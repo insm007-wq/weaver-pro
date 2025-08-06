@@ -1,0 +1,55 @@
+# ========================
+# Node & NPM
+# ========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# ========================
+# Build Output
+# ========================
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# ========================
+# Electron Specific
+# ========================
+*.exe
+*.dmg
+*.app
+*.asar
+
+# ========================
+# OS & Editor junk
+# ========================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+*.swp
+*.swo
+*.bak
+*.tmp
+
+# ========================
+# VSCode
+# ========================
+.vscode/
+.history/
+
+# ========================
+# Environment Files
+# ========================
+.env
+.env.*.local
+.env.local
+
+# ========================
+# Others
+# ========================
+coverage/
+.idea/
+*.log
