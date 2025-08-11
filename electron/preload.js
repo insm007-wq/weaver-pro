@@ -34,4 +34,46 @@ contextBridge.exposeInMainWorld("api", {
     console.log("[preload] invoke minimax:test");
     return ipcRenderer.invoke("minimax:test", payload);
   },
+
+  /**
+   * 일반 설정값 가져오기 (electron-store)
+   * @param {string} key - 저장 키 (예: "miniMaxGroupId")
+   * @returns {Promise<any>} - 저장된 값 또는 undefined
+   */
+  getSetting: (key) => {
+    console.log("[preload] invoke settings:get", key);
+    return ipcRenderer.invoke("settings:get", key);
+  },
+
+  /**
+   * 일반 설정값 저장 (electron-store)
+   * @param {string} key - 저장 키
+   * @param {any} value - 저장할 값
+   * @returns {Promise<{ok: boolean}>}
+   */
+  setSetting: (key, value) => {
+    console.log("[preload] invoke settings:set", key);
+    return ipcRenderer.invoke("settings:set", { key, value });
+  },
+
+  /**
+   * 민감 정보 가져오기 (keytar)
+   * @param {string} key - 시크릿 키 (예: "anthropicKey", "replicateKey", "miniMaxKey")
+   * @returns {Promise<string|null>} - 저장된 시크릿 또는 null
+   */
+  getSecret: (key) => {
+    console.log("[preload] invoke secrets:get", key);
+    return ipcRenderer.invoke("secrets:get", key);
+  },
+
+  /**
+   * 민감 정보 저장 (keytar)
+   * @param {string} key - 시크릿 키
+   * @param {string} value - 저장할 시크릿
+   * @returns {Promise<{ok: boolean}>}
+   */
+  setSecret: (key, value) => {
+    console.log("[preload] invoke secrets:set", key);
+    return ipcRenderer.invoke("secrets:set", { key, value });
+  },
 });

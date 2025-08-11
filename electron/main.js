@@ -2,6 +2,11 @@
 const { app, BrowserWindow, Menu, ipcMain } = require("electron");
 const path = require("path");
 const axios = require("axios");
+const Store = require("electron-store");
+const keytar = require("keytar");
+
+const store = new Store({ name: "settings" });
+const SERVICE = "ContentWeaverPro"; // keytar 서비스명
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -10,23 +15,14 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      preload: path.join(__dirname, "preload.js"), // 렌더러 <-> main 브리지
+      preload: path.join(__dirname, "preload.js"),
     },
   });
-
-  // 메뉴바 제거
   Menu.setApplicationMenu(null);
-
-  // 웹 앱 로드 (Vite dev 서버)
   win.loadURL(process.env.VITE_DEV_SERVER_URL || "http://localhost:5173");
-
-  // 필요 시 디버깅
-  // win.webContents.openDevTools({ mode: "detach" });
 }
 
-/* ---------------- IPC: API 연결 테스트 ---------------- */
-
-// ✅ Replicate 연결 테스트
+/* --------- API 연결 테스트 (그대로 유지) --------- */
 ipcMain.handle("replicate:test", async (_e, token) => {
   try {
     const r = await axios.get("https://api.replicate.com/v1/models", {
@@ -43,13 +39,12 @@ ipcMain.handle("replicate:test", async (_e, token) => {
   }
 });
 
-// ✅ Anthropic 연결 테스트
 ipcMain.handle("anthropic:test", async (_e, apiKey) => {
   try {
     const r = await axios.post(
       "https://api.anthropic.com/v1/messages",
       {
-        model: "claude-3-haiku-20240307", // 가볍게 핑 테스트
+        model: "claude-3-haiku-20240307",
         max_tokens: 5,
         messages: [{ role: "user", content: "ping" }],
       },
@@ -72,15 +67,12 @@ ipcMain.handle("anthropic:test", async (_e, apiKey) => {
   }
 });
 
-// ✅ MiniMax 연결 테스트
-// payload: { key: string, groupId: string }
-ipcMain.handle("minimax:test", async (_e, payload) => {
-  const { key, groupId } = payload || {};
+ipcMain.handle("minimax:test", async (_e, { key, groupId }) => {
   try {
     const r = await axios.post(
       "https://api.minimax.chat/v1/text/chatcompletion",
       {
-        model: "abab5.5-chat", // 가벼운 모델로 ping
+        model: "abab5.5-chat",
         messages: [{ role: "user", content: "ping" }],
       },
       {
@@ -92,7 +84,6 @@ ipcMain.handle("minimax:test", async (_e, payload) => {
         timeout: 15000,
       }
     );
-    // 응답 예: { model, choices: [ { message: { content } } ] }
     const choice = r.data?.choices?.[0];
     return { ok: true, model: r.data?.model, reply: choice?.message?.content };
   } catch (err) {
@@ -104,15 +95,29 @@ ipcMain.handle("minimax:test", async (_e, payload) => {
   }
 });
 
-/* ---------------- 앱 라이프사이클 ---------------- */
-
-app.whenReady().then(() => {
-  createWindow();
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+/* --------- 설정/시크릿 저장소 IPC --------- */
+// 일반 설정 저장 (electron-store)
+ipcMain.handle("settings:get", async (_e, key) => {
+  return store.get(key);
+});
+ipcMain.handle("settings:set", async (_e, { key, value }) => {
+  store.set(key, value);
+  return { ok: true };
 });
 
+// 민감 정보 저장 (keytar)
+ipcMain.handle("secrets:get", async (_e, key) => {
+  return keytar.getPassword(SERVICE, key); // 없다면 null
+});
+ipcMain.handle("secrets:set", async (_e, { key, value }) => {
+  await keytar.setPassword(SERVICE, key, value || "");
+  return { ok: true };
+});
+
+app.whenReady().then(createWindow);
+app.on("activate", () => {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
