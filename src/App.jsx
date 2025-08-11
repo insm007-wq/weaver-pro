@@ -2,6 +2,8 @@ import { useState } from "react";
 import Sidebar from "./components/Sidebar";
 import ProjectInit from "./components/ProjectInit";
 import SettingsDialog from "./components/SettngsDialog";
+import HeaderBar from "./components/HeaderBar";
+import ThumbnailGenerator from "./components/ThumbnailGenerator";
 
 export default function App() {
   const [projectName, setProjectName] = useState(null);
@@ -14,6 +16,8 @@ export default function App() {
 
   const renderPage = () => {
     switch (currentPage) {
+      case "thumbnail":
+        return <ThumbnailGenerator />;
       case "script":
         return <ScriptPage />;
       case "draft":
@@ -26,7 +30,8 @@ export default function App() {
             <h1 className="text-2xl font-bold mb-4">{projectName}</h1>
             <div className="bg-gray-100 p-4 rounded">
               <p className="text-sm text-gray-700">
-                <code>CachedPromise&lt;DocumentContent&gt;</code>, document content would be a <code>LazyD.property Couch</code>.
+                <code>CachedPromise&lt;DocumentContent&gt;</code>, document
+                content would be a <code>LazyD.property Couch</code>.
               </p>
             </div>
           </div>
@@ -35,17 +40,33 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen bg-[#f5f7fa] text-gray-800">
-      {/* 본문 먼저 */}
-      <main className="flex-1 p-10 overflow-auto flex items-center justify-center">
-        {!projectName ? <ProjectInit onCreate={handleCreateProject} /> : renderPage()}
-      </main>
+    <div className="flex min-h-screen flex-col bg-[#f5f7fa] text-gray-800">
+      {/* ▲ 헤더 */}
+      <HeaderBar onOpenSettings={() => setCurrentPage("settings")} />
 
-      {/* 사이드바 오른쪽으로 이동 */}
-      <Sidebar onSelectMenu={(key) => setCurrentPage(key)} />
+      {/* ▼ 본문 + 사이드바 */}
+      <div className="flex flex-1">
+        <main className="flex-1 p-10 overflow-auto flex items-center justify-center">
+          {currentPage === "thumbnail" ? (
+            <ThumbnailGenerator />
+          ) : !projectName ? (
+            <ProjectInit onCreate={handleCreateProject} />
+          ) : (
+            renderPage()
+          )}
+        </main>
 
-      {/* 설정 다이얼로그 */}
-      {currentPage === "settings" && <SettingsDialog onClose={() => setCurrentPage(null)} />}
+        <Sidebar onSelectMenu={(key) => setCurrentPage(key)} />
+      </div>
+
+      {currentPage === "settings" && (
+        <SettingsDialog
+          onClose={() => {
+            setCurrentPage(null);
+            window.dispatchEvent(new CustomEvent("health:refresh"));
+          }}
+        />
+      )}
     </div>
   );
 }

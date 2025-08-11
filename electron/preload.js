@@ -36,9 +36,18 @@ contextBridge.exposeInMainWorld("api", {
   },
 
   /**
-   * 일반 설정값 가져오기 (electron-store)
-   * @param {string} key - 저장 키 (예: "miniMaxGroupId")
-   * @returns {Promise<any>} - 저장된 값 또는 undefined
+   * 헬스 체크 (3개 API 상태 한 번에 확인)
+   * @returns {Promise<{ ok: boolean, timestamp: number, anthropic: object, replicate: object, minimax: object }>}
+   */
+  healthCheck: () => {
+    console.log("[preload] invoke health:check");
+    return ipcRenderer.invoke("health:check");
+  },
+
+  /**
+   * 일반 설정 가져오기 (electron-store)
+   * @param {string} key
+   * @returns {Promise<any>}
    */
   getSetting: (key) => {
     console.log("[preload] invoke settings:get", key);
@@ -46,20 +55,19 @@ contextBridge.exposeInMainWorld("api", {
   },
 
   /**
-   * 일반 설정값 저장 (electron-store)
-   * @param {string} key - 저장 키
-   * @param {any} value - 저장할 값
+   * 일반 설정 저장하기 (electron-store)
+   * @param {{ key: string, value: any }} payload
    * @returns {Promise<{ok: boolean}>}
    */
-  setSetting: (key, value) => {
-    console.log("[preload] invoke settings:set", key);
-    return ipcRenderer.invoke("settings:set", { key, value });
+  setSetting: (payload) => {
+    console.log("[preload] invoke settings:set", payload.key);
+    return ipcRenderer.invoke("settings:set", payload);
   },
 
   /**
    * 민감 정보 가져오기 (keytar)
-   * @param {string} key - 시크릿 키 (예: "anthropicKey", "replicateKey", "miniMaxKey")
-   * @returns {Promise<string|null>} - 저장된 시크릿 또는 null
+   * @param {string} key
+   * @returns {Promise<string|null>}
    */
   getSecret: (key) => {
     console.log("[preload] invoke secrets:get", key);
@@ -67,13 +75,22 @@ contextBridge.exposeInMainWorld("api", {
   },
 
   /**
-   * 민감 정보 저장 (keytar)
-   * @param {string} key - 시크릿 키
-   * @param {string} value - 저장할 시크릿
+   * 민감 정보 저장하기 (keytar)
+   * @param {{ key: string, value: string }} payload
    * @returns {Promise<{ok: boolean}>}
    */
-  setSecret: (key, value) => {
-    console.log("[preload] invoke secrets:set", key);
-    return ipcRenderer.invoke("secrets:set", { key, value });
+  setSecret: (payload) => {
+    console.log("[preload] invoke secrets:set", payload.key);
+    return ipcRenderer.invoke("secrets:set", payload);
+  },
+
+  /**
+   * 썸네일 생성 (Replicate 실행)
+   * @param {{ prompt: string, count: number, mode: 'dramatic'|'calm', referenceImage?: string, token?: string }} payload
+   * @returns {Promise<{ok: boolean, images?: string[], message?: any}>}
+   */
+  generateThumbnails: (payload) => {
+    console.log("[preload] invoke replicate:generate");
+    return ipcRenderer.invoke("replicate:generate", payload);
   },
 });
