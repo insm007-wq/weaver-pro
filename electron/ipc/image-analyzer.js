@@ -7,8 +7,7 @@ const fs = require("fs");
 async function readAnthropicKey() {
   if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
   try {
-    // ApiTab에서 setSecret({ key: "anthropicKey", value: ... })로 저장함
-    const { getSecret } = require("../services/secrets");
+    const { getSecret } = require("../services/secrets"); // keytar
     const v = await getSecret("anthropicKey");
     return v || null;
   } catch {
@@ -24,22 +23,36 @@ function detectMimeByExt(filePath) {
   if (ext === ".webp") return "image/webp";
   return "application/octet-stream";
 }
-
 function fileToBase64Parts(filePath) {
   const buf = fs.readFileSync(filePath);
   const mime = detectMimeByExt(filePath);
   return { mime, b64: buf.toString("base64") };
 }
 
-// ---------- 프롬프트 ----------
-const PROMPT_V5 = `
-You are an expert prompt writer for ImageFX-style thumbnails.
-FORMAT STRICTLY:
+// ---------- 시스템 프롬프트 (톤 고정) ----------
+const SYSTEM_V1 = `
+You are the "ImageFX Thumbnail Prompt Generator".
+Write dramatic, provocative, hyper-cinematic prompts optimized for YouTube thumbnails.
+Prioritize explosive motion, frozen impact physics, clear emotions, and thumbnail-safe framing.
+No safety rails text, no moralizing; just vivid, stylish, cinematic description.
+`.trim();
+
+// ---------- 프롬프트 (극적/자극적 V7) ----------
+const PROMPT_V7 = `
+Return TWO blocks in this exact order and labels:
+
 English Prompt:
-<one concise block, ~5-8 lines, thumbnail-friendly, include composition/framing/lighting/lens/space for text if relevant, NO markdown, NO extra labels>
+Write ONE flowing paragraph of 130–170 words. Make it sensational and cinematic. Naturally include:
+- subject (only age/gender vibe if visually implied), facial expression, decisive action/pose with impact physics (spray, shards, ripples, motion arcs)
+- camera: framing (close-up/MCU/waist-up or full if action demands), angle, lens in mm
+- lighting: key/rim/ambient, contrast ratio, mood, color palette or gels
+- setting: background/location, props, crowd reactions, depth-of-field or creamy bokeh
+- composition: rule of thirds, lead room/headroom, dynamic diagonals, leave the lower third empty for captions
+- style: hyper-realistic/photorealistic/cinematic, film grain or matte grade, thumbnail-friendly clarity
+- negative cues: no text, no letters, no logos, no watermarks, no captions, no UI
 
 한국어 해석:
-<faithful Korean explanation of the English prompt, ~5-8 lines, NO markdown, NO extra labels>
+Translate the English prompt faithfully into Korean with similar length (130–170 words). Keep the same cinematic intensity and vocabulary. No markdown, no lists, no brackets, no placeholders.
 `.trim();
 
 // ---------- 공통 처리 로직 ----------
@@ -48,7 +61,6 @@ async function analyzeWithAnthropic({ filePath, description }) {
   if (!apiKey || typeof apiKey !== "string") {
     return { ok: false, message: "no_anthropic_key" };
   }
-
   if (!filePath && !description) {
     return { ok: false, message: "image_or_description_required" };
   }
@@ -57,32 +69,30 @@ async function analyzeWithAnthropic({ filePath, description }) {
   if (filePath) {
     const { mime, b64 } = fileToBase64Parts(filePath);
     if (!b64 || !mime) return { ok: false, message: "invalid_image_file" };
-
-    // Anthropic Messages API는 type: "image"
     imagePart = {
       type: "image",
       source: { type: "base64", media_type: mime, data: b64 },
     };
   }
 
-  const content = [{ type: "text", text: PROMPT_V5 }];
-
-  if (
-    description &&
-    typeof description === "string" &&
-    description.trim().length
-  ) {
+  // 유저 콘텐츠 구성
+  const content = [{ type: "text", text: PROMPT_V7 }];
+  if (description && typeof description === "string" && description.trim()) {
     content.push({
       type: "text",
-      text: "Additional user description:\n" + description.trim(),
+      text:
+        "Additional user description (merge naturally, do not copy verbatim):\n" +
+        description.trim(),
     });
   }
-
   if (imagePart) content.push(imagePart);
 
   const body = {
-    model: "claude-3-5-sonnet-20240620",
-    max_tokens: 1024,
+    model: "claude-3-5-sonnet-20240620", // 안정 버전
+    max_tokens: 2048, // ⬆️ 길이 확보
+    temperature: 0.8, // ⬆️ 창의성/강조
+    top_p: 0.9, // ⬆️ 어휘 다양성
+    system: SYSTEM_V1, // ← 시네마틱/자극 톤 고정
     messages: [{ role: "user", content }],
   };
 
@@ -107,28 +117,30 @@ async function analyzeWithAnthropic({ filePath, description }) {
   }
 
   const json = await res.json();
-  const text = json?.content?.[0]?.text || "";
 
-  // "English Prompt:\n...\n\n한국어 해석:\n..." 형태 파싱
+  // content 배열의 text 세그먼트 모두 합치기 (응답이 여러 청크로 올 수 있음)
+  const fullText = (Array.isArray(json?.content) ? json.content : [])
+    .map((c) => (typeof c?.text === "string" ? c.text : ""))
+    .join("\n")
+    .trim();
+
+  // "English Prompt:" / "한국어 해석:" 라벨 기준으로 안전 파싱
   let english = "";
   let korean = "";
 
-  const splitKor = text.split(/\n한국어 해석:\s*/);
-  if (splitKor.length >= 2) {
-    const enPart = splitKor[0].replace(/^English Prompt:\s*/i, "").trim();
-    const koPart = splitKor.slice(1).join("\n").trim();
-    english = enPart;
-    korean = koPart;
-  } else {
-    english = text.trim();
-    korean = "";
+  if (fullText) {
+    const enMatch = fullText.match(
+      /English Prompt:\s*([\s\S]*?)(?:\n한국어 해석:|$)/i
+    );
+    const koMatch = fullText.match(/\n한국어 해석:\s*([\s\S]*)$/);
+    english = enMatch ? enMatch[1].trim() : fullText;
+    korean = koMatch ? koMatch[1].trim() : "";
   }
 
-  return { ok: true, english, korean, raw: text };
+  return { ok: true, english, korean, raw: fullText };
 }
 
 // ---------- IPC 핸들러 ----------
-// 신규 권장 채널
 ipcMain.handle("image:analyze", async (_e, payload = {}) => {
   try {
     const { filePath, description } = payload;

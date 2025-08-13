@@ -1,5 +1,5 @@
 // src/pages/ThumbnailGenerator.jsx
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { HiLightBulb } from "react-icons/hi";
 
 function TipCard({ children, className = "" }) {
@@ -42,21 +42,36 @@ function Spinner({ size = 16 }) {
 }
 
 /** 업로드 정책 */
-const MAX_UPLOAD_MB = 10; // ✅ 10MB로 제한
-const DEFAULT_TEMPLATE = ``; // 템플릿 기본값
+const MAX_UPLOAD_MB = 10; // 10MB로 제한
+
+/** 프롬프트 템플릿 */
+const DEFAULT_TEMPLATE = ``;
 
 export default function ThumbnailGenerator() {
   const fileInputRef = useRef(null);
 
-  const [prompt, setPrompt] = useState("");
+  /** 🔒 고정 폭 측정/저장 (리플리케이트 기준) */
+  const containerRef = useRef(null);
+  const [fixedWidthPx, setFixedWidthPx] = useState(null);
+
+  /** 공통 상태 */
+  const [provider, setProvider] = useState("replicate"); // 'replicate' | 'imagen3'
   const [metaTemplate, setMetaTemplate] = useState(DEFAULT_TEMPLATE);
 
+  /** Replicate 전용 */
+  const [prompt, setPrompt] = useState(""); // ⬅️ Replicate일 때만 사용
+  const [mode, setMode] = useState("dramatic"); // dramatic | calm
+
+  /** 공통 옵션 */
+  const [count, setCount] = useState(1);
+
+  /** Imagen3 전용 옵션 */
+  const [aspectRatio, setAspectRatio] = useState("16:9"); // "1:1" | "3:4" | "4:3" | "9:16" | "16:9"
+
+  /** 참고 이미지(분석용) */
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null); // ObjectURL
   const previewUrlRef = useRef(null); // revoke 관리용
-
-  const [count, setCount] = useState(1);
-  const [mode, setMode] = useState("dramatic"); // dramatic | calm
 
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -74,7 +89,15 @@ export default function ThumbnailGenerator() {
 
   const onPickFile = () => fileInputRef.current?.click();
 
-  /** 안전한 미리보기 URL 관리 (메모리 누수 방지) */
+  /** 🔒 최초 렌더 시 컨테이너 실제 폭을 픽셀로 고정 (리플리케이트 탭 기준) */
+  useLayoutEffect(() => {
+    if (!fixedWidthPx && containerRef.current) {
+      const px = Math.round(containerRef.current.getBoundingClientRect().width);
+      if (px > 0) setFixedWidthPx(px);
+    }
+  }, [fixedWidthPx]);
+
+  /** 안전한 미리보기 URL 해제 */
   useEffect(() => {
     return () => {
       if (previewUrlRef.current) {
@@ -93,11 +116,13 @@ export default function ThumbnailGenerator() {
       setFxEn("");
       setFxKo("");
 
-      // Electron에서는 File에 file.path가 들어있음
-      const filePath = file.path || file.name;
+      const filePath = file.path || file.name; // Electron은 path 제공
       const res = await window.api.imagefxAnalyze({
         filePath,
-        description: prompt.trim() || undefined,
+        // Replicate 모드에서는 장면 설명도 같이 넘겨 보조,
+        // Imagen 모드에선 템플릿 기반이므로 description은 없어도 됨
+        description:
+          provider === "replicate" ? prompt.trim() || undefined : undefined,
       });
       if (!res?.ok) throw new Error(res?.message || "analysis_failed");
 
@@ -114,19 +139,18 @@ export default function ThumbnailGenerator() {
   const onFile = (file) => {
     if (!file) return;
 
-    // ✅ PNG/JPG/JPEG만 허용 (WEBP 제외)
+    // PNG/JPG/JPEG만 허용 (WEBP 제외)
     if (!/image\/(png|jpe?g)$/i.test(file.type)) {
       return alert("PNG / JPG / JPEG만 업로드 가능합니다. (WEBP 불가)");
     }
 
-    // ✅ 파일 크기 10MB 제한
+    // 파일 크기 10MB 제한
     if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
       return alert(`최대 ${MAX_UPLOAD_MB}MB까지 업로드 가능합니다.`);
     }
 
     setImageFile(file);
 
-    // 미리보기 URL 생성 + 이전 URL 해제
     if (previewUrlRef.current) {
       URL.revokeObjectURL(previewUrlRef.current);
       previewUrlRef.current = null;
@@ -135,7 +159,7 @@ export default function ThumbnailGenerator() {
     previewUrlRef.current = url;
     setImagePreview(url);
 
-    // 업로드 직후 분석 (원치 않으면 버튼으로 분리 가능)
+    // 업로드 직후 분석
     analyzeReference(file);
   };
 
@@ -148,14 +172,26 @@ export default function ThumbnailGenerator() {
 
   /** 최종 프롬프트 만들기 */
   const buildFinalPrompt = () => {
-    const base = prompt.trim();
-    const referenceAnalysis = ""; // (참고 이미지 분석 텍스트를 넣고 싶으면 여기에 매핑)
+    const referenceAnalysis = (fxEn || "").trim();
+
+    if (provider === "imagen3") {
+      // ✅ ImageFX(Imagen3): 장면 설명란 사용 X, 템플릿만 사용
+      // {content}는 비워두고 {referenceAnalysis}만 주입 가능
+      const core = (metaTemplate || "")
+        .replaceAll("{content}", "")
+        .replaceAll("{referenceAnalysis}", referenceAnalysis)
+        .trim();
+      return core;
+    }
+
+    // ✅ Replicate: 장면 설명 + 공통 키워드 + 모드
+    const base = (prompt || "").trim();
     let core = (metaTemplate || "")
       .replaceAll("{content}", base)
       .replaceAll("{referenceAnalysis}", referenceAnalysis)
       .trim();
 
-    if (!core) core = base; // 템플릿 비어있으면 기존 방식
+    if (!core) core = base;
 
     const common = [
       "ultra-realistic",
@@ -175,10 +211,32 @@ export default function ThumbnailGenerator() {
 
   /** 생성 버튼 핸들러 */
   const onGenerate = async () => {
-    if (!window?.api?.generateThumbnails)
+    // 각 프로바이더별 필수 필드 가드
+    if (
+      provider === "replicate" &&
+      !prompt.trim() &&
+      !fxEn.trim() &&
+      !metaTemplate.trim()
+    ) {
+      return alert("장면 설명 또는 템플릿/분석 결과 중 하나는 필요합니다.");
+    }
+    if (provider === "imagen3" && !metaTemplate.trim()) {
+      return alert("ImageFX 모드에서는 템플릿이 필요합니다.");
+    }
+
+    // IPC 가드
+    const hasReplicate = !!window?.api?.generateThumbnails;
+    const hasImagen3 = !!window?.api?.generateThumbnailsGoogleImagen3;
+    if (provider === "replicate" && !hasReplicate) {
       return alert(
-        "IPC generateThumbnails가 없습니다. preload/main 설정을 확인하세요."
+        "Replicate IPC(generateThumbnails)가 없습니다. preload/main 설정을 확인하세요."
       );
+    }
+    if (provider === "imagen3" && !hasImagen3) {
+      return alert(
+        "Google Imagen3 IPC(generateThumbnailsGoogleImagen3)가 없습니다. preload/main 설정을 확인하세요."
+      );
+    }
 
     setLoading(true);
     setResults([]);
@@ -189,15 +247,23 @@ export default function ThumbnailGenerator() {
       const finalPrompt = buildFinalPrompt();
       setUsedPrompt(finalPrompt);
 
-      // 참고 이미지가 필요하면, 여기서 file.path를 메인에서 읽어 쓰는 구조이므로
-      // 별도 base64 변환 없이 현재대로 유지 (replicate 핸들러는 referenceImage 옵션 없이도 동작 중)
-      const res = await window.api.generateThumbnails({
-        prompt: finalPrompt,
-        count,
-        mode,
-        // referenceImage를 넘기는 로직을 쓰는 경우에는
-        // file → dataURL 변환 시에도 10MB 제한을 다시 체크해야 함
-      });
+      let res;
+      if (provider === "imagen3") {
+        // ⬇️ Google Imagen3 호출 (count, aspectRatio 사용)
+        res = await window.api.generateThumbnailsGoogleImagen3({
+          prompt: finalPrompt,
+          count,
+          aspectRatio,
+          // 추가 파라미터 필요하면 여기에…
+        });
+      } else {
+        // ⬇️ Replicate 호출 (count, mode 사용)
+        res = await window.api.generateThumbnails({
+          prompt: finalPrompt,
+          count,
+          mode,
+        });
+      }
 
       if (!res?.ok) {
         throw new Error(
@@ -218,7 +284,25 @@ export default function ThumbnailGenerator() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-md">
+    <div
+      ref={containerRef}
+      className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-md"
+      style={
+        fixedWidthPx
+          ? {
+              width: `${fixedWidthPx}px`,
+              minWidth: `${fixedWidthPx}px`,
+              maxWidth: `${fixedWidthPx}px`,
+              flex: `0 0 ${fixedWidthPx}px`,
+              boxSizing: "border-box",
+              // 스크롤바 유무에 따른 레이아웃 흔들림 방지
+              scrollbarGutter: "stable both-edges",
+            }
+          : {
+              scrollbarGutter: "stable both-edges",
+            }
+      }
+    >
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold flex items-center gap-2">
@@ -229,7 +313,49 @@ export default function ThumbnailGenerator() {
         </span>
       </div>
 
-      {/* 프롬프트 템플릿 */}
+      {/* 프로바이더 선택 */}
+      <div className="mb-6">
+        <label className="font-semibold mb-2 block">생성 엔진</label>
+
+        {/* ✅ 고정폭 + 2열 그리드 */}
+        <div className="w-full max-w-[520px]">
+          <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-gray-300">
+            <button
+              type="button"
+              onClick={() => setProvider("replicate")}
+              className={`h-10 w-full text-sm font-medium transition
+                    ${
+                      provider === "replicate"
+                        ? "bg-gray-900 text-white"
+                        : "bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+              aria-pressed={provider === "replicate"}
+            >
+              Replicate
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setProvider("imagen3")}
+              className={`h-10 w-full text-sm font-medium transition
+                    ${
+                      provider === "imagen3"
+                        ? "bg-gray-900 text-white"
+                        : "bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+              aria-pressed={provider === "imagen3"}
+            >
+              Google ImageFX (Imagen 3)
+            </button>
+          </div>
+        </div>
+
+        <p className="text-xs text-gray-500 mt-2">
+          Replicate는 장면 설명 + 템플릿, ImageFX는 템플릿 중심으로 생성합니다.
+        </p>
+      </div>
+
+      {/* 프롬프트 템플릿 (공통) */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">
           <label className="font-semibold">썸네일 생성 프롬프트 템플릿</label>
@@ -242,10 +368,11 @@ export default function ThumbnailGenerator() {
           </button>
         </div>
         <p className="text-xs text-gray-500 mb-2">
-          입력한 장면 설명을 바탕으로 실제 이미지 생성 프롬프트를 만듭니다.{" "}
           <code className="bg-gray-100 px-1 rounded">{`{content}`}</code>,{" "}
           <code className="bg-gray-100 px-1 rounded">{`{referenceAnalysis}`}</code>{" "}
-          변수를 사용할 수 있어요.
+          변수를 사용할 수 있어요. ImageFX 모드에서는{" "}
+          <code className="bg-gray-100 px-1 rounded">{`{content}`}</code>가
+          비워질 수 있습니다.
         </p>
         <textarea
           rows={6}
@@ -256,42 +383,44 @@ export default function ThumbnailGenerator() {
         />
       </div>
 
-      {/* 장면 설명 */}
-      <div className="mb-6">
-        <label className="font-semibold mb-2 block">장면 설명</label>
-        <textarea
-          rows={5}
-          placeholder="어떤 썸네일을 원하시나요? 인물의 표정, 상황, 감정을 구체적으로 적어주세요."
-          className="w-full border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-        />
-        <TipCard>
-          <span className="font-medium text-gray-700 mr-1">Tip.</span>
-          <span className="inline-flex flex-wrap items-center gap-1">
-            <span className="inline-flex items-center rounded-md bg-white/80 px-2 py-0.5 text-[12px] font-medium text-gray-700 ring-1 ring-gray-200">
-              표정
+      {/* 장면 설명 — Replicate에서만 표시 */}
+      {provider === "replicate" && (
+        <div className="mb-6">
+          <label className="font-semibold mb-2 block">장면 설명</label>
+          <textarea
+            rows={5}
+            placeholder="어떤 썸네일을 원하시나요? 인물의 표정, 상황, 감정을 구체적으로 적어주세요."
+            className="w-full border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+          />
+          <TipCard>
+            <span className="font-medium text-gray-700 mr-1">Tip.</span>
+            <span className="inline-flex flex-wrap items-center gap-1">
+              <span className="inline-flex items-center rounded-md bg-white/80 px-2 py-0.5 text-[12px] font-medium text-gray-700 ring-1 ring-gray-200">
+                표정
+              </span>
+              <span className="text-gray-400">+</span>
+              <span className="inline-flex items-center rounded-md bg-white/80 px-2 py-0.5 text-[12px] font-medium text-gray-700 ring-1 ring-gray-200">
+                구도(MCU/Close-up)
+              </span>
+              <span className="text-gray-400">+</span>
+              <span className="inline-flex items-center rounded-md bg-white/80 px-2 py-0.5 text-[12px] font-medium text-gray-700 ring-1 ring-gray-200">
+                조명(dramatic)
+              </span>
+              <span className="text-gray-400">+</span>
+              <span className="inline-flex items-center rounded-md bg-white/80 px-2 py-0.5 text-[12px] font-medium text-gray-700 ring-1 ring-gray-200">
+                배경(공항/사무실)
+              </span>
+              <span className="ml-1">
+                을 구체적으로 적을수록 결과가 좋아집니다.
+              </span>
             </span>
-            <span className="text-gray-400">+</span>
-            <span className="inline-flex items-center rounded-md bg-white/80 px-2 py-0.5 text-[12px] font-medium text-gray-700 ring-1 ring-gray-200">
-              구도(MCU/Close-up)
-            </span>
-            <span className="text-gray-400">+</span>
-            <span className="inline-flex items-center rounded-md bg-white/80 px-2 py-0.5 text-[12px] font-medium text-gray-700 ring-1 ring-gray-200">
-              조명(dramatic)
-            </span>
-            <span className="text-gray-400">+</span>
-            <span className="inline-flex items-center rounded-md bg-white/80 px-2 py-0.5 text-[12px] font-medium text-gray-700 ring-1 ring-gray-200">
-              배경(공항/사무실)
-            </span>
-            <span className="ml-1">
-              을 구체적으로 적을수록 결과가 좋아집니다.
-            </span>
-          </span>
-        </TipCard>
-      </div>
+          </TipCard>
+        </div>
+      )}
 
-      {/* 참고 이미지 업로드 */}
+      {/* 참고 이미지 업로드 (분석 보조) — 두 모드 공통 사용 가능 */}
       <div className="mb-6">
         <label className="font-semibold mb-2 block">
           참고 이미지 (선택사항)
@@ -367,14 +496,12 @@ export default function ThumbnailGenerator() {
           <input
             ref={fileInputRef}
             type="file"
-            // ✅ webp 제외
-            accept="image/png,image/jpeg"
+            accept="image/png,image/jpeg" // webp 제외
             className="hidden"
             onChange={(e) => onFile(e.target.files?.[0])}
           />
         </div>
 
-        {/* 참고 이미지 분석 결과 */}
         {(fxLoading || fxErr || fxEn || fxKo) && (
           <div className="mt-4 rounded-lg border bg-gray-50 p-3">
             {fxErr && (
@@ -383,7 +510,6 @@ export default function ThumbnailGenerator() {
             {fxLoading && !fxErr && (
               <div className="text-sm text-gray-600">이미지 분석 중…</div>
             )}
-
             {fxEn && (
               <>
                 <div className="text-[13px] font-medium mb-1">
@@ -412,13 +538,13 @@ export default function ThumbnailGenerator() {
         )}
 
         <TipCard className="bg-white/70">
-          참고 이미지를 업로드하면 스타일과 구도를 분석해 결과의 일관성이
-          좋아집니다.
+          참고 이미지 분석을 템플릿에 주입하면 일관성이 좋아집니다.
         </TipCard>
       </div>
 
-      {/* 옵션 */}
+      {/* 옵션들 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        {/* 공통: 생성 개수 */}
         <div>
           <label className="font-semibold mb-2 block">생성 개수</label>
           <select
@@ -433,17 +559,38 @@ export default function ThumbnailGenerator() {
             ))}
           </select>
         </div>
-        <div>
-          <label className="font-semibold mb-2 block">생성 모드</label>
-          <select
-            className="w-full border rounded-lg p-2 text-sm"
-            value={mode}
-            onChange={(e) => setMode(e.target.value)}
-          >
-            <option value="dramatic">극적 & 자극적 모드</option>
-            <option value="calm">차분 & 자연스러운 모드</option>
-          </select>
-        </div>
+
+        {/* 분기 옵션 */}
+        {provider === "replicate" ? (
+          <div>
+            <label className="font-semibold mb-2 block">생성 모드</label>
+            <select
+              className="w-full border rounded-lg p-2 text-sm"
+              value={mode}
+              onChange={(e) => setMode(e.target.value)}
+            >
+              <option value="dramatic">극적 & 자극적 모드</option>
+              <option value="calm">차분 & 자연스러운 모드</option>
+            </select>
+          </div>
+        ) : (
+          <div>
+            <label className="font-semibold mb-2 block">
+              가로세로 비율 (ImageFX)
+            </label>
+            <select
+              className="w-full border rounded-lg p-2 text-sm"
+              value={aspectRatio}
+              onChange={(e) => setAspectRatio(e.target.value)}
+            >
+              {["1:1", "3:4", "4:3", "9:16", "16:9"].map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* 생성 버튼 */}
@@ -452,8 +599,7 @@ export default function ThumbnailGenerator() {
         disabled={loading}
         className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
       >
-        {loading && <Spinner />}
-        썸네일 생성하기
+        {loading && <Spinner />}썸네일 생성하기
       </button>
 
       {/* 결과 */}
@@ -490,7 +636,7 @@ export default function ThumbnailGenerator() {
                       onClick={async () => {
                         const res = await window.api.saveUrlToFile({
                           url: r.url,
-                          suggestedName: `thumbnail-${i + 1}.png`,
+                          suggestedName: `thumbnail-${i + 1}.jpg`, // JPG 저장 권장
                         });
                         if (!res?.ok && res?.message !== "canceled") {
                           alert(`저장 실패: ${res?.message || "unknown"}`);
