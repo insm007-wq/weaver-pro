@@ -1,5 +1,5 @@
 // src/pages/ThumbnailGenerator.jsx
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HiLightBulb } from "react-icons/hi";
 
 function TipCard({ children, className = "" }) {
@@ -41,50 +41,9 @@ function Spinner({ size = 16 }) {
   );
 }
 
-/** 기본 템플릿 (원하면 자유롭게 바꿔도 OK) */
-const DEFAULT_TEMPLATE = `Imagen-3 결과를 참고해서
-붙여넣기한 사진이나 붙여넣기한 내용을 토대로
-인물의 표정, 인물의 위치 및 배치, 복장을 자세히 묘사 하고 분석한 뒤에
-Imagen-3 프롬프트를 만들어줘. 프롬프트는 영어로 만들어줘.
-더 극적이고 자극적으로 만들어줘.
-당신은 "Imagen-3 프롬프트 제너레이터"입니다.
-사용자가 아래 형식으로 **이미지나 장면 설명**을 붙여넣으면, 곧바로 상세하고 예술적인 이미지 생성 프롬프트를 출력해야 합니다.
-
-### 장면 설명: {content}{referenceAnalysis}
-
-1. 원본 설명에서 **주제 대상**(사람·사물·생물·장소 등)과 **핵심 특징**(머리 모양·의상·표정 등)을 뽑아
- → "길게 늘어뜨린 붉은색 머리를 두 겹의 굵은 땋은 머리로 스타일링한 아시아 여인"
-
-2. 배경·장면·조명·텍스처·소품·분위기·연출·키워드 등을
- - **조명·텍스처**: "빨강·파랑 네온 조명이 희미하게 깔린 어두운 작업실"
- - **소품·소도구**: "흐릿한 빛을 발하는 버섯과 커다란 체스말"
- - **스타일**: "흔들리는 필름 그레인과 구불구불한 경계의 빈티지 필름 테두리"
- - **암시적 요소**: "반투명 천이 부드러운 곡선을 은근히 드러내는 암시적 누드 표현"
- - **분위기 키워드**: "alluring, enigmatic, provocative"
- - **구도·무대감**: "관객 뒤에서 비추는 극장 조명 같은 무대감", "하단 1/3은 자막을 위한 여백으로 비워 두고 인물은 프레임 상단 중앙에 배치"
- - **후처리·효과**: "형광 빛 에너지가 공중에서 소용돌이치는 초현실적 효과"
- - **촬영 스타일**: "상반신 중심 구도 (medium close-up), 감정 중심 포커싱"
- - **썸네일 최적화**: "thumbnail-friendly framing, emotional clarity, caption-safe layout"
-
-3. 위 요소들을 **자연스러운 한 문장**으로 조합해 최종 프롬프트를 생성한다.
- - 절대 "[ ]" 같은 플레이스홀더를 남기지 말 것.
- - 묘사된 디테일, 감성 단어, 연출 단어를 빠짐없이 담을 것.
-
-### 중요한 제약사항:
-- 반드시 **Asian person** 또는 **Korean** 명시 (동양인 인물로 생성)
-- 반드시 **no text, no words, no letters** 포함 (글자 없이 생성)
-- **16:9 aspect ratio** 명시 (썸네일 비율)
-- **ultra-realistic, cinematic style** 포함 (고품질 스타일)
-- **dramatic lighting** 포함 (극적인 조명)
-
-### 사용 예시:
-**사무실 커피 모멸 장면**
-"An explosive moment of humiliation unfolds in a high-pressure South Korean office: a furious male team leader in a sharply tailored navy suit hurls a full cup of coffee at a young Korean female employee. The liquid detonates mid-air in a dramatic burst—dark coffee splattering in every direction, frozen in a chaotic, high-speed arc that captures each droplet suspended in motion. The young woman, wearing a crisp white blouse now soaked through and clinging to her skin, reveals the faint silhouette of her undergarments beneath, amplifying her visible vulnerability... ultra-realistic, cinematic style with dramatic lighting, medium close-up framing, 16:9 aspect ratio, no text, no words, no letters"
-
-**공항 보안대치 장면**
-"A high-stakes confrontation unfolds at a sleek, modern airport security checkpoint: a confident Asian woman with sharp features and shoulder-length jet-black hair stands tall in a form-fitting black blazer that accentuates her silhouette, worn open over a low-cut, silk white blouse that subtly reveals her curves with a commanding sensuality. Her expression is one of poised indignation... ultra-realistic, cinematic style with dramatic lighting, medium close-up framing, 16:9 aspect ratio, no text, no words, no letters"
-
-영문 Imagen-3 생성 프롬프트만 응답해주세요:`;
+/** 업로드 정책 */
+const MAX_UPLOAD_MB = 10; // ✅ 10MB로 제한
+const DEFAULT_TEMPLATE = ``; // 템플릿 기본값
 
 export default function ThumbnailGenerator() {
   const fileInputRef = useRef(null);
@@ -93,7 +52,8 @@ export default function ThumbnailGenerator() {
   const [metaTemplate, setMetaTemplate] = useState(DEFAULT_TEMPLATE);
 
   const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null); // ObjectURL
+  const previewUrlRef = useRef(null); // revoke 관리용
 
   const [count, setCount] = useState(1);
   const [mode, setMode] = useState("dramatic"); // dramatic | calm
@@ -106,16 +66,77 @@ export default function ThumbnailGenerator() {
   const [usedPrompt, setUsedPrompt] = useState("");
   const [tookMs, setTookMs] = useState(null);
 
+  // 이미지 분석(Anthropic) 결과
+  const [fxLoading, setFxLoading] = useState(false);
+  const [fxErr, setFxErr] = useState("");
+  const [fxEn, setFxEn] = useState("");
+  const [fxKo, setFxKo] = useState("");
+
   const onPickFile = () => fileInputRef.current?.click();
 
+  /** 안전한 미리보기 URL 관리 (메모리 누수 방지) */
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  /** 참고 이미지 분석 (메인 프로세스 Anthropic IPC) */
+  const analyzeReference = async (file) => {
+    if (!file || !window?.api?.imagefxAnalyze) return;
+    try {
+      setFxLoading(true);
+      setFxErr("");
+      setFxEn("");
+      setFxKo("");
+
+      // Electron에서는 File에 file.path가 들어있음
+      const filePath = file.path || file.name;
+      const res = await window.api.imagefxAnalyze({
+        filePath,
+        description: prompt.trim() || undefined,
+      });
+      if (!res?.ok) throw new Error(res?.message || "analysis_failed");
+
+      setFxEn(res.english || "");
+      setFxKo(res.korean || "");
+    } catch (e) {
+      setFxErr(String(e?.message || e));
+    } finally {
+      setFxLoading(false);
+    }
+  };
+
+  /** 파일 선택 처리 */
   const onFile = (file) => {
     if (!file) return;
-    if (!/image\/(png|jpe?g)/i.test(file.type))
-      return alert("PNG/JPG/JPEG만 업로드 가능합니다.");
-    if (file.size > 10 * 1024 * 1024)
-      return alert("최대 10MB까지 업로드 가능합니다.");
+
+    // ✅ PNG/JPG/JPEG만 허용 (WEBP 제외)
+    if (!/image\/(png|jpe?g)$/i.test(file.type)) {
+      return alert("PNG / JPG / JPEG만 업로드 가능합니다. (WEBP 불가)");
+    }
+
+    // ✅ 파일 크기 10MB 제한
+    if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
+      return alert(`최대 ${MAX_UPLOAD_MB}MB까지 업로드 가능합니다.`);
+    }
+
     setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+
+    // 미리보기 URL 생성 + 이전 URL 해제
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+    const url = URL.createObjectURL(file);
+    previewUrlRef.current = url;
+    setImagePreview(url);
+
+    // 업로드 직후 분석 (원치 않으면 버튼으로 분리 가능)
+    analyzeReference(file);
   };
 
   const onDrop = (e) => {
@@ -125,23 +146,16 @@ export default function ThumbnailGenerator() {
     onFile(file);
   };
 
-  const fileToDataUrl = async (file) => {
-    if (!file) return null;
-    const buf = await file.arrayBuffer();
-    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-    return `data:${file.type};base64,${b64}`;
-  };
-
-  /** 최종 프롬프트 만들기: 템플릿 → 공통 키워드 덧붙이기 */
+  /** 최종 프롬프트 만들기 */
   const buildFinalPrompt = () => {
     const base = prompt.trim();
-    const referenceAnalysis = ""; // (참고 이미지 분석: 추후 추가 예정)
+    const referenceAnalysis = ""; // (참고 이미지 분석 텍스트를 넣고 싶으면 여기에 매핑)
     let core = (metaTemplate || "")
       .replaceAll("{content}", base)
       .replaceAll("{referenceAnalysis}", referenceAnalysis)
       .trim();
 
-    if (!core) core = base; // 템플릿이 비어있다면 기존 방식 유지
+    if (!core) core = base; // 템플릿 비어있으면 기존 방식
 
     const common = [
       "ultra-realistic",
@@ -159,9 +173,8 @@ export default function ThumbnailGenerator() {
     return `${core}\n\n${[...common, ...mood].join(", ")}`;
   };
 
+  /** 생성 버튼 핸들러 */
   const onGenerate = async () => {
-    if (!prompt.trim() && !imageFile)
-      return alert("장면 설명 또는 참고 이미지를 입력해주세요.");
     if (!window?.api?.generateThumbnails)
       return alert(
         "IPC generateThumbnails가 없습니다. preload/main 설정을 확인하세요."
@@ -176,13 +189,14 @@ export default function ThumbnailGenerator() {
       const finalPrompt = buildFinalPrompt();
       setUsedPrompt(finalPrompt);
 
-      const referenceImage = await fileToDataUrl(imageFile);
-
+      // 참고 이미지가 필요하면, 여기서 file.path를 메인에서 읽어 쓰는 구조이므로
+      // 별도 base64 변환 없이 현재대로 유지 (replicate 핸들러는 referenceImage 옵션 없이도 동작 중)
       const res = await window.api.generateThumbnails({
         prompt: finalPrompt,
         count,
         mode,
-        referenceImage,
+        // referenceImage를 넘기는 로직을 쓰는 경우에는
+        // file → dataURL 변환 시에도 10MB 제한을 다시 체크해야 함
       });
 
       if (!res?.ok) {
@@ -192,6 +206,7 @@ export default function ThumbnailGenerator() {
             : JSON.stringify(res?.message)
         );
       }
+
       const urls = Array.isArray(res.images) ? res.images : [];
       setResults(urls.map((u) => ({ url: u })));
       setTookMs(Date.now() - started);
@@ -210,11 +225,11 @@ export default function ThumbnailGenerator() {
           <span>🎯</span> 썸네일 생성기
         </h1>
         <span className="text-xs text-gray-500">
-          PNG, JPG, JPEG · 최대 10MB
+          PNG, JPG, JPEG · 최대 {MAX_UPLOAD_MB}MB (WEBP 불가)
         </span>
       </div>
 
-      {/* ▶ 프롬프트 템플릿 */}
+      {/* 프롬프트 템플릿 */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">
           <label className="font-semibold">썸네일 생성 프롬프트 템플릿</label>
@@ -227,11 +242,10 @@ export default function ThumbnailGenerator() {
           </button>
         </div>
         <p className="text-xs text-gray-500 mb-2">
-          이 템플릿은 사용자가 입력한 장면 설명을 바탕으로 실제 이미지 생성
-          프롬프트를 만드는 데 사용됩니다.{" "}
+          입력한 장면 설명을 바탕으로 실제 이미지 생성 프롬프트를 만듭니다.{" "}
           <code className="bg-gray-100 px-1 rounded">{`{content}`}</code>,{" "}
           <code className="bg-gray-100 px-1 rounded">{`{referenceAnalysis}`}</code>{" "}
-          변수를 사용할 수 있습니다.
+          변수를 사용할 수 있어요.
         </p>
         <textarea
           rows={6}
@@ -308,34 +322,94 @@ export default function ThumbnailGenerator() {
                 <p className="text-xs text-gray-500">
                   {(imageFile?.size / 1024 / 1024).toFixed(2)}MB
                 </p>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setImageFile(null);
-                    setImagePreview(null);
-                  }}
-                  className="mt-2 text-xs px-2 py-1 rounded border hover:bg-gray-50"
-                >
-                  제거
-                </button>
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setImageFile(null);
+                      if (previewUrlRef.current) {
+                        URL.revokeObjectURL(previewUrlRef.current);
+                        previewUrlRef.current = null;
+                      }
+                      setImagePreview(null);
+                      setFxEn("");
+                      setFxKo("");
+                      setFxErr("");
+                    }}
+                    className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
+                  >
+                    제거
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      analyzeReference(imageFile);
+                    }}
+                    className="text-xs px-2 py-1 rounded border hover:bg-gray-50 disabled:opacity-50"
+                    disabled={!imageFile || fxLoading}
+                    title="참고 이미지 재분석"
+                  >
+                    {fxLoading ? "분석 중…" : "분석 다시 실행"}
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
             <div className="text-gray-500">
               <div className="text-2xl mb-2">⬆️</div>
               <p className="text-sm">클릭하거나 드래그하여 업로드</p>
-              <p className="text-xs mt-1">PNG, JPG, JPEG (최대 10MB)</p>
+              <p className="text-xs mt-1">
+                PNG, JPG, JPEG (최대 {MAX_UPLOAD_MB}MB, WEBP 불가)
+              </p>
             </div>
           )}
 
           <input
             ref={fileInputRef}
             type="file"
+            // ✅ webp 제외
             accept="image/png,image/jpeg"
             className="hidden"
             onChange={(e) => onFile(e.target.files?.[0])}
           />
         </div>
+
+        {/* 참고 이미지 분석 결과 */}
+        {(fxLoading || fxErr || fxEn || fxKo) && (
+          <div className="mt-4 rounded-lg border bg-gray-50 p-3">
+            {fxErr && (
+              <div className="text-sm text-rose-600 mb-2">에러: {fxErr}</div>
+            )}
+            {fxLoading && !fxErr && (
+              <div className="text-sm text-gray-600">이미지 분석 중…</div>
+            )}
+
+            {fxEn && (
+              <>
+                <div className="text-[13px] font-medium mb-1">
+                  English Prompt
+                </div>
+                <textarea
+                  className="w-full h-28 border rounded p-2 text-xs"
+                  readOnly
+                  value={fxEn}
+                />
+              </>
+            )}
+            {fxKo && (
+              <>
+                <div className="text-[13px] font-medium mt-3 mb-1">
+                  한국어 번역
+                </div>
+                <textarea
+                  className="w-full h-28 border rounded p-2 text-xs"
+                  readOnly
+                  value={fxKo}
+                />
+              </>
+            )}
+          </div>
+        )}
 
         <TipCard className="bg-white/70">
           참고 이미지를 업로드하면 스타일과 구도를 분석해 결과의 일관성이
@@ -412,13 +486,20 @@ export default function ThumbnailGenerator() {
                 <div className="p-3 flex items-center justify-between">
                   <div className="text-sm font-medium">썸네일 #{i + 1}</div>
                   <div className="flex items-center gap-2">
-                    <a
-                      href={r.url}
-                      download={`thumbnail-${i + 1}.png`}
+                    <button
+                      onClick={async () => {
+                        const res = await window.api.saveUrlToFile({
+                          url: r.url,
+                          suggestedName: `thumbnail-${i + 1}.png`,
+                        });
+                        if (!res?.ok && res?.message !== "canceled") {
+                          alert(`저장 실패: ${res?.message || "unknown"}`);
+                        }
+                      }}
                       className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
                     >
                       다운로드
-                    </a>
+                    </button>
                     <a
                       href={r.url}
                       target="_blank"

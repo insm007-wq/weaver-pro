@@ -1,3 +1,4 @@
+// src/components/settings/tabs/ApiTab.jsx
 import React, { useEffect, useMemo, useState } from "react";
 
 export default function ApiTab() {
@@ -19,7 +20,6 @@ export default function ApiTab() {
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
-    // 앱 시작 시 저장된 값 불러오기
     (async () => {
       const [ak, rk, gid, mk] = await Promise.all([
         window.api.getSecret("anthropicKey"),
@@ -44,24 +44,26 @@ export default function ApiTab() {
   const setStat = (k, ok, msg) =>
     setStatus((s) => ({ ...s, [k]: { ok, msg, ts: Date.now() } }));
 
-  /* ----- 저장 핸들러 ----- */
+  // ----- 저장 -----
   const saveAnthropic = async () => {
-    await window.api.setSecret("anthropicKey", anthropicKey);
+    await window.api.setSecret({ key: "anthropicKey", value: anthropicKey });
     setToast({ type: "success", text: "Anthropic 키 저장 완료" });
   };
+
   const saveReplicate = async () => {
-    await window.api.setSecret("replicateKey", replicateKey);
+    await window.api.setSecret({ key: "replicateKey", value: replicateKey });
     setToast({ type: "success", text: "Replicate 토큰 저장 완료" });
   };
+
   const saveMiniMax = async () => {
     await Promise.all([
-      window.api.setSetting("miniMaxGroupId", miniMaxGroupId),
-      window.api.setSecret("miniMaxKey", miniMaxKey),
+      window.api.setSetting({ key: "miniMaxGroupId", value: miniMaxGroupId }),
+      window.api.setSecret({ key: "miniMaxKey", value: miniMaxKey }),
     ]);
     setToast({ type: "success", text: "MiniMax 설정 저장 완료" });
   };
 
-  /* ----- 테스트 핸들러 (기존과 동일) ----- */
+  // ----- 테스트 -----
   const handleTestReplicate = async () => {
     setBusy("replicate", true);
     setStat("replicate", false, "");
