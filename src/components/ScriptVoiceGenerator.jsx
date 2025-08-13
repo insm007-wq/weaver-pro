@@ -104,12 +104,22 @@ export default function ScriptVoiceGenerator() {
       }
       setDoc(generatedDoc);
 
+      // --- SRT 생성 & 저장 ---
       setPhase("SRT");
-      await call("script/toSrt", { doc: generatedDoc });
+      const srtRes = await call("script/toSrt", { doc: generatedDoc });
+      if (srtRes?.srt) {
+        const srtBuf = new TextEncoder().encode(srtRes.srt).buffer;
+        await call("files/saveToProject", {
+          category: "subtitle",
+          fileName: "subtitle.srt",
+          buffer: srtBuf,
+        });
+      }
 
+      // --- TTS 생성 ---
       setPhase("TTS");
       setProgress({ current: 0, total: generatedDoc.scenes.length });
-      await call("tts/synthesizeByScenes", {
+      const ttsRes = await call("tts/synthesizeByScenes", {
         doc: generatedDoc,
         tts: {
           engine: form.ttsEngine,
@@ -119,6 +129,37 @@ export default function ScriptVoiceGenerator() {
         },
       });
 
+      // 씬별 MP3 저장 및 병합
+      let merged = [];
+      if (ttsRes?.parts?.length) {
+        for (let i = 0; i < ttsRes.parts.length; i++) {
+          const p = ttsRes.parts[i];
+          const arr = base64ToArrayBuffer(p.base64);
+          merged.push(new Uint8Array(arr));
+          await call("files/saveToProject", {
+            category: "audio/parts",
+            fileName: p.fileName,
+            buffer: arr,
+          });
+          setProgress({ current: i + 1, total: ttsRes.parts.length });
+        }
+
+        // 간단 병합(연속 결합) → narration.mp3 저장
+        const totalLen = merged.reduce((s, u) => s + u.byteLength, 0);
+        const out = new Uint8Array(totalLen);
+        let off = 0;
+        merged.forEach((u) => {
+          out.set(u, off);
+          off += u.byteLength;
+        });
+        await call("files/saveToProject", {
+          category: "audio",
+          fileName: "narration.mp3",
+          buffer: out.buffer,
+        });
+      }
+
+      // (호환) 메인 프로세스 병합 호출은 NO-OP
       setPhase("MERGE");
       setProgress({ current: 1, total: 1 });
       await call("audio/concatScenes", {});
@@ -171,7 +212,7 @@ export default function ScriptVoiceGenerator() {
 
   return (
     // ✅ 썸네일 페이지와 동일한 “흰 카드” 래퍼
-    <div className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-md">
+    <div className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-2xl border border-slate-200">
       {/* 헤더 (non-sticky) */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -548,4 +589,12 @@ function secToTime(sec) {
   const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
   const ss = String(s % 60).padStart(2, "0");
   return hh !== "00" ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+function base64ToArrayBuffer(b64) {
+  const bin = atob(b64);
+  const len = bin.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
 }

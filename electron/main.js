@@ -9,6 +9,10 @@ require("./ipc/settings");
 require("./ipc/health");
 require("./ipc/image-analyzer");
 require("./ipc/files");
+require("./ipc/llm");
+require("./ipc/script");
+require("./ipc/tts");
+require("./ipc/audio");
 
 app.whenReady().then(createMainWindow);
 
