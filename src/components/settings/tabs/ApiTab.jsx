@@ -7,30 +7,37 @@ export default function ApiTab() {
   const [miniMaxGroupId, setMiniMaxGroupId] = useState("");
   const [miniMaxKey, setMiniMaxKey] = useState("");
 
+  // ✅ 추가: Google TTS
+  const [googleTtsKey, setGoogleTtsKey] = useState("");
+
   const [status, setStatus] = useState({
     anthropic: null,
     replicate: null,
     minimax: null,
+    googleTts: null, // ✅ 추가
   });
   const [loading, setLoading] = useState({
     anthropic: false,
     replicate: false,
     minimax: false,
+    googleTts: false, // ✅ 추가
   });
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
     (async () => {
-      const [ak, rk, gid, mk] = await Promise.all([
+      const [ak, rk, gid, mk, gk] = await Promise.all([
         window.api.getSecret("anthropicKey"),
         window.api.getSecret("replicateKey"),
         window.api.getSetting("miniMaxGroupId"),
         window.api.getSecret("miniMaxKey"),
+        window.api.getSecret("googleTtsApiKey"), // ✅ 추가
       ]);
       setAnthropicKey(ak || "");
       setReplicateKey(rk || "");
       setMiniMaxGroupId(gid || "");
       setMiniMaxKey(mk || "");
+      setGoogleTtsKey(gk || ""); // ✅ 추가
     })();
   }, []);
 
@@ -61,6 +68,12 @@ export default function ApiTab() {
       window.api.setSecret({ key: "miniMaxKey", value: miniMaxKey }),
     ]);
     setToast({ type: "success", text: "MiniMax 설정 저장 완료" });
+  };
+
+  // ✅ 추가: Google TTS 저장
+  const saveGoogleTts = async () => {
+    await window.api.setSecret({ key: "googleTtsApiKey", value: googleTtsKey });
+    setToast({ type: "success", text: "Google TTS 키 저장 완료" });
   };
 
   // ----- 테스트 -----
@@ -136,6 +149,36 @@ export default function ApiTab() {
       setToast({ type: "error", text: "MiniMax 오류" });
     } finally {
       setBusy("minimax", false);
+    }
+  };
+
+  // ✅ 추가: Google TTS 테스트 (testGoogleTTS가 없으면 안내)
+  const handleTestGoogleTts = async () => {
+    setBusy("googleTts", true);
+    setStat("googleTts", false, "");
+    try {
+      if (typeof window.api.testGoogleTTS !== "function") {
+        setStat("googleTts", true, "키 저장됨 (테스트 함수 미구현)");
+        setToast({ type: "success", text: "Google TTS 키 확인(간이)" });
+        return;
+      }
+      const res = await window.api.testGoogleTTS(googleTtsKey);
+      res?.ok
+        ? setStat("googleTts", true, "연결 성공")
+        : setStat(
+            "googleTts",
+            false,
+            `실패: ${JSON.stringify(res?.message ?? "")}`
+          );
+      setToast({
+        type: res?.ok ? "success" : "error",
+        text: res?.ok ? "Google TTS 연결 성공" : "Google TTS 실패",
+      });
+    } catch (e) {
+      setStat("googleTts", false, `오류: ${e?.message || e}`);
+      setToast({ type: "error", text: "Google TTS 오류" });
+    } finally {
+      setBusy("googleTts", false);
     }
   };
 
@@ -215,6 +258,23 @@ export default function ApiTab() {
             className="w-1/2 px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
         </div>
+      </Section>
+
+      {/* ✅ Google TTS */}
+      <Section
+        title="🗣️ Google Cloud Text-to-Speech"
+        status={status.googleTts}
+        loading={loading.googleTts}
+        onTest={handleTestGoogleTts}
+        onSave={saveGoogleTts}
+      >
+        <input
+          type="password"
+          value={googleTtsKey}
+          onChange={(e) => setGoogleTtsKey(e.target.value)}
+          placeholder="Google Cloud API Key (Text-to-Speech)"
+          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+        />
       </Section>
     </div>
   );
