@@ -1,13 +1,18 @@
 // src/components/ScriptVoiceGenerator.jsx
-import { useMemo, useRef, useState, useLayoutEffect } from "react";
+import { useMemo, useRef, useState, useLayoutEffect, useEffect } from "react";
 
 const DUR_OPTIONS = [1, 3, 5, 7, 10, 15];
 const MAX_SCENE_OPTIONS = [6, 8, 10, 12, 15, 20];
+
+// ✅ LLM 옵션: OpenAI GPT-5 mini 추가
 const LLM_OPTIONS = [
   { label: "Anthropic Claude 3.5/3.7", value: "anthropic" },
   { label: "Minimax abab", value: "minimax" },
-  { label: "OpenAI", value: "openai" },
+  { label: "OpenAI GPT-5 mini", value: "openai-gpt5mini" }, // ← 추가
+  // 필요하면 나중에 표준 GPT-5도 노출:
+  // { label: "OpenAI GPT-5", value: "openai-gpt5" },
 ];
+
 const TTS_ENGINES = [
   { label: "Google Cloud TTS", value: "google" },
   { label: "Azure Speech", value: "azure" },
@@ -34,7 +39,7 @@ export default function ScriptVoiceGenerator() {
     style: "",
     durationMin: 5,
     maxScenes: 10,
-    llmMain: "anthropic",
+    llmMain: "openai-gpt5mini",
     ttsEngine: "google",
     voiceName: "ko-KR-Wavenet-A",
     speakingRate: 1.0,
@@ -46,11 +51,15 @@ export default function ScriptVoiceGenerator() {
   const importMp3Ref = useRef(null);
 
   const [status, setStatus] = useState("idle"); // idle|running|done|error
-  const [phase, setPhase] = useState("");
+  const [phase, setPhase] = useState(""); // SCRIPT|SRT|TTS|MERGE|완료
   const [progress, setProgress] = useState({ current: 0, total: 0 });
 
   const [doc, setDoc] = useState(null);
   const [error, setError] = useState("");
+
+  // ⏱️ SCRIPT 단계 경과초(인디케이터용)
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const scriptTimerRef = useRef(null);
 
   // ✅ 폭 고정(썸네일 생성기와 동일)
   const containerRef = useRef(null);
@@ -77,11 +86,29 @@ export default function ScriptVoiceGenerator() {
     }
   };
 
+  // ▶️ SCRIPT 인디케이터 시작/종료
+  const startScriptIndicator = () => {
+    setElapsedSec(0);
+    if (scriptTimerRef.current) clearInterval(scriptTimerRef.current);
+    scriptTimerRef.current = setInterval(
+      () => setElapsedSec((s) => s + 1),
+      1000
+    );
+  };
+  const stopScriptIndicator = () => {
+    if (scriptTimerRef.current) {
+      clearInterval(scriptTimerRef.current);
+      scriptTimerRef.current = null;
+    }
+  };
+  useEffect(() => () => stopScriptIndicator(), []);
+
   const runGenerate = async (mode) => {
     setStatus("running");
     setError("");
     setPhase("SCRIPT");
     setProgress({ current: 0, total: 0 });
+    startScriptIndicator(); // ⏱️ 인디케이터 시작
 
     try {
       let generatedDoc = null;
@@ -93,7 +120,7 @@ export default function ScriptVoiceGenerator() {
           style: form.style,
           duration: form.durationMin,
           maxScenes: form.maxScenes,
-          llm: form.llmMain,
+          llm: form.llmMain, // ← openai-gpt5mini 선택 시 백엔드가 해당 모델로 생성
         });
       } else if (mode === "ref") {
         generatedDoc = await call("llm/generateScript", {
@@ -109,6 +136,7 @@ export default function ScriptVoiceGenerator() {
         generatedDoc = doc;
       }
 
+      stopScriptIndicator(); // ⏹️
       if (!generatedDoc || !generatedDoc.scenes?.length) {
         throw new Error("대본 생성 결과가 비어있습니다.");
       }
@@ -139,7 +167,7 @@ export default function ScriptVoiceGenerator() {
         },
       });
 
-      // 씬별 MP3 저장 및 병합
+      // 씬별 MP3 저장 및 병합(간단 연결)
       let merged = [];
       if (ttsRes?.parts?.length) {
         for (let i = 0; i < ttsRes.parts.length; i++) {
@@ -154,7 +182,6 @@ export default function ScriptVoiceGenerator() {
           setProgress({ current: i + 1, total: ttsRes.parts.length });
         }
 
-        // 간단 병합(연속 결합) → narration.mp3 저장
         const totalLen = merged.reduce((s, u) => s + u.byteLength, 0);
         const out = new Uint8Array(totalLen);
         let off = 0;
@@ -169,7 +196,6 @@ export default function ScriptVoiceGenerator() {
         });
       }
 
-      // (호환) 메인 프로세스 병합 호출은 NO-OP
       setPhase("MERGE");
       setProgress({ current: 1, total: 1 });
       await call("audio/concatScenes", {});
@@ -177,6 +203,7 @@ export default function ScriptVoiceGenerator() {
       setStatus("done");
       setPhase("완료");
     } catch (e) {
+      stopScriptIndicator();
       setStatus("error");
       setError(e?.message || "오류가 발생했습니다.");
     }
@@ -221,7 +248,6 @@ export default function ScriptVoiceGenerator() {
     (activeTab === "import" && doc);
 
   return (
-    // ✅ 썸네일 생성기와 동일한 흰 카드 + 고정폭 래퍼
     <div
       ref={containerRef}
       className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-md"
@@ -238,7 +264,7 @@ export default function ScriptVoiceGenerator() {
           : { scrollbarGutter: "stable both-edges" }
       }
     >
-      {/* 헤더 (non-sticky) */}
+      {/* 헤더 */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold">대본 &amp; 음성 생성</h1>
@@ -250,6 +276,7 @@ export default function ScriptVoiceGenerator() {
           {status !== "idle" && (
             <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
               {phase}
+              {phase === "SCRIPT" && ` · ${elapsedSec}s`}
               {progress.total > 0 && ` · ${progress.current}/${progress.total}`}
             </span>
           )}
@@ -267,6 +294,17 @@ export default function ScriptVoiceGenerator() {
           </button>
         </div>
       </div>
+
+      {/* 진행 바 */}
+      {status !== "idle" && (
+        <div className="mb-4">
+          {phase === "SCRIPT" ? (
+            <IndeterminateBar />
+          ) : (
+            <ProgressBar current={progress.current} total={progress.total} />
+          )}
+        </div>
+      )}
 
       {/* 탭 바 */}
       <div className="mb-4 flex gap-2 border-b border-slate-200">
@@ -570,6 +608,29 @@ function Th({ children, className = "" }) {
 }
 function Td({ children, className = "" }) {
   return <td className={`px-3 py-2 ${className}`}>{children}</td>;
+}
+
+/** 진행바(정량) */
+function ProgressBar({ current, total }) {
+  const pct =
+    total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
+  return (
+    <div className="w-full h-2 rounded bg-slate-100 overflow-hidden">
+      <div
+        className="h-2 bg-blue-500 transition-all"
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  );
+}
+
+/** 진행바(비정량, SCRIPT용) */
+function IndeterminateBar() {
+  return (
+    <div className="w-full h-2 rounded bg-slate-100 overflow-hidden">
+      <div className="h-2 bg-blue-500 animate-pulse" style={{ width: "40%" }} />
+    </div>
+  );
 }
 
 function TtsPanel({ form, onChange, voices }) {
