@@ -10,7 +10,7 @@ const ThumbnailGenerator = lazy(() =>
   import("./components/ThumbnailGenerator")
 );
 const ScriptVoiceGenerator = lazy(() =>
-  import("./components/ScriptVoiceGenerator")
+  import("./components/scriptgen/ScriptVoiceGenerator")
 );
 
 /** ✅ 프로젝트 없이도 열 수 있는 페이지 (재생성 방지) */

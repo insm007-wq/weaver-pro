@@ -4,13 +4,11 @@ import { useMemo, useRef, useState, useLayoutEffect, useEffect } from "react";
 const DUR_OPTIONS = [1, 3, 5, 7, 10, 15];
 const MAX_SCENE_OPTIONS = [6, 8, 10, 12, 15, 20];
 
-// ✅ LLM 옵션: OpenAI GPT-5 mini 추가
+// ✅ LLM 옵션: OpenAI GPT-5 mini 기본값
 const LLM_OPTIONS = [
   { label: "Anthropic Claude 3.5/3.7", value: "anthropic" },
   { label: "Minimax abab", value: "minimax" },
-  { label: "OpenAI GPT-5 mini", value: "openai-gpt5mini" }, // ← 추가
-  // 필요하면 나중에 표준 GPT-5도 노출:
-  // { label: "OpenAI GPT-5", value: "openai-gpt5" },
+  { label: "OpenAI GPT-5 mini", value: "openai-gpt5mini" },
 ];
 
 const TTS_ENGINES = [
@@ -32,8 +30,35 @@ const VOICES_BY_ENGINE = {
   openai: ["alloy", "nova", "verse"],
 };
 
+/** 프롬프트 기본값(고객사 요구안 반영) */
+const DEFAULT_GENERATE_PROMPT = `다음 조건에 맞는 {duration}분 길이의 영상 대본을 작성해주세요:
+
+주제: {topic}
+스타일: {style}
+언어: 한국어
+최대 장면 수: {maxScenes}개
+
+요구사항:
+- 장면 수는 가능한 한 최대 장면 수에 가깝게 분할
+- 자연스러운 구어체
+- JSON 외 텍스트 금지`;
+
+const DEFAULT_REFERENCE_PROMPT = `## 레퍼런스 대본 분석 및 적용
+
+다음 레퍼런스 대본을 분석하고 그 장점을 활용해주세요:
+
+=== 레퍼런스 대본 ===
+{referenceScript}
+=== 레퍼런스 대본 끝 ===
+
+요구사항:
+- 레퍼런스의 구조/톤/템포를 참고하되, 표절 없이 새로 작성
+- 한국어 구어체
+- JSON 외 텍스트 금지`;
+
 export default function ScriptVoiceGenerator() {
-  const [activeTab, setActiveTab] = useState("auto"); // auto|ref|import
+  // 🔹 탭 추가: prompt
+  const [activeTab, setActiveTab] = useState("auto"); // auto|ref|import|prompt
   const [form, setForm] = useState({
     topic: "",
     style: "",
@@ -50,6 +75,44 @@ export default function ScriptVoiceGenerator() {
   const importSrtRef = useRef(null);
   const importMp3Ref = useRef(null);
 
+  // ✅ 커스텀 프롬프트 상태 + 로드/저장
+  const [genPrompt, setGenPrompt] = useState(DEFAULT_GENERATE_PROMPT);
+  const [refPrompt, setRefPrompt] = useState(DEFAULT_REFERENCE_PROMPT);
+  const [promptSavedAt, setPromptSavedAt] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [gp, rp] = await Promise.all([
+          window.api.getSetting("prompt.generateTemplate"),
+          window.api.getSetting("prompt.referenceTemplate"),
+        ]);
+        if (gp) setGenPrompt(gp);
+        if (rp) setRefPrompt(rp);
+      } catch (e) {
+        // 무시(최초 실행 시 settings 없을 수 있음)
+      }
+    })();
+  }, []);
+
+  const savePrompts = async () => {
+    await Promise.all([
+      window.api.setSetting({
+        key: "prompt.generateTemplate",
+        value: genPrompt,
+      }),
+      window.api.setSetting({
+        key: "prompt.referenceTemplate",
+        value: refPrompt,
+      }),
+    ]);
+    setPromptSavedAt(new Date());
+  };
+  const resetPrompts = () => {
+    setGenPrompt(DEFAULT_GENERATE_PROMPT);
+    setRefPrompt(DEFAULT_REFERENCE_PROMPT);
+  };
+
   const [status, setStatus] = useState("idle"); // idle|running|done|error
   const [phase, setPhase] = useState(""); // SCRIPT|SRT|TTS|MERGE|완료
   const [progress, setProgress] = useState({ current: 0, total: 0 });
@@ -57,11 +120,11 @@ export default function ScriptVoiceGenerator() {
   const [doc, setDoc] = useState(null);
   const [error, setError] = useState("");
 
-  // ⏱️ SCRIPT 단계 경과초(인디케이터용)
+  // ⏱️ SCRIPT 단계 경과초
   const [elapsedSec, setElapsedSec] = useState(0);
   const scriptTimerRef = useRef(null);
 
-  // ✅ 폭 고정(썸네일 생성기와 동일)
+  // ✅ 폭 고정
   const containerRef = useRef(null);
   const [fixedWidthPx, setFixedWidthPx] = useState(null);
   useLayoutEffect(() => {
@@ -86,7 +149,7 @@ export default function ScriptVoiceGenerator() {
     }
   };
 
-  // ▶️ SCRIPT 인디케이터 시작/종료
+  // ▶️ SCRIPT 인디케이터
   const startScriptIndicator = () => {
     setElapsedSec(0);
     if (scriptTimerRef.current) clearInterval(scriptTimerRef.current);
@@ -108,35 +171,38 @@ export default function ScriptVoiceGenerator() {
     setError("");
     setPhase("SCRIPT");
     setProgress({ current: 0, total: 0 });
-    startScriptIndicator(); // ⏱️ 인디케이터 시작
+    startScriptIndicator();
 
     try {
+      // 프롬프트 오버라이드 전달(백엔드가 지원하면 사용, 아니면 무시)
+      const payloadCommon = {
+        topic: form.topic,
+        style: form.style,
+        duration: form.durationMin,
+        maxScenes: form.maxScenes,
+        llm: form.llmMain,
+        promptTemplate: genPrompt,
+        promptRefTemplate: refPrompt,
+      };
+
       let generatedDoc = null;
 
       if (mode === "auto") {
         generatedDoc = await call("llm/generateScript", {
+          ...payloadCommon,
           type: "auto",
-          topic: form.topic,
-          style: form.style,
-          duration: form.durationMin,
-          maxScenes: form.maxScenes,
-          llm: form.llmMain, // ← openai-gpt5mini 선택 시 백엔드가 해당 모델로 생성
         });
       } else if (mode === "ref") {
         generatedDoc = await call("llm/generateScript", {
+          ...payloadCommon,
           type: "reference",
-          topic: form.topic,
-          style: form.style,
-          duration: form.durationMin,
-          maxScenes: form.maxScenes,
           referenceText: refText,
-          llm: form.llmMain,
         });
       } else {
         generatedDoc = doc;
       }
 
-      stopScriptIndicator(); // ⏹️
+      stopScriptIndicator();
       if (!generatedDoc || !generatedDoc.scenes?.length) {
         throw new Error("대본 생성 결과가 비어있습니다.");
       }
@@ -323,6 +389,12 @@ export default function ScriptVoiceGenerator() {
           onClick={() => setActiveTab("import")}
           label="가져오기 (SRT/MP3)"
         />
+        {/* 🔹 새 탭: 프롬프트 */}
+        <TabButton
+          active={activeTab === "prompt"}
+          onClick={() => setActiveTab("prompt")}
+          label="프롬프트"
+        />
       </div>
 
       {/* 본문 */}
@@ -469,6 +541,66 @@ export default function ScriptVoiceGenerator() {
             </div>
             <div className="mt-4">
               <TtsPanel form={form} onChange={onChange} voices={voices} />
+            </div>
+          </Card>
+        )}
+
+        {/* 🔹 새 탭: 프롬프트 편집 */}
+        {activeTab === "prompt" && (
+          <Card>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-semibold">프롬프트 관리</div>
+              <div className="text-xs text-slate-500">
+                {promptSavedAt
+                  ? `저장됨: ${promptSavedAt.toLocaleTimeString()}`
+                  : ""}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  대본 생성 프롬프트
+                </label>
+                <textarea
+                  className="w-full h-64 text-sm rounded-lg border border-slate-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  value={genPrompt}
+                  onChange={(e) => setGenPrompt(e.target.value)}
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  사용 가능한 변수:{" "}
+                  {"{topic}, {style}, {duration}, {maxScenes}"}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  레퍼런스 분석 프롬프트
+                </label>
+                <textarea
+                  className="w-full h-64 text-sm rounded-lg border border-slate-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  value={refPrompt}
+                  onChange={(e) => setRefPrompt(e.target.value)}
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  사용 가능 변수: {"{referenceScript}, {topic}"}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={savePrompts}
+                className="px-3 py-2 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-500"
+              >
+                저장
+              </button>
+              <button
+                onClick={resetPrompts}
+                className="px-3 py-2 text-xs rounded-lg bg-slate-100 hover:bg-slate-200"
+              >
+                기본값으로 초기화
+              </button>
             </div>
           </Card>
         )}
