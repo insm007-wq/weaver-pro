@@ -1,9 +1,10 @@
+// src/App.jsx
 import { useCallback, useMemo, useState, Suspense, lazy } from "react";
 
 // ✅ 코드 스플리팅: 초기 로드 가벼움
 const Sidebar = lazy(() => import("./components/Sidebar"));
 const ProjectInit = lazy(() => import("./components/ProjectInit"));
-const SettingsDialog = lazy(() => import("./components/SettngsDialog"));
+const SettingsPage = lazy(() => import("./components/SettingsPage"));
 const HeaderBar = lazy(() => import("./components/HeaderBar"));
 const ThumbnailGenerator = lazy(() =>
   import("./components/ThumbnailGenerator")
@@ -26,7 +27,7 @@ function Spinner({ label = "Loading..." }) {
 
 export default function App() {
   const [projectName, setProjectName] = useState(null);
-  const [currentPage, setCurrentPage] = useState(null); // null: 초기 진입
+  const [currentPage, setCurrentPage] = useState(null);
 
   /** ✅ 프로젝트 생성 → 즉시 script로 이동 */
   const handleCreateProject = useCallback((name) => {
@@ -41,12 +42,6 @@ export default function App() {
 
   const handleOpenSettings = useCallback(() => {
     setCurrentPage("settings");
-  }, []);
-
-  const handleCloseSettings = useCallback(() => {
-    setCurrentPage(null);
-    // 건강 상태 리프레시 이벤트
-    window.dispatchEvent(new CustomEvent("health:refresh"));
   }, []);
 
   /** ✅ 초기 화면/접근 가능 여부 계산 메모 */
@@ -86,8 +81,8 @@ export default function App() {
         );
 
       case "settings":
-        // 설정은 오버레이로 띄우므로 본문 비움
-        return null;
+        // ⬅️ 설정을 “전체 화면 페이지”로 렌더
+        return <SettingsPage onBack={() => setCurrentPage(null)} />;
 
       default:
         // 기본 대시 카드 (프로젝트 있는 경우만)
@@ -125,13 +120,6 @@ export default function App() {
           <Sidebar onSelectMenu={handleSelectMenu} />
         </Suspense>
       </div>
-
-      {/* 설정 다이얼로그 (오버레이) */}
-      {currentPage === "settings" && (
-        <Suspense fallback={<Spinner label="Loading settings..." />}>
-          <SettingsDialog onClose={handleCloseSettings} />
-        </Suspense>
-      )}
     </div>
   );
 }

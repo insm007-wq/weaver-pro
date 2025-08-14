@@ -1,5 +1,5 @@
 // src/components/ScriptVoiceGenerator.jsx
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useLayoutEffect } from "react";
 
 const DUR_OPTIONS = [1, 3, 5, 7, 10, 15];
 const MAX_SCENE_OPTIONS = [6, 8, 10, 12, 15, 20];
@@ -51,6 +51,16 @@ export default function ScriptVoiceGenerator() {
 
   const [doc, setDoc] = useState(null);
   const [error, setError] = useState("");
+
+  // ✅ 폭 고정(썸네일 생성기와 동일)
+  const containerRef = useRef(null);
+  const [fixedWidthPx, setFixedWidthPx] = useState(null);
+  useLayoutEffect(() => {
+    if (!fixedWidthPx && containerRef.current) {
+      const px = Math.round(containerRef.current.getBoundingClientRect().width);
+      if (px > 0) setFixedWidthPx(px);
+    }
+  }, [fixedWidthPx]);
 
   const voices = useMemo(
     () => VOICES_BY_ENGINE[form.ttsEngine] || [],
@@ -211,8 +221,23 @@ export default function ScriptVoiceGenerator() {
     (activeTab === "import" && doc);
 
   return (
-    // ✅ 썸네일 페이지와 동일한 “흰 카드” 래퍼
-    <div className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-2xl border border-slate-200">
+    // ✅ 썸네일 생성기와 동일한 흰 카드 + 고정폭 래퍼
+    <div
+      ref={containerRef}
+      className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-md"
+      style={
+        fixedWidthPx
+          ? {
+              width: `${fixedWidthPx}px`,
+              minWidth: `${fixedWidthPx}px`,
+              maxWidth: `${fixedWidthPx}px`,
+              flex: `0 0 ${fixedWidthPx}px`,
+              boxSizing: "border-box",
+              scrollbarGutter: "stable both-edges",
+            }
+          : { scrollbarGutter: "stable both-edges" }
+      }
+    >
       {/* 헤더 (non-sticky) */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
