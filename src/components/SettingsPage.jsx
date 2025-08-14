@@ -18,7 +18,7 @@ const tabs = [
   { key: "외관", name: "외관", icon: "🎨", Comp: AppearanceTab },
 ];
 
-export default function SettingsPage({ onBack }) {
+export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("기본값");
   const ActiveComp = tabs.find((t) => t.key === activeTab)?.Comp ?? DefaultsTab;
 
@@ -55,14 +55,6 @@ export default function SettingsPage({ onBack }) {
         <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
           <span>⚙️</span> 전역 설정
         </h1>
-        {onBack && (
-          <button
-            onClick={onBack}
-            className="text-xs px-3 py-1.5 rounded border hover:bg-gray-50"
-          >
-            돌아가기
-          </button>
-        )}
       </div>
 
       {/* 탭 바 */}

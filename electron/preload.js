@@ -48,6 +48,11 @@ contextBridge.exposeInMainWorld("api", {
   // =========================
   // API Connectivity Tests
   // =========================
+  /** OpenAI API 연결 테스트 */
+  testOpenAI: (apiKey) => {
+    console.log("[preload] invoke openai:test");
+    return ipcRenderer.invoke("openai:test", apiKey);
+  },
   /** Replicate API 연결 테스트 */
   testReplicate: (token) => {
     console.log("[preload] invoke replicate:test");
@@ -63,7 +68,7 @@ contextBridge.exposeInMainWorld("api", {
     console.log("[preload] invoke minimax:test");
     return ipcRenderer.invoke("minimax:test", payload);
   },
-  /** ✅ Google TTS 연결 테스트(있으면 사용, 없으면 메인에서 무시 가능) */
+  /** Google TTS 연결 테스트(있으면 사용, 없으면 메인에서 무시 가능) */
   testGoogleTTS: (apiKey) => {
     console.log("[preload] invoke testGoogleTTS");
     return ipcRenderer.invoke("testGoogleTTS", apiKey);
@@ -94,11 +99,45 @@ contextBridge.exposeInMainWorld("api", {
   },
 
   // =========================
-  // Image Generation (Replicate)
+  // LLM (대본 생성)
   // =========================
+  /** OpenAI GPT-5/mini 기반 대본 생성 */
+  generateScript: (payload) => {
+    console.log("[preload] invoke llm/generateScript");
+    return ipcRenderer.invoke("llm/generateScript", payload);
+  },
+
+  // =========================
+  // Script / Audio
+  // =========================
+  /** 자막(SRT) 변환 */
+  scriptToSrt: (payload) => {
+    console.log("[preload] invoke script/toSrt");
+    return ipcRenderer.invoke("script/toSrt", payload);
+  },
+  /** 장면별 합성(텍스트→음성) */
+  ttsSynthesizeByScenes: (payload) => {
+    console.log("[preload] invoke tts/synthesizeByScenes");
+    return ipcRenderer.invoke("tts/synthesizeByScenes", payload);
+  },
+  /** 장면 오디오 병합 */
+  audioConcatScenes: (payload) => {
+    console.log("[preload] invoke audio/concatScenes");
+    return ipcRenderer.invoke("audio/concatScenes", payload);
+  },
+
+  // =========================
+  // Image Generation
+  // =========================
+  /** Replicate 썸네일 생성 */
   generateThumbnails: (payload) => {
     console.log("[preload] invoke replicate:generate");
     return ipcRenderer.invoke("replicate:generate", payload);
+  },
+  /** Google Imagen3 썸네일 생성 */
+  generateThumbnailsGoogleImagen3: (payload) => {
+    console.log("[preload] invoke generateThumbnailsGoogleImagen3");
+    return ipcRenderer.invoke("generateThumbnailsGoogleImagen3", payload);
   },
 
   // =========================
@@ -109,7 +148,7 @@ contextBridge.exposeInMainWorld("api", {
     console.log("[preload] invoke file:save-url");
     return ipcRenderer.invoke("file:save-url", payload);
   },
-  /** ✅ 프로젝트 폴더에 버퍼 저장 (ScriptVoiceGenerator에서 사용) */
+  /** 프로젝트 폴더에 버퍼 저장 (ScriptVoiceGenerator에서 사용) */
   saveBufferToProject: ({ category, fileName, buffer }) => {
     console.log("[preload] invoke files/saveToProject", category, fileName);
     return ipcRenderer.invoke("files/saveToProject", {

@@ -2,21 +2,22 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 export default function ApiTab() {
+  const [openaiKey, setOpenaiKey] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
   const [replicateKey, setReplicateKey] = useState("");
   const [miniMaxGroupId, setMiniMaxGroupId] = useState("");
   const [miniMaxKey, setMiniMaxKey] = useState("");
-
-  // ✅ 추가: Google TTS
   const [googleTtsKey, setGoogleTtsKey] = useState("");
 
   const [status, setStatus] = useState({
+    openai: null, // ✅ OpenAI 상태 표시
     anthropic: null,
     replicate: null,
     minimax: null,
     googleTts: null, // ✅ 추가
   });
   const [loading, setLoading] = useState({
+    openai: false, // ✅ OpenAI 로딩 표시
     anthropic: false,
     replicate: false,
     minimax: false,
@@ -26,13 +27,15 @@ export default function ApiTab() {
 
   useEffect(() => {
     (async () => {
-      const [ak, rk, gid, mk, gk] = await Promise.all([
+      const [ok, ak, rk, gid, mk, gk] = await Promise.all([
+        window.api.getSecret("openaiKey"), // ✅ OpenAI
         window.api.getSecret("anthropicKey"),
         window.api.getSecret("replicateKey"),
         window.api.getSetting("miniMaxGroupId"),
         window.api.getSecret("miniMaxKey"),
         window.api.getSecret("googleTtsApiKey"), // ✅ 추가
       ]);
+      setOpenaiKey(ok || ""); // ✅ OpenAI
       setAnthropicKey(ak || "");
       setReplicateKey(rk || "");
       setMiniMaxGroupId(gid || "");
@@ -52,6 +55,11 @@ export default function ApiTab() {
     setStatus((s) => ({ ...s, [k]: { ok, msg, ts: Date.now() } }));
 
   // ----- 저장 -----
+  const saveOpenAI = async () => {
+    await window.api.setSecret({ key: "openaiKey", value: openaiKey });
+    setToast({ type: "success", text: "OpenAI 키 저장 완료" });
+  };
+
   const saveAnthropic = async () => {
     await window.api.setSecret({ key: "anthropicKey", value: anthropicKey });
     setToast({ type: "success", text: "Anthropic 키 저장 완료" });
@@ -77,6 +85,44 @@ export default function ApiTab() {
   };
 
   // ----- 테스트 -----
+  const handleTestOpenAI = async () => {
+    // ✅ 키 미입력 가드
+    if (!openaiKey?.trim()) {
+      setToast({ type: "error", text: "OpenAI 키를 입력하세요." });
+      setStat("openai", false, "키 미입력");
+      return;
+    }
+    setBusy("openai", true);
+    setStat("openai", false, "");
+    try {
+      const res = await window.api.testOpenAI(openaiKey);
+      res?.ok
+        ? setStat(
+            "openai",
+            true,
+            `연결 성공 (model: ${res?.model ?? "gpt-5-mini"})`
+          )
+        : setStat(
+            "openai",
+            false,
+            `실패: ${res?.status ?? ""} ${
+              typeof res?.message === "string"
+                ? res.message
+                : JSON.stringify(res?.message ?? "")
+            }`
+          );
+      setToast({
+        type: res?.ok ? "success" : "error",
+        text: res?.ok ? "OpenAI 연결 성공" : "OpenAI 실패",
+      });
+    } catch (e) {
+      setStat("openai", false, `오류: ${e?.message || e}`);
+      setToast({ type: "error", text: "OpenAI 오류" });
+    } finally {
+      setBusy("openai", false);
+    }
+  };
+
   const handleTestReplicate = async () => {
     setBusy("replicate", true);
     setStat("replicate", false, "");
@@ -199,6 +245,23 @@ export default function ApiTab() {
           </div>
         )}
       </div>
+
+      {/* ✅ OpenAI */}
+      <Section
+        title="🧠 OpenAI API Key"
+        status={status.openai}
+        loading={loading.openai}
+        onTest={handleTestOpenAI}
+        onSave={saveOpenAI}
+      >
+        <input
+          type="password"
+          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          value={openaiKey}
+          onChange={(e) => setOpenaiKey(e.target.value)}
+          placeholder="OpenAI API Key (sk-...)"
+        />
+      </Section>
 
       {/* Anthropic */}
       <Section
