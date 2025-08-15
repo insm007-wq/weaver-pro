@@ -5,13 +5,11 @@ import AutoTab from "./tabs/AutoTab";
 import RefTab from "./tabs/RefTab";
 import ImportTab from "./tabs/ImportTab";
 import PromptTab from "./tabs/PromptTab";
-import {
-  VOICES_BY_ENGINE,
-  DEFAULT_GENERATE_PROMPT,
-  DEFAULT_REFERENCE_PROMPT,
-} from "./constants";
+import { VOICES_BY_ENGINE, DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT } from "./constants";
 import { secToTime } from "./utils/time";
 import { base64ToArrayBuffer } from "./utils/buffer";
+import ScriptPromptTab from "./tabs/ScriptPromptTab";
+import ReferencePromptTab from "./tabs/ReferencePromptTab";
 
 export default function ScriptVoiceGenerator() {
   const [activeTab, setActiveTab] = useState("auto"); // auto|ref|import|prompt
@@ -38,15 +36,13 @@ export default function ScriptVoiceGenerator() {
   useEffect(() => {
     (async () => {
       try {
-        const [gp, rp] = await Promise.all([
-          window.api.getSetting("prompt.generateTemplate"),
-          window.api.getSetting("prompt.referenceTemplate"),
-        ]);
+        const [gp, rp] = await Promise.all([window.api.getSetting("prompt.generateTemplate"), window.api.getSetting("prompt.referenceTemplate")]);
         if (gp) setGenPrompt(gp);
         if (rp) setRefPrompt(rp);
       } catch {}
     })();
   }, []);
+
   const savePrompts = async () => {
     await Promise.all([
       window.api.setSetting({
@@ -60,13 +56,14 @@ export default function ScriptVoiceGenerator() {
     ]);
     setPromptSavedAt(new Date());
   };
+
   const resetPrompts = () => {
     setGenPrompt(DEFAULT_GENERATE_PROMPT);
     setRefPrompt(DEFAULT_REFERENCE_PROMPT);
   };
 
-  const [status, setStatus] = useState("idle"); // idle|running|done|error
-  const [phase, setPhase] = useState(""); // SCRIPT|SRT|TTS|MERGE|완료
+  const [status, setStatus] = useState("idle");
+  const [phase, setPhase] = useState("");
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [elapsedSec, setElapsedSec] = useState(0);
   const scriptTimerRef = useRef(null);
@@ -83,10 +80,7 @@ export default function ScriptVoiceGenerator() {
     }
   }, [fixedWidthPx]);
 
-  const voices = useMemo(
-    () => VOICES_BY_ENGINE[form.ttsEngine] || [],
-    [form.ttsEngine]
-  );
+  const voices = useMemo(() => VOICES_BY_ENGINE[form.ttsEngine] || [], [form.ttsEngine]);
   const onChange = (key, v) => setForm((s) => ({ ...s, [key]: v }));
 
   const call = (channel, payload) => window.api.invoke(channel, payload);
@@ -94,10 +88,7 @@ export default function ScriptVoiceGenerator() {
   const startScriptIndicator = () => {
     setElapsedSec(0);
     if (scriptTimerRef.current) clearInterval(scriptTimerRef.current);
-    scriptTimerRef.current = setInterval(
-      () => setElapsedSec((s) => s + 1),
-      1000
-    );
+    scriptTimerRef.current = setInterval(() => setElapsedSec((s) => s + 1), 1000);
   };
   const stopScriptIndicator = () => {
     if (scriptTimerRef.current) {
@@ -138,8 +129,7 @@ export default function ScriptVoiceGenerator() {
       else generatedDoc = doc;
 
       stopScriptIndicator();
-      if (!generatedDoc?.scenes?.length)
-        throw new Error("대본 생성 결과가 비어있습니다.");
+      if (!generatedDoc?.scenes?.length) throw new Error("대본 생성 결과가 비어있습니다.");
       setDoc(generatedDoc);
 
       setPhase("SRT");
@@ -236,10 +226,7 @@ export default function ScriptVoiceGenerator() {
     }
   };
 
-  const canRun =
-    (activeTab === "auto" && form.topic.trim()) ||
-    (activeTab === "ref" && refText.trim()) ||
-    (activeTab === "import" && doc);
+  const canRun = (activeTab === "auto" && form.topic.trim()) || (activeTab === "ref" && refText.trim()) || (activeTab === "import" && doc);
 
   return (
     <div
@@ -262,9 +249,7 @@ export default function ScriptVoiceGenerator() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold">대본 &amp; 음성 생성</h1>
-          <span className="text-xs text-slate-500">
-            SRT 자막 + MP3 내레이션을 한 번에
-          </span>
+          <span className="text-xs text-slate-500">SRT 자막 + MP3 내레이션을 한 번에</span>
         </div>
         <div className="flex items-center gap-3">
           {status !== "idle" && (
@@ -278,9 +263,7 @@ export default function ScriptVoiceGenerator() {
             onClick={() => runGenerate(activeTab)}
             disabled={!canRun || status === "running"}
             className={`px-4 py-2 rounded-lg text-sm text-white transition ${
-              status === "running"
-                ? "bg-slate-400 cursor-not-allowed"
-                : "bg-blue-600 hover:bg-blue-500"
+              status === "running" ? "bg-slate-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-500"
             }`}
           >
             실행
@@ -290,52 +273,21 @@ export default function ScriptVoiceGenerator() {
 
       {/* 진행 바 */}
       {status !== "idle" && (
-        <div className="mb-4">
-          {phase === "SCRIPT" ? (
-            <IndeterminateBar />
-          ) : (
-            <ProgressBar current={progress.current} total={progress.total} />
-          )}
-        </div>
+        <div className="mb-4">{phase === "SCRIPT" ? <IndeterminateBar /> : <ProgressBar current={progress.current} total={progress.total} />}</div>
       )}
 
       {/* 탭 바 */}
       <div className="mb-4 flex gap-2 border-b border-slate-200">
-        <TabButton
-          active={activeTab === "auto"}
-          onClick={() => setActiveTab("auto")}
-          label="자동 생성"
-        />
-        <TabButton
-          active={activeTab === "ref"}
-          onClick={() => setActiveTab("ref")}
-          label="레퍼런스 기반"
-        />
-        <TabButton
-          active={activeTab === "import"}
-          onClick={() => setActiveTab("import")}
-          label="가져오기 (SRT/MP3)"
-        />
-        <TabButton
-          active={activeTab === "prompt"}
-          onClick={() => setActiveTab("prompt")}
-          label="프롬프트"
-        />
+        <TabButton active={activeTab === "auto"} onClick={() => setActiveTab("auto")} label="자동 생성" />
+        <TabButton active={activeTab === "ref"} onClick={() => setActiveTab("ref")} label="레퍼런스 기반" />
+        <TabButton active={activeTab === "import"} onClick={() => setActiveTab("import")} label="가져오기 (SRT/MP3)" />
+        <TabButton active={activeTab === "prompt-gen"} onClick={() => setActiveTab("prompt-gen")} label="대본 프롬폰트" />
+        <TabButton active={activeTab === "prompt-ref"} onClick={() => setActiveTab("prompt-ref")} label="레퍼런스 프롬폰트" />
       </div>
 
       {/* 본문 */}
-      {activeTab === "auto" && (
-        <AutoTab form={form} onChange={onChange} voices={voices} />
-      )}
-      {activeTab === "ref" && (
-        <RefTab
-          form={form}
-          onChange={onChange}
-          voices={voices}
-          refText={refText}
-          setRefText={setRefText}
-        />
-      )}
+      {activeTab === "auto" && <AutoTab form={form} onChange={onChange} voices={voices} />}
+      {activeTab === "ref" && <RefTab form={form} onChange={onChange} voices={voices} refText={refText} setRefText={setRefText} />}
       {activeTab === "import" && (
         <ImportTab
           form={form}
@@ -347,6 +299,7 @@ export default function ScriptVoiceGenerator() {
           onUseMp3={handleUseUploadedMp3}
         />
       )}
+
       {activeTab === "prompt" && (
         <PromptTab
           genPrompt={genPrompt}
@@ -359,13 +312,42 @@ export default function ScriptVoiceGenerator() {
         />
       )}
 
+      {activeTab === "prompt-gen" && (
+        <Card>
+          <ScriptPromptTab
+            template={genPrompt}
+            setTemplate={setGenPrompt}
+            savedAt={promptSavedAt}
+            onSave={() => savePrompt("generate")}
+            onReset={() => resetPrompt("generate")}
+            form={form}
+            onChange={onChange}
+            voices={voices}
+          />
+        </Card>
+      )}
+
+      {activeTab === "prompt-ref" && (
+        <Card>
+          <ReferencePromptTab
+            template={refPrompt}
+            setTemplate={setRefPrompt}
+            savedAt={promptSavedAt}
+            onSave={() => savePrompt("reference")}
+            onReset={() => resetPrompt("reference")}
+            form={form}
+            onChange={onChange}
+            voices={voices}
+            refText={refText}
+          />
+        </Card>
+      )}
+
       {/* 결과/리스트 */}
       <Card className="mt-5">
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-semibold">씬 미리보기</div>
-          <div className="text-xs text-slate-500">
-            {doc?.scenes?.length ? `${doc.scenes.length}개 씬` : "대본 없음"}
-          </div>
+          <div className="text-xs text-slate-500">{doc?.scenes?.length ? `${doc.scenes.length}개 씬` : "대본 없음"}</div>
         </div>
         <div className="border border-slate-200 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
@@ -384,9 +366,7 @@ export default function ScriptVoiceGenerator() {
                   <Td className="text-center">
                     {secToTime(sc.start)}–{secToTime(sc.end)}
                   </Td>
-                  <Td className="text-center">
-                    {sc.charCount ?? sc.text?.length}
-                  </Td>
+                  <Td className="text-center">{sc.charCount ?? sc.text?.length}</Td>
                   <Td className="text-slate-700">{sc.text}</Td>
                 </tr>
               ))}
@@ -400,11 +380,7 @@ export default function ScriptVoiceGenerator() {
             </tbody>
           </table>
         </div>
-        {error && (
-          <div className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
-            {error}
-          </div>
-        )}
+        {error && <div className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</div>}
       </Card>
     </div>
   );
