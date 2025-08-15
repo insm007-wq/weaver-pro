@@ -4,7 +4,6 @@ import { ProgressBar, IndeterminateBar } from "./parts/ProgressBar";
 import AutoTab from "./tabs/AutoTab";
 import RefTab from "./tabs/RefTab";
 import ImportTab from "./tabs/ImportTab";
-import PromptTab from "./tabs/PromptTab";
 import { VOICES_BY_ENGINE, DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT } from "./constants";
 import { secToTime } from "./utils/time";
 import { base64ToArrayBuffer } from "./utils/buffer";
@@ -12,7 +11,9 @@ import ScriptPromptTab from "./tabs/ScriptPromptTab";
 import ReferencePromptTab from "./tabs/ReferencePromptTab";
 
 export default function ScriptVoiceGenerator() {
-  const [activeTab, setActiveTab] = useState("auto"); // auto|ref|import|prompt
+  // 탭: auto|ref|import|prompt-gen|prompt-ref
+  const [activeTab, setActiveTab] = useState("auto");
+
   const [form, setForm] = useState({
     topic: "",
     style: "",
@@ -29,6 +30,7 @@ export default function ScriptVoiceGenerator() {
   const importSrtRef = useRef(null);
   const importMp3Ref = useRef(null);
 
+  // 프롬프트
   const [genPrompt, setGenPrompt] = useState(DEFAULT_GENERATE_PROMPT);
   const [refPrompt, setRefPrompt] = useState(DEFAULT_REFERENCE_PROMPT);
   const [promptSavedAt, setPromptSavedAt] = useState(null);
@@ -43,25 +45,21 @@ export default function ScriptVoiceGenerator() {
     })();
   }, []);
 
-  const savePrompts = async () => {
-    await Promise.all([
-      window.api.setSetting({
-        key: "prompt.generateTemplate",
-        value: genPrompt,
-      }),
-      window.api.setSetting({
-        key: "prompt.referenceTemplate",
-        value: refPrompt,
-      }),
-    ]);
+  const savePrompt = async (type) => {
+    if (type === "generate") {
+      await window.api.setSetting({ key: "prompt.generateTemplate", value: genPrompt });
+    } else if (type === "reference") {
+      await window.api.setSetting({ key: "prompt.referenceTemplate", value: refPrompt });
+    }
     setPromptSavedAt(new Date());
   };
 
-  const resetPrompts = () => {
-    setGenPrompt(DEFAULT_GENERATE_PROMPT);
-    setRefPrompt(DEFAULT_REFERENCE_PROMPT);
+  const resetPrompt = (type) => {
+    if (type === "generate") setGenPrompt(DEFAULT_GENERATE_PROMPT);
+    if (type === "reference") setRefPrompt(DEFAULT_REFERENCE_PROMPT);
   };
 
+  // 상태
   const [status, setStatus] = useState("idle");
   const [phase, setPhase] = useState("");
   const [progress, setProgress] = useState({ current: 0, total: 0 });
@@ -71,6 +69,7 @@ export default function ScriptVoiceGenerator() {
   const [doc, setDoc] = useState(null);
   const [error, setError] = useState("");
 
+  // 폭 고정
   const containerRef = useRef(null);
   const [fixedWidthPx, setFixedWidthPx] = useState(null);
   useLayoutEffect(() => {
@@ -80,11 +79,14 @@ export default function ScriptVoiceGenerator() {
     }
   }, [fixedWidthPx]);
 
+  // 선택 보이스
   const voices = useMemo(() => VOICES_BY_ENGINE[form.ttsEngine] || [], [form.ttsEngine]);
   const onChange = (key, v) => setForm((s) => ({ ...s, [key]: v }));
 
+  // IPC
   const call = (channel, payload) => window.api.invoke(channel, payload);
 
+  // 실행 인디케이터
   const startScriptIndicator = () => {
     setElapsedSec(0);
     if (scriptTimerRef.current) clearInterval(scriptTimerRef.current);
@@ -98,35 +100,60 @@ export default function ScriptVoiceGenerator() {
   };
   useEffect(() => () => stopScriptIndicator(), []);
 
+  // 실행
   const runGenerate = async (mode) => {
+    // prompt-gen → auto, prompt-ref → ref
+    const normalized = mode === "prompt-gen" ? "auto" : mode === "prompt-ref" ? "ref" : mode;
+
     setStatus("running");
     setError("");
     setPhase("SCRIPT");
     setProgress({ current: 0, total: 0 });
     startScriptIndicator();
+
     try {
-      const common = {
-        topic: form.topic,
-        style: form.style,
+      // 실행 직전: 해당 탭 프롬프트를 설정에 동기화(백엔드가 settings만 읽는 경우 대비)
+      if (mode === "prompt-gen") {
+        await window.api.setSetting({ key: "prompt.generateTemplate", value: genPrompt });
+        await window.api.setSetting({ key: "prompt.generate.preset.__runtime__", value: genPrompt });
+        await window.api.setSetting({ key: "prompt.generate.current", value: "__runtime__" });
+      } else if (mode === "prompt-ref") {
+        await window.api.setSetting({ key: "prompt.referenceTemplate", value: refPrompt });
+        await window.api.setSetting({ key: "prompt.reference.preset.__runtime__", value: refPrompt });
+        await window.api.setSetting({ key: "prompt.reference.current", value: "__runtime__" });
+      }
+
+      // 모드에 맞는 프롬프트 하나만 선택 (그대로 전달)
+      const promptTemplate = normalized === "ref" ? refPrompt : genPrompt;
+
+      // 공통 옵션
+      const base = {
         duration: form.durationMin,
         maxScenes: form.maxScenes,
         llm: form.llmMain,
-        promptTemplate: genPrompt,
-        promptRefTemplate: refPrompt,
+        promptTemplate,
       };
+
       let generatedDoc = null;
-      if (mode === "auto")
+
+      if (normalized === "auto") {
         generatedDoc = await call("llm/generateScript", {
-          ...common,
+          ...base,
           type: "auto",
+          topic: form.topic,
+          style: form.style,
         });
-      else if (mode === "ref")
+      } else if (normalized === "ref") {
         generatedDoc = await call("llm/generateScript", {
-          ...common,
+          ...base,
           type: "reference",
-          referenceText: refText,
+          referenceText: refText, // ← prompt-ref 탭에서 입력한 레퍼런스 본문
+          topic: form.topic,
+          style: form.style,
         });
-      else generatedDoc = doc;
+      } else if (normalized === "import") {
+        generatedDoc = doc;
+      }
 
       stopScriptIndicator();
       if (!generatedDoc?.scenes?.length) throw new Error("대본 생성 결과가 비어있습니다.");
@@ -194,6 +221,7 @@ export default function ScriptVoiceGenerator() {
     }
   };
 
+  // 가져오기
   const handleImportSrt = async () => {
     const file = importSrtRef.current?.files?.[0];
     if (!file) return;
@@ -211,6 +239,7 @@ export default function ScriptVoiceGenerator() {
       setError(e?.message || "SRT 파싱 실패");
     }
   };
+
   const handleUseUploadedMp3 = async () => {
     const file = importMp3Ref.current?.files?.[0];
     if (!file) return;
@@ -226,7 +255,13 @@ export default function ScriptVoiceGenerator() {
     }
   };
 
-  const canRun = (activeTab === "auto" && form.topic.trim()) || (activeTab === "ref" && refText.trim()) || (activeTab === "import" && doc);
+  // 실행 가능 조건: prompt-ref는 프롬프트 + 레퍼런스 본문이 모두 필요
+  const canRun =
+    (activeTab === "auto" && form.topic.trim()) ||
+    (activeTab === "ref" && refText.trim()) ||
+    (activeTab === "import" && doc) ||
+    (activeTab === "prompt-gen" && genPrompt.trim()) ||
+    (activeTab === "prompt-ref" && refPrompt.trim() && refText.trim());
 
   return (
     <div
@@ -260,6 +295,7 @@ export default function ScriptVoiceGenerator() {
             </span>
           )}
           <button
+            type="button"
             onClick={() => runGenerate(activeTab)}
             disabled={!canRun || status === "running"}
             className={`px-4 py-2 rounded-lg text-sm text-white transition ${
@@ -281,13 +317,17 @@ export default function ScriptVoiceGenerator() {
         <TabButton active={activeTab === "auto"} onClick={() => setActiveTab("auto")} label="자동 생성" />
         <TabButton active={activeTab === "ref"} onClick={() => setActiveTab("ref")} label="레퍼런스 기반" />
         <TabButton active={activeTab === "import"} onClick={() => setActiveTab("import")} label="가져오기 (SRT/MP3)" />
-        <TabButton active={activeTab === "prompt-gen"} onClick={() => setActiveTab("prompt-gen")} label="대본 프롬폰트" />
-        <TabButton active={activeTab === "prompt-ref"} onClick={() => setActiveTab("prompt-ref")} label="레퍼런스 프롬폰트" />
+        <TabButton active={activeTab === "prompt-gen"} onClick={() => setActiveTab("prompt-gen")} label="대본 프롬프트" />
+        <TabButton active={activeTab === "prompt-ref"} onClick={() => setActiveTab("prompt-ref")} label="레퍼런스 프롬프트" />
       </div>
 
       {/* 본문 */}
-      {activeTab === "auto" && <AutoTab form={form} onChange={onChange} voices={voices} />}
-      {activeTab === "ref" && <RefTab form={form} onChange={onChange} voices={voices} refText={refText} setRefText={setRefText} />}
+      {activeTab === "auto" && <AutoTab form={form} onChange={onChange} voices={voices} onRun={() => runGenerate("auto")} />}
+
+      {activeTab === "ref" && (
+        <RefTab form={form} onChange={onChange} voices={voices} refText={refText} setRefText={setRefText} onRun={() => runGenerate("ref")} />
+      )}
+
       {activeTab === "import" && (
         <ImportTab
           form={form}
@@ -297,18 +337,7 @@ export default function ScriptVoiceGenerator() {
           importMp3Ref={importMp3Ref}
           onImportSrt={handleImportSrt}
           onUseMp3={handleUseUploadedMp3}
-        />
-      )}
-
-      {activeTab === "prompt" && (
-        <PromptTab
-          genPrompt={genPrompt}
-          setGenPrompt={setGenPrompt}
-          refPrompt={refPrompt}
-          setRefPrompt={setRefPrompt}
-          onSave={savePrompts}
-          onReset={resetPrompts}
-          savedAt={promptSavedAt}
+          onRun={() => runGenerate("import")}
         />
       )}
 
@@ -323,6 +352,7 @@ export default function ScriptVoiceGenerator() {
             form={form}
             onChange={onChange}
             voices={voices}
+            onRun={() => runGenerate("prompt-gen")}
           />
         </Card>
       )}
@@ -339,6 +369,8 @@ export default function ScriptVoiceGenerator() {
             onChange={onChange}
             voices={voices}
             refText={refText}
+            setRefText={setRefText}
+            onRun={() => runGenerate("prompt-ref")}
           />
         </Card>
       )}

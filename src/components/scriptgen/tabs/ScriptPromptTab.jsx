@@ -13,30 +13,30 @@ function slugify(name = "") {
 }
 
 export default function ScriptPromptTab({
-  template, // 현재 편집 문자열 (부모 state)
-  setTemplate, // setState
-  form, // 실행 설정 공유
-  onChange, // (key, value) => void
-  voices, // 현재 TTS 엔진의 보이스 목록
+  template,
+  setTemplate,
+  form,
+  onChange,
+  voices,
+  onRun,
+  savedAt, // 부모가 내려주는 저장 시각 (선택)
+  onSave, // 부모 저장 핸들러 (선택)
+  onReset, // 부모 리셋 핸들러 (선택)
 }) {
   // 프리셋 메타
-  const [presets, setPresets] = useState([]); // [{id, name, updatedAt}]
-  const [currentId, setCurrentId] = useState("default"); // 'default' | presetId
+  const [presets, setPresets] = useState([]);
+  const [currentId, setCurrentId] = useState("default");
   const [savingAt, setSavingAt] = useState(null);
 
   // 새 프롬프트 UI
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
 
-  const countTotal = 1 + (presets?.length || 0); // 기본 포함
+  const countTotal = 1 + (presets?.length || 0);
 
   // ─────────────────────────────────────────────
-  // 초기 로드: 선택 프리셋 + 본문 불러오기(없으면 기본값 주입)
-  // settings keys:
-  //   - prompt.generate.presets           : [{id,name,updatedAt}]
-  //   - prompt.generate.current           : 'default' | presetId
-  //   - prompt.generateTemplate           : 기본 프롬프트 본문
-  //   - prompt.generate.preset.<id>       : 개별 프리셋 본문
+  // 초기 로드: 프리셋 목록/현재 id만 가져오기
+  // (본문은 부모의 template을 신뢰하고 덮어쓰지 않음)
   // ─────────────────────────────────────────────
   useEffect(() => {
     (async () => {
@@ -46,30 +46,32 @@ export default function ScriptPromptTab({
 
         const cur = (await window?.api?.getSetting("prompt.generate.current")) || "default";
         setCurrentId(cur);
-
-        let body = "";
-        if (cur === "default") {
-          body = (await window?.api?.getSetting("prompt.generateTemplate")) || "";
-        } else {
-          body = (await window?.api?.getSetting(`prompt.generate.preset.${cur}`)) || "";
-        }
-        if (!body) body = DEFAULT_GENERATE_PROMPT; // 기본값 자동 주입
-        setTemplate(body);
+        // ⚠️ 여기서 setTemplate을 호출해 부모값을 덮어쓰지 않는다.
       } catch {
-        setTemplate((prev) => prev || DEFAULT_GENERATE_PROMPT);
+        // ignore
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 프리셋 선택
+  // Ctrl/Cmd + Enter → 실행 (상단 버튼과 동일 동작)
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        if (typeof onRun === "function") {
+          e.preventDefault();
+          onRun();
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onRun]);
+
+  // 프리셋 선택 시에만 본문 로드하여 교체
   const handleSelect = async (id) => {
     try {
       setCurrentId(id);
-      await window?.api?.setSetting({
-        key: "prompt.generate.current",
-        value: id,
-      });
+      await window?.api?.setSetting({ key: "prompt.generate.current", value: id });
 
       let body = "";
       if (id === "default") {
@@ -84,68 +86,55 @@ export default function ScriptPromptTab({
     }
   };
 
-  // 저장 (현재 선택한 대상에 저장)
+  // 저장 (기본 템플릿은 부모 onSave 우선, 프리셋은 로컬에서 처리)
   const handleSave = async () => {
     try {
       if (currentId === "default") {
-        await window?.api?.setSetting({
-          key: "prompt.generateTemplate",
-          value: template,
-        });
+        if (typeof onSave === "function") {
+          await onSave(); // 부모가 저장 처리
+        } else {
+          // 부모 핸들러가 없으면 직접 저장
+          await window?.api?.setSetting({ key: "prompt.generateTemplate", value: template });
+        }
       } else {
-        await window?.api?.setSetting({
-          key: `prompt.generate.preset.${currentId}`,
-          value: template,
-        });
+        // 프리셋 저장
+        await window?.api?.setSetting({ key: `prompt.generate.preset.${currentId}`, value: template });
         const next = (presets || []).map((p) => (p.id === currentId ? { ...p, updatedAt: Date.now() } : p));
         setPresets(next);
-        await window?.api?.setSetting({
-          key: "prompt.generate.presets",
-          value: next,
-        });
+        await window?.api?.setSetting({ key: "prompt.generate.presets", value: next });
       }
-      await window?.api?.setSetting({
-        key: "prompt.generate.current",
-        value: currentId,
-      });
+      await window?.api?.setSetting({ key: "prompt.generate.current", value: currentId });
       setSavingAt(new Date());
     } catch (e) {
       console.error(e);
     }
   };
 
-  // 기본값으로 초기화 (에디터만 교체)
+  // 기본값으로 초기화 (부모 onReset 우선)
   const handleReset = () => {
-    setTemplate(DEFAULT_GENERATE_PROMPT);
+    if (typeof onReset === "function") onReset();
+    else setTemplate(DEFAULT_GENERATE_PROMPT);
   };
 
-  // 새 프롬프트 생성 (현재 에디터 내용을 초깃값으로 저장)
+  // 새 프리셋 생성 (현재 에디터 내용으로)
   const handleCreate = async () => {
     const name = newName.trim();
     if (!name) return;
     const id = slugify(name);
     try {
-      // 본문 저장
       await window?.api?.setSetting({
         key: `prompt.generate.preset.${id}`,
         value: template || DEFAULT_GENERATE_PROMPT,
       });
-      // 목록 갱신(중복 id는 갱신)
       const next = [...(presets || []).filter((p) => p.id !== id), { id, name, updatedAt: Date.now() }];
-      await window?.api?.setSetting({
-        key: "prompt.generate.presets",
-        value: next,
-      });
-      // 선택 전환
-      await window?.api?.setSetting({
-        key: "prompt.generate.current",
-        value: id,
-      });
+      await window?.api?.setSetting({ key: "prompt.generate.presets", value: next });
+      await window?.api?.setSetting({ key: "prompt.generate.current", value: id });
+
       setPresets(next);
       setCurrentId(id);
       setCreating(false);
       setNewName("");
-      // 저장된 본문을 다시 로드(보정)
+
       const body = (await window?.api?.getSetting(`prompt.generate.preset.${id}`)) || DEFAULT_GENERATE_PROMPT;
       setTemplate(body);
     } catch (e) {
@@ -153,33 +142,27 @@ export default function ScriptPromptTab({
     }
   };
 
-  // 프롬프트 삭제 (기본 제외)
+  // 프리셋 삭제 (기본 제외)
   const handleDelete = async () => {
     if (currentId === "default") return;
     try {
-      // 스토어에서 본문 제거(선택적) — 없어도 무방
-      await window?.api?.setSetting({
-        key: `prompt.generate.preset.${currentId}`,
-        value: "",
-      });
+      await window?.api?.setSetting({ key: `prompt.generate.preset.${currentId}`, value: "" });
       const next = (presets || []).filter((p) => p.id !== currentId);
       setPresets(next);
-      await window?.api?.setSetting({
-        key: "prompt.generate.presets",
-        value: next,
-      });
-      // 기본으로 전환
+      await window?.api?.setSetting({ key: "prompt.generate.presets", value: next });
+
       setCurrentId("default");
-      await window?.api?.setSetting({
-        key: "prompt.generate.current",
-        value: "default",
-      });
+      await window?.api?.setSetting({ key: "prompt.generate.current", value: "default" });
+
+      // 기본 템플릿 본문으로 교체
       const base = (await window?.api?.getSetting("prompt.generateTemplate")) || DEFAULT_GENERATE_PROMPT;
       setTemplate(base);
     } catch (e) {
       console.error(e);
     }
   };
+
+  const savedLabel = savedAt || savingAt;
 
   return (
     <div className="flex flex-col gap-4">
@@ -200,11 +183,12 @@ export default function ScriptPromptTab({
             ))}
           </select>
 
-          <button onClick={() => setCreating((v) => !v)} className="h-9 rounded-lg bg-blue-600 px-3 text-sm text-white hover:bg-blue-500">
+          <button type="button" onClick={() => setCreating((v) => !v)} className="h-9 rounded-lg bg-blue-600 px-3 text-sm text-white hover:bg-blue-500">
             + 새 프롬프트
           </button>
 
           <button
+            type="button"
             onClick={handleDelete}
             disabled={currentId === "default"}
             className={`h-9 rounded-lg px-3 text-sm ${
@@ -232,17 +216,21 @@ export default function ScriptPromptTab({
             }}
           />
           <div className="mt-3 flex gap-2">
-            <button onClick={handleCreate} className="flex-1 h-10 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-500">
+            <button type="button" onClick={handleCreate} className="flex-1 h-10 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-500">
               생성
             </button>
-            <button onClick={() => setCreating(false)} className="flex-1 h-10 rounded-lg border border-slate-200 bg-white text-sm hover:bg-slate-50">
+            <button
+              type="button"
+              onClick={() => setCreating(false)}
+              className="flex-1 h-10 rounded-lg border border-slate-200 bg-white text-sm hover:bg-slate-50"
+            >
               취소
             </button>
           </div>
         </div>
       )}
 
-      {/* 실행 옵션 (이전 디자인) */}
+      {/* 실행 옵션 */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <SelectField label="LLM (대본)" value={form.llmMain} options={LLM_OPTIONS} onChange={(v) => onChange("llmMain", v)} />
         <SelectField
@@ -263,12 +251,12 @@ export default function ScriptPromptTab({
         />
       </div>
 
-      {/* 에디터 (고정 높이 + 스크롤, 리사이즈 금지) */}
+      {/* 에디터 */}
       <div className="w-full">
         <div className="flex items-center justify-between mb-2">
           <div className="text-sm font-semibold">대본 프롬프트</div>
           <div className="text-[11px] text-slate-500">
-            사용 변수: {"{topic}, {style}, {duration}, {maxScenes}, {minCharacters}, {maxCharacters}, {avgCharactersPerScene}"}
+            <span className="ml-2 text-slate-400">(실행: Ctrl/Cmd + Enter)</span>
           </div>
         </div>
         <textarea
@@ -278,15 +266,15 @@ export default function ScriptPromptTab({
         />
       </div>
 
-      {/* 하단 액션 */}
+      {/* 하단 액션 (저장/초기화만, 실행 버튼 없음) */}
       <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-        <button onClick={handleReset} className="text-sm bg-slate-100 text-slate-700 rounded-lg px-4 py-2 hover:bg-slate-200">
+        <button type="button" onClick={handleReset} className="text-sm bg-slate-100 text-slate-700 rounded-lg px-4 py-2 hover:bg-slate-200">
           기본값으로 초기화
         </button>
-        <button onClick={handleSave} className="text-sm bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-500">
+        <button type="button" onClick={handleSave} className="text-sm bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-500">
           저장
         </button>
-        {savingAt && <span className="ml-2 self-center text-[11px] text-slate-500">저장됨: {savingAt.toLocaleTimeString()}</span>}
+        {savedLabel && <span className="ml-2 self-center text-[11px] text-slate-500">저장됨: {new Date(savedLabel).toLocaleTimeString()}</span>}
       </div>
     </div>
   );
