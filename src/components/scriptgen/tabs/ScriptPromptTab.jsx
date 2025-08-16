@@ -1,5 +1,5 @@
 // src/components/tabs/ScriptPromptTab.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SelectField } from "../parts/SmallUI";
 import { LLM_OPTIONS, TTS_ENGINES, VOICES_BY_ENGINE, DEFAULT_GENERATE_PROMPT } from "../constants";
 
@@ -18,10 +18,9 @@ export default function ScriptPromptTab({
   form,
   onChange,
   voices,
-  onRun,
-  savedAt, // 부모가 내려주는 저장 시각 (선택)
-  onSave, // 부모 저장 핸들러 (선택)
-  onReset, // 부모 리셋 핸들러 (선택)
+  savedAt, // 선택
+  onSave, // 선택
+  onReset, // 선택
 }) {
   // 프리셋 메타
   const [presets, setPresets] = useState([]);
@@ -34,10 +33,7 @@ export default function ScriptPromptTab({
 
   const countTotal = 1 + (presets?.length || 0);
 
-  // ─────────────────────────────────────────────
-  // 초기 로드: 프리셋 목록/현재 id만 가져오기
-  // (본문은 부모의 template을 신뢰하고 덮어쓰지 않음)
-  // ─────────────────────────────────────────────
+  // 초기: 프리셋 목록/현재 id만 불러오기
   useEffect(() => {
     (async () => {
       try {
@@ -46,28 +42,13 @@ export default function ScriptPromptTab({
 
         const cur = (await window?.api?.getSetting("prompt.generate.current")) || "default";
         setCurrentId(cur);
-        // ⚠️ 여기서 setTemplate을 호출해 부모값을 덮어쓰지 않는다.
       } catch {
-        // ignore
+        /* ignore */
       }
     })();
   }, []);
 
-  // Ctrl/Cmd + Enter → 실행 (상단 버튼과 동일 동작)
-  useEffect(() => {
-    const handler = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-        if (typeof onRun === "function") {
-          e.preventDefault();
-          onRun();
-        }
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onRun]);
-
-  // 프리셋 선택 시에만 본문 로드하여 교체
+  // 프리셋 선택 시 본문 로드
   const handleSelect = async (id) => {
     try {
       setCurrentId(id);
@@ -86,18 +67,16 @@ export default function ScriptPromptTab({
     }
   };
 
-  // 저장 (기본 템플릿은 부모 onSave 우선, 프리셋은 로컬에서 처리)
+  // 저장 (기본 템플릿은 부모 onSave 우선, 프리셋은 여기서 처리)
   const handleSave = async () => {
     try {
       if (currentId === "default") {
         if (typeof onSave === "function") {
-          await onSave(); // 부모가 저장 처리
+          await onSave();
         } else {
-          // 부모 핸들러가 없으면 직접 저장
           await window?.api?.setSetting({ key: "prompt.generateTemplate", value: template });
         }
       } else {
-        // 프리셋 저장
         await window?.api?.setSetting({ key: `prompt.generate.preset.${currentId}`, value: template });
         const next = (presets || []).map((p) => (p.id === currentId ? { ...p, updatedAt: Date.now() } : p));
         setPresets(next);
@@ -110,13 +89,13 @@ export default function ScriptPromptTab({
     }
   };
 
-  // 기본값으로 초기화 (부모 onReset 우선)
+  // 기본값으로 초기화
   const handleReset = () => {
     if (typeof onReset === "function") onReset();
     else setTemplate(DEFAULT_GENERATE_PROMPT);
   };
 
-  // 새 프리셋 생성 (현재 에디터 내용으로)
+  // 새 프리셋 생성
   const handleCreate = async () => {
     const name = newName.trim();
     if (!name) return;
@@ -154,7 +133,6 @@ export default function ScriptPromptTab({
       setCurrentId("default");
       await window?.api?.setSetting({ key: "prompt.generate.current", value: "default" });
 
-      // 기본 템플릿 본문으로 교체
       const base = (await window?.api?.getSetting("prompt.generateTemplate")) || DEFAULT_GENERATE_PROMPT;
       setTemplate(base);
     } catch (e) {
@@ -230,7 +208,7 @@ export default function ScriptPromptTab({
         </div>
       )}
 
-      {/* 실행 옵션 */}
+      {/* 실행 옵션 (엔진/보이스만) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <SelectField label="LLM (대본)" value={form.llmMain} options={LLM_OPTIONS} onChange={(v) => onChange("llmMain", v)} />
         <SelectField
@@ -255,9 +233,6 @@ export default function ScriptPromptTab({
       <div className="w-full">
         <div className="flex items-center justify-between mb-2">
           <div className="text-sm font-semibold">대본 프롬프트</div>
-          <div className="text-[11px] text-slate-500">
-            <span className="ml-2 text-slate-400">(실행: Ctrl/Cmd + Enter)</span>
-          </div>
         </div>
         <textarea
           className="w-full h-72 text-sm rounded-lg border border-slate-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 overflow-auto resize-none whitespace-pre-wrap"
@@ -266,7 +241,7 @@ export default function ScriptPromptTab({
         />
       </div>
 
-      {/* 하단 액션 (저장/초기화만, 실행 버튼 없음) */}
+      {/* 하단 액션 (실행 버튼 없음) */}
       <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
         <button type="button" onClick={handleReset} className="text-sm bg-slate-100 text-slate-700 rounded-lg px-4 py-2 hover:bg-slate-200">
           기본값으로 초기화
@@ -274,7 +249,9 @@ export default function ScriptPromptTab({
         <button type="button" onClick={handleSave} className="text-sm bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-500">
           저장
         </button>
-        {savedLabel && <span className="ml-2 self-center text-[11px] text-slate-500">저장됨: {new Date(savedLabel).toLocaleTimeString()}</span>}
+        {(savedLabel || savingAt) && (
+          <span className="ml-2 self-center text-[11px] text-slate-500">저장됨: {new Date(savedLabel || savingAt).toLocaleTimeString()}</span>
+        )}
       </div>
     </div>
   );

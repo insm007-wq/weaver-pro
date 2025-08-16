@@ -21,33 +21,54 @@ export const VOICES_BY_ENGINE = {
   openai: ["alloy", "nova", "verse"],
 };
 
-export const DEFAULT_GENERATE_PROMPT = `{duration}분 길이의 한국어 영상 대본을 작성하세요.
+export const DEFAULT_GENERATE_PROMPT = `다음 조건에 맞는 {duration}분 길이의 영상 대본을 작성해주세요.
 
-주제: {topic}  
-스타일: {style}  
-최대 장면 수: {maxScenes}
+주제: {topic}
+스타일: {style}
+언어: 한국어
+장면 수: 정확히 {maxScenes}개
 
-조건:
-- 전체 글자수 {minCharacters}~{maxCharacters}자
-- 장면별 평균 {avgCharactersPerScene}자 이상
-- 모든 장면 duration 합계 = {totalSeconds}초
-- 각 장면의 text 길이는 duration에 맞게 작성
+## 📝 대본 작성 가이드
 
-출력(JSON만 응답):
+**실제 음성 시간 기준**
+- 한국어 평균 말하기 속도: 분당 300~400자
+- 총 {duration}분 (아래 자동 계산된 제약을 반드시 따르세요)
+
+## ✅ 절대 규칙(반드시 지켜야 함)
+1) 모든 장면의 duration(초) 합계 = 정확히 [AUTO_TOTAL_SECONDS]초
+2) 전체 텍스트 길이(모든 장면 text 합산) ≥ [AUTO_MIN_CHARS]자 (권장: [AUTO_MIN_CHARS]~[AUTO_MAX_CHARS]자)
+3) 각 장면의 text는 해당 duration에 비례해 충분한 분량으로 작성(짧은 텍스트에 긴 duration 금지)
+4) 장면 수는 정확히 {maxScenes}개
+5) 접두어/화자명/대괄호 등 불필요한 표기는 text에 넣지 말 것
+6) 가능한 한 구체적 예시·배경 설명·단계별 설명을 포함해 내용 밀도를 높일 것
+
+## 🔒 자동 계산 제약(모델이 반드시 준수)
+- 총 시간(초): [AUTO_TOTAL_SECONDS]
+- 총 글자수 최소/권장: [AUTO_MIN_CHARS] ~ [AUTO_MAX_CHARS]
+- 장면당 평균 최소 글자수: [AUTO_AVG_PER_SCENE]자 이상
+
+## 🔎 출력 형식(중요: 유효한 JSON만 반환. 다른 텍스트 금지)
 {
-  "title": "영상 제목",
+  "title": "흥미롭고 구체적인 영상 제목",
   "total_duration": {duration},
-  "total_characters": "총 글자 수",
+  "total_characters": "숫자(전체 글자 수)",
   "scenes": [
     {
       "scene_number": 1,
-      "text": "대본 내용",
-      "duration": 초,
-      "character_count": "글자 수",
-      "visual_description": "장면 설명"
+      "text": "장면 1의 상세한 대본 텍스트입니다. 배경 설명·예시·단계별 설명을 포함하여 충분한 분량으로 작성하세요...",
+      "duration": 45,
+      "character_count": "숫자(이 장면의 글자 수)",
+      "visual_description": "이 장면에서 보여줄 구체적인 시각 요소 설명"
     }
   ]
 }
+
+## ✅ 자체 검증(모델이 체크)
+- scenes 길이 = {maxScenes}
+- sum(scenes[*].duration) = [AUTO_TOTAL_SECONDS]
+- 총 글자수 ≥ [AUTO_MIN_CHARS]
+- 각 장면 분량이 duration에 비례하여 충분한지
+- JSON 외 추가 텍스트 절대 금지
 `;
 
 export const DEFAULT_REFERENCE_PROMPT = `## 레퍼런스 대본 분석 및 적용
