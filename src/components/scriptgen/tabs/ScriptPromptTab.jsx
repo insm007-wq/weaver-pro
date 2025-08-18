@@ -1,7 +1,12 @@
 // src/components/tabs/ScriptPromptTab.jsx
 import { useEffect, useMemo, useState } from "react";
 import { SelectField } from "../parts/SmallUI";
-import { LLM_OPTIONS, TTS_ENGINES, VOICES_BY_ENGINE, DEFAULT_GENERATE_PROMPT } from "../constants";
+import {
+  LLM_OPTIONS,
+  TTS_ENGINES,
+  VOICES_BY_ENGINE,
+  DEFAULT_GENERATE_PROMPT,
+} from "../constants";
 
 // 간단 slugify
 function slugify(name = "") {
@@ -37,10 +42,13 @@ export default function ScriptPromptTab({
   useEffect(() => {
     (async () => {
       try {
-        const list = (await window?.api?.getSetting("prompt.generate.presets")) || [];
+        const list =
+          (await window?.api?.getSetting("prompt.generate.presets")) || [];
         setPresets(Array.isArray(list) ? list : []);
 
-        const cur = (await window?.api?.getSetting("prompt.generate.current")) || "default";
+        const cur =
+          (await window?.api?.getSetting("prompt.generate.current")) ||
+          "default";
         setCurrentId(cur);
       } catch {
         /* ignore */
@@ -52,13 +60,17 @@ export default function ScriptPromptTab({
   const handleSelect = async (id) => {
     try {
       setCurrentId(id);
-      await window?.api?.setSetting({ key: "prompt.generate.current", value: id });
+      await window?.api?.setSetting({
+        key: "prompt.generate.current",
+        value: id,
+      });
 
       let body = "";
       if (id === "default") {
         body = (await window?.api?.getSetting("prompt.generateTemplate")) || "";
       } else {
-        body = (await window?.api?.getSetting(`prompt.generate.preset.${id}`)) || "";
+        body =
+          (await window?.api?.getSetting(`prompt.generate.preset.${id}`)) || "";
       }
       if (!body) body = DEFAULT_GENERATE_PROMPT;
       setTemplate(body);
@@ -74,15 +86,29 @@ export default function ScriptPromptTab({
         if (typeof onSave === "function") {
           await onSave();
         } else {
-          await window?.api?.setSetting({ key: "prompt.generateTemplate", value: template });
+          await window?.api?.setSetting({
+            key: "prompt.generateTemplate",
+            value: template,
+          });
         }
       } else {
-        await window?.api?.setSetting({ key: `prompt.generate.preset.${currentId}`, value: template });
-        const next = (presets || []).map((p) => (p.id === currentId ? { ...p, updatedAt: Date.now() } : p));
+        await window?.api?.setSetting({
+          key: `prompt.generate.preset.${currentId}`,
+          value: template,
+        });
+        const next = (presets || []).map((p) =>
+          p.id === currentId ? { ...p, updatedAt: Date.now() } : p
+        );
         setPresets(next);
-        await window?.api?.setSetting({ key: "prompt.generate.presets", value: next });
+        await window?.api?.setSetting({
+          key: "prompt.generate.presets",
+          value: next,
+        });
       }
-      await window?.api?.setSetting({ key: "prompt.generate.current", value: currentId });
+      await window?.api?.setSetting({
+        key: "prompt.generate.current",
+        value: currentId,
+      });
       setSavingAt(new Date());
     } catch (e) {
       console.error(e);
@@ -105,16 +131,27 @@ export default function ScriptPromptTab({
         key: `prompt.generate.preset.${id}`,
         value: template || DEFAULT_GENERATE_PROMPT,
       });
-      const next = [...(presets || []).filter((p) => p.id !== id), { id, name, updatedAt: Date.now() }];
-      await window?.api?.setSetting({ key: "prompt.generate.presets", value: next });
-      await window?.api?.setSetting({ key: "prompt.generate.current", value: id });
+      const next = [
+        ...(presets || []).filter((p) => p.id !== id),
+        { id, name, updatedAt: Date.now() },
+      ];
+      await window?.api?.setSetting({
+        key: "prompt.generate.presets",
+        value: next,
+      });
+      await window?.api?.setSetting({
+        key: "prompt.generate.current",
+        value: id,
+      });
 
       setPresets(next);
       setCurrentId(id);
       setCreating(false);
       setNewName("");
 
-      const body = (await window?.api?.getSetting(`prompt.generate.preset.${id}`)) || DEFAULT_GENERATE_PROMPT;
+      const body =
+        (await window?.api?.getSetting(`prompt.generate.preset.${id}`)) ||
+        DEFAULT_GENERATE_PROMPT;
       setTemplate(body);
     } catch (e) {
       console.error(e);
@@ -125,15 +162,26 @@ export default function ScriptPromptTab({
   const handleDelete = async () => {
     if (currentId === "default") return;
     try {
-      await window?.api?.setSetting({ key: `prompt.generate.preset.${currentId}`, value: "" });
+      await window?.api?.setSetting({
+        key: `prompt.generate.preset.${currentId}`,
+        value: "",
+      });
       const next = (presets || []).filter((p) => p.id !== currentId);
       setPresets(next);
-      await window?.api?.setSetting({ key: "prompt.generate.presets", value: next });
+      await window?.api?.setSetting({
+        key: "prompt.generate.presets",
+        value: next,
+      });
 
       setCurrentId("default");
-      await window?.api?.setSetting({ key: "prompt.generate.current", value: "default" });
+      await window?.api?.setSetting({
+        key: "prompt.generate.current",
+        value: "default",
+      });
 
-      const base = (await window?.api?.getSetting("prompt.generateTemplate")) || DEFAULT_GENERATE_PROMPT;
+      const base =
+        (await window?.api?.getSetting("prompt.generateTemplate")) ||
+        DEFAULT_GENERATE_PROMPT;
       setTemplate(base);
     } catch (e) {
       console.error(e);
@@ -147,12 +195,18 @@ export default function ScriptPromptTab({
       {/* 프롬프트 관리 헤더 라인 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded bg-slate-100">📝</span>
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded bg-slate-100">
+            📝
+          </span>
           <div className="text-sm font-semibold">프롬프트 관리</div>
           <span className="ml-1 text-xs text-slate-500">{countTotal}개</span>
         </div>
         <div className="flex items-center gap-2">
-          <select className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm" value={currentId} onChange={(e) => handleSelect(e.target.value)}>
+          <select
+            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+            value={currentId}
+            onChange={(e) => handleSelect(e.target.value)}
+          >
             <option value="default">기본 프롬프트 (기본)</option>
             {(presets || []).map((p) => (
               <option key={p.id} value={p.id}>
@@ -161,7 +215,11 @@ export default function ScriptPromptTab({
             ))}
           </select>
 
-          <button type="button" onClick={() => setCreating((v) => !v)} className="h-9 rounded-lg bg-blue-600 px-3 text-sm text-white hover:bg-blue-500">
+          <button
+            type="button"
+            onClick={() => setCreating((v) => !v)}
+            className="h-9 rounded-lg bg-blue-600 px-3 text-sm text-white hover:bg-blue-500"
+          >
             + 새 프롬프트
           </button>
 
@@ -170,7 +228,9 @@ export default function ScriptPromptTab({
             onClick={handleDelete}
             disabled={currentId === "default"}
             className={`h-9 rounded-lg px-3 text-sm ${
-              currentId === "default" ? "bg-rose-100 text-rose-300 cursor-not-allowed" : "bg-rose-50 text-rose-600 hover:bg-rose-100"
+              currentId === "default"
+                ? "bg-rose-100 text-rose-300 cursor-not-allowed"
+                : "bg-rose-50 text-rose-600 hover:bg-rose-100"
             }`}
           >
             삭제
@@ -181,7 +241,9 @@ export default function ScriptPromptTab({
       {/* 새 프롬프트 입력 박스 */}
       {creating && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <label className="block text-xs font-medium text-slate-600 mb-1">프롬프트 이름</label>
+          <label className="block text-xs font-medium text-slate-600 mb-1">
+            프롬프트 이름
+          </label>
           <input
             autoFocus
             className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
@@ -194,7 +256,11 @@ export default function ScriptPromptTab({
             }}
           />
           <div className="mt-3 flex gap-2">
-            <button type="button" onClick={handleCreate} className="flex-1 h-10 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-500">
+            <button
+              type="button"
+              onClick={handleCreate}
+              className="flex-1 h-10 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-500"
+            >
               생성
             </button>
             <button
@@ -210,7 +276,12 @@ export default function ScriptPromptTab({
 
       {/* 실행 옵션 (엔진/보이스만) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <SelectField label="LLM (대본)" value={form.llmMain} options={LLM_OPTIONS} onChange={(v) => onChange("llmMain", v)} />
+        <SelectField
+          label="LLM (대본)"
+          value={form.llmMain}
+          options={LLM_OPTIONS}
+          onChange={(v) => onChange("llmMain", v)}
+        />
         <SelectField
           label="TTS 엔진"
           value={form.ttsEngine}
@@ -243,14 +314,24 @@ export default function ScriptPromptTab({
 
       {/* 하단 액션 (실행 버튼 없음) */}
       <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-        <button type="button" onClick={handleReset} className="text-sm bg-slate-100 text-slate-700 rounded-lg px-4 py-2 hover:bg-slate-200">
+        <button
+          type="button"
+          onClick={handleReset}
+          className="text-sm bg-slate-100 text-slate-700 rounded-lg px-4 py-2 hover:bg-slate-200"
+        >
           기본값으로 초기화
         </button>
-        <button type="button" onClick={handleSave} className="text-sm bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-500">
+        <button
+          type="button"
+          onClick={handleSave}
+          className="text-sm bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-500"
+        >
           저장
         </button>
         {(savedLabel || savingAt) && (
-          <span className="ml-2 self-center text-[11px] text-slate-500">저장됨: {new Date(savedLabel || savingAt).toLocaleTimeString()}</span>
+          <span className="ml-2 self-center text-[11px] text-slate-500">
+            저장됨: {new Date(savedLabel || savingAt).toLocaleTimeString()}
+          </span>
         )}
       </div>
     </div>
