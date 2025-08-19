@@ -15,7 +15,50 @@ import { base64ToArrayBuffer } from "./utils/buffer";
 import ScriptPromptTab from "./tabs/ScriptPromptTab";
 import ReferencePromptTab from "./tabs/ReferencePromptTab";
 
-// 템플릿 변수 치환
+/** ===== 유연한 글자수 규칙 설정 (나중에 constants로 빼도 OK) =====
+ *  - 자동 탭(auto)만 per-minute 규칙 적용
+ *  - 나중에 100~200으로 바꾸려면 아래 숫자만 바꾸면 됨
+ */
+const CHAR_BUDGETS = {
+  auto: { perMinMin: 200, perMinMax: 300 }, // ← 여기만 바꾸면 전체 자동 탭 정책 변경
+  fallbackPerScene: { min: 500, max: 900 }, // 프롬프트 탭 변수 계산 등 기본값
+};
+
+/** 계산 헬퍼: 탭/분/씬수 기준으로 글자수 예산 산출 */
+function computeCharBudget({ tab, durationMin, maxScenes }) {
+  const duration = Number(durationMin) || 0;
+  const scenes = Math.max(1, Number(maxScenes) || 1);
+  const totalSeconds = duration * 60;
+
+  if (tab === "auto") {
+    const { perMinMin, perMinMax } = CHAR_BUDGETS.auto;
+    const minCharacters = Math.max(0, Math.round(duration * perMinMin));
+    const maxCharacters = Math.max(
+      minCharacters,
+      Math.round(duration * perMinMax)
+    );
+    const avgCharactersPerScene = Math.round(
+      (minCharacters + maxCharacters) / 2 / scenes
+    );
+    return {
+      totalSeconds,
+      minCharacters,
+      maxCharacters,
+      avgCharactersPerScene,
+    };
+  }
+
+  // 프롬프트 탭 등: 기존 per-scene 기본값 유지 (프롬프트 변수만 채워줌)
+  const { min, max } = CHAR_BUDGETS.fallbackPerScene;
+  const minCharacters = scenes * min;
+  const maxCharacters = scenes * max;
+  const avgCharactersPerScene = Math.round(
+    (minCharacters + maxCharacters) / 2 / scenes
+  );
+  return { totalSeconds, minCharacters, maxCharacters, avgCharactersPerScene };
+}
+
+/** 템플릿 변수 치환 */
 function compileTemplate(tpl, vars) {
   let s = String(tpl ?? "");
   const dict = {
@@ -29,13 +72,14 @@ function compileTemplate(tpl, vars) {
     totalSeconds: vars.totalSeconds,
     referenceText: vars.referenceText ?? "",
   };
-  Object.entries(dict).forEach(([k, v]) => {
+  for (const [k, v] of Object.entries(dict)) {
     s = s.replaceAll(`{${k}}`, String(v ?? ""));
-  });
+  }
   return s;
 }
 
 export default function ScriptVoiceGenerator() {
+  // ---------------- UI 상태 ----------------
   const [activeTab, setActiveTab] = useState("auto");
 
   const [form, setForm] = useState({
@@ -54,7 +98,7 @@ export default function ScriptVoiceGenerator() {
   const importSrtRef = useRef(null);
   const importMp3Ref = useRef(null);
 
-  // 프롬프트 템플릿
+  // ---------------- 프롬프트 템플릿 ----------------
   const [genPrompt, setGenPrompt] = useState(DEFAULT_GENERATE_PROMPT);
   const [refPrompt, setRefPrompt] = useState(DEFAULT_REFERENCE_PROMPT);
   const [promptSavedAt, setPromptSavedAt] = useState(null);
@@ -63,28 +107,34 @@ export default function ScriptVoiceGenerator() {
     (async () => {
       try {
         const [gp, rp] = await Promise.all([
-          window.api.getSetting("prompt.generateTemplate"),
-          window.api.getSetting("prompt.referenceTemplate"),
+          window.api?.getSetting?.("prompt.generateTemplate"),
+          window.api?.getSetting?.("prompt.referenceTemplate"),
         ]);
         if (gp) setGenPrompt(gp);
         if (rp) setRefPrompt(rp);
-      } catch {}
+      } catch {
+        /* ignore */
+      }
     })();
   }, []);
 
   const savePrompt = async (type) => {
-    if (type === "generate") {
-      await window.api.setSetting({
-        key: "prompt.generateTemplate",
-        value: genPrompt,
-      });
-    } else if (type === "reference") {
-      await window.api.setSetting({
-        key: "prompt.referenceTemplate",
-        value: refPrompt,
-      });
+    try {
+      if (type === "generate") {
+        await window.api?.setSetting?.({
+          key: "prompt.generateTemplate",
+          value: genPrompt,
+        });
+      } else if (type === "reference") {
+        await window.api?.setSetting?.({
+          key: "prompt.referenceTemplate",
+          value: refPrompt,
+        });
+      }
+      setPromptSavedAt(new Date());
+    } catch {
+      /* ignore */
     }
-    setPromptSavedAt(new Date());
   };
 
   const resetPrompt = (type) => {
@@ -92,9 +142,9 @@ export default function ScriptVoiceGenerator() {
     if (type === "reference") setRefPrompt(DEFAULT_REFERENCE_PROMPT);
   };
 
-  // 상태
-  const [status, setStatus] = useState("idle");
-  const [phase, setPhase] = useState("");
+  // ---------------- 진행 상태 ----------------
+  const [status, setStatus] = useState("idle"); // idle | running | done | error
+  const [phase, setPhase] = useState(""); // SCRIPT | SRT | TTS | MERGE | 완료
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [elapsedSec, setElapsedSec] = useState(0);
   const scriptTimerRef = useRef(null);
@@ -102,7 +152,7 @@ export default function ScriptVoiceGenerator() {
   const [doc, setDoc] = useState(null);
   const [error, setError] = useState("");
 
-  // 폭 고정
+  // ---------------- 폭 고정 ----------------
   const containerRef = useRef(null);
   const [fixedWidthPx, setFixedWidthPx] = useState(null);
   useLayoutEffect(() => {
@@ -112,17 +162,17 @@ export default function ScriptVoiceGenerator() {
     }
   }, [fixedWidthPx]);
 
-  // 보이스
+  // ---------------- 보이스 목록/폼 변경 ----------------
   const voices = useMemo(
     () => VOICES_BY_ENGINE[form.ttsEngine] || [],
     [form.ttsEngine]
   );
   const onChange = (key, v) => setForm((s) => ({ ...s, [key]: v }));
 
-  // IPC
+  // ---------------- IPC 래퍼 ----------------
   const call = (channel, payload) => window.api.invoke(channel, payload);
 
-  // 인디케이터
+  // ---------------- 인디케이터 ----------------
   const startScriptIndicator = () => {
     setElapsedSec(0);
     if (scriptTimerRef.current) clearInterval(scriptTimerRef.current);
@@ -139,10 +189,11 @@ export default function ScriptVoiceGenerator() {
   };
   useEffect(() => () => stopScriptIndicator(), []);
 
-  // 실행
-  const runGenerate = async (mode) => {
+  // ---------------- 실행 플로우 ----------------
+  const runGenerate = async (tab) => {
+    // 탭별 모드 정규화
     const normalized =
-      mode === "prompt-gen" ? "auto" : mode === "prompt-ref" ? "ref" : mode;
+      tab === "prompt-gen" ? "auto" : tab === "prompt-ref" ? "ref" : tab;
 
     setStatus("running");
     setError("");
@@ -155,64 +206,79 @@ export default function ScriptVoiceGenerator() {
       const maxScenes = Number(form.maxScenes);
       const topic = String(form.topic || "");
       const style = String(form.style || "");
-      const minCharacters = maxScenes * 500;
-      const maxCharacters = maxScenes * 900;
-      const avgCharactersPerScene = Math.round(
-        (minCharacters + maxCharacters) / 2 / Math.max(1, maxScenes)
-      );
-      const totalSeconds = duration * 60;
 
-      const compiledPrompt =
-        mode === "prompt-gen"
-          ? compileTemplate(genPrompt, {
-              duration,
-              topic,
-              style,
-              maxScenes,
-              minCharacters,
-              maxCharacters,
-              avgCharactersPerScene,
-              totalSeconds,
-            })
-          : mode === "prompt-ref"
-          ? compileTemplate(refPrompt, {
-              duration,
-              topic,
-              style,
-              maxScenes,
-              minCharacters,
-              maxCharacters,
-              avgCharactersPerScene,
-              totalSeconds,
-              referenceText: refText,
-            })
-          : undefined;
-
-      console.groupCollapsed("%c[RUN][generate] payload", "color:#2563eb");
-      console.log({
-        type: normalized,
-        llm: form.llmMain,
-        duration,
+      // 🔢 탭에 따라 글자수 예산 계산 (자동 탭만 분당 규칙)
+      const {
+        totalSeconds,
+        minCharacters,
+        maxCharacters,
+        avgCharactersPerScene,
+      } = computeCharBudget({
+        tab: normalized,
+        durationMin: duration,
         maxScenes,
-        topic,
-        style,
-        compiledPrompt: compiledPrompt
-          ? compiledPrompt.slice(0, 220)
-          : undefined,
-        customPrompt: !!compiledPrompt,
       });
-      console.groupEnd();
 
+      // ✅ 프롬프트는 프롬프트 탭에서만 생성/전송
+      const makePrompt = () => {
+        if (tab === "prompt-gen") {
+          return compileTemplate(genPrompt, {
+            duration,
+            topic,
+            style,
+            maxScenes,
+            minCharacters,
+            maxCharacters,
+            avgCharactersPerScene,
+            totalSeconds,
+          });
+        }
+        if (tab === "prompt-ref") {
+          return compileTemplate(refPrompt, {
+            duration,
+            topic,
+            style,
+            maxScenes,
+            minCharacters,
+            maxCharacters,
+            avgCharactersPerScene,
+            totalSeconds,
+            referenceText: refText,
+          });
+        }
+        return undefined; // auto/ref 탭은 prompt 미전송 → 백엔드 기본 가이드 사용
+      };
+      const prompt = makePrompt();
+
+      // (선택) 디버그
+      try {
+        console.groupCollapsed("%c[RUN][generate] payload", "color:#2563eb");
+        const dbg = {
+          tab,
+          normalized,
+          llm: form.llmMain,
+          duration,
+          maxScenes,
+          topic,
+          style,
+          minCharacters,
+          maxCharacters,
+          avgCharactersPerScene,
+        };
+        if (prompt) dbg.promptPreview = prompt.slice(0, 200);
+        console.log(dbg);
+        console.groupEnd();
+      } catch {}
+
+      // 호출 페이로드 구성 (prompt가 없으면 필드 자체를 안 보냄)
       const base = {
         llm: form.llmMain,
         duration,
         maxScenes,
-        compiledPrompt,
-        customPrompt: !!compiledPrompt,
+        ...(prompt ? { prompt } : {}),
       };
 
       let generatedDoc = null;
-
       if (normalized === "auto") {
         generatedDoc = await call("llm/generateScript", {
           ...base,
@@ -237,7 +303,7 @@ export default function ScriptVoiceGenerator() {
         throw new Error("대본 생성 결과가 비어있습니다.");
       setDoc(generatedDoc);
 
-      // SRT
+      // ---------- SRT ----------
       setPhase("SRT");
       const srtRes = await call("script/toSrt", { doc: generatedDoc });
       if (srtRes?.srt) {
@@ -249,7 +315,7 @@ export default function ScriptVoiceGenerator() {
         });
       }
 
-      // TTS
+      // ---------- TTS ----------
       setPhase("TTS");
       setProgress({ current: 0, total: generatedDoc.scenes.length });
       const ttsRes = await call("tts/synthesizeByScenes", {
@@ -278,10 +344,10 @@ export default function ScriptVoiceGenerator() {
         const totalLen = merged.reduce((s, u) => s + u.byteLength, 0);
         const out = new Uint8Array(totalLen);
         let off = 0;
-        merged.forEach((u) => {
+        for (const u of merged) {
           out.set(u, off);
           off += u.byteLength;
-        });
+        }
         await call("files/saveToProject", {
           category: "audio",
           fileName: "narration.mp3",
@@ -289,6 +355,7 @@ export default function ScriptVoiceGenerator() {
         });
       }
 
+      // ---------- MERGE ----------
       setPhase("MERGE");
       setProgress({ current: 1, total: 1 });
       await call("audio/concatScenes", {});
@@ -297,11 +364,18 @@ export default function ScriptVoiceGenerator() {
     } catch (e) {
       stopScriptIndicator();
       setStatus("error");
-      setError(e?.message || "오류가 발생했습니다.");
+      const msg =
+        e?.response?.data?.error?.message ||
+        e?.message ||
+        "오류가 발생했습니다.";
+      setError(msg);
+      try {
+        console.error("[generate] failed:", e);
+      } catch {}
     }
   };
 
-  // 가져오기
+  // ---------------- 가져오기(SRT/MP3) ----------------
   const handleImportSrt = async () => {
     const file = importSrtRef.current?.files?.[0];
     if (!file) return;
@@ -335,7 +409,7 @@ export default function ScriptVoiceGenerator() {
     }
   };
 
-  // 실행 가능 조건
+  // ---------------- 실행 가능 조건 ----------------
   const canRun =
     (activeTab === "auto" && form.topic.trim()) ||
     (activeTab === "ref" && refText.trim()) ||
@@ -343,6 +417,7 @@ export default function ScriptVoiceGenerator() {
     (activeTab === "prompt-gen" && genPrompt.trim()) ||
     (activeTab === "prompt-ref" && refPrompt.trim() && refText.trim());
 
+  // ---------------- 렌더 ----------------
   return (
     <div
       ref={containerRef}
@@ -440,6 +515,7 @@ export default function ScriptVoiceGenerator() {
           onRun={() => runGenerate("auto")}
         />
       )}
+
       {activeTab === "ref" && (
         <RefTab
           form={form}
@@ -450,6 +526,7 @@ export default function ScriptVoiceGenerator() {
           onRun={() => runGenerate("ref")}
         />
       )}
+
       {activeTab === "import" && (
         <ImportTab
           form={form}
@@ -503,6 +580,7 @@ export default function ScriptVoiceGenerator() {
             {doc?.scenes?.length ? `${doc.scenes.length}개 씬` : "대본 없음"}
           </div>
         </div>
+
         <div className="border border-slate-200 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-slate-500">
@@ -536,6 +614,7 @@ export default function ScriptVoiceGenerator() {
             </tbody>
           </table>
         </div>
+
         {error && (
           <div className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
             {error}

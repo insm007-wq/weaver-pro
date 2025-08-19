@@ -1,52 +1,77 @@
-// src/components/settings/tabs/ApiTab.jsx
 import React, { useEffect, useMemo, useState } from "react";
 
+/**
+ * API 탭 (단순화 버전)
+ * - 각 서비스 키 입력/저장/테스트
+ * - MiniMax: groupId / key 둘 다 한 줄 입력
+ * - 저장 시에는 trim 정도만 적용
+ */
 export default function ApiTab() {
   const [openaiKey, setOpenaiKey] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
   const [replicateKey, setReplicateKey] = useState("");
-  const [miniMaxGroupId, setMiniMaxGroupId] = useState("");
-  const [miniMaxKey, setMiniMaxKey] = useState("");
+
+  // MiniMax (표준 키 이름: minimaxGroupId / minimaxKey)
+  const [minimaxGroupId, setMinimaxGroupId] = useState("");
+  const [minimaxKey, setMinimaxKey] = useState("");
+
+  // Google TTS
   const [googleTtsKey, setGoogleTtsKey] = useState("");
 
   const [status, setStatus] = useState({
-    openai: null, // ✅ OpenAI 상태 표시
+    openai: null,
     anthropic: null,
     replicate: null,
     minimax: null,
-    googleTts: null, // ✅ 추가
+    googleTts: null,
   });
   const [loading, setLoading] = useState({
-    openai: false, // ✅ OpenAI 로딩 표시
+    openai: false,
     anthropic: false,
     replicate: false,
     minimax: false,
-    googleTts: false, // ✅ 추가
+    googleTts: false,
   });
   const [toast, setToast] = useState(null);
 
+  // 초기 로드: 저장된 값 불러오기 (하위호환 포함)
   useEffect(() => {
     (async () => {
-      const [ok, ak, rk, gid, mk, gk] = await Promise.all([
-        window.api.getSecret("openaiKey"), // ✅ OpenAI
+      const [ok, ak, rk, gidSecret, gidOldSetting, mk, gk] = await Promise.all([
+        window.api.getSecret("openaiKey"),
         window.api.getSecret("anthropicKey"),
         window.api.getSecret("replicateKey"),
-        window.api.getSetting("miniMaxGroupId"),
-        window.api.getSecret("miniMaxKey"),
-        window.api.getSecret("googleTtsApiKey"), // ✅ 추가
+        window.api.getSecret("minimaxGroupId"), // 표준 저장 위치
+        window.api.getSetting("miniMaxGroupId"), // (구) settings → 하위호환
+        window.api.getSecret("minimaxKey"),
+        window.api.getSecret("googleTtsApiKey"),
       ]);
-      setOpenaiKey(ok || ""); // ✅ OpenAI
+
+      // (구) settings에 있던 miniMaxGroupId를 secrets로 승격 (있으면)
+      if (!gidSecret && gidOldSetting) {
+        try {
+          await window.api.setSecret({
+            key: "minimaxGroupId",
+            value: String(gidOldSetting || "").trim(),
+          });
+        } catch {
+          /* ignore */
+        }
+      }
+
+      setOpenaiKey(ok || "");
       setAnthropicKey(ak || "");
       setReplicateKey(rk || "");
-      setMiniMaxGroupId(gid || "");
-      setMiniMaxKey(mk || "");
-      setGoogleTtsKey(gk || ""); // ✅ 추가
+      setMinimaxGroupId((gidSecret || gidOldSetting || "").trim());
+      setMinimaxKey(mk || "");
+      setGoogleTtsKey(gk || "");
     })();
   }, []);
 
+  // 토스트 자동 제거
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 1800);
+    const t = setTimeout(() => setToast(null), 1600);
     return () => clearTimeout(t);
   }, [toast]);
 
@@ -54,39 +79,57 @@ export default function ApiTab() {
   const setStat = (k, ok, msg) =>
     setStatus((s) => ({ ...s, [k]: { ok, msg, ts: Date.now() } }));
 
-  // ----- 저장 -----
+  /* ---------------- 저장 ---------------- */
+
   const saveOpenAI = async () => {
-    await window.api.setSecret({ key: "openaiKey", value: openaiKey });
+    await window.api.setSecret({
+      key: "openaiKey",
+      value: (openaiKey || "").trim(),
+    });
     setToast({ type: "success", text: "OpenAI 키 저장 완료" });
   };
 
   const saveAnthropic = async () => {
-    await window.api.setSecret({ key: "anthropicKey", value: anthropicKey });
+    await window.api.setSecret({
+      key: "anthropicKey",
+      value: (anthropicKey || "").trim(),
+    });
     setToast({ type: "success", text: "Anthropic 키 저장 완료" });
   };
 
   const saveReplicate = async () => {
-    await window.api.setSecret({ key: "replicateKey", value: replicateKey });
+    await window.api.setSecret({
+      key: "replicateKey",
+      value: (replicateKey || "").trim(),
+    });
     setToast({ type: "success", text: "Replicate 토큰 저장 완료" });
   };
 
   const saveMiniMax = async () => {
     await Promise.all([
-      window.api.setSetting({ key: "miniMaxGroupId", value: miniMaxGroupId }),
-      window.api.setSecret({ key: "miniMaxKey", value: miniMaxKey }),
+      window.api.setSecret({
+        key: "minimaxGroupId",
+        value: (minimaxGroupId || "").trim(),
+      }),
+      window.api.setSecret({
+        key: "minimaxKey",
+        value: (minimaxKey || "").trim(),
+      }),
     ]);
     setToast({ type: "success", text: "MiniMax 설정 저장 완료" });
   };
 
-  // ✅ 추가: Google TTS 저장
   const saveGoogleTts = async () => {
-    await window.api.setSecret({ key: "googleTtsApiKey", value: googleTtsKey });
+    await window.api.setSecret({
+      key: "googleTtsApiKey",
+      value: (googleTtsKey || "").trim(),
+    });
     setToast({ type: "success", text: "Google TTS 키 저장 완료" });
   };
 
-  // ----- 테스트 -----
+  /* ---------------- 테스트 ---------------- */
+
   const handleTestOpenAI = async () => {
-    // ✅ 키 미입력 가드
     if (!openaiKey?.trim()) {
       setToast({ type: "error", text: "OpenAI 키를 입력하세요." });
       setStat("openai", false, "키 미입력");
@@ -95,7 +138,7 @@ export default function ApiTab() {
     setBusy("openai", true);
     setStat("openai", false, "");
     try {
-      const res = await window.api.testOpenAI(openaiKey);
+      const res = await window.api.testOpenAI?.(openaiKey.trim());
       res?.ok
         ? setStat(
             "openai",
@@ -105,11 +148,7 @@ export default function ApiTab() {
         : setStat(
             "openai",
             false,
-            `실패: ${res?.status ?? ""} ${
-              typeof res?.message === "string"
-                ? res.message
-                : JSON.stringify(res?.message ?? "")
-            }`
+            `실패: ${res?.status ?? ""} ${stringifyErr(res?.message)}`
           );
       setToast({
         type: res?.ok ? "success" : "error",
@@ -123,17 +162,37 @@ export default function ApiTab() {
     }
   };
 
+  const handleTestAnthropic = async () => {
+    setBusy("anthropic", true);
+    setStat("anthropic", false, "");
+    try {
+      const res = await window.api.testAnthropic?.(anthropicKey.trim());
+      res?.ok
+        ? setStat("anthropic", true, "연결 성공")
+        : setStat("anthropic", false, `실패: ${stringifyErr(res?.message)}`);
+      setToast({
+        type: res?.ok ? "success" : "error",
+        text: res?.ok ? "Anthropic 연결 성공" : "Anthropic 실패",
+      });
+    } catch (e) {
+      setStat("anthropic", false, `오류: ${e?.message || e}`);
+      setToast({ type: "error", text: "Anthropic 오류" });
+    } finally {
+      setBusy("anthropic", false);
+    }
+  };
+
   const handleTestReplicate = async () => {
     setBusy("replicate", true);
     setStat("replicate", false, "");
     try {
-      const res = await window.api.testReplicate(replicateKey);
+      const res = await window.api.testReplicate?.(replicateKey.trim());
       res?.ok
         ? setStat("replicate", true, `연결 성공 (models: ${res.count})`)
         : setStat(
             "replicate",
             false,
-            `실패: ${res?.status ?? ""} ${JSON.stringify(res?.message ?? "")}`
+            `실패: ${res?.status ?? ""} ${stringifyErr(res?.message)}`
           );
       setToast({
         type: res?.ok ? "success" : "error",
@@ -147,45 +206,22 @@ export default function ApiTab() {
     }
   };
 
-  const handleTestAnthropic = async () => {
-    setBusy("anthropic", true);
-    setStat("anthropic", false, "");
-    try {
-      const res = await window.api.testAnthropic(anthropicKey);
-      res?.ok
-        ? setStat("anthropic", true, "연결 성공")
-        : setStat(
-            "anthropic",
-            false,
-            `실패: ${JSON.stringify(res?.message ?? "")}`
-          );
-      setToast({
-        type: res?.ok ? "success" : "error",
-        text: res?.ok ? "Anthropic 연결 성공" : "Anthropic 실패",
-      });
-    } catch (e) {
-      setStat("anthropic", false, `오류: ${e?.message || e}`);
-      setToast({ type: "error", text: "Anthropic 오류" });
-    } finally {
-      setBusy("anthropic", false);
-    }
-  };
-
   const handleTestMiniMax = async () => {
     setBusy("minimax", true);
     setStat("minimax", false, "");
     try {
-      const res = await window.api.testMiniMax({
-        key: miniMaxKey,
-        groupId: miniMaxGroupId,
-      });
+      let res = null;
+      if (typeof window.api.testMiniMax === "function") {
+        res = await window.api.testMiniMax({
+          key: (minimaxKey || "").trim(),
+          groupId: (minimaxGroupId || "").trim(),
+        });
+      } else if (typeof window.api.invoke === "function") {
+        res = await window.api.invoke("minimax:test");
+      }
       res?.ok
         ? setStat("minimax", true, "연결 성공")
-        : setStat(
-            "minimax",
-            false,
-            `실패: ${JSON.stringify(res?.message ?? "")}`
-          );
+        : setStat("minimax", false, `실패: ${stringifyErr(res?.message)}`);
       setToast({
         type: res?.ok ? "success" : "error",
         text: res?.ok ? "MiniMax 연결 성공" : "MiniMax 실패",
@@ -198,7 +234,6 @@ export default function ApiTab() {
     }
   };
 
-  // ✅ 추가: Google TTS 테스트 (testGoogleTTS가 없으면 안내)
   const handleTestGoogleTts = async () => {
     setBusy("googleTts", true);
     setStat("googleTts", false, "");
@@ -206,20 +241,16 @@ export default function ApiTab() {
       if (typeof window.api.testGoogleTTS !== "function") {
         setStat("googleTts", true, "키 저장됨 (테스트 함수 미구현)");
         setToast({ type: "success", text: "Google TTS 키 확인(간이)" });
-        return;
+      } else {
+        const res = await window.api.testGoogleTTS(googleTtsKey.trim());
+        res?.ok
+          ? setStat("googleTts", true, "연결 성공")
+          : setStat("googleTts", false, `실패: ${stringifyErr(res?.message)}`);
+        setToast({
+          type: res?.ok ? "success" : "error",
+          text: res?.ok ? "Google TTS 연결 성공" : "Google TTS 실패",
+        });
       }
-      const res = await window.api.testGoogleTTS(googleTtsKey);
-      res?.ok
-        ? setStat("googleTts", true, "연결 성공")
-        : setStat(
-            "googleTts",
-            false,
-            `실패: ${JSON.stringify(res?.message ?? "")}`
-          );
-      setToast({
-        type: res?.ok ? "success" : "error",
-        text: res?.ok ? "Google TTS 연결 성공" : "Google TTS 실패",
-      });
     } catch (e) {
       setStat("googleTts", false, `오류: ${e?.message || e}`);
       setToast({ type: "error", text: "Google TTS 오류" });
@@ -246,7 +277,7 @@ export default function ApiTab() {
         )}
       </div>
 
-      {/* ✅ OpenAI */}
+      {/* OpenAI */}
       <Section
         title="🧠 OpenAI API Key"
         status={status.openai}
@@ -260,6 +291,8 @@ export default function ApiTab() {
           value={openaiKey}
           onChange={(e) => setOpenaiKey(e.target.value)}
           placeholder="OpenAI API Key (sk-...)"
+          autoComplete="off"
+          spellCheck={false}
         />
       </Section>
 
@@ -277,6 +310,8 @@ export default function ApiTab() {
           value={anthropicKey}
           onChange={(e) => setAnthropicKey(e.target.value)}
           placeholder="Anthropic API Key"
+          autoComplete="off"
+          spellCheck={false}
         />
       </Section>
 
@@ -294,6 +329,8 @@ export default function ApiTab() {
           value={replicateKey}
           onChange={(e) => setReplicateKey(e.target.value)}
           placeholder="API Token"
+          autoComplete="off"
+          spellCheck={false}
         />
       </Section>
 
@@ -305,25 +342,29 @@ export default function ApiTab() {
         onTest={handleTestMiniMax}
         onSave={saveMiniMax}
       >
-        <div className="flex gap-2">
+        <div className="flex gap-2 w-full">
           <input
             type="text"
-            value={miniMaxGroupId}
-            onChange={(e) => setMiniMaxGroupId(e.target.value)}
-            placeholder="Group ID"
+            value={minimaxGroupId}
+            onChange={(e) => setMinimaxGroupId(e.target.value)}
+            placeholder="Group ID (예: 1940...)"
             className="w-1/2 px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            autoComplete="off"
+            spellCheck={false}
           />
           <input
             type="password"
-            value={miniMaxKey}
-            onChange={(e) => setMiniMaxKey(e.target.value)}
-            placeholder="MiniMax API Key"
+            value={minimaxKey}
+            onChange={(e) => setMinimaxKey(e.target.value)}
+            placeholder="MiniMax Secret Key"
             className="w-1/2 px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            autoComplete="off"
+            spellCheck={false}
           />
         </div>
       </Section>
 
-      {/* ✅ Google TTS */}
+      {/* Google TTS */}
       <Section
         title="🗣️ Google Cloud Text-to-Speech"
         status={status.googleTts}
@@ -337,6 +378,8 @@ export default function ApiTab() {
           onChange={(e) => setGoogleTtsKey(e.target.value)}
           placeholder="Google Cloud API Key (Text-to-Speech)"
           className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          autoComplete="off"
+          spellCheck={false}
         />
       </Section>
     </div>
@@ -344,6 +387,7 @@ export default function ApiTab() {
 }
 
 /* ---------- 재사용 컴포넌트 ---------- */
+
 function Section({ title, status, loading, onTest, onSave, children }) {
   const borderClass = useMemo(
     () =>
@@ -362,7 +406,7 @@ function Section({ title, status, loading, onTest, onSave, children }) {
         <StatusBadge status={status} />
       </div>
 
-      <div className="flex items-center gap-2">{children}</div>
+      <div className="flex items-center gap-2 w-full">{children}</div>
 
       <div className="mt-3 flex items-center gap-3">
         <button
@@ -442,4 +486,9 @@ function Spinner() {
       />
     </svg>
   );
+}
+
+/* ---------- helpers ---------- */
+function stringifyErr(m) {
+  return typeof m === "string" ? m : JSON.stringify(m ?? "");
 }
