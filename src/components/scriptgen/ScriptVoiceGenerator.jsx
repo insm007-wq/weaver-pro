@@ -15,26 +15,23 @@ import { base64ToArrayBuffer } from "./utils/buffer";
 import ScriptPromptTab from "./tabs/ScriptPromptTab";
 import ReferencePromptTab from "./tabs/ReferencePromptTab";
 
-/** ===== 글자수 규칙 =====
- * - 자동 탭(auto)은 기존 정책 유지(분당 150~250자)
- * - 프롬프트 탭(prompt-gen / prompt-ref)은 프롬프트 중심(원문 위주)
- *   · prompt-gen: 원문 그대로(치환 없음) 전송
- *   · prompt-ref: 레퍼런스 원문만 안전하게 주입해서 전송
- * - 일반 레퍼런스(ref)와 import는 기존 동작 유지
+/** ========================= 글자수 규칙 =========================
+ * - 자동 탭(auto): 기존 정책 유지(분당 150~250자)
+ * - 프롬프트 탭은 "프롬프트 중심"
+ *   - prompt-gen: 프롬프트 원문 그대로 전송 (치환 없음)
+ *   - prompt-ref: 4개 값(duration/topic/style/maxScenes) + referenceText만 치환
  */
 const CHAR_BUDGETS = {
-  auto: { perMinMin: 150, perMinMax: 250 }, // 자동 탭(그대로)
-  // ref/import 계산에 쓰는 기본값
-  perSceneFallback: { min: 500, max: 900 },
+  auto: { perMinMin: 150, perMinMax: 250 },
+  perSceneFallback: { min: 500, max: 900 }, // ref/import 계산용
 };
 
-/** 계산 헬퍼: 탭/분/씬수 기준으로 글자수 예산 산출 (자동/ref/import 전용) */
 function computeCharBudget({ tab, durationMin, maxScenes }) {
   const duration = Number(durationMin) || 0;
   const scenes = Math.max(1, Number(maxScenes) || 1);
   const totalSeconds = duration * 60;
 
-  // 1) 자동 탭: 기존 정책 유지
+  // 자동 탭: 분당 속도 정책 적용
   if (tab === "auto") {
     const { perMinMin, perMinMax } = CHAR_BUDGETS.auto;
     const minCharacters = Math.max(0, Math.round(duration * perMinMin));
@@ -56,7 +53,7 @@ function computeCharBudget({ tab, durationMin, maxScenes }) {
     };
   }
 
-  // 2) ref/import: 대략 per-scene 기준(기존 로직)
+  // ref/import: 대략 per-scene 기준
   const { min, max } = CHAR_BUDGETS.perSceneFallback;
   const minCharacters = scenes * min;
   const maxCharacters = scenes * max;
@@ -67,29 +64,27 @@ function computeCharBudget({ tab, durationMin, maxScenes }) {
   return { totalSeconds, minCharacters, maxCharacters, avgCharactersPerScene };
 }
 
-/** 프롬프트 원문 그대로 반환 (치환 없음) */
+/** 프롬프트 원문 그대로 (prompt-gen) */
 function compilePromptRaw(tpl) {
   return String(tpl ?? "");
 }
 
-/** 레퍼런스 본문을 템플릿에 주입
- * - {referenceText}, {referenceScript}, (referenceScript) 모두 지원
- * - 어떤 토큰도 없으면 맨 끝에 표준 블록으로 자동 첨부
- */
-function injectReference(template, reference) {
-  const ref = String(reference || "").trim();
-  let t = String(template || "");
-  if (!ref) return t;
-
-  const replaced = t
-    .replaceAll("{referenceText}", ref)
-    .replaceAll("{referenceScript}", ref)
-    .replaceAll("(referenceScript)", ref);
-
-  if (replaced !== t) return replaced;
-
-  // 토큰이 전혀 없으면 표준 블록을 자동으로 덧붙임
-  return t + `\n\n=== 레퍼런스 대본 ===\n${ref}\n=== 레퍼런스 대본 끝 ===`;
+/** 레퍼런스 프롬프트 치환 (4개 + referenceText) */
+function compileRefPrompt(
+  tpl,
+  { duration, topic, style, maxScenes, referenceText }
+) {
+  let s = String(tpl ?? "");
+  const dict = {
+    duration,
+    topic,
+    style,
+    maxScenes,
+    referenceText: referenceText ?? "",
+  };
+  for (const [k, v] of Object.entries(dict))
+    s = s.replaceAll(`{${k}}`, String(v ?? ""));
+  return s;
 }
 
 export default function ScriptVoiceGenerator() {
@@ -108,7 +103,23 @@ export default function ScriptVoiceGenerator() {
     pitch: 0,
   });
 
-  const [refText, setRefText] = useState("");
+  // ✅ 레퍼런스 입력을 탭별로 분리: Tab2(레퍼런스 기반), Tab5(레퍼런스 프롬프트)
+  const [refText, setRefText] = useState(""); // Tab2 전용
+  const [promptRefText, setPromptRefText] = useState(""); // Tab5 전용
+
+  // ✅ 씬/대본을 탭별로 독립 보관 (공유 금지)
+  //    키: 'auto' | 'ref' | 'import' | 'prompt-gen' | 'prompt-ref'
+  const [docs, setDocs] = useState({
+    auto: null,
+    ref: null,
+    import: null,
+    "prompt-gen": null,
+    "prompt-ref": null,
+  });
+
+  // 현재 탭의 문서만 미리보기에서 사용
+  const currentDoc = docs[activeTab] || null;
+
   const importSrtRef = useRef(null);
   const importMp3Ref = useRef(null);
 
@@ -126,9 +137,7 @@ export default function ScriptVoiceGenerator() {
         ]);
         if (gp) setGenPrompt(gp);
         if (rp) setRefPrompt(rp);
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     })();
   }, []);
 
@@ -160,7 +169,6 @@ export default function ScriptVoiceGenerator() {
   const [elapsedSec, setElapsedSec] = useState(0);
   const scriptTimerRef = useRef(null);
 
-  const [doc, setDoc] = useState(null);
   const [error, setError] = useState("");
 
   // ---------------- 폭 고정 ----------------
@@ -200,9 +208,9 @@ export default function ScriptVoiceGenerator() {
   };
   useEffect(() => () => stopScriptIndicator(), []);
 
-  // ---------------- 실행 플로우 ----------------
+  // ======================== 실행 플로우 ========================
   const runGenerate = async (tab) => {
-    // 백엔드 타입 라우팅 정규화(프롬프트 탭은 auto/ref에 매핑)
+    // 백엔드 라우팅 기준으로 탭 정규화
     const normalized =
       tab === "prompt-gen" ? "auto" : tab === "prompt-ref" ? "ref" : tab;
 
@@ -218,7 +226,7 @@ export default function ScriptVoiceGenerator() {
       const topic = String(form.topic || "");
       const style = String(form.style || "");
 
-      // 자동/ref/import 계산(프롬프트 탭은 계산해도 전송 안 함)
+      // 자동/ref/import 계산치(프롬프트 탭은 계산해도 payload엔 안 실을 수 있음)
       const {
         totalSeconds,
         minCharacters,
@@ -227,47 +235,29 @@ export default function ScriptVoiceGenerator() {
         cpmMin,
         cpmMax,
       } = computeCharBudget({
-        tab: normalized, // 계산은 백엔드 타입 기준
+        tab: normalized,
         durationMin: duration,
         maxScenes,
       });
 
-      // ✅ 프롬프트 탭 처리
-      const makePrompt = () => {
-        if (tab === "prompt-gen") {
-          // 원문 그대로 전송
-          return compilePromptRaw(genPrompt);
-        }
-        if (tab === "prompt-ref") {
-          // 프롬프트 원문은 유지, 분석 원문(refText)만 안전하게 주입
-          const raw = compilePromptRaw(refPrompt);
-          return injectReference(raw, refText);
-        }
-        return undefined; // auto/ref/import는 서버 fallback 프롬프트 사용
-      };
-      const prompt = makePrompt();
+      // ----- 프롬프트 구성 -----
+      const prompt =
+        tab === "prompt-gen"
+          ? compilePromptRaw(genPrompt)
+          : tab === "prompt-ref"
+          ? compileRefPrompt(refPrompt, {
+              duration,
+              topic,
+              style,
+              maxScenes,
+              referenceText: promptRefText, // Tab5 입력만 사용
+            })
+          : undefined;
 
-      // 디버그
-      try {
-        console.groupCollapsed("%c[RUN][generate] payload", "color:#2563eb");
-        const dbg = {
-          tab,
-          normalized,
-          llm: form.llmMain,
-          duration,
-          maxScenes,
-          topic,
-          style,
-        };
-        if (prompt) dbg.promptPreview = prompt.slice(0, 200);
-        console.log(dbg);
-        console.groupEnd();
-      } catch {}
-
-      // 호출 페이로드 구성
-      // - 프롬프트 탭: prompt만(그리고 루틴상 필요한 기본 필드) 전송
-      // - 그 외: 기존대로 계산값 포함
+      // ----- 공통 필드 -----
       const common = { llm: form.llmMain, duration, maxScenes, topic, style };
+
+      // ----- 베이스 payload (프롬프트 탭은 prompt만, 나머지는 계산치 포함) -----
       const base =
         tab === "prompt-gen" || tab === "prompt-ref"
           ? { ...common, ...(prompt ? { prompt } : {}) }
@@ -282,27 +272,63 @@ export default function ScriptVoiceGenerator() {
               ...(prompt ? { prompt } : {}),
             };
 
-      let generatedDoc = null;
+      // ----- 최종 호출 payload 조립 + 디버그 로그 출력 -----
+      let invokePayload = null;
       if (normalized === "auto") {
-        generatedDoc = await call("llm/generateScript", {
-          ...base,
-          type: "auto",
-        });
+        invokePayload = { ...base, type: "auto" };
       } else if (normalized === "ref") {
-        // prompt-ref는 프롬프트에 이미 레퍼런스를 주입했으므로 referenceText 전달 안 함
-        const payload =
-          tab === "prompt-ref"
-            ? { ...base, type: "reference" }
-            : { ...base, type: "reference", referenceText: refText };
-        generatedDoc = await call("llm/generateScript", payload);
+        invokePayload = {
+          ...base,
+          type: "reference",
+          // Tab5(prompt-ref)은 promptRefText, Tab2(ref)은 refText
+          referenceText: tab === "prompt-ref" ? promptRefText : refText,
+        };
       } else if (normalized === "import") {
-        generatedDoc = doc;
+        // import는 LLM 호출이 없으므로 패스
       }
 
+      // 🌈 디버그: 백엔드로 넘어가는 payload 확인용 (prompt는 preview만)
+      try {
+        if (invokePayload) {
+          const dbg = { ...invokePayload };
+          if (dbg.prompt) {
+            dbg.promptPreview = String(dbg.prompt).slice(0, 400);
+            delete dbg.prompt;
+          }
+          console.groupCollapsed(
+            "%c[LLM] llm/generateScript payload",
+            "color:#2563eb"
+          );
+          console.log(dbg);
+          console.groupEnd();
+        } else {
+          console.groupCollapsed(
+            "%c[LLM] import/no-llm run payload",
+            "color:#64748b"
+          );
+          console.log({ tab, normalized });
+          console.groupEnd();
+        }
+      } catch {}
+
+      // ----- 호출 -----
+      let generatedDoc = null;
+      if (normalized === "auto") {
+        generatedDoc = await call("llm/generateScript", invokePayload);
+      } else if (normalized === "ref") {
+        generatedDoc = await call("llm/generateScript", invokePayload);
+      } else if (normalized === "import") {
+        // 현재 탭(import)에 이미 로드되어 있는 문서를 사용
+        generatedDoc = docs[tab] || null;
+      }
+
+      // ----- 결과 처리 -----
       stopScriptIndicator();
       if (!generatedDoc?.scenes?.length)
         throw new Error("대본 생성 결과가 비어있습니다.");
-      setDoc(generatedDoc);
+
+      // ✅ 생성된 문서를 현재 탭에만 저장 (다른 탭과 공유 금지)
+      setDocs((prev) => ({ ...prev, [tab]: generatedDoc }));
 
       // ---------- SRT ----------
       setPhase("SRT");
@@ -386,7 +412,8 @@ export default function ScriptVoiceGenerator() {
     setError("");
     try {
       const parsed = await call("script/importSrt", { srtText: text });
-      setDoc(parsed);
+      // ⬇️ 가져온 문서도 import 탭에만 저장
+      setDocs((prev) => ({ ...prev, import: parsed }));
       setStatus("idle");
       setPhase("대본 불러오기 완료");
     } catch (e) {
@@ -414,9 +441,9 @@ export default function ScriptVoiceGenerator() {
   const canRun =
     (activeTab === "auto" && form.topic.trim()) ||
     (activeTab === "ref" && refText.trim()) ||
-    (activeTab === "import" && doc) ||
+    (activeTab === "import" && !!docs.import) ||
     (activeTab === "prompt-gen" && genPrompt.trim()) ||
-    (activeTab === "prompt-ref" && refPrompt.trim() && refText.trim());
+    (activeTab === "prompt-ref" && refPrompt.trim() && promptRefText.trim()); // Tab5는 refText 대신 promptRefText 확인
 
   // ---------------- 렌더 ----------------
   return (
@@ -524,7 +551,6 @@ export default function ScriptVoiceGenerator() {
           voices={voices}
           refText={refText}
           setRefText={setRefText}
-          onRun={() => runGenerate("ref")}
         />
       )}
 
@@ -567,19 +593,21 @@ export default function ScriptVoiceGenerator() {
             form={form}
             onChange={onChange}
             voices={voices}
-            refText={refText}
-            setRefText={setRefText}
+            refText={promptRefText}
+            setRefText={setPromptRefText}
             onRun={() => runGenerate("prompt-ref")}
           />
         </Card>
       )}
 
-      {/* 결과/리스트 */}
+      {/* 결과/리스트 (현재 탭의 문서만 표시) */}
       <Card className="mt-5">
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-semibold">씬 미리보기</div>
           <div className="text-xs text-slate-500">
-            {doc?.scenes?.length ? `${doc.scenes.length}개 씬` : "대본 없음"}
+            {currentDoc?.scenes?.length
+              ? `${currentDoc.scenes.length}개 씬`
+              : "대본 없음"}
           </div>
         </div>
 
@@ -594,7 +622,7 @@ export default function ScriptVoiceGenerator() {
               </tr>
             </thead>
             <tbody>
-              {(doc?.scenes || []).map((sc, i) => (
+              {(currentDoc?.scenes || []).map((sc, i) => (
                 <tr key={sc.id || i} className="border-t border-slate-100">
                   <Td className="text-center">{sc.scene_number ?? i + 1}</Td>
                   <Td className="text-center">
@@ -606,7 +634,7 @@ export default function ScriptVoiceGenerator() {
                   <Td className="text-slate-700">{sc.text}</Td>
                 </tr>
               ))}
-              {!doc?.scenes?.length && (
+              {!currentDoc?.scenes?.length && (
                 <tr>
                   <td colSpan={4} className="text-center py-10 text-slate-400">
                     대본을 생성하거나 SRT를 불러오면 씬 목록이 표시됩니다.

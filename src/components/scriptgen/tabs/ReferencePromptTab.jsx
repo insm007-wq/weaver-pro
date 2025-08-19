@@ -23,12 +23,12 @@ export default function ReferencePromptTab({
   form,
   onChange,
   voices,
-  onRun, // 실행 트리거 (필수)
-  refText, // 레퍼런스 대본 원문
-  setRefText, // 레퍼런스 대본 setter
-  savedAt, // 부모가 내려주는 저장 시각 (선택)
-  onSave, // 부모 저장 핸들러 (선택)
-  onReset, // 부모 리셋 핸들러 (선택)
+  onRun, // 공통 실행(단축키용)
+  refText, // 레퍼런스 원문
+  setRefText,
+  savedAt, // 저장 시각(부모)
+  onSave,
+  onReset,
 }) {
   // 프리셋 메타
   const [presets, setPresets] = useState([]);
@@ -41,14 +41,13 @@ export default function ReferencePromptTab({
 
   const countTotal = 1 + (presets?.length || 0);
 
-  // 초기 로드: 프리셋 목록/현재 id만 가져오기 (본문은 부모 template 유지)
+  // 초기 로드: 프리셋 목록/현재 id만
   useEffect(() => {
     (async () => {
       try {
         const list =
           (await window?.api?.getSetting("prompt.reference.presets")) || [];
         setPresets(Array.isArray(list) ? list : []);
-
         const cur =
           (await window?.api?.getSetting("prompt.reference.current")) ||
           "default";
@@ -59,7 +58,7 @@ export default function ReferencePromptTab({
     })();
   }, []);
 
-  // Ctrl/Cmd + Enter → 실행
+  // Ctrl/Cmd + Enter → 상단 공통 실행
   useEffect(() => {
     const handler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
@@ -212,7 +211,7 @@ export default function ReferencePromptTab({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 헤더 */}
+      {/* 프롬프트 관리 헤더 라인 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="inline-flex h-6 w-6 items-center justify-center rounded bg-slate-100">
@@ -258,6 +257,42 @@ export default function ReferencePromptTab({
         </div>
       </div>
 
+      {/* ⬇️ 새 프롬프트 입력 박스 (헤더 바로 아래, 스크립트 탭과 동일 위치) */}
+      {creating && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <label className="block text-xs font-medium text-slate-600 mb-1">
+            프롬프트 이름
+          </label>
+          <input
+            autoFocus
+            className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+            placeholder="새 프롬프트 이름을 입력하세요"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleCreate();
+              if (e.key === "Escape") setCreating(false);
+            }}
+          />
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={handleCreate}
+              className="flex-1 h-10 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-500"
+            >
+              생성
+            </button>
+            <button
+              type="button"
+              onClick={() => setCreating(false)}
+              className="flex-1 h-10 rounded-lg border border-slate-200 bg-white text-sm hover:bg-slate-50"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 실행 옵션 */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <SelectField
@@ -291,7 +326,7 @@ export default function ReferencePromptTab({
             레퍼런스 대본 (분석할 원문)
           </div>
           <div className="text-[11px] text-slate-500">
-            글자수: {refLen.toLocaleString()}
+            글자수: {refText?.length?.toLocaleString?.() || 0}
           </div>
         </div>
         <textarea
@@ -307,7 +342,7 @@ export default function ReferencePromptTab({
         <div className="flex items-center justify-between mb-2">
           <div className="text-sm font-semibold">레퍼런스 프롬프트</div>
           <div className="text-[11px] text-slate-500">
-            (실행: Ctrl/Cmd + Enter)
+            (실행: Ctrl/Cmd + Enter · 상단 ‘실행’ 버튼 사용)
           </div>
         </div>
         <textarea
@@ -317,36 +352,27 @@ export default function ReferencePromptTab({
         />
       </div>
 
-      {/* 하단 액션 */}
-      <div className="flex justify-between items-center pt-4 border-t border-slate-100">
-        <div className="text-[11px] text-slate-500">
-          {savedLabel && `저장됨: ${new Date(savedLabel).toLocaleTimeString()}`}
-        </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={handleReset}
-            className="text-sm bg-slate-100 text-slate-700 rounded-lg px-4 py-2 hover:bg-slate-200"
-          >
-            기본값으로 초기화
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className="text-sm bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-500"
-          >
-            저장
-          </button>
-          <button
-            type="button"
-            onClick={onRun}
-            className="text-sm bg-emerald-600 text-white rounded-lg px-4 py-2 hover:bg-emerald-500"
-            disabled={!refText?.trim() || !template?.trim()}
-            title={!refText?.trim() ? "레퍼런스 대본을 입력하세요" : ""}
-          >
-            실행
-          </button>
-        </div>
+      {/* 하단 액션: 저장/초기화 + 저장시각(오른쪽) */}
+      <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+        <button
+          type="button"
+          onClick={handleReset}
+          className="text-sm bg-slate-100 text-slate-700 rounded-lg px-4 py-2 hover:bg-slate-200"
+        >
+          기본값으로 초기화
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          className="text-sm bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-500"
+        >
+          저장
+        </button>
+        {savedLabel && (
+          <span className="ml-2 self-center text-[11px] text-slate-500">
+            저장됨: {new Date(savedLabel).toLocaleTimeString()}
+          </span>
+        )}
       </div>
     </div>
   );
