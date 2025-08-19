@@ -8,6 +8,16 @@ const path = require("path");
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const DEFAULT_ANTHROPIC_MODEL = "claude-3-5-sonnet-latest";
 
+/* ---------- 모델별 출력 토큰 상한(여유 마진 포함) ---------- */
+const ANTHROPIC_MODEL_CAPS = {
+  "claude-3-5-sonnet-latest": 8192, // 출력 토큰 최대치
+};
+function clampAnthropicTokens(requested, model) {
+  const cap = ANTHROPIC_MODEL_CAPS[model] || 8192;
+  // 마진 64 토큰 확보해서 경계값 에러 회피
+  return Math.max(1000, Math.min(requested, cap - 64));
+}
+
 /* ---------------- 유틸 ---------------- */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const normalizeErr = (err) => ({
@@ -74,7 +84,7 @@ function tryParse(raw) {
   return null;
 }
 
-/** ← 문자열 씬도 통과시키도록 강화 */
+/** 문자열/객체 어디서든 텍스트 추출 */
 function pickText(s) {
   if (s == null) return "";
   if (typeof s === "string") return s.trim();
@@ -89,14 +99,12 @@ function pickText(s) {
     s.value,
   ];
   for (const v of cand) if (typeof v === "string" && v.trim()) return v.trim();
-  // 배열/객체로 온 경우도 최대한 문자열화
   if (Array.isArray(s.lines)) return s.lines.filter(Boolean).join(" ").trim();
   if (typeof s.summary === "string") return s.summary.trim();
   return "";
 }
 
 function deepFindScenes(obj) {
-  // obj 어디든 "텍스트를 가진 오브젝트 배열"을 찾아 scenes로 간주
   const visited = new Set();
   function walk(node) {
     if (!node || typeof node !== "object") return null;
@@ -104,10 +112,7 @@ function deepFindScenes(obj) {
     visited.add(node);
 
     if (Array.isArray(node)) {
-      // 배열 요소에 텍스트 후보키가 있으면 씬으로 취급
-      const hasTextish = node.some(
-        (it) => typeof pickText(it) === "string" && pickText(it)
-      );
+      const hasTextish = node.some((it) => pickText(it));
       if (hasTextish) return node;
       for (const it of node) {
         const found = walk(it);
@@ -115,7 +120,6 @@ function deepFindScenes(obj) {
       }
       return null;
     } else {
-      // 흔한 키 우선
       const keys = Object.keys(node);
       for (const k of [
         "scenes",
@@ -133,12 +137,10 @@ function deepFindScenes(obj) {
           const arr = node[k];
           const ok = arr.some((it) => pickText(it));
           if (ok) return arr;
-          // 이 배열 안에서 더 찾기
           const deeper = walk(arr);
           if (deeper) return deeper;
         }
       }
-      // 일반 객체 키 순회
       for (const k of keys) {
         const v = node[k];
         const found = walk(v);
@@ -152,10 +154,8 @@ function deepFindScenes(obj) {
 function coerceToScenesShape(obj) {
   if (!obj) return null;
   if (Array.isArray(obj)) return { scenes: obj };
-  // 1차 시도: 바로 scenes
   if (Array.isArray(obj.scenes))
     return { title: obj.title || obj.name, scenes: obj.scenes };
-  // 2차 시도: 중첩 키
   const nests = [
     ["result", "scenes"],
     ["output", "scenes"],
@@ -166,13 +166,10 @@ function coerceToScenesShape(obj) {
     if (Array.isArray(obj?.[a]?.[b]))
       return { title: obj.title || obj?.[a]?.title, scenes: obj[a][b] };
   }
-  // 3차: 깊이 탐색
   const arr = deepFindScenes(obj);
   if (Array.isArray(arr)) return { title: obj.title || obj.name, scenes: arr };
   return obj;
 }
-
-/** ← 문자열 배열 씬도 통과 */
 function validateScriptDocLoose(json) {
   if (!json || typeof json !== "object") return false;
   if (!Array.isArray(json.scenes) || json.scenes.length === 0) return false;
@@ -183,6 +180,7 @@ function validateScriptDocLoose(json) {
   return true;
 }
 
+/** 목표 씬 수로 강제 분할(자동/레퍼런스에서만 사용) */
 function expandScenesToTarget(scenes, target) {
   if (!Array.isArray(scenes) || scenes.length >= target) return scenes;
   const out = [
@@ -215,6 +213,7 @@ function expandScenesToTarget(scenes, target) {
   return out.slice(0, target);
 }
 
+/** 결과 정규화: 프롬프트-우선 모드(custom)일 때는 씬/길이 그대로 존중 */
 function formatScenes(
   parsedIn,
   topic,
@@ -242,7 +241,9 @@ function formatScenes(
         scene_number: Number.isFinite(sceneNo) ? sceneNo : i + 1,
         text,
         duration:
-          Number.isFinite(duration) && duration > 0 ? duration : undefined,
+          Number.isFinite(duration) && duration > 0
+            ? Math.round(duration)
+            : undefined,
         character_count: Number(s?.character_count ?? s?.charCount ?? NaN),
         visual_description:
           typeof s?.visual_description === "string"
@@ -252,15 +253,35 @@ function formatScenes(
     })
     .filter((s) => s.text);
 
+  // 자동/레퍼런스에서만 목표 씬 수에 맞게 분할
   if (!fromCustomPrompt && maxScenes && Number(maxScenes) > 0) {
     scenesRaw = expandScenesToTarget(scenesRaw, Number(maxScenes));
   }
 
-  const totalSecsTarget = Math.max(1, Number(durationMin || 5) * 60);
   const n = Math.max(1, scenesRaw.length);
+
+  // 목표 총 초
+  let totalSecsTarget;
+  if (fromCustomPrompt) {
+    const sumModel = scenesRaw.reduce(
+      (a, s) => a + (Number.isFinite(s.duration) ? s.duration : 0),
+      0
+    );
+    if (sumModel > 0) {
+      totalSecsTarget = sumModel;
+    } else if (Number.isFinite(parsed?.total_duration)) {
+      const td = Number(parsed.total_duration);
+      totalSecsTarget = td <= 25 ? Math.round(td * 60) : Math.round(td);
+    } else {
+      totalSecsTarget = Math.max(1, Math.round(Number(durationMin || 5) * 60));
+    }
+  } else {
+    totalSecsTarget = Math.max(1, Math.round(Number(durationMin || 5) * 60));
+  }
 
   const hasModelDur = scenesRaw.some((s) => Number.isFinite(s.duration));
   let durations = new Array(n).fill(Math.floor(totalSecsTarget / n));
+
   if (hasModelDur) {
     durations = scenesRaw.map((s) =>
       Number.isFinite(s.duration) ? Math.max(1, Math.round(s.duration)) : 0
@@ -273,17 +294,25 @@ function formatScenes(
       for (const idx of miss) durations[idx] = fallback;
     }
     const sum = durations.reduce((a, b) => a + b, 0);
-    if (sum !== totalSecsTarget && sum > 0) {
-      const scale = totalSecsTarget / sum;
-      let acc = 0;
-      durations = durations.map((d, i) => {
-        let v = Math.max(1, Math.round(d * scale));
-        if (i === n - 1) v = Math.max(1, totalSecsTarget - acc);
-        acc += v;
-        return v;
-      });
+
+    if (!fromCustomPrompt) {
+      // 자동/레퍼런스: 총 길이에 리스케일
+      if (sum !== totalSecsTarget && sum > 0) {
+        const scale = totalSecsTarget / sum;
+        let acc = 0;
+        durations = durations.map((d, i) => {
+          let v = Math.max(1, Math.round(d * scale));
+          if (i === n - 1) v = Math.max(1, totalSecsTarget - acc);
+          acc += v;
+          return v;
+        });
+      }
+    } else {
+      // 커스텀: 모델 값 존중
+      totalSecsTarget = sum > 0 ? sum : totalSecsTarget;
     }
   } else {
+    // duration 없으면 균등
     let acc = 0;
     durations = durations.map((d, i) => {
       let v = d;
@@ -324,7 +353,7 @@ function formatScenes(
   return { title, scenes };
 }
 
-/** 토큰 버짓 */
+/** 토큰 버짓(대략치) */
 function estimateMaxTokens({
   maxScenes = 10,
   duration = 5,
@@ -332,7 +361,8 @@ function estimateMaxTokens({
   cap = 12000,
   floor = 2000,
 }) {
-  const expectChars = Math.max(maxScenes, 1) * perSceneChars;
+  const expectChars =
+    Math.max(Number(maxScenes) || 1, 1) * (perSceneChars || 700);
   const expectTokens = Math.ceil(expectChars / 3.0) + 600;
   return Math.max(floor, Math.min(cap, expectTokens));
 }
@@ -345,8 +375,8 @@ async function callOpenAIGpt5Mini({
   duration,
   maxScenes,
   referenceText,
-  compiledPrompt, // 프론트에서 치환된 사용자 프롬프트
-  customPrompt, // 프론트 플래그 (있으면 씬 강제분할 X)
+  compiledPrompt, // 사용자 프롬프트(치환 완료) 그대로
+  customPrompt, // true면 '프롬프트 우선' 모드
 }) {
   const apiKey = await getSecret("openaiKey");
   if (!apiKey) throw new Error("OpenAI API Key가 설정되지 않았습니다.");
@@ -359,7 +389,6 @@ async function callOpenAIGpt5Mini({
     "Return ONLY JSON. No extra prose or Markdown.",
   ].join("\n");
 
-  // ← 커스텀 프롬프트에도 JSON 스키마 강제 삽입
   const SCHEMA_HINT = `
 반드시 아래 JSON 스키마로만 응답하세요. 마크다운 금지.
 {
@@ -373,29 +402,31 @@ async function callOpenAIGpt5Mini({
   ]
 }`;
 
+  // 커스텀 프롬프트 모드에서는 사용자가 쓴 프롬프트만 그대로 전달
   const user = useCompiled
-    ? `${compiledPrompt}\n\n${SCHEMA_HINT}`
+    ? compiledPrompt
     : [
         `주제: ${topic || "(미지정)"}`,
         `스타일: ${style || "(자유)"}`,
         `목표 길이(분): ${duration}`,
-        `목표 장면 수(정확히): ${maxScenes}`,
+        `최대 장면 수(상한): ${maxScenes}`,
         type === "reference" ? `\n[레퍼런스]\n${referenceText || ""}` : "",
         "\n**요구사항**",
-        "- 장면 수는 가능한 한 목표 장면 수에 정확히 맞춤",
-        "- 각 장면은 500~900자 분량의 자연스러운 구어체(한국어)",
         "- 결과는 JSON만 반환",
         "- 각 장면 객체는 최소 { text } 포함",
         SCHEMA_HINT,
-      ].join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
 
   const budget = estimateMaxTokens({
-    maxScenes,
-    duration,
+    maxScenes: Number(maxScenes) || 10,
+    duration: Number(duration) || 5,
     perSceneChars: 800,
     cap: 12000,
     floor: 2500,
   });
+
   const cfg = {
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -463,10 +494,9 @@ async function callOpenAIGpt5Mini({
     },
   ];
 
-  let lastRaw = null,
-    lastLabel = "";
+  let lastRaw = null;
   for (let mode = 0; mode < attempts.length; mode++) {
-    const { body, label } = attempts[mode];
+    const { body } = attempts[mode];
     const maxRetries = 2;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
@@ -484,7 +514,6 @@ async function callOpenAIGpt5Mini({
             .join("");
         if (typeof raw !== "string") raw = String(raw ?? "");
         lastRaw = raw;
-        lastLabel = label;
 
         const unfenced = stripFence(raw);
         let parsed = tryParse(unfenced);
@@ -498,22 +527,22 @@ async function callOpenAIGpt5Mini({
           id: s?.id ? String(s.id) : `s${idx + 1}`,
           text: pickText(s),
         }));
+
         return formatScenes(parsed, topic, duration, maxScenes, {
           fromCustomPrompt: !!customPrompt || useCompiled,
         });
       } catch (err) {
         const { status } = normalizeErr(err);
         const retryable = status === 429 || (status >= 500 && status < 600);
-        if (retryable && attempt < maxRetries) {
+        if (retryable && attempt < 2) {
           await sleep(800 * Math.pow(2, attempt));
           continue;
         }
-        break; // 다음 모드로
+        break;
       }
     }
   }
 
-  // 최종 실패 → 원시응답 덤프
   const p = dumpRaw("openai-fail", lastRaw);
   const hint = p ? ` (raw: ${p})` : "";
   throw new Error("OpenAI 요청 실패: 대본 JSON 파싱/검증 실패" + hint);
@@ -527,8 +556,8 @@ async function callAnthropic({
   duration,
   maxScenes,
   referenceText,
-  compiledPrompt,
-  customPrompt,
+  compiledPrompt, // 프롬프트 그대로
+  customPrompt, // true면 '프롬프트 우선'
 }) {
   const apiKey = await getSecret("anthropicKey");
   if (!apiKey) throw new Error("Anthropic API Key가 설정되지 않았습니다.");
@@ -541,30 +570,34 @@ async function callAnthropic({
     "Return ONLY JSON.",
   ].join("\n");
 
+  // 커스텀 프롬프트면 그대로, 기본 탭이면 안내 문구
   const user = useCompiled
     ? compiledPrompt
     : [
         `주제: ${topic || "(미지정)"}`,
         `스타일: ${style || "(자유)"}`,
         `목표 길이(분): ${duration}`,
-        `목표 장면 수(정확히): ${maxScenes}`,
+        `최대 장면 수(상한): ${maxScenes}`,
         type === "reference" ? `\n[레퍼런스]\n${referenceText || ""}` : "",
         "\n**요구사항**",
-        "- 장면 수는 가능한 한 목표 장면 수에 정확히 맞춤",
-        "- 각 장면은 500~900자 분량의 자연스러운 구어체(한국어)",
         "- 결과는 JSON만 반환",
-      ].join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
 
-  const budget = Math.max(
-    5000,
+  // 추정치 → 모델 상한으로 캡
+  const requested = Math.max(
+    3000,
     estimateMaxTokens({
-      maxScenes,
-      duration,
+      maxScenes: Number(maxScenes) || 10,
+      duration: Number(duration) || 5,
       perSceneChars: 800,
       cap: 16000,
       floor: 3000,
     })
   );
+  const budget = clampAnthropicTokens(requested, DEFAULT_ANTHROPIC_MODEL);
+
   const body = {
     model: DEFAULT_ANTHROPIC_MODEL,
     max_tokens: budget,
@@ -612,6 +645,7 @@ async function callAnthropic({
       id: s?.id ? String(s.id) : `s${idx + 1}`,
       text: pickText(s),
     }));
+
     return formatScenes(parsed, topic, duration, maxScenes, {
       fromCustomPrompt: !!customPrompt || useCompiled,
     });

@@ -15,7 +15,7 @@ import { base64ToArrayBuffer } from "./utils/buffer";
 import ScriptPromptTab from "./tabs/ScriptPromptTab";
 import ReferencePromptTab from "./tabs/ReferencePromptTab";
 
-// 템플릿 변수 치환 (필요 변수만 정확히 치환)
+// 템플릿 변수 치환
 function compileTemplate(tpl, vars) {
   let s = String(tpl ?? "");
   const dict = {
@@ -27,7 +27,7 @@ function compileTemplate(tpl, vars) {
     maxCharacters: vars.maxCharacters,
     avgCharactersPerScene: vars.avgCharactersPerScene,
     totalSeconds: vars.totalSeconds,
-    referenceText: vars.referenceText ?? "", // ref 탭용
+    referenceText: vars.referenceText ?? "",
   };
   Object.entries(dict).forEach(([k, v]) => {
     s = s.replaceAll(`{${k}}`, String(v ?? ""));
@@ -36,7 +36,6 @@ function compileTemplate(tpl, vars) {
 }
 
 export default function ScriptVoiceGenerator() {
-  // 탭: auto | ref | import | prompt-gen | prompt-ref
   const [activeTab, setActiveTab] = useState("auto");
 
   const [form, setForm] = useState({
@@ -55,7 +54,7 @@ export default function ScriptVoiceGenerator() {
   const importSrtRef = useRef(null);
   const importMp3Ref = useRef(null);
 
-  // 프롬프트 (대본/레퍼런스 탭)
+  // 프롬프트 템플릿
   const [genPrompt, setGenPrompt] = useState(DEFAULT_GENERATE_PROMPT);
   const [refPrompt, setRefPrompt] = useState(DEFAULT_REFERENCE_PROMPT);
   const [promptSavedAt, setPromptSavedAt] = useState(null);
@@ -113,7 +112,7 @@ export default function ScriptVoiceGenerator() {
     }
   }, [fixedWidthPx]);
 
-  // 선택 보이스
+  // 보이스
   const voices = useMemo(
     () => VOICES_BY_ENGINE[form.ttsEngine] || [],
     [form.ttsEngine]
@@ -123,7 +122,7 @@ export default function ScriptVoiceGenerator() {
   // IPC
   const call = (channel, payload) => window.api.invoke(channel, payload);
 
-  // 실행 인디케이터
+  // 인디케이터
   const startScriptIndicator = () => {
     setElapsedSec(0);
     if (scriptTimerRef.current) clearInterval(scriptTimerRef.current);
@@ -142,7 +141,6 @@ export default function ScriptVoiceGenerator() {
 
   // 실행
   const runGenerate = async (mode) => {
-    // prompt-gen → auto, prompt-ref → ref로 정규화
     const normalized =
       mode === "prompt-gen" ? "auto" : mode === "prompt-ref" ? "ref" : mode;
 
@@ -153,7 +151,6 @@ export default function ScriptVoiceGenerator() {
     startScriptIndicator();
 
     try {
-      // 변수 계산(프론트 계산치)
       const duration = Number(form.durationMin);
       const maxScenes = Number(form.maxScenes);
       const topic = String(form.topic || "");
@@ -165,7 +162,6 @@ export default function ScriptVoiceGenerator() {
       );
       const totalSeconds = duration * 60;
 
-      // 탭별 사용자 프롬프트 컴파일
       const compiledPrompt =
         mode === "prompt-gen"
           ? compileTemplate(genPrompt, {
@@ -192,7 +188,6 @@ export default function ScriptVoiceGenerator() {
             })
           : undefined;
 
-      // 디버그: 실제 전송되는 값 확인
       console.groupCollapsed("%c[RUN][generate] payload", "color:#2563eb");
       console.log({
         type: normalized,
@@ -208,13 +203,12 @@ export default function ScriptVoiceGenerator() {
       });
       console.groupEnd();
 
-      // 공통 옵션
       const base = {
         llm: form.llmMain,
         duration,
         maxScenes,
         compiledPrompt,
-        customPrompt: !!compiledPrompt, // ✅ 백엔드에게 '커스텀 프롬프트 모드' 알림
+        customPrompt: !!compiledPrompt,
       };
 
       let generatedDoc = null;
@@ -243,7 +237,7 @@ export default function ScriptVoiceGenerator() {
         throw new Error("대본 생성 결과가 비어있습니다.");
       setDoc(generatedDoc);
 
-      // SRT 생성/저장
+      // SRT
       setPhase("SRT");
       const srtRes = await call("script/toSrt", { doc: generatedDoc });
       if (srtRes?.srt) {
@@ -446,7 +440,6 @@ export default function ScriptVoiceGenerator() {
           onRun={() => runGenerate("auto")}
         />
       )}
-
       {activeTab === "ref" && (
         <RefTab
           form={form}
@@ -457,7 +450,6 @@ export default function ScriptVoiceGenerator() {
           onRun={() => runGenerate("ref")}
         />
       )}
-
       {activeTab === "import" && (
         <ImportTab
           form={form}
@@ -482,7 +474,6 @@ export default function ScriptVoiceGenerator() {
             form={form}
             onChange={onChange}
             voices={voices}
-            // 실행 버튼은 상단 공용 버튼만 사용
           />
         </Card>
       )}
@@ -500,7 +491,6 @@ export default function ScriptVoiceGenerator() {
             voices={voices}
             refText={refText}
             setRefText={setRefText}
-            // 실행 버튼은 상단 공용 버튼만 사용
           />
         </Card>
       )}
