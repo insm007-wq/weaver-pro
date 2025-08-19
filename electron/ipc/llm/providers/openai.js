@@ -28,8 +28,9 @@ function extractLargestJson(raw = "") {
       const start = stack.pop();
       const cand = s.slice(start, i + 1);
       const obj = tryParse(cand);
-      if (obj && (!best || cand.length > best.len))
+      if (obj && (!best || cand.length > best.len)) {
         best = { len: cand.length, obj };
+      }
     }
   }
   return best?.obj || null;
@@ -98,8 +99,9 @@ async function callOpenAIGpt5Mini(payload) {
       : undefined,
   }));
 
+  // 프롬프트가 있으면 사용자 프롬프트 우선(보정 최소화)
   const out = formatScenes(parsed, topic, duration, maxScenes, {
-    fromCustomPrompt: false,
+    fromCustomPrompt: !!(typeof prompt === "string" && prompt.trim().length),
   });
 
   return out;

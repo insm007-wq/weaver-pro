@@ -15,21 +15,24 @@ import { base64ToArrayBuffer } from "./utils/buffer";
 import ScriptPromptTab from "./tabs/ScriptPromptTab";
 import ReferencePromptTab from "./tabs/ReferencePromptTab";
 
-/** ===== 유연한 글자수 규칙 설정 (나중에 constants로 빼도 OK) =====
- *  - 자동 탭(auto)만 per-minute 규칙 적용
- *  - 나중에 100~200으로 바꾸려면 아래 숫자만 바꾸면 됨
+/** ===== 글자수 규칙 =====
+ * - 자동 탭(auto)은 기존 정책 유지(분당 150~250자)
+ * - 프롬프트 탭(prompt-gen / prompt-ref)은 프롬프트 원문 그대로 전송(치환 없음)
+ * - 일반 레퍼런스(ref)와 import는 기존 동작 유지
  */
 const CHAR_BUDGETS = {
-  auto: { perMinMin: 200, perMinMax: 300 }, // ← 여기만 바꾸면 전체 자동 탭 정책 변경
-  fallbackPerScene: { min: 500, max: 900 }, // 프롬프트 탭 변수 계산 등 기본값
+  auto: { perMinMin: 150, perMinMax: 250 }, // 자동 탭(그대로)
+  // ref/import 계산에 쓰는 기본값
+  perSceneFallback: { min: 500, max: 900 },
 };
 
-/** 계산 헬퍼: 탭/분/씬수 기준으로 글자수 예산 산출 */
+/** 계산 헬퍼: 탭/분/씬수 기준으로 글자수 예산 산출 (자동/ref/import 전용) */
 function computeCharBudget({ tab, durationMin, maxScenes }) {
   const duration = Number(durationMin) || 0;
   const scenes = Math.max(1, Number(maxScenes) || 1);
   const totalSeconds = duration * 60;
 
+  // 1) 자동 탭: 기존 정책 유지
   if (tab === "auto") {
     const { perMinMin, perMinMax } = CHAR_BUDGETS.auto;
     const minCharacters = Math.max(0, Math.round(duration * perMinMin));
@@ -37,45 +40,34 @@ function computeCharBudget({ tab, durationMin, maxScenes }) {
       minCharacters,
       Math.round(duration * perMinMax)
     );
-    const avgCharactersPerScene = Math.round(
-      (minCharacters + maxCharacters) / 2 / scenes
+    const avgCharactersPerScene = Math.max(
+      1,
+      Math.round((minCharacters + maxCharacters) / 2 / scenes)
     );
     return {
       totalSeconds,
       minCharacters,
       maxCharacters,
       avgCharactersPerScene,
+      cpmMin: perMinMin,
+      cpmMax: perMinMax,
     };
   }
 
-  // 프롬프트 탭 등: 기존 per-scene 기본값 유지 (프롬프트 변수만 채워줌)
-  const { min, max } = CHAR_BUDGETS.fallbackPerScene;
+  // 2) ref/import: 대략 per-scene 기준(기존 로직)
+  const { min, max } = CHAR_BUDGETS.perSceneFallback;
   const minCharacters = scenes * min;
   const maxCharacters = scenes * max;
-  const avgCharactersPerScene = Math.round(
-    (minCharacters + maxCharacters) / 2 / scenes
+  const avgCharactersPerScene = Math.max(
+    1,
+    Math.round((minCharacters + maxCharacters) / 2 / scenes)
   );
   return { totalSeconds, minCharacters, maxCharacters, avgCharactersPerScene };
 }
 
-/** 템플릿 변수 치환 */
-function compileTemplate(tpl, vars) {
-  let s = String(tpl ?? "");
-  const dict = {
-    duration: vars.duration,
-    topic: vars.topic,
-    style: vars.style,
-    maxScenes: vars.maxScenes,
-    minCharacters: vars.minCharacters,
-    maxCharacters: vars.maxCharacters,
-    avgCharactersPerScene: vars.avgCharactersPerScene,
-    totalSeconds: vars.totalSeconds,
-    referenceText: vars.referenceText ?? "",
-  };
-  for (const [k, v] of Object.entries(dict)) {
-    s = s.replaceAll(`{${k}}`, String(v ?? ""));
-  }
-  return s;
+/** 프롬프트 원문 그대로 반환 (치환 없음) */
+function compilePromptRaw(tpl) {
+  return String(tpl ?? "");
 }
 
 export default function ScriptVoiceGenerator() {
@@ -132,19 +124,16 @@ export default function ScriptVoiceGenerator() {
         });
       }
       setPromptSavedAt(new Date());
-    } catch {
-      /* ignore */
-    }
+    } catch {}
   };
-
   const resetPrompt = (type) => {
     if (type === "generate") setGenPrompt(DEFAULT_GENERATE_PROMPT);
     if (type === "reference") setRefPrompt(DEFAULT_REFERENCE_PROMPT);
   };
 
   // ---------------- 진행 상태 ----------------
-  const [status, setStatus] = useState("idle"); // idle | running | done | error
-  const [phase, setPhase] = useState(""); // SCRIPT | SRT | TTS | MERGE | 완료
+  const [status, setStatus] = useState("idle");
+  const [phase, setPhase] = useState("");
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [elapsedSec, setElapsedSec] = useState(0);
   const scriptTimerRef = useRef(null);
@@ -191,7 +180,7 @@ export default function ScriptVoiceGenerator() {
 
   // ---------------- 실행 플로우 ----------------
   const runGenerate = async (tab) => {
-    // 탭별 모드 정규화
+    // 백엔드 타입 라우팅 정규화(프롬프트 탭은 auto/ref에 매핑)
     const normalized =
       tab === "prompt-gen" ? "auto" : tab === "prompt-ref" ? "ref" : tab;
 
@@ -207,50 +196,34 @@ export default function ScriptVoiceGenerator() {
       const topic = String(form.topic || "");
       const style = String(form.style || "");
 
-      // 🔢 탭에 따라 글자수 예산 계산 (자동 탭만 분당 규칙)
+      // 자동/ref/import 계산(프롬프트 탭은 계산해도 전송 안 함)
       const {
         totalSeconds,
         minCharacters,
         maxCharacters,
         avgCharactersPerScene,
+        cpmMin,
+        cpmMax,
       } = computeCharBudget({
-        tab: normalized,
+        tab: normalized, // 계산은 백엔드 타입 기준
         durationMin: duration,
         maxScenes,
       });
 
-      // ✅ 프롬프트는 프롬프트 탭에서만 생성/전송
+      // ✅ 프롬프트 탭: 원문 그대로 전송 (치환 없음)
       const makePrompt = () => {
         if (tab === "prompt-gen") {
-          return compileTemplate(genPrompt, {
-            duration,
-            topic,
-            style,
-            maxScenes,
-            minCharacters,
-            maxCharacters,
-            avgCharactersPerScene,
-            totalSeconds,
-          });
+          return compilePromptRaw(genPrompt);
         }
         if (tab === "prompt-ref") {
-          return compileTemplate(refPrompt, {
-            duration,
-            topic,
-            style,
-            maxScenes,
-            minCharacters,
-            maxCharacters,
-            avgCharactersPerScene,
-            totalSeconds,
-            referenceText: refText,
-          });
+          // 원문 그대로. (원하면 여기서 {referenceText} 치환을 넣을 수 있음)
+          return compilePromptRaw(refPrompt);
         }
-        return undefined; // auto/ref 탭은 prompt 미전송 → 백엔드 기본 가이드 사용
+        return undefined; // auto/ref/import는 서버 fallback 프롬프트 사용
       };
       const prompt = makePrompt();
 
-      // (선택) 디버그
+      // 디버그
       try {
         console.groupCollapsed("%c[RUN][generate] payload", "color:#2563eb");
         const dbg = {
@@ -261,37 +234,40 @@ export default function ScriptVoiceGenerator() {
           maxScenes,
           topic,
           style,
-          minCharacters,
-          maxCharacters,
-          avgCharactersPerScene,
         };
         if (prompt) dbg.promptPreview = prompt.slice(0, 200);
         console.log(dbg);
         console.groupEnd();
       } catch {}
 
-      // 호출 페이로드 구성 (prompt가 없으면 필드 자체를 안 보냄)
-      const base = {
-        llm: form.llmMain,
-        duration,
-        maxScenes,
-        ...(prompt ? { prompt } : {}),
-      };
+      // 호출 페이로드 구성
+      // - 프롬프트 탭: prompt만(그리고 루틴상 필요한 기본 필드) 전송
+      // - 그 외: 기존대로 계산값 포함
+      const common = { llm: form.llmMain, duration, maxScenes, topic, style };
+      const base =
+        tab === "prompt-gen" || tab === "prompt-ref"
+          ? { ...common, ...(prompt ? { prompt } : {}) }
+          : {
+              ...common,
+              minCharacters,
+              maxCharacters,
+              avgCharactersPerScene,
+              totalSeconds,
+              cpmMin,
+              cpmMax,
+              ...(prompt ? { prompt } : {}),
+            };
 
       let generatedDoc = null;
       if (normalized === "auto") {
         generatedDoc = await call("llm/generateScript", {
           ...base,
           type: "auto",
-          topic,
-          style,
         });
       } else if (normalized === "ref") {
         generatedDoc = await call("llm/generateScript", {
           ...base,
-          type: "reference",
-          topic,
-          style,
+          type: tab === "prompt-ref" ? "reference" : "reference",
           referenceText: refText,
         });
       } else if (normalized === "import") {

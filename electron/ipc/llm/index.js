@@ -27,9 +27,14 @@ function buildPromptFallback(payload = {}) {
   const maxScenes = Number(payload.maxScenes || 10);
   const referenceText = String(payload.referenceText || "");
 
-  // ⬇️ 분당 글자수 목표 (200~300자)
-  const cpmMin = Number.isFinite(payload.cpmMin) ? payload.cpmMin : 200;
-  const cpmMax = Number.isFinite(payload.cpmMax) ? payload.cpmMax : 300;
+  // ⬇️ 분당 글자수 목표 (프론트에서 cpmMin/Max 주면 우선 사용, 문자열도 허용)
+  const cpmMin = Number.isFinite(Number(payload.cpmMin))
+    ? Number(payload.cpmMin)
+    : 300;
+  const cpmMax = Number.isFinite(Number(payload.cpmMax))
+    ? Number(payload.cpmMax)
+    : 400;
+
   const minChars = Math.round(duration * cpmMin);
   const maxChars = Math.round(duration * cpmMax);
 
@@ -61,24 +66,40 @@ ipcMain.handle("llm/generateScript", async (_evt, payload) => {
 
   const llm = ensureString(payload.llm, "llm");
 
-  // 프롬프트 없으면 fallback 자동 생성 (자동/레퍼런스 탭)
-  if (!payload.prompt || !payload.prompt.trim()) {
-    payload.prompt = buildPromptFallback(payload);
-  }
-
+  // 숫자 파라미터 정규화
   payload.duration = ensureNumber(payload.duration ?? 5, "duration");
   payload.maxScenes = ensureNumber(payload.maxScenes ?? 10, "maxScenes");
+
+  // 문자열 파라미터 정규화
   payload.topic = String(payload.topic ?? "");
   payload.style = String(payload.style ?? "");
 
+  // 프롬프트 탭에서 넘어온 prompt가 있으면 곧바로 사용하도록 승격
+  // (Anthropic는 compiledPrompt/customPrompt 신호를 사용)
+  const hasUserPrompt =
+    typeof payload.prompt === "string" && payload.prompt.trim().length > 0;
+
+  if (hasUserPrompt) {
+    payload.compiledPrompt = payload.prompt.trim();
+    payload.customPrompt = true; // 프로바이더에 "사용자 프롬프트 우선" 힌트
+  } else {
+    // 프롬프트 없으면 안전한 fallback 생성 (자동/레퍼런스 탭)
+    payload.prompt = buildPromptFallback(payload);
+    payload.customPrompt = false; // 명시적으로 사용자 프롬프트 아님
+  }
+
+  // 모델 라우팅
   switch (llm) {
     case "openai-gpt5mini":
       return await callOpenAIGpt5Mini(payload);
+
     case "anthropic":
       return await callAnthropic(payload);
+
     case "minimax":
     case "minimax-abab":
       return await callMinimaxAbab(payload);
+
     default:
       throw new Error(`지원하지 않는 LLM입니다: ${llm}`);
   }
