@@ -17,7 +17,9 @@ import ReferencePromptTab from "./tabs/ReferencePromptTab";
 
 /** ===== 글자수 규칙 =====
  * - 자동 탭(auto)은 기존 정책 유지(분당 150~250자)
- * - 프롬프트 탭(prompt-gen / prompt-ref)은 프롬프트 원문 그대로 전송(치환 없음)
+ * - 프롬프트 탭(prompt-gen / prompt-ref)은 프롬프트 중심(원문 위주)
+ *   · prompt-gen: 원문 그대로(치환 없음) 전송
+ *   · prompt-ref: 레퍼런스 원문만 안전하게 주입해서 전송
  * - 일반 레퍼런스(ref)와 import는 기존 동작 유지
  */
 const CHAR_BUDGETS = {
@@ -68,6 +70,26 @@ function computeCharBudget({ tab, durationMin, maxScenes }) {
 /** 프롬프트 원문 그대로 반환 (치환 없음) */
 function compilePromptRaw(tpl) {
   return String(tpl ?? "");
+}
+
+/** 레퍼런스 본문을 템플릿에 주입
+ * - {referenceText}, {referenceScript}, (referenceScript) 모두 지원
+ * - 어떤 토큰도 없으면 맨 끝에 표준 블록으로 자동 첨부
+ */
+function injectReference(template, reference) {
+  const ref = String(reference || "").trim();
+  let t = String(template || "");
+  if (!ref) return t;
+
+  const replaced = t
+    .replaceAll("{referenceText}", ref)
+    .replaceAll("{referenceScript}", ref)
+    .replaceAll("(referenceScript)", ref);
+
+  if (replaced !== t) return replaced;
+
+  // 토큰이 전혀 없으면 표준 블록을 자동으로 덧붙임
+  return t + `\n\n=== 레퍼런스 대본 ===\n${ref}\n=== 레퍼런스 대본 끝 ===`;
 }
 
 export default function ScriptVoiceGenerator() {
@@ -210,14 +232,16 @@ export default function ScriptVoiceGenerator() {
         maxScenes,
       });
 
-      // ✅ 프롬프트 탭: 원문 그대로 전송 (치환 없음)
+      // ✅ 프롬프트 탭 처리
       const makePrompt = () => {
         if (tab === "prompt-gen") {
+          // 원문 그대로 전송
           return compilePromptRaw(genPrompt);
         }
         if (tab === "prompt-ref") {
-          // 원문 그대로. (원하면 여기서 {referenceText} 치환을 넣을 수 있음)
-          return compilePromptRaw(refPrompt);
+          // 프롬프트 원문은 유지, 분석 원문(refText)만 안전하게 주입
+          const raw = compilePromptRaw(refPrompt);
+          return injectReference(raw, refText);
         }
         return undefined; // auto/ref/import는 서버 fallback 프롬프트 사용
       };
@@ -265,11 +289,12 @@ export default function ScriptVoiceGenerator() {
           type: "auto",
         });
       } else if (normalized === "ref") {
-        generatedDoc = await call("llm/generateScript", {
-          ...base,
-          type: tab === "prompt-ref" ? "reference" : "reference",
-          referenceText: refText,
-        });
+        // prompt-ref는 프롬프트에 이미 레퍼런스를 주입했으므로 referenceText 전달 안 함
+        const payload =
+          tab === "prompt-ref"
+            ? { ...base, type: "reference" }
+            : { ...base, type: "reference", referenceText: refText };
+        generatedDoc = await call("llm/generateScript", payload);
       } else if (normalized === "import") {
         generatedDoc = doc;
       }
@@ -544,6 +569,7 @@ export default function ScriptVoiceGenerator() {
             voices={voices}
             refText={refText}
             setRefText={setRefText}
+            onRun={() => runGenerate("prompt-ref")}
           />
         </Card>
       )}
