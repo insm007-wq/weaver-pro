@@ -6,11 +6,24 @@ const Sidebar = lazy(() => import("./components/Sidebar"));
 const ProjectInit = lazy(() => import("./components/ProjectInit"));
 const SettingsPage = lazy(() => import("./components/SettingsPage"));
 const HeaderBar = lazy(() => import("./components/HeaderBar"));
-const ThumbnailGenerator = lazy(() => import("./components/ThumbnailGenerator"));
-const ScriptVoiceGenerator = lazy(() => import("./components/scriptgen/ScriptVoiceGenerator"));
+const ThumbnailGenerator = lazy(() =>
+  import("./components/ThumbnailGenerator")
+);
+const ScriptVoiceGenerator = lazy(() =>
+  import("./components/scriptgen/ScriptVoiceGenerator")
+);
+// ⬇️ 새로 추가: 영상 구성(Assemble)
+const AssembleEditor = lazy(() =>
+  import("./components/assemble/AssembleEditor")
+);
 
 /** ✅ 프로젝트 없이도 열 수 있는 페이지 (재생성 방지) */
-const ALLOW_WITHOUT_PROJECT = new Set(["thumbnail", "settings", "script"]);
+const ALLOW_WITHOUT_PROJECT = new Set([
+  "thumbnail",
+  "settings",
+  "script",
+  "assemble",
+]);
 
 /** ✅ 공용 스피너 */
 function Spinner({ label = "Loading..." }) {
@@ -41,7 +54,10 @@ export default function App() {
   }, []);
 
   /** ✅ 초기 화면/접근 가능 여부 계산 메모 */
-  const canOpenWithoutProject = useMemo(() => ALLOW_WITHOUT_PROJECT.has(currentPage), [currentPage]);
+  const canOpenWithoutProject = useMemo(
+    () => ALLOW_WITHOUT_PROJECT.has(currentPage),
+    [currentPage]
+  );
 
   /** ✅ 메인 콘텐츠 분기: 조기 리턴으로 단순화 */
   const mainContent = useMemo(() => {
@@ -58,6 +74,9 @@ export default function App() {
       case "script":
         return <ScriptVoiceGenerator />;
 
+      case "assemble":
+        return <AssembleEditor />;
+
       case "draft":
         // 프로젝트 있어야 의미 있음
         if (!projectName) return null;
@@ -66,7 +85,8 @@ export default function App() {
             <h1 className="text-2xl font-bold mb-4">{projectName}</h1>
             <div className="bg-gray-100 p-4 rounded">
               <p className="text-sm text-gray-700">
-                <code>CachedPromise&lt;DocumentContent&gt;</code>, document content would be a <code>LazyD.property Couch</code>.
+                <code>CachedPromise&lt;DocumentContent&gt;</code>, document
+                content would be a <code>LazyD.property Couch</code>.
               </p>
             </div>
           </div>
@@ -84,7 +104,8 @@ export default function App() {
             <h1 className="text-2xl font-bold mb-4">{projectName}</h1>
             <div className="bg-gray-100 p-4 rounded">
               <p className="text-sm text-gray-700">
-                <code>CachedPromise&lt;DocumentContent&gt;</code>, document content would be a <code>LazyD.property Couch</code>.
+                <code>CachedPromise&lt;DocumentContent&gt;</code>, document
+                content would be a <code>LazyD.property Couch</code>.
               </p>
             </div>
           </div>
