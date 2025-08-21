@@ -1,8 +1,9 @@
 // electron/main.js
 const { app } = require("electron");
 const { createMainWindow } = require("./utils/window");
+const { registerCanvaBrowse } = require("./ipc/canva-browse");
 
-// IPC 등록 (모듈 내부에서 ipcMain.handle 등록)
+// 기존 IPC들
 require("./ipc/tests");
 require("./ipc/replicate");
 require("./ipc/settings");
@@ -14,7 +15,13 @@ require("./ipc/script");
 require("./ipc/tts");
 require("./ipc/audio");
 
-app.whenReady().then(createMainWindow);
+const { registerFilePickers } = require("./ipc/file-pickers");
+
+app.whenReady().then(() => {
+  registerFilePickers && registerFilePickers();
+  registerCanvaBrowse(); // 👈 추가
+  createMainWindow();
+});
 
 app.on("activate", () => {
   const { BrowserWindow } = require("electron");

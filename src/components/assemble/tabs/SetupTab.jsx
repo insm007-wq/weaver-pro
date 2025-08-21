@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import SectionCard from "../parts/SectionCard";
 
 function Toggle({ checked, onChange, label }) {
@@ -25,6 +26,63 @@ function Toggle({ checked, onChange, label }) {
   );
 }
 
+/** 파일명만 표시 + 경로 보기/복사 컨트롤. path 없으면 '미선택' */
+function FileRow({ icon, label, path, showFull, onToggleFull }) {
+  const fileName = path ? path.split(/[/\\]/).pop() : null;
+
+  const copyPath = async () => {
+    if (!path) return;
+    try {
+      await navigator.clipboard.writeText(path);
+      alert("전체 경로가 클립보드에 복사되었습니다.");
+    } catch {
+      alert("복사에 실패했습니다. 다시 시도해 주세요.");
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-[84px,1fr,auto] items-center gap-2 text-xs w-full">
+      <div className="inline-flex items-center gap-1 text-slate-700">
+        <span aria-hidden>{icon}</span>
+        <span className="font-medium">{label}</span>
+      </div>
+
+      <div className="w-full max-w-full overflow-hidden">
+        <div
+          className={`truncate ${path ? "text-slate-600" : "text-slate-400"}`}
+        >
+          {fileName || "미선택"}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1">
+        <button
+          className="px-2 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          onClick={onToggleFull}
+          disabled={!path}
+          title={path ? "전체 경로 보기/숨기기" : "파일을 먼저 선택하세요"}
+        >
+          🔍
+        </button>
+        <button
+          className="px-2 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          onClick={copyPath}
+          disabled={!path}
+          title={path ? "전체 경로 복사" : "파일을 먼저 선택하세요"}
+        >
+          📋
+        </button>
+      </div>
+
+      {showFull && path && (
+        <div className="col-span-3 text-[11px] text-slate-400 break-all mt-0.5">
+          {path}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SetupTab({
   srtConnected,
   mp3Connected,
@@ -35,41 +93,110 @@ export default function SetupTab({
   autoOpts,
   setAutoOpts,
 }) {
+  // 경로는 Settings에 영구 저장/복원 → 탭 왔다갔다 해도 유지
+  const [srtPath, setSrtPath] = useState(null);
+  const [mp3Path, setMp3Path] = useState(null);
+  const [showFullSrt, setShowFullSrt] = useState(false);
+  const [showFullMp3, setShowFullMp3] = useState(false);
+
+  // 최초 로드 시 Settings에서 복원
+  useEffect(() => {
+    (async () => {
+      try {
+        const srt = await window.api.getSetting("paths.srt");
+        const mp3 = await window.api.getSetting("paths.mp3");
+        if (srt) {
+          setSrtPath(srt);
+          setSrtConnected?.(true);
+        }
+        if (mp3) {
+          setMp3Path(mp3);
+          setMp3Connected?.(true);
+        }
+      } catch (e) {
+        console.warn("파일 경로 복원 실패:", e);
+      }
+    })();
+  }, [setMp3Connected, setSrtConnected]);
+
+  const handlePickSrt = async () => {
+    try {
+      const res = await window.api?.selectSrt?.();
+      if (!res || res.canceled) return;
+      setSrtPath(res.filePath);
+      setSrtConnected?.(true);
+      setShowFullSrt(false);
+      await window.api.setSetting({ key: "paths.srt", value: res.filePath });
+    } catch (e) {
+      console.error(e);
+      alert("SRT 선택 중 오류가 발생했습니다.");
+    }
+  };
+
+  const handlePickMp3 = async () => {
+    try {
+      const res = await window.api?.selectMp3?.();
+      if (!res || res.canceled) return;
+      setMp3Path(res.filePath);
+      setMp3Connected?.(true);
+      setShowFullMp3(false);
+      await window.api.setSetting({ key: "paths.mp3", value: res.filePath });
+    } catch (e) {
+      console.error(e);
+      alert("오디오(MP3) 선택 중 오류가 발생했습니다.");
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <SectionCard
         title="자막 / 오디오 연결"
         right={<span className="text-xs text-slate-500">프로젝트 준비</span>}
       >
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button
-            onClick={() => setSrtConnected(true)}
-            className={`h-10 px-4 rounded-lg text-sm border ${
-              srtConnected
-                ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-            }`}
-          >
-            {srtConnected ? "SRT 연결됨" : "SRT 연결"}
-          </button>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={handlePickSrt}
+              className={`h-10 px-4 rounded-lg text-sm border ${
+                srtConnected
+                  ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+              }`}
+              title={srtConnected ? "SRT 연결됨" : "SRT 파일 선택"}
+            >
+              {srtConnected ? "SRT 연결됨" : "SRT 연결"}
+            </button>
 
-          <button
-            onClick={() => setMp3Connected(true)}
-            className={`h-10 px-4 rounded-lg text-sm border ${
-              mp3Connected
-                ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-            }`}
-          >
-            {mp3Connected ? "오디오 연결됨" : "오디오 연결(MP3)"}
-          </button>
+            <button
+              onClick={handlePickMp3}
+              className={`h-10 px-4 rounded-lg text-sm border ${
+                mp3Connected
+                  ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+              }`}
+              title={mp3Connected ? "오디오 연결됨" : "MP3 파일 선택"}
+            >
+              {mp3Connected ? "오디오 연결됨" : "오디오 연결(MP3)"}
+            </button>
+          </div>
 
-          <button
-            onClick={() => alert("Canva 로그인/연결 플로우는 다음 단계에서!")}
-            className="h-10 px-4 rounded-lg text-sm border bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-          >
-            Canva 연결
-          </button>
+          {/* 항상 두 줄 렌더 → 레이아웃 흔들림 방지 */}
+          <div className="space-y-1">
+            <FileRow
+              icon="📜"
+              label="SRT:"
+              path={srtPath}
+              showFull={showFullSrt}
+              onToggleFull={() => setShowFullSrt((v) => !v)}
+            />
+            <FileRow
+              icon="🎧"
+              label="MP3:"
+              path={mp3Path}
+              showFull={showFullMp3}
+              onToggleFull={() => setShowFullMp3((v) => !v)}
+            />
+          </div>
         </div>
       </SectionCard>
 

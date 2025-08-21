@@ -207,3 +207,17 @@ ipcMain.handle("file:save-buffer", async (_evt, payload = {}) => {
     return { ok: false, message: String(err?.message || err) };
   }
 });
+
+/**
+ * ✅ 텍스트 파일 읽기 (SRT/텍스트 키워드 추출용)
+ * payload: { path: string, encoding?: string }
+ * 반환: string (BOM 제거된 텍스트)
+ */
+ipcMain.handle("files/readText", async (_evt, payload = {}) => {
+  const { path: filePath, encoding = "utf8" } = payload || {};
+  if (!filePath) throw new Error("path_required");
+  const buf = await fs.promises.readFile(filePath);
+  // 기본은 UTF-8 가정, BOM 제거
+  let text = buf.toString(encoding).replace(/^\uFEFF/, "");
+  return text;
+});

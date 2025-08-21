@@ -2,7 +2,8 @@
 const { BrowserWindow, Menu } = require("electron");
 const path = require("path");
 
-const isDev = !!process.env.VITE_DEV_SERVER_URL || process.env.NODE_ENV !== "production";
+const isDev =
+  !!process.env.VITE_DEV_SERVER_URL || process.env.NODE_ENV !== "production";
 const shouldAutoOpenDevtools = isDev || process.env.OPEN_DEVTOOLS === "1";
 
 function createMainWindow() {
@@ -15,6 +16,7 @@ function createMainWindow() {
       nodeIntegration: false,
       devTools: true, // ✅ DevTools 사용 가능하게 보장
       preload: path.join(__dirname, "..", "preload.js"),
+      webviewTag: true, // ✅ 추가
     },
   });
 
