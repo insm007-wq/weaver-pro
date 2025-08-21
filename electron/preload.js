@@ -27,10 +27,7 @@ contextBridge.exposeInMainWorld("api", {
   // =========================
   // Image Analyzer (Anthropic)
   // =========================
-  /**
-   * 이미지/설명을 보내 분석 프롬프트 생성
-   * @param {{ filePath?: string, description?: string }} payload
-   */
+  /** 이미지/설명을 보내 분석 프롬프트 생성 */
   imagefxAnalyze: (payload) => {
     console.log("[preload] invoke imagefx:analyze");
     return ipcRenderer.invoke("imagefx:analyze", payload);
@@ -143,27 +140,31 @@ contextBridge.exposeInMainWorld("api", {
   },
 
   // =========================
-  // Canva (브라우저 열기 & 다운로드 훅)
+  // Canva (브라우저/다운로드/로그인)
   // =========================
-  /**
-   * Canva 검색 창 열기 (사용자 로그인/검색/다운로드 클릭)
-   * payload: { query?: string, media?: "videos"|"images", saveDir?: string }
-   */
+  /** Canva 검색/팝업 열기 (선택 기능) */
   canvaOpenBrowser: (payload) => {
     console.log("[preload] invoke canva/openBrowser");
     return ipcRenderer.invoke("canva/openBrowser", payload);
   },
-  /**
-   * Canva에서 다운로드 완료 이벤트 수신
-   * 사용법:
-   *   const off = window.api.onCanvaDownloaded((d)=>{ ... });
-   *   // unmount 시 off() 호출
-   */
+
+  /** Canva 다운로드 완료 이벤트 */
   onCanvaDownloaded: (cb) => {
     const listener = (_e, data) => cb?.(data);
     ipcRenderer.on("canva:downloaded", listener);
     return () => ipcRenderer.removeListener("canva:downloaded", listener);
   },
+  /** Canva 다운로드 진행 이벤트 */
+  onCanvaProgress: (cb) => {
+    const listener = (_e, data) => cb?.(data);
+    ipcRenderer.on("canva:progress", listener);
+    return () => ipcRenderer.removeListener("canva:progress", listener);
+  },
+
+  /** ✅ 로그인 상태 확인 / 세션 초기화 / 캐시 삭제 */
+  canvaCheckAuth: () => ipcRenderer.invoke("canva:check-auth"),
+  canvaClearAuth: () => ipcRenderer.invoke("canva:clear-auth"),
+  canvaClearCache: () => ipcRenderer.invoke("canva:clear-cache"),
 
   // =========================
   // File I/O
@@ -182,9 +183,23 @@ contextBridge.exposeInMainWorld("api", {
       buffer,
     });
   },
-  /** ✅ 텍스트 파일 읽기 (SRT 키워드 추출용) */
+  /** ✅ 텍스트 파일 읽기 (SRT 키워드 추출용) — main에 'files/readText' 핸들러 필요 */
   readTextFile: (path) => {
     console.log("[preload] invoke files/readText");
     return ipcRenderer.invoke("files/readText", { path });
   },
+
+  // =========================
+  // Utils for Renderer
+  // =========================
+  /** 플랫폼별 파일 URL 생성 (렌더러에서 process.platform을 직접 쓰지 않도록) */
+  toFileUrl: (filePath) => {
+    if (!filePath) return "";
+    const p = String(filePath);
+    return process.platform === "win32"
+      ? "file:///" + p.replace(/\\/g, "/")
+      : "file://" + p;
+  },
+  /** 현재 플랫폼 문자열 반환 ('win32' | 'darwin' | 'linux' ...) */
+  getPlatform: () => process.platform,
 });
