@@ -173,6 +173,7 @@ if (!gotLock) {
     safeRequire("ipc/script", () => require("./ipc/script"));
     safeRequire("ipc/tts", () => require("./ipc/tts"));
     safeRequire("ipc/audio", () => require("./ipc/audio"));
+    safeRequire("ipc/ai-keywords", () => require("./ipc/ai-keywords"));
 
     /* -----------------------------------------------------------------------
      * ❷ (옵션) 딥링크
