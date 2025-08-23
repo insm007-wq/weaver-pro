@@ -1,436 +1,223 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import SectionCard from "../parts/SectionCard";
 import AssetLibrary from "../parts/AssetLibrary";
 import { extractKeywords } from "../../../utils/extractKeywords";
 
-const FALLBACK_SEED = ["여행", "산", "노을", "도시", "강아지", "바다"];
-// 404가 뜨는 경우가 있어 홈에서 진입하도록 변경
-const CANVA_HOME = "https://www.canva.com/";
+/** 현재 실행 환경 모드 감지 */
+function detectMode() {
+  if (window?.api?.canva?.scanAndDownload) return "auto";
+  if (window?.api?.canva?.openBrowser || window?.api?.canvaOpenBrowser) return "manual";
+  return "none";
+}
 
-export default function KeywordsTab({ assets, addAssets, autoMatch }) {
-  const [keywords, setKeywords] = useState(FALLBACK_SEED);
-  const [history, setHistory] = useState([]);
+/** 실행 라우팅: 자동/수동 모두 지원 */
+async function runCanvaAction({ keywords, onlyVideo, perKeyword, concurrency, minBytes, maxBytes }) {
+  const mode = detectMode();
+  if (mode === "auto") {
+    return window.api.canva.scanAndDownload({ keywords, perKeyword, concurrency, minBytes, maxBytes, onlyVideo });
+  }
+  if (mode === "manual") {
+    const open = window.api?.canva?.openBrowser || window?.api?.canvaOpenBrowser;
+    const q = keywords?.[0] || "";
+    return open({ query: q, media: onlyVideo ? "videos" : "images" });
+  }
+  throw new Error("Canva IPC 연결이 없습니다.");
+}
+
+export default function KeywordsTab({ assets, addAssets }) {
+  const [mode, setMode] = useState("none");
+  const [keywords, setKeywords] = useState([]);
+  const [input, setInput] = useState("");
   const [srtFileName, setSrtFileName] = useState(null);
+
+  const [onlyVideo, setOnlyVideo] = useState(true);
+  const [perKeyword, setPerKeyword] = useState(1);
+  const [concurrency, setConcurrency] = useState(2);
+  const [minMB, setMinMB] = useState(1);
+  const [maxMB, setMaxMB] = useState(10);
+
   const [busy, setBusy] = useState(false);
-
-  const [loggedIn, setLoggedIn] = useState(null);
-
-  const [canvaUrl, setCanvaUrl] = useState(CANVA_HOME);
-  const webviewRef = useRef(null);
-
-  const [autoCycle, setAutoCycle] = useState(true);
-  const [autoRun, setAutoRun] = useState(false);
-  const queueRef = useRef([]);
-  const idxRef = useRef(0);
   const [completed, setCompleted] = useState(0);
   const [target, setTarget] = useState(0);
   const [progress, setProgress] = useState(null);
-
-  const injectTimerRef = useRef(null);
-  const lastInjectedKwRef = useRef("");
-  const injectInFlightRef = useRef(false);
+  const [status, setStatus] = useState({
+    stage: "idle",
+    keyword: null,
+    kIndex: 0,
+    totalKeywords: 0,
+    found: 0,
+    totalDownloaded: 0,
+    totalPlanned: 0,
+    message: "",
+  });
 
   useEffect(() => {
-    (async () => {
-      try {
-        const srtPath = await window.api.getSetting("paths.srt");
-        if (srtPath) setSrtFileName(srtPath.split(/[/\\]/).pop());
-      } catch {}
-      try {
-        const r = await window.api.canvaCheckAuth?.();
-        setLoggedIn(!!r?.loggedIn);
-      } catch {
-        setLoggedIn(false);
-      }
-    })();
+    setMode(detectMode());
   }, []);
 
   useEffect(() => {
-    const off1 = window.api.onCanvaDownloaded((d) => {
+    const offDownloaded = window.api?.onCanvaDownloaded?.((d) => {
       if (!d?.ok) return;
-      const fileUrl = window.api.toFileUrl
-        ? window.api.toFileUrl(d.path)
-        : d.path;
+      const filePath = d.path;
       const type = d.type || (/video/i.test(d.mime) ? "video" : "image");
+      const fileUrl = process.platform === "win32" ? "file:///" + filePath.replace(/\\/g, "/") : "file://" + filePath;
       addAssets([
         {
           id: "dl-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7),
           type,
           thumbUrl: fileUrl,
-          filePath: d.path,
+          filePath,
         },
       ]);
       setCompleted((n) => n + 1);
-      if (autoCycle) gotoNextKeyword(true);
     });
 
-    const off2 = window.api.onCanvaProgress?.((p) =>
-      setProgress({ received: p.received, total: p.total })
-    );
+    const attach = window.api?.onCanvaProgress || window.api?.canva?.onProgress;
+    const offProgress =
+      attach?.((p) => {
+        if (p?.bytes) setProgress({ received: p.bytes.received ?? 0, total: p.bytes.total ?? 0 });
+        if (p?.stage) {
+          setStatus((s) => ({ ...s, ...p }));
+          if (typeof p.totalDownloaded === "number") setCompleted(p.totalDownloaded);
+          if (typeof p.totalPlanned === "number") setTarget(p.totalPlanned);
+        }
+        if (p?.stage === "done") setBusy(false);
+      }) || null;
 
     return () => {
-      off1 && off1();
-      off2 && off2();
+      offDownloaded && offDownloaded();
+      offProgress && offProgress();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addAssets, autoCycle, autoRun]);
+  }, [addAssets]);
 
-  // ── webview 이벤트에서 주입 스케줄 ──────────────────────────────
   useEffect(() => {
-    const wv = webviewRef.current;
-    if (!wv) return;
+    (async () => {
+      try {
+        const srtPath = await window.api.getSetting?.("paths.srt");
+        if (srtPath) setSrtFileName(srtPath.split(/[/\\]/).pop());
+      } catch {}
+    })();
+  }, []);
 
-    const scheduleInject = (delay = 400) => {
-      if (!autoRun) return;
-      if (injectTimerRef.current) clearTimeout(injectTimerRef.current);
-      injectTimerRef.current = setTimeout(tryInjectForCurrentKeyword, delay);
-    };
-
-    const onDomReady = () => scheduleInject(600);
-    const onStop = () => scheduleInject(400);
-    const onNav = () => scheduleInject(600);
-
-    wv.addEventListener("dom-ready", onDomReady);
-    wv.addEventListener("did-stop-loading", onStop);
-    wv.addEventListener("did-navigate", onNav);
-    wv.addEventListener("did-navigate-in-page", onNav);
-
-    return () => {
-      wv.removeEventListener("dom-ready", onDomReady);
-      wv.removeEventListener("did-stop-loading", onStop);
-      wv.removeEventListener("did-navigate", onNav);
-      wv.removeEventListener("did-navigate-in-page", onNav);
-      if (injectTimerRef.current) clearTimeout(injectTimerRef.current);
-    };
-  }, [autoRun, canvaUrl]);
-
-  // ── 로그인 보장 ────────────────────────────────────────────────
-  const ensureLoggedInOrOpenLogin = async () => {
-    try {
-      const r = await window.api.canvaCheckAuth?.();
-      if (!r?.loggedIn) {
-        setLoggedIn(false);
-        setCanvaUrl("https://www.canva.com/login");
-        webviewRef.current?.loadURL?.("https://www.canva.com/login");
-        return false;
-      }
-      setLoggedIn(true);
-      return true;
-    } catch {
-      setLoggedIn(false);
-      return false;
-    }
+  const addKeyword = (k) => {
+    const trimmed = (k || "").trim();
+    if (!trimmed) return;
+    setKeywords((old) => (old.includes(trimmed) ? old : [...old, trimmed]).slice(0, 100));
   };
+  const removeKeyword = (k) => setKeywords((old) => old.filter((x) => x !== k));
+  const clearKeywords = () => setKeywords([]);
 
-  const openHome = async () => {
-    const ok = await ensureLoggedInOrOpenLogin();
-    if (!ok) return;
-    setCanvaUrl(CANVA_HOME);
-    webviewRef.current?.loadURL?.(CANVA_HOME);
-  };
-
-  const openEditorForKeyword = async () => {
-    const ok = await ensureLoggedInOrOpenLogin();
-    if (!ok) return;
-    // 홈에서 자동으로 에디터 진입을 시도 → 주입 스크립트에서 처리
-  };
-
-  const gotoNextKeyword = (autoClickAfter = false) => {
-    const list = queueRef.current;
-    const next = idxRef.current + 1;
-    if (next < list.length) {
-      idxRef.current = next;
-      if (autoRun && autoClickAfter) {
-        lastInjectedKwRef.current = "";
-        openEditorForKeyword();
-      }
-    } else {
-      setAutoRun(false);
-      console.log("[cycle] done");
-    }
+  const addFromInput = () => {
+    const items = input
+      .split(/[,/\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    items.forEach(addKeyword);
+    setInput("");
   };
 
   const extractFromSrt = async () => {
-    setBusy(true);
     try {
-      const srtPath = await window.api.getSetting("paths.srt");
-      if (!srtPath) {
-        alert("먼저 [셋업] 탭에서 SRT 파일을 연결해 주세요.");
-        return;
-      }
-      const rawRes = await window.api.readTextFile(srtPath);
-      const src = typeof rawRes === "string" ? rawRes : rawRes?.data || "";
-      if (!src) throw new Error("SRT 파일을 읽지 못했습니다.");
-
-      const cleaned = src
+      const srtPath = await window.api.getSetting?.("paths.srt");
+      if (!srtPath) return alert("먼저 [셋업] 탭에서 SRT 파일을 연결해 주세요.");
+      const raw = await window.api.readTextFile?.(srtPath);
+      const cleaned = raw
         .replace(/\r/g, "\n")
         .replace(/\d+\s*\n(?=\d{2}:\d{2}:\d{2},\d{3})/g, "")
-        .replace(
-          /\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}.*\n/g,
-          ""
-        );
-
+        .replace(/\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}.*\n/g, "");
       const kws = extractKeywords(cleaned, { topK: 20, minLen: 2 });
-      const final = kws.length ? kws : FALLBACK_SEED;
-
-      setKeywords(final);
-      setHistory((h) => [{ at: Date.now(), items: final }, ...h]);
+      if (!kws.length) return alert("추출된 키워드가 없습니다. 직접 추가해 주세요.");
+      setKeywords(kws);
       setSrtFileName(srtPath.split(/[/\\]/).pop());
-
-      queueRef.current = final;
-      idxRef.current = 0;
-      setCompleted(0);
-      setTarget(final.length);
-
-      await openHome(); // 홈에서 시작 → 자동 주입이 에디터 진입까지 수행
-      if (autoRun) lastInjectedKwRef.current = "";
     } catch (e) {
       console.error(e);
       alert("키워드 추출 중 오류가 발생했습니다.");
-    } finally {
+    }
+  };
+
+  const canStart = useMemo(() => keywords.length > 0 && !busy && (mode === "auto" || (mode === "manual" && keywords[0])), [keywords, busy, mode]);
+
+  const startAction = async () => {
+    try {
+      if (!keywords.length) return;
+      setBusy(true);
+      setCompleted(0);
+      setProgress(null);
+
+      if (mode === "auto") {
+        const planned = perKeyword * keywords.length;
+        setTarget(planned);
+        setStatus((s) => ({
+          ...s,
+          stage: "start",
+          keyword: null,
+          kIndex: 0,
+          totalKeywords: keywords.length,
+          totalPlanned: planned,
+          totalDownloaded: 0,
+          found: 0,
+        }));
+      } else {
+        setTarget(0);
+        setStatus((s) => ({ ...s, stage: "search", keyword: keywords[0], kIndex: 0, totalKeywords: 1, totalPlanned: 0, totalDownloaded: 0 }));
+      }
+
+      await runCanvaAction({
+        keywords,
+        onlyVideo,
+        perKeyword,
+        concurrency,
+        minBytes: Math.max(0, Math.floor(minMB * 1024 * 1024)),
+        maxBytes: Math.max(0, Math.floor(maxMB * 1024 * 1024)),
+      });
+    } catch (e) {
+      console.error(e);
+      alert("실행 중 오류: " + (e?.message || e));
       setBusy(false);
     }
   };
 
-  // ── 자동 주입 스크립트 ─────────────────────────────────────────
-  const currentKeyword = () =>
-    queueRef.current[idxRef.current] || keywords[idxRef.current] || "";
-
-  const isEditorUrl = (url) => /\/design\/[^/]+\/edit/.test(url || "");
-
-  const AUTO_JS = (kw) => `
-    (async () => {
-      const KW = ${JSON.stringify(kw)};
-      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-      const clickByText = async (texts) => {
-        const joined = texts
-          .map(t => \`//button[contains(., "\${t}")] | //a[contains(., "\${t}")] | //div[contains(@role,"button") and contains(., "\${t}")]\`)
-          .join(" | ");
-        const it = document.evaluate(joined, document, null, XPathResult.ANY_TYPE, null);
-        let n; while(n = it.iterateNext()){ if(n.offsetParent !== null) { n.click(); await sleep(600); return true; } }
-        return false;
-      };
-
-      const inEditor = () => /\\/design\\/[^/]+\\/edit/.test(location.pathname);
-
-      // 0) 404 페이지면 홈으로 이동
-      const bodyText = (document.body && document.body.innerText || "").slice(0, 4000);
-      if (/404|찾을 수 없음/i.test(bodyText)) {
-        location.href = "https://www.canva.com/";
-        return { retry: "go_home" };
-      }
-
-      // 1) 에디터가 아니면: 홈/대시보드 → '디자인 만들기/만들기/Create a design' 클릭 후 '동영상/Video' 선택 시도
-      if (!inEditor()) {
-        // 메뉴 열기
-        await clickByText(["디자인 만들기","만들기","Create a design"]);
-        await sleep(500);
-        // 비디오 항목 선택
-        const opened = await clickByText([
-          "동영상(1920 × 1080)","동영상","비디오",
-          "Video","Video (1920 × 1080)","Video (1920 x 1080)"
-        ]);
-        if (!opened) {
-          // 직접 이동 시도 (locale 상관없이)
-          location.href = "https://www.canva.com/design?create&category=video";
-        }
-        // 에디터 진입 대기
-        let t=0; while(!inEditor() && t<60){ await sleep(300); t++; }
-        if (!inEditor()) return { retry: "wait_editor" };
-      }
-
-      // 2) 에디터 도달 → 좌측 검색 입력 찾기
-      let input = document.querySelector('input[placeholder*="검색"], input[placeholder*="Search"]');
-      if (!input) {
-        await clickByText(["동영상","Videos","요소","Elements"]);
-        await sleep(400);
-        input = document.querySelector('input[placeholder*="검색"], input[placeholder*="Search"]');
-      }
-      if (!input) return { error: "search_input_not_found" };
-
-      // 3) 키워드 입력 + 엔터
-      input.focus();
-      input.value = KW;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-      input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }));
-      await sleep(1000);
-
-      // 4) 첫 동영상 카드 클릭
-      let card = document.querySelector('[data-testid*="search"] video, [data-testid*="card"] video, [data-testid*="media"] video');
-      if (card) {
-        let clickable = card.closest('[role="button"], [data-testid*="card"], [data-testid*="grid"] [tabindex]');
-        (clickable || card).click();
-        await sleep(800);
-      }
-
-      // 5) 공유 → 다운로드 → MP4 → 다운로드
-      const okShare = await clickByText(["공유","Share"]);
-      if (!okShare) return { error: "share_not_found" };
-      await clickByText(["다운로드","Download"]);
-      await sleep(700);
-
-      const all = Array.from(document.querySelectorAll('button,[role=menuitem],[role="option"]'));
-      const mp4 = all.find(el => /mp4/i.test(el.textContent || ""));
-      if (mp4) { mp4.click(); await sleep(300); }
-
-      await clickByText(["다운로드","Download"]);
-      return { ok: true };
-    })().catch(e => ({ error: String(e?.message || e) }));
-  `;
-
-  const tryInjectForCurrentKeyword = async () => {
-    const wv = webviewRef.current;
-    if (!wv || !autoRun) return;
-    if (injectInFlightRef.current) return;
-
-    const url = wv.getURL?.() || "";
-    // 에디터 진입은 스크립트가 알아서 함 — 홈이어도 쏘자
-    const kw = currentKeyword();
-    if (!kw) return;
-    if (lastInjectedKwRef.current === kw) return;
-
+  const openForKeyword = async (k) => {
+    if (mode !== "manual") return;
+    const open = window.api?.canva?.openBrowser || window.api?.canvaOpenBrowser;
+    if (!open) return alert("수동 검색 IPC가 없습니다.");
     try {
-      injectInFlightRef.current = true;
-      const res = await wv.executeJavaScript(AUTO_JS(kw), true);
-      console.log("[inject]", kw, res);
-      if (res?.retry) {
-        // 홈 이동/에디터 대기 등 재시도 신호
-        lastInjectedKwRef.current = "";
-        injectInFlightRef.current = false;
-        setTimeout(tryInjectForCurrentKeyword, 900);
-        return;
-      }
-      lastInjectedKwRef.current = kw;
-      if (res && res.error) {
-        // 재시도
-        lastInjectedKwRef.current = "";
-        injectInFlightRef.current = false;
-        setTimeout(tryInjectForCurrentKeyword, 900);
-      } else {
-        injectInFlightRef.current = false;
-      }
+      setBusy(true);
+      setProgress(null);
+      setStatus((s) => ({ ...s, stage: "search", keyword: k, kIndex: 0, totalKeywords: 1, totalPlanned: 0, totalDownloaded: 0 }));
+      await open({ query: k, media: onlyVideo ? "videos" : "images" });
     } catch (e) {
-      console.warn("[inject error]", e);
-      injectInFlightRef.current = false;
-      lastInjectedKwRef.current = "";
-      setTimeout(tryInjectForCurrentKeyword, 900);
+      console.error(e);
+      alert("검색창 열기 실패: " + (e?.message || e));
+      setBusy(false);
     }
   };
-
-  const manualInject = () => {
-    lastInjectedKwRef.current = "";
-    tryInjectForCurrentKeyword();
-  };
-
-  const startAuto = async () => {
-    if (!keywords?.length) return;
-    const ok = await ensureLoggedInOrOpenLogin();
-    if (!ok) return;
-    queueRef.current = keywords;
-    idxRef.current = 0;
-    lastInjectedKwRef.current = "";
-    setAutoRun(true);
-    await openHome();
-  };
-  const stopAuto = () => setAutoRun(false);
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
       <SectionCard
-        title="키워드 & 소스"
+        title="키워드 구성"
         right={
           <div className="flex items-center gap-2">
             <button
               onClick={extractFromSrt}
-              disabled={busy}
               className="h-9 px-3 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500 disabled:opacity-60"
+              disabled={busy}
+              title="SRT에서 자동 추출"
             >
-              {busy ? "추출 중..." : "키워드 추출"}
+              {busy ? "작업 중…" : "SRT에서 추출"}
             </button>
-
-            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                className="sr-only peer"
-                checked={autoCycle}
-                onChange={(e) => setAutoCycle(e.target.checked)}
-              />
-              <span
-                className={`w-10 h-6 rounded-full relative transition ${
-                  autoCycle ? "bg-blue-600" : "bg-slate-300"
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 left-0.5 h-5 w-5 bg-white rounded-full shadow transition-transform ${
-                    autoCycle ? "translate-x-4" : ""
-                  }`}
-                />
-              </span>
-              자동 순회
-            </label>
-
-            {autoRun ? (
-              <button
-                onClick={stopAuto}
-                className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
-              >
-                자동 수집 중지
-              </button>
-            ) : (
-              <button
-                onClick={startAuto}
-                className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
-                title="홈→에디터 진입→검색→공유→다운로드 자동 수행"
-              >
-                자동 수집 시작
-              </button>
-            )}
-
             <button
-              onClick={openHome}
+              onClick={clearKeywords}
               className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
-              title="Canva 홈 열기"
+              disabled={busy || keywords.length === 0}
+              title="현재 키워드 전부 지우기"
             >
-              홈 열기
-            </button>
-
-            <button
-              onClick={manualInject}
-              className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
-              title="현재 키워드 강제 실행(주입)"
-            >
-              수동 실행
+              비우기
             </button>
           </div>
         }
       >
-        {loggedIn === false && (
-          <div className="mb-3 p-2 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800">
-            Canva에 로그인해야 자동 수집/다운로드가 가능합니다.
-            <button
-              className="ml-2 px-2 py-0.5 text-xs rounded bg-amber-600 text-white"
-              onClick={() => {
-                setCanvaUrl("https://www.canva.com/login");
-                webviewRef.current?.loadURL?.("https://www.canva.com/login");
-              }}
-            >
-              로그인 열기
-            </button>
-            <button
-              className="ml-2 px-2 py-0.5 text-xs rounded border"
-              onClick={async () => {
-                const r = await window.api.canvaCheckAuth?.();
-                setLoggedIn(!!r?.loggedIn);
-                if (r?.loggedIn) openHome();
-              }}
-            >
-              로그인 완료 확인
-            </button>
-          </div>
-        )}
-
         <div className="text-xs text-slate-600 mb-2">
           {srtFileName ? (
             <>
@@ -441,77 +228,212 @@ export default function KeywordsTab({ assets, addAssets, autoMatch }) {
           )}
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {keywords.map((k, i) => (
-            <button
-              key={k + i}
-              onClick={() => {
-                queueRef.current = keywords;
-                idxRef.current = i;
-                lastInjectedKwRef.current = "";
-                openEditorForKeyword();
-              }}
-              className={`px-3 h-8 rounded-full border border-slate-200 text-sm hover:bg-slate-50 whitespace-nowrap ${
-                i === idxRef.current ? "ring-1 ring-blue-400" : ""
-              }`}
-            >
-              #{k}
-            </button>
-          ))}
+        <div className="flex gap-2">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addFromInput()}
+            placeholder="키워드 입력 후 Enter (쉼표/줄바꿈으로 여러 개)"
+            className="flex-1 h-9 px-3 text-sm rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-400"
+          />
+          <button onClick={addFromInput} className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50" disabled={!input.trim() || busy}>
+            추가
+          </button>
         </div>
 
-        <div className="mt-3 text-xs text-slate-600 space-y-1">
-          <div>
-            진행: <b>{completed}</b> / <b>{target}</b> (키워드당 1개)
-            {autoRun && (
-              <span className="ml-2 text-blue-600">· 자동 수집 ON</span>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {keywords.length === 0 ? (
+            <div className="text-[12px] text-slate-500">키워드를 추가하거나 SRT에서 추출해 주세요.</div>
+          ) : (
+            keywords.map((k) => (
+              <span key={k} className="px-2 py-1.5 h-8 rounded-full border border-slate-200 bg-white text-sm inline-flex items-center gap-2">
+                <span className="px-1">#{k}</span>
+                {mode === "manual" && (
+                  <button
+                    onClick={() => openForKeyword(k)}
+                    className="text-slate-500 hover:text-blue-600 text-xs px-2 py-0.5 rounded-md border border-slate-200 hover:bg-slate-50"
+                    title="이 키워드로 검색창 열기"
+                    disabled={busy}
+                  >
+                    검색
+                  </button>
+                )}
+                <button onClick={() => removeKeyword(k)} className="text-slate-400 hover:text-slate-600" title="제거">
+                  ✕
+                </button>
+              </span>
+            ))
+          )}
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <label className="text-xs text-slate-700 flex flex-col gap-1">
+            {mode === "auto" ? "키워드당 개수" : "키워드당 개수 (자동 전용)"}
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={perKeyword}
+              onChange={(e) => setPerKeyword(Math.max(1, +e.target.value || 1))}
+              className="h-9 px-3 rounded-lg border border-slate-200 text-sm disabled:opacity-50"
+              disabled={mode !== "auto"}
+            />
+          </label>
+          <label className="text-xs text-slate-700 flex flex-col gap-1">
+            {mode === "auto" ? "동시 작업" : "동시 작업 (자동 전용)"}
+            <input
+              type="number"
+              min={1}
+              max={6}
+              value={concurrency}
+              onChange={(e) => setConcurrency(Math.max(1, +e.target.value || 1))}
+              className="h-9 px-3 rounded-lg border border-slate-200 text-sm disabled:opacity-50"
+              disabled={mode !== "auto"}
+            />
+          </label>
+          <label className="text-xs text-slate-700 flex flex-col gap-1">
+            최소 용량(MB)
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={minMB}
+              onChange={(e) => setMinMB(Math.max(0, +e.target.value || 0))}
+              className="h-9 px-3 rounded-lg border border-slate-200 text-sm disabled:opacity-50"
+              disabled={mode !== "auto"}
+            />
+          </label>
+          <label className="text-xs text-slate-700 flex flex-col gap-1">
+            최대 용량(MB)
+            <input
+              type="number"
+              min={0}
+              max={500}
+              value={maxMB}
+              onChange={(e) => setMaxMB(Math.max(0, +e.target.value || 0))}
+              className="h-9 px-3 rounded-lg border border-slate-200 text-sm disabled:opacity-50"
+              disabled={mode !== "auto"}
+            />
+          </label>
+
+          <label className="text-xs text-slate-700 flex items-center gap-2 col-span-2">
+            <input type="checkbox" className="h-4 w-4" checked={onlyVideo} onChange={(e) => setOnlyVideo(!!e.target.checked)} />
+            <span>{mode === "auto" ? "비디오만 다운로드" : "비디오만 보기/다운로드"}</span>
+          </label>
+
+          <div className="text-xs text-slate-500 col-span-2">
+            {mode === "auto" ? (
+              <>
+                Canva 유료 계정 로그인 후 선택한 키워드로 자동 검색하여 <b>비디오</b>를 다운로드합니다.
+              </>
+            ) : mode === "manual" ? (
+              <>
+                각 키워드로 <b>검색창을 열어 수동으로 다운로드</b>합니다. 저장이 완료되면 에셋 라이브러리에 자동 추가됩니다.
+              </>
+            ) : (
+              <>Canva IPC 연결을 먼저 완료해 주세요.</>
             )}
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-center gap-2">
+          <button
+            onClick={startAction}
+            disabled={!canStart}
+            className="h-10 px-4 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500 disabled:opacity-50"
+          >
+            {mode === "auto"
+              ? busy
+                ? "시작 중…"
+                : "검색 & 다운로드 시작"
+              : busy
+              ? "검색창 여는 중…"
+              : `검색창 열기${keywords[0] ? ` (“${keywords[0]}”)` : ""}`}
+          </button>
+          <span className="text-xs text-slate-500">
+            선택 키워드: <b>{keywords.length}</b>개
+          </span>
+          {mode === "manual" && keywords.length > 1 && (
+            <span className="text-[11px] text-slate-400">
+              추가 키워드는 태그의 <b>검색</b> 버튼으로 열 수 있어요.
+            </span>
+          )}
+        </div>
+
+        <div className="mt-3 text-xs text-slate-700 space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-2">
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${
+                  status.stage === "search"
+                    ? "bg-amber-500"
+                    : status.stage === "download"
+                    ? "bg-blue-500"
+                    : status.stage === "done"
+                    ? "bg-emerald-500"
+                    : status.stage === "error"
+                    ? "bg-rose-500"
+                    : "bg-slate-300"
+                }`}
+              />
+              <b>
+                {status.stage === "search" && "캔바에서 검색 중…"}
+                {status.stage === "enqueue" && "결과 정리 중…"}
+                {status.stage === "download" && "다운로드 중…"}
+                {status.stage === "saved" && "저장 완료"}
+                {status.stage === "done" && "완료"}
+                {status.stage === "error" && (status.message || "오류")}
+                {["idle", "start"].includes(status.stage) && "대기"}
+              </b>
+            </span>
+            {status.keyword ? (
+              <span>
+                (<b>{status.kIndex + 1}</b>
+                {status.totalKeywords ? ` / ${status.totalKeywords}` : ""}) "{status.keyword}"
+              </span>
+            ) : null}
+          </div>
+          <div className="text-slate-600">
+            다운로드: <b>{completed}</b>
+            {target ? (
+              <>
+                {" "}
+                / <b>{target}</b> (키워드당 {perKeyword}개)
+              </>
+            ) : null}
           </div>
           {progress?.total ? (
             <div className="h-2 bg-slate-200 rounded">
-              <div
-                className="h-2 bg-blue-500 rounded"
-                style={{
-                  width: `${Math.min(
-                    100,
-                    (progress.received / progress.total) * 100
-                  )}%`,
-                }}
-              />
+              <div className="h-2 bg-blue-500 rounded" style={{ width: `${Math.min(100, (progress.received / progress.total) * 100)}%` }} />
             </div>
           ) : null}
-          <div className="text-[11px] text-slate-500">
-            로그인 후 동작합니다. 404가 뜨면 자동으로 홈으로 복구 후
-            재시도합니다.
-          </div>
         </div>
       </SectionCard>
 
       <div className="xl:col-span-1">
         <SectionCard title="에셋 라이브러리">
-          <AssetLibrary
-            assets={assets}
-            onPick={() => alert("해당 씬에 배치")}
-          />
+          <AssetLibrary assets={assets} onPick={() => alert("해당 씬에 배치")} />
         </SectionCard>
       </div>
 
       <div className="xl:col-span-1">
-        <SectionCard title="Canva 미니 브라우저">
-          <div className="rounded-xl overflow-hidden border border-slate-200 h-[520px] bg-white">
-            {/* eslint-disable-next-line react/no-unknown-property */}
-            <webview
-              ref={webviewRef}
-              src={canvaUrl}
-              className="w-full h-full"
-              allowpopups="true"
-              partition="persist:canva"
-              useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115 Safari/537.36"
-            />
-          </div>
-          <div className="text-[11px] text-slate-500 mt-2">
-            홈 → ‘디자인 만들기/만들기’ → ‘동영상’ 선택 → 에디터에서
-            검색·다운로드까지 자동 실행합니다.
+        <SectionCard title="다운로드 안내">
+          <div className="text-sm text-slate-700 space-y-2">
+            <p>
+              1) 키워드를 추가하거나 <b>SRT에서 추출</b>하세요.
+            </p>
+            {mode === "auto" ? (
+              <p>
+                2) <b>검색 & 다운로드 시작</b>을 누르면 키워드별로 자동 저장됩니다.
+              </p>
+            ) : mode === "manual" ? (
+              <p>
+                2) <b>검색창 열기</b>로 Canva 창이 열립니다. 원하는 항목을 <b>Download</b>하면 자동 저장됩니다.
+              </p>
+            ) : (
+              <p>Canva 연결을 먼저 완료해 주세요.</p>
+            )}
+            <p className="text-[12px] text-slate-500">저장이 완료되면 에셋 라이브러리에 자동 추가됩니다. 진행률과 상태는 아래에 표시됩니다.</p>
           </div>
         </SectionCard>
       </div>

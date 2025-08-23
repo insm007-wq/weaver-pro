@@ -10,196 +10,117 @@ console.log("[preload] loaded");
  */
 contextBridge.exposeInMainWorld("api", {
   // =========================
-  // ✅ 공통 Invoke 브릿지
+  // Canva
   // =========================
-  /**
-   * 메인 프로세스 IPC 핸들러를 직접 호출합니다.
-   * 예) window.api.invoke("llm/generateScript", {...})
-   * @param {string} channel
-   * @param {any} payload
-   * @returns {Promise<any>}
-   */
+  canva: {
+    /** OAuth 로그인 (dot 우선, slash 호환) */
+    login: async () => {
+      try {
+        return await ipcRenderer.invoke("canva.login");
+      } catch {
+        return ipcRenderer.invoke("canva/login");
+      }
+    },
+
+    /** 수동 검색/다운로드 창 열기 (dot 우선, slash 호환) */
+    openBrowser: async (payload) => {
+      try {
+        return await ipcRenderer.invoke("canva.openBrowser", payload);
+      } catch {
+        return ipcRenderer.invoke("canva/openBrowser", payload);
+      }
+    },
+
+    /** 자동 스캔 & CDN 다운로드 (dot/slash 모두 등록) */
+    scanAndDownload: async (opts) => {
+      try {
+        return await ipcRenderer.invoke("canva.scanAndDownload", opts);
+      } catch {
+        return ipcRenderer.invoke("canva/scanAndDownload", opts);
+      }
+    },
+
+    /** 다운로드/검색 진행 이벤트 수신 (off 함수 반환) */
+    onProgress: (cb) => {
+      if (typeof cb !== "function") return () => {};
+      const handler = (_e, data) => cb(data);
+      ipcRenderer.on("canva:progress", handler);
+      ipcRenderer.on("canva/progress", handler);
+      return () => {
+        ipcRenderer.removeListener("canva:progress", handler);
+        ipcRenderer.removeListener("canva/progress", handler);
+      };
+    },
+  },
+
+  /** 레거시 별칭: 기존 코드가 window.api.canvaOpenBrowser를 호출해도 동작 */
+  canvaOpenBrowser: async (payload) => {
+    try {
+      return await ipcRenderer.invoke("canva.openBrowser", payload);
+    } catch {
+      return ipcRenderer.invoke("canva/openBrowser", payload);
+    }
+  },
+
+  /** 다운로드 완료 이벤트 수신 (off 함수 반환) */
+  onCanvaDownloaded: (cb) => {
+    if (typeof cb !== "function") return () => {};
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on("canva:downloaded", listener);
+    return () => ipcRenderer.removeListener("canva:downloaded", listener);
+  },
+
+  /** 진행 이벤트 수신(레거시 최상위 헬퍼, canva.onProgress와 동일 채널) */
+  onCanvaProgress: (cb) => {
+    if (typeof cb !== "function") return () => {};
+    const handler = (_e, data) => cb(data);
+    ipcRenderer.on("canva:progress", handler);
+    ipcRenderer.on("canva/progress", handler);
+    return () => {
+      ipcRenderer.removeListener("canva:progress", handler);
+      ipcRenderer.removeListener("canva/progress", handler);
+    };
+  },
+
+  // =========================
+  // 공통 Invoke
+  // =========================
   invoke: (channel, payload) => {
     console.log("[preload] invoke:", channel);
     return ipcRenderer.invoke(channel, payload);
   },
 
   // =========================
-  // Image Analyzer (Anthropic)
+  // 나머지 기존 브릿지
   // =========================
-  /** 이미지/설명을 보내 분석 프롬프트 생성 */
-  imagefxAnalyze: (payload) => {
-    console.log("[preload] invoke imagefx:analyze");
-    return ipcRenderer.invoke("imagefx:analyze", payload);
-  },
+  imagefxAnalyze: (payload) => ipcRenderer.invoke("imagefx:analyze", payload),
+  healthCheck: () => ipcRenderer.invoke("health:check"),
+  testOpenAI: (apiKey) => ipcRenderer.invoke("openai:test", apiKey),
+  testReplicate: (token) => ipcRenderer.invoke("replicate:test", token),
+  testAnthropic: (apiKey) => ipcRenderer.invoke("anthropic:test", apiKey),
+  testMiniMax: (payload) => ipcRenderer.invoke("minimax:test", payload),
+  testGoogleTTS: (apiKey) => ipcRenderer.invoke("testGoogleTTS", apiKey),
 
-  // =========================
-  // Connectivity / Health
-  // =========================
-  /** 헬스 체크 (Anthropic / Replicate / MiniMax) */
-  healthCheck: () => {
-    console.log("[preload] invoke health:check");
-    return ipcRenderer.invoke("health:check");
-  },
+  getSetting: (key) => ipcRenderer.invoke("settings:get", key),
+  setSetting: (payload) => ipcRenderer.invoke("settings:set", payload),
 
-  // =========================
-  // API Connectivity Tests
-  // =========================
-  testOpenAI: (apiKey) => {
-    console.log("[preload] invoke openai:test");
-    return ipcRenderer.invoke("openai:test", apiKey);
-  },
-  testReplicate: (token) => {
-    console.log("[preload] invoke replicate:test");
-    return ipcRenderer.invoke("replicate:test", token);
-  },
-  testAnthropic: (apiKey) => {
-    console.log("[preload] invoke anthropic:test");
-    return ipcRenderer.invoke("anthropic:test", apiKey);
-  },
-  testMiniMax: (payload) => {
-    console.log("[preload] invoke minimax:test");
-    return ipcRenderer.invoke("minimax:test", payload);
-  },
-  /** Google TTS 연결 테스트(있으면 사용, 없으면 메인에서 무시 가능) */
-  testGoogleTTS: (apiKey) => {
-    console.log("[preload] invoke testGoogleTTS");
-    return ipcRenderer.invoke("testGoogleTTS", apiKey);
-  },
+  getSecret: (key) => ipcRenderer.invoke("secrets:get", key),
+  setSecret: (payload) => ipcRenderer.invoke("secrets:set", payload),
 
-  // =========================
-  // Settings (electron-store)
-  // =========================
-  getSetting: (key) => {
-    console.log("[preload] invoke settings:get", key);
-    return ipcRenderer.invoke("settings:get", key);
-  },
-  setSetting: (payload) => {
-    console.log("[preload] invoke settings:set", payload?.key);
-    return ipcRenderer.invoke("settings:set", payload);
-  },
+  generateScript: (payload) => ipcRenderer.invoke("llm/generateScript", payload),
 
-  // =========================
-  // Secrets (keytar)
-  // =========================
-  getSecret: (key) => {
-    console.log("[preload] invoke secrets:get", key);
-    return ipcRenderer.invoke("secrets:get", key);
-  },
-  setSecret: (payload) => {
-    console.log("[preload] invoke secrets:set", payload?.key);
-    return ipcRenderer.invoke("secrets:set", payload);
-  },
+  scriptToSrt: (payload) => ipcRenderer.invoke("script/toSrt", payload),
+  ttsSynthesizeByScenes: (payload) => ipcRenderer.invoke("tts/synthesizeByScenes", payload),
+  audioConcatScenes: (payload) => ipcRenderer.invoke("audio/concatScenes", payload),
 
-  // =========================
-  // LLM (대본 생성)
-  // =========================
-  generateScript: (payload) => {
-    console.log("[preload] invoke llm/generateScript");
-    return ipcRenderer.invoke("llm/generateScript", payload);
-  },
+  generateThumbnails: (payload) => ipcRenderer.invoke("replicate:generate", payload),
+  generateThumbnailsGoogleImagen3: (payload) => ipcRenderer.invoke("generateThumbnailsGoogleImagen3", payload),
 
-  // =========================
-  // Script / Audio
-  // =========================
-  scriptToSrt: (payload) => {
-    console.log("[preload] invoke script/toSrt");
-    return ipcRenderer.invoke("script/toSrt", payload);
-  },
-  ttsSynthesizeByScenes: (payload) => {
-    console.log("[preload] invoke tts/synthesizeByScenes");
-    return ipcRenderer.invoke("tts/synthesizeByScenes", payload);
-  },
-  audioConcatScenes: (payload) => {
-    console.log("[preload] invoke audio/concatScenes");
-    return ipcRenderer.invoke("audio/concatScenes", payload);
-  },
+  selectSrt: () => ipcRenderer.invoke("files/select", { type: "srt" }),
+  selectMp3: () => ipcRenderer.invoke("files/select", { type: "mp3" }),
 
-  // =========================
-  // Image Generation
-  // =========================
-  generateThumbnails: (payload) => {
-    console.log("[preload] invoke replicate:generate");
-    return ipcRenderer.invoke("replicate:generate", payload);
-  },
-  generateThumbnailsGoogleImagen3: (payload) => {
-    console.log("[preload] invoke generateThumbnailsGoogleImagen3");
-    return ipcRenderer.invoke("generateThumbnailsGoogleImagen3", payload);
-  },
+  saveUrlToFile: (payload) => ipcRenderer.invoke("file:save-url", payload),
+  saveBufferToProject: ({ category, fileName, buffer }) => ipcRenderer.invoke("files/saveToProject", { category, fileName, buffer }),
 
-  // =========================
-  // File Pickers
-  // =========================
-  selectSrt: () => {
-    console.log("[preload] invoke files/select (srt)");
-    return ipcRenderer.invoke("files/select", { type: "srt" });
-  },
-  selectMp3: () => {
-    console.log("[preload] invoke files/select (mp3)");
-    return ipcRenderer.invoke("files/select", { type: "mp3" });
-  },
-
-  // =========================
-  // Canva (브라우저/다운로드/로그인)
-  // =========================
-  /** Canva 검색/팝업 열기 (선택 기능) */
-  canvaOpenBrowser: (payload) => {
-    console.log("[preload] invoke canva/openBrowser");
-    return ipcRenderer.invoke("canva/openBrowser", payload);
-  },
-
-  /** Canva 다운로드 완료 이벤트 */
-  onCanvaDownloaded: (cb) => {
-    const listener = (_e, data) => cb?.(data);
-    ipcRenderer.on("canva:downloaded", listener);
-    return () => ipcRenderer.removeListener("canva:downloaded", listener);
-  },
-  /** Canva 다운로드 진행 이벤트 */
-  onCanvaProgress: (cb) => {
-    const listener = (_e, data) => cb?.(data);
-    ipcRenderer.on("canva:progress", listener);
-    return () => ipcRenderer.removeListener("canva:progress", listener);
-  },
-
-  /** ✅ 로그인 상태 확인 / 세션 초기화 / 캐시 삭제 */
-  canvaCheckAuth: () => ipcRenderer.invoke("canva:check-auth"),
-  canvaClearAuth: () => ipcRenderer.invoke("canva:clear-auth"),
-  canvaClearCache: () => ipcRenderer.invoke("canva:clear-cache"),
-
-  // =========================
-  // File I/O
-  // =========================
-  /** URL을 파일로 저장 */
-  saveUrlToFile: (payload) => {
-    console.log("[preload] invoke file:save-url");
-    return ipcRenderer.invoke("file:save-url", payload);
-  },
-  /** 프로젝트 폴더에 버퍼 저장 */
-  saveBufferToProject: ({ category, fileName, buffer }) => {
-    console.log("[preload] invoke files/saveToProject", category, fileName);
-    return ipcRenderer.invoke("files/saveToProject", {
-      category,
-      fileName,
-      buffer,
-    });
-  },
-  /** ✅ 텍스트 파일 읽기 (SRT 키워드 추출용) — main에 'files/readText' 핸들러 필요 */
-  readTextFile: (path) => {
-    console.log("[preload] invoke files/readText");
-    return ipcRenderer.invoke("files/readText", { path });
-  },
-
-  // =========================
-  // Utils for Renderer
-  // =========================
-  /** 플랫폼별 파일 URL 생성 (렌더러에서 process.platform을 직접 쓰지 않도록) */
-  toFileUrl: (filePath) => {
-    if (!filePath) return "";
-    const p = String(filePath);
-    return process.platform === "win32"
-      ? "file:///" + p.replace(/\\/g, "/")
-      : "file://" + p;
-  },
-  /** 현재 플랫폼 문자열 반환 ('win32' | 'darwin' | 'linux' ...) */
-  getPlatform: () => process.platform,
+  readTextFile: (p) => ipcRenderer.invoke("files/readText", { path: p }),
 });
