@@ -24,13 +24,16 @@ function ensureDirSync(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
+/** 경로 문자열 정리 (선행 슬래시/역슬래시 제거, 중복 슬래시 정리, 상위 디렉터리 이탈 패턴 제거) */
 function sanitize(p) {
   return String(p || "")
     .replace(/\\/g, "/")
     .replace(/^\/*/, "")
-    .replace(/\.\.(\/|\\)/g, "");
+    .replace(/\.\.(\/|\\)/g, "")
+    .replace(/\/{2,}/g, "/");
 }
 
+/** 다양한 버퍼 표현을 Node Buffer로 */
 function toBuffer(bufLike) {
   if (Buffer.isBuffer(bufLike)) return bufLike;
   if (bufLike && bufLike.type === "Buffer" && Array.isArray(bufLike.data)) {
@@ -101,15 +104,19 @@ function streamDownloadToFile(url, outPath, depth = 0) {
   });
 }
 
-/** 파일명 중복 방지 */
+/** 파일명 중복 방지 (항상 basename만 사용해 하위 폴더 밖으로 새지 않도록) */
 function ensureUniquePath(dir, fileName) {
-  const parsed = path.parse(fileName);
+  const parsed = path.parse(fileName || "file");
+  const safeBase = path.basename(sanitize(parsed.base)); // 예: "clip.mp4"
+  const baseName = safeBase || "file";
+  const nameOnly = path.parse(baseName).name;
+  const ext = path.parse(baseName).ext || "";
+
   let n = 0;
-  let out = path.join(dir, sanitize(fileName));
+  let out = path.join(dir, baseName);
   while (fs.existsSync(out)) {
     n += 1;
-    const nextName = `${parsed.name}(${n})${parsed.ext}`;
-    out = path.join(dir, sanitize(nextName));
+    out = path.join(dir, `${nameOnly}(${n})${ext}`);
   }
   return out;
 }
@@ -213,7 +220,7 @@ ipcMain.handle("files/getProjectRoot", async () => {
   }
 });
 
-/* -------------- 기존 핸들러들(루트만 변경) -------------- */
+/* -------------- 저장/읽기 핸들러들 -------------- */
 
 /**
  * 이미지/데이터 URL을 OS 저장 대화상자로 저장 (항상 JPG)
@@ -322,12 +329,18 @@ ipcMain.handle("file:save-buffer", async (_evt, payload = {}) => {
 
 /**
  * 텍스트 파일 읽기 (SRT/텍스트)
+ * invoke: "files/readText", { path, encoding? }
+ * return: string (BOM 제거)
  */
 ipcMain.handle("files/readText", async (_evt, payload = {}) => {
-  const { path: filePath, encoding = "utf8" } = payload || {};
-  if (!filePath) throw new Error("path_required");
-  const buf = await fs.promises.readFile(filePath);
-  return buf.toString(encoding).replace(/^\uFEFF/, "");
+  try {
+    const { path: filePath, encoding = "utf8" } = payload || {};
+    if (!filePath) throw new Error("path_required");
+    const buf = await fs.promises.readFile(filePath);
+    return buf.toString(encoding).replace(/^\uFEFF/, "");
+  } catch (err) {
+    throw err; // renderer에서 catch하도록
+  }
 });
 
 /**

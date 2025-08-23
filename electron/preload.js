@@ -18,15 +18,80 @@ contextBridge.exposeInMainWorld("api", {
   },
 
   // =========================
-  // 기능 브릿지
+  // 시스템/헬스
   // =========================
-  imagefxAnalyze: (payload) => ipcRenderer.invoke("imagefx:analyze", payload),
   healthCheck: () => ipcRenderer.invoke("health:check"),
 
-  // --- AI 키워드 추출 (GPT-5 mini)
-  aiExtractKeywords: (payload) => ipcRenderer.invoke("ai:extractKeywords", payload),
+  // =========================
+  // 설정/시크릿
+  // =========================
+  getSetting: (key) => ipcRenderer.invoke("settings:get", key),
+  setSetting: (payload) => ipcRenderer.invoke("settings:set", payload),
+  getSecret: (key) => ipcRenderer.invoke("secrets:get", key),
+  setSecret: (payload) => ipcRenderer.invoke("secrets:set", payload),
 
-  // --- 테스트 채널들 ---
+  // =========================
+  // 프로젝트 루트 (날짜 폴더)
+  // =========================
+  selectDatedProjectRoot: () => ipcRenderer.invoke("files/selectDatedProjectRoot"),
+  getProjectRoot: () => ipcRenderer.invoke("files/getProjectRoot"),
+
+  // =========================
+  // 파일 선택/저장
+  // =========================
+  // SRT/MP3 파일 선택: files/select 사용 → 실패 시 pickers:select* 폴백
+  selectSrt: () => ipcRenderer.invoke("files/select", { type: "srt" }).catch(() => ipcRenderer.invoke("pickers:selectSrt")),
+  selectMp3: () => ipcRenderer.invoke("files/select", { type: "mp3" }).catch(() => ipcRenderer.invoke("pickers:selectMp3")),
+
+  // 이미지/데이터 URL 저장(대화상자)
+  saveUrlToFile: (payload) => ipcRenderer.invoke("file:save-url", payload),
+
+  // 대화상자 없이 현재 프로젝트에 바로 저장 (영상 등 대용량)
+  saveUrlToProject: (payload) => ipcRenderer.invoke("files/saveUrlToProject", payload),
+
+  // 버퍼를 프로젝트 폴더에 저장
+  saveBufferToProject: ({ category, fileName, buffer }) => ipcRenderer.invoke("files/saveToProject", { category, fileName, buffer }),
+
+  // 텍스트 읽기 (SRT/일반 텍스트) — 문자열 경로/옵션 객체 모두 지원
+  readText: (fileOrOpts) => {
+    const payload = typeof fileOrOpts === "string" ? { path: fileOrOpts } : fileOrOpts || {};
+    return ipcRenderer.invoke("files/readText", payload);
+  },
+  // 호환 alias
+  readTextFile: (p) => ipcRenderer.invoke("files/readText", { path: p }),
+
+  // =========================
+  // LLM/분석/번역
+  // =========================
+  generateScript: (payload) => ipcRenderer.invoke("llm/generateScript", payload),
+  aiExtractKeywords: (payload) => ipcRenderer.invoke("ai:extractKeywords", payload),
+  aiTranslateTerms: (payload) => ipcRenderer.invoke("ai:translateTerms", payload),
+  imagefxAnalyze: (payload) => ipcRenderer.invoke("imagefx:analyze", payload),
+
+  // =========================
+  // 스톡/검색
+  // =========================
+  stockSearch: (payload) => ipcRenderer.invoke("stock:search", payload),
+
+  // =========================
+  // 스크립트/오디오/TTS
+  // =========================
+  scriptToSrt: (payload) => ipcRenderer.invoke("script/toSrt", payload),
+  ttsSynthesizeByScenes: (payload) => ipcRenderer.invoke("tts/synthesizeByScenes", payload),
+
+  // 오디오: 길이 조회/병합 스텁
+  getMp3Duration: (path) => ipcRenderer.invoke("audio/getDuration", { path }),
+  audioConcatScenes: (payload) => ipcRenderer.invoke("audio/concatScenes", payload),
+
+  // =========================
+  // 이미지 생성
+  // =========================
+  generateThumbnails: (payload) => ipcRenderer.invoke("replicate:generate", payload),
+  generateThumbnailsGoogleImagen3: (payload) => ipcRenderer.invoke("generateThumbnailsGoogleImagen3", payload),
+
+  // =========================
+  // 테스트 채널들
+  // =========================
   testOpenAI: (apiKey) => ipcRenderer.invoke("openai:test", apiKey),
   testReplicate: (token) => ipcRenderer.invoke("replicate:test", token),
   testAnthropic: (apiKey) => ipcRenderer.invoke("anthropic:test", apiKey),
@@ -34,37 +99,4 @@ contextBridge.exposeInMainWorld("api", {
   testGoogleTTS: (apiKey) => ipcRenderer.invoke("testGoogleTTS", apiKey),
   testPexels: (key) => ipcRenderer.invoke("pexels:test", key),
   testPixabay: (key) => ipcRenderer.invoke("pixabay:test", key),
-
-  // --- 설정/시크릿 ---
-  getSetting: (key) => ipcRenderer.invoke("settings:get", key),
-  setSetting: (payload) => ipcRenderer.invoke("settings:set", payload),
-  getSecret: (key) => ipcRenderer.invoke("secrets:get", key),
-  setSecret: (payload) => ipcRenderer.invoke("secrets:set", payload),
-
-  // --- LLM/생성 ---
-  generateScript: (payload) => ipcRenderer.invoke("llm/generateScript", payload),
-
-  // --- 오디오/자막 ---
-  scriptToSrt: (payload) => ipcRenderer.invoke("script/toSrt", payload),
-  ttsSynthesizeByScenes: (payload) => ipcRenderer.invoke("tts/synthesizeByScenes", payload),
-  audioConcatScenes: (payload) => ipcRenderer.invoke("audio/concatScenes", payload),
-
-  // --- 이미지 생성 ---
-  generateThumbnails: (payload) => ipcRenderer.invoke("replicate:generate", payload),
-  generateThumbnailsGoogleImagen3: (payload) => ipcRenderer.invoke("generateThumbnailsGoogleImagen3", payload),
-
-  // --- 파일/저장 ---
-  selectSrt: () => ipcRenderer.invoke("files/select", { type: "srt" }),
-  selectMp3: () => ipcRenderer.invoke("files/select", { type: "mp3" }),
-  saveUrlToFile: (payload) => ipcRenderer.invoke("file:save-url", payload),
-  // 🔽 새로 추가: 대화창 없이 프로젝트에 바로 저장 (영상 등)
-  saveUrlToProject: (payload) => ipcRenderer.invoke("files/saveUrlToProject", payload),
-  saveBufferToProject: ({ category, fileName, buffer }) => ipcRenderer.invoke("files/saveToProject", { category, fileName, buffer }),
-  readTextFile: (p) => ipcRenderer.invoke("files/readText", { path: p }),
-
-  // --- 동영상 검색 ---
-  stockSearch: (payload) => ipcRenderer.invoke("stock:search", payload),
-
-  // 번역
-  aiTranslateTerms: (payload) => ipcRenderer.invoke("ai:translateTerms", payload),
 });
