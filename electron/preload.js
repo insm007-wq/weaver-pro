@@ -57,6 +57,14 @@ contextBridge.exposeInMainWorld("api", {
   selectSrt: () => ipcRenderer.invoke("files/select", { type: "srt" }),
   selectMp3: () => ipcRenderer.invoke("files/select", { type: "mp3" }),
   saveUrlToFile: (payload) => ipcRenderer.invoke("file:save-url", payload),
+  // 🔽 새로 추가: 대화창 없이 프로젝트에 바로 저장 (영상 등)
+  saveUrlToProject: (payload) => ipcRenderer.invoke("files/saveUrlToProject", payload),
   saveBufferToProject: ({ category, fileName, buffer }) => ipcRenderer.invoke("files/saveToProject", { category, fileName, buffer }),
   readTextFile: (p) => ipcRenderer.invoke("files/readText", { path: p }),
+
+  // --- 동영상 검색 ---
+  stockSearch: (payload) => ipcRenderer.invoke("stock:search", payload),
+
+  // 번역
+  aiTranslateTerms: (payload) => ipcRenderer.invoke("ai:translateTerms", payload),
 });
