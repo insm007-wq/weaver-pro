@@ -1,5 +1,5 @@
 // src/components/tabs/KeywordsTab.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import SectionCard from "../parts/SectionCard";
 import AssetLibrary from "../parts/AssetLibrary";
 import { extractKeywords as fallbackExtract } from "../../../utils/extractKeywords";
@@ -12,6 +12,52 @@ const RES_PRESETS = [
   { id: "qhd", label: "QHD (2560×1440)", w: 2560, h: 1440 },
   { id: "uhd", label: "4K (3840×2160)", w: 3840, h: 2160 },
 ];
+
+/* =========================
+   진행상황 reducer (안정적인 게이지/카운트)
+   ========================= */
+const progInit = { total: 0, picked: 0, saved: 0, rows: {} }; // rows: { [k]: { picked, saved, status } }
+function progReducer(state, action) {
+  switch (action.type) {
+    case "init": {
+      const rows = {};
+      for (const k of action.keywords) rows[k] = { picked: 0, saved: 0, status: "대기" };
+      return { total: action.keywords.length * action.perKeyword, picked: 0, saved: 0, rows };
+    }
+    case "status": {
+      const { k, status } = action;
+      const row = state.rows[k] || { picked: 0, saved: 0, status: "" };
+      return { ...state, rows: { ...state.rows, [k]: { ...row, status } } };
+    }
+    case "picked": {
+      const { k, n = 1 } = action;
+      const row = state.rows[k] || { picked: 0, saved: 0, status: "" };
+      const nextPicked = row.picked + n;
+      return {
+        ...state,
+        picked: state.picked + n,
+        rows: { ...state.rows, [k]: { ...row, picked: nextPicked, status: `선택 ${nextPicked}` } },
+      };
+    }
+    case "saved": {
+      const { k, n = 1 } = action;
+      const row = state.rows[k] || { picked: 0, saved: 0, status: "" };
+      const nextSaved = row.saved + n;
+      return {
+        ...state,
+        saved: state.saved + n,
+        rows: { ...state.rows, [k]: { ...row, saved: nextSaved, status: "저장 중" } },
+      };
+    }
+    case "done": {
+      const { k } = action;
+      const row = state.rows[k] || { picked: 0, saved: 0, status: "" };
+      return { ...state, rows: { ...state.rows, [k]: { ...row, status: "완료" } } };
+    }
+    default:
+      return state;
+  }
+}
 
 export default function KeywordsTab({ assets, addAssets }) {
   // ---------------- state: keywords & ui ----------------
@@ -31,16 +77,26 @@ export default function KeywordsTab({ assets, addAssets }) {
   const [dedupAcrossKeywords, setDedupAcrossKeywords] = useState(true);
   const [usePexels, setUsePexels] = useState(true);
   const [usePixabay, setUsePixabay] = useState(true);
-
-  // 🔁 새 옵션: 한→영 자동 변환 / 키워드 엄격 매칭
   const [autoTranslate, setAutoTranslate] = useState(true);
   const [strictKeyword, setStrictKeyword] = useState(true);
+  const [maxKeywordsToUse, setMaxKeywordsToUse] = useState(30); // 긴 대본 방지
 
-  // provider key 보유 여부 -> UI 토글 disable 처리
+  // provider key 보유 여부
   const [hasPexelsKey, setHasPexelsKey] = useState(false);
   const [hasPixabayKey, setHasPixabayKey] = useState(false);
 
-  // SRT 이름 초기 표시 & provider 키 유무 확인
+  // 진행 상황 (reducer + slice 목록)
+  const [progress, dispatchProg] = useReducer(progReducer, progInit);
+  const percent = progress.total ? Math.round((progress.saved / progress.total) * 100) : 0;
+  const savedRef = useRef(0);
+  useEffect(() => {
+    savedRef.current = progress.saved;
+  }, [progress.saved]);
+  const [listSlice, setListSlice] = useState({ start: 0, size: 20 });
+
+  const chosenRes = useMemo(() => RES_PRESETS.find((r) => r.id === resPreset) || RES_PRESETS[2], [resPreset]);
+
+  // SRT & API 키 확인
   useEffect(() => {
     (async () => {
       try {
@@ -57,20 +113,14 @@ export default function KeywordsTab({ assets, addAssets }) {
     })();
   }, []);
 
-  const chosenRes = useMemo(
-    () => RES_PRESETS.find((r) => r.id === resPreset) || RES_PRESETS[2], // default QHD
-    [resPreset]
-  );
-
   // ---------------- keyword helpers ----------------
   const addKeyword = (k) => {
     const t = (k || "").trim();
     if (!t) return;
-    setKeywords((old) => (old.includes(t) ? old : [...old, t]).slice(0, 200));
+    setKeywords((old) => (old.includes(t) ? old : [...old, t]).slice(0, 300));
   };
   const removeKeyword = (k) => setKeywords((old) => old.filter((x) => x !== k));
   const clearKeywords = () => setKeywords([]);
-
   const addFromInput = () => {
     const items = input
       .split(/[,/\n]+/)
@@ -110,22 +160,16 @@ export default function KeywordsTab({ assets, addAssets }) {
         return;
       }
 
-      setMsg("AI가 키워드를 추출 중… (GPT-5 mini)");
-      const res = await window.api.aiExtractKeywords({
-        apiKey,
-        text,
-        topK: 30, // 살짝 늘려서 여유 확보
-        language: "ko",
-      });
-
+      setMsg("AI가 키워드를 추출 중…");
+      const res = await window.api.aiExtractKeywords({ apiKey, text, topK: 60, language: "ko" });
       if (res?.ok && Array.isArray(res.keywords) && res.keywords.length) {
         setKeywords(res.keywords);
         setMsg(`AI 추출 완료 · ${res.keywords.length}개`);
       } else {
-        const local = fallbackExtract(text, { topK: 20, minLen: 2 });
+        const local = fallbackExtract(text, { topK: 30, minLen: 2 });
         if (local.length) {
           setKeywords(local);
-          setMsg("AI 실패 → 로컬 추출로 대체");
+          setMsg("AI 실패 → 로컬 추출로 대체 (완료)");
         } else {
           setMsg("키워드 추출 실패");
           alert("키워드를 추출하지 못했습니다.");
@@ -134,7 +178,6 @@ export default function KeywordsTab({ assets, addAssets }) {
     } catch (e) {
       console.error(e);
       setMsg("오류: " + (e?.message || e));
-      alert("AI 추출 중 오류: " + (e?.message || e));
     } finally {
       setBusy(false);
     }
@@ -172,12 +215,18 @@ export default function KeywordsTab({ assets, addAssets }) {
   const downloadFromKeywords = async () => {
     if (!keywords.length) return;
 
-    // 사용 가능한 provider 정리
+    // 사용 가능한 provider
     const providerList = [...(usePexels && hasPexelsKey ? ["pexels"] : []), ...(usePixabay && hasPixabayKey ? ["pixabay"] : [])];
     if (providerList.length === 0) {
       alert("사용할 수 있는 제공사가 없습니다. (Pexels/Pixabay 키 확인)");
       return;
     }
+
+    // 긴 대본 → 상위 N개만 사용
+    const runKeywords = keywords.slice(0, Math.max(1, Math.min(maxKeywordsToUse, keywords.length)));
+    dispatchProg({ type: "init", keywords: runKeywords, perKeyword });
+    setListSlice((s) => ({ ...s, start: 0 })); // 목록 첫 페이지로
+    const targetTotal = runKeywords.length * perKeyword;
 
     try {
       setBusy(true);
@@ -189,10 +238,10 @@ export default function KeywordsTab({ assets, addAssets }) {
         window.api.getSecret?.("openaiKey"),
       ]);
 
-      // 🔁 한→영 번역(짧은 용어만, 토큰 소모 적음)
+      // 한→영 번역
       let enMap = {};
       if (autoTranslate && openaiKey && typeof window.api.aiTranslateTerms === "function") {
-        const koTerms = keywords.filter((k) => /[ㄱ-ㅎ가-힣]/.test(k));
+        const koTerms = runKeywords.filter((k) => /[ㄱ-ㅎ가-힣]/.test(k));
         if (koTerms.length) {
           try {
             const tr = await window.api.aiTranslateTerms({ apiKey: openaiKey, terms: koTerms });
@@ -200,13 +249,12 @@ export default function KeywordsTab({ assets, addAssets }) {
               koTerms.forEach((ko, i) => (enMap[ko] = tr.terms[i] || ko));
             }
           } catch {
-            // 번역 실패 시 원문만 사용
+            // ignore
           }
         }
       }
 
       const SEARCH_OPTS = {
-        // perPage는 여유 있게(중복/필터 탈락 대비)
         perPage: Math.min(10, perKeyword * 3),
         minBytes: Math.max(0, Math.floor(minMB * MB)),
         maxBytes: Math.max(0, Math.floor(maxMB * MB)),
@@ -216,45 +264,59 @@ export default function KeywordsTab({ assets, addAssets }) {
         pexelsKey,
         pixabayKey,
         type: "videos",
-        strictKeyword, // 우선 엄격 매칭으로 시도
+        strictKeyword,
       };
 
       const limit = pLimit(Math.max(1, Math.min(6, concurrency)));
-      let added = 0;
-      const seenUrl = new Set(); // 중복 방지(키워드 간)
+      const seenGlobal = new Set(); // ✅ 키워드 간 중복 제거용
 
-      const tasks = keywords.map((k) =>
+      const tasks = runKeywords.map((k) =>
         limit(async () => {
+          dispatchProg({ type: "status", k, status: "검색 중" });
+
           const kEn = enMap[k];
-          // 원문 + 번역문을 함께 queries로 보냄(백엔드가 태그/메타로 스코어링)
           const queries = kEn && kEn !== k ? [k, kEn] : [k];
 
-          setMsg(`"${k}" 검색 중…`);
           let r = await window.api.stockSearch({ queries, ...SEARCH_OPTS });
 
-          // 엄격 매칭에서 0건 → 자동 완화 재시도(한 번)
+          // 엄격 매칭에서 0건 → 완화 재시도
           if ((!r?.ok || !Array.isArray(r.items) || r.items.length === 0) && strictKeyword) {
-            setMsg(`"${k}" 결과 없음 → 엄격 매칭 완화 재시도…`);
+            dispatchProg({ type: "status", k, status: "재시도(완화)" });
             r = await window.api.stockSearch({ queries, ...SEARCH_OPTS, strictKeyword: false });
           }
-          if (!r?.ok || !Array.isArray(r.items) || r.items.length === 0) return;
 
-          // 필터링: 키워드당 perKeyword개, 전역 dedup 적용
+          if (!r?.ok) {
+            // 429 백오프 등: 상위에서 재호출·다음 키워드 진행
+            dispatchProg({ type: "status", k, status: "실패" });
+            return;
+          }
+          if (!Array.isArray(r.items) || r.items.length === 0) {
+            dispatchProg({ type: "status", k, status: "결과 없음" });
+            return;
+          }
+
+          // 선택
           const picked = [];
           for (const it of r.items) {
             if (!it?.url) continue;
-            if (dedupAcrossKeywords && seenUrl.has(it.url)) continue;
+            if (dedupAcrossKeywords && seenGlobal.has(it.url)) continue;
+            seenGlobal.add(it.url);
             picked.push(it);
-            seenUrl.add(it.url);
             if (picked.length >= perKeyword) break;
           }
+          if (picked.length) dispatchProg({ type: "picked", k, n: picked.length });
+          else {
+            dispatchProg({ type: "status", k, status: "결과 없음" });
+            return;
+          }
 
+          // 저장
           for (const item of picked) {
-            setMsg(`"${k}" 저장 중…`);
+            dispatchProg({ type: "saved", k, n: 1 });
             const save = await window.api.saveUrlToProject({
               url: item.url,
               category: "videos",
-              fileName: item.filename, // 중복 시 백엔드에서 (n) 붙여줌
+              fileName: item.filename,
             });
             if (save?.ok && save?.path) {
               const filePath = save.path;
@@ -268,14 +330,14 @@ export default function KeywordsTab({ assets, addAssets }) {
                   filePath,
                 },
               ]);
-              added += 1;
             }
           }
+          dispatchProg({ type: "done", k });
         })
       );
 
       await Promise.allSettled(tasks);
-      setMsg(`다운로드 완료: ${added}개 (키워드 ${keywords.length}개, 키워드당 ${perKeyword}개 목표)`);
+      setMsg(`다운로드 완료: ${savedRef.current}/${targetTotal}`);
     } catch (e) {
       console.error(e);
       setMsg("오류: " + (e?.message || e));
@@ -285,11 +347,10 @@ export default function KeywordsTab({ assets, addAssets }) {
     }
   };
 
-  // ---------------- render ----------------
-  const estimatedDownloads = keywords.length * perKeyword;
+  const estimatedDownloads = Math.min(keywords.length, maxKeywordsToUse) * perKeyword;
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px_420px] gap-4 items-start [&>*]:min-w-0">
       {/* 키워드 구성 */}
       <SectionCard
         title="키워드 구성"
@@ -315,7 +376,7 @@ export default function KeywordsTab({ assets, addAssets }) {
 
             <button
               onClick={clearKeywords}
-              className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
+              className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50 disabled:opacity-50"
               disabled={busy || keywords.length === 0}
               title="현재 키워드 전부 지우기"
             >
@@ -352,7 +413,8 @@ export default function KeywordsTab({ assets, addAssets }) {
           </button>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2">
+        {/* 키워드 칩: 내부 스크롤로 UI 안정화 */}
+        <div className="mt-3 flex flex-wrap gap-2 max-h-40 overflow-y-auto pr-1">
           {keywords.length === 0 ? (
             <div className="text-[12px] text-slate-500">SRT에서 AI 추출하거나, 직접 키워드를 추가해 주세요.</div>
           ) : (
@@ -370,7 +432,6 @@ export default function KeywordsTab({ assets, addAssets }) {
         <div className="mt-3 text-[12px] text-slate-600">
           예상 다운로드: <b>{estimatedDownloads}</b>개
         </div>
-
         {msg && <div className="mt-3 text-[12px] text-slate-600">{msg}</div>}
       </SectionCard>
 
@@ -445,6 +506,20 @@ export default function KeywordsTab({ assets, addAssets }) {
             />
           </label>
 
+          <label className="text-xs text-slate-700 flex flex-col gap-1">
+            상위 키워드만 사용
+            <input
+              type="number"
+              min={1}
+              max={300}
+              value={maxKeywordsToUse}
+              onChange={(e) => setMaxKeywordsToUse(Math.max(1, Math.min(300, +e.target.value || 30)))}
+              className="h-9 px-3 rounded-lg border border-slate-200 text-sm"
+              disabled={busy}
+            />
+            <span className="text-[11px] text-slate-400">긴 대본일 때 과도한 호출을 방지합니다.</span>
+          </label>
+
           <label className="text-xs text-slate-700 flex items-center gap-2">
             <input
               type="checkbox"
@@ -456,7 +531,6 @@ export default function KeywordsTab({ assets, addAssets }) {
             키워드 간 중복 영상 제거
           </label>
 
-          {/* 🔁 새 옵션들 */}
           <label className="text-xs text-slate-700 flex items-center gap-2">
             <input type="checkbox" className="h-4 w-4" checked={autoTranslate} onChange={(e) => setAutoTranslate(!!e.target.checked)} disabled={busy} />
             한→영 자동 변환(권장)
@@ -503,30 +577,71 @@ export default function KeywordsTab({ assets, addAssets }) {
         </div>
       </SectionCard>
 
-      {/* 라이브러리 */}
-      <div className="xl:col-span-1">
-        <SectionCard title="에셋 라이브러리">
-          <AssetLibrary assets={assets} onPick={() => alert("해당 씬에 배치")} />
-        </SectionCard>
-      </div>
-
-      {/* 안내 */}
-      <div className="xl:col-span-1">
-        <SectionCard title="사용 안내">
-          <div className="text-sm text-slate-700 space-y-2">
-            <p>1) [셋업] 탭에서 SRT를 연결합니다.</p>
-            <p>
-              2) <b>SRT에서 AI 추출</b>로 핵심 키워드를 얻습니다.
-            </p>
-            <p>
-              3) 아래 <b>다운로드 옵션</b>을 설정하고, <b>키워드로 영상 받기</b>를 누르세요.
-            </p>
-            <p className="text-[12px] text-slate-500">
-              저장은 프로젝트 <code>videos</code> 폴더에 자동으로 이루어지며, 성공 시 라이브러리에 즉시 추가됩니다.
-            </p>
+      {/* 진행 상황 */}
+      <SectionCard title="진행 상황" right={<span className="text-xs text-slate-400">실시간</span>}>
+        <div className="text-sm text-slate-700">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[12px] text-slate-600">
+              저장: <b>{progress.saved}</b> / 목표 <b>{progress.total}</b>
+            </span>
+            <span className="text-[12px] text-slate-600">{percent}%</span>
           </div>
-        </SectionCard>
-      </div>
+          <div className="h-1.5 w-full rounded bg-slate-100 overflow-hidden">
+            <div className="h-1.5 bg-emerald-500 transition-[width] duration-300" style={{ width: `${percent}%` }} />
+          </div>
+
+          {/* 목록: 조각(slice) + 내부 스크롤 → 넓은 화면에서도 UI 안정 */}
+          <div className="mt-3 mb-1 flex items-center justify-between text-[12px] text-slate-500">
+            <div>
+              다운로드 완료: <b>{progress.saved}</b>개
+              <span className="ml-1">
+                (키워드 {Object.keys(progress.rows).length}개, 키워드당 {perKeyword}개 목표)
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button className="px-2 py-1 rounded border" onClick={() => setListSlice((s) => ({ start: Math.max(0, s.start - s.size), size: s.size }))}>
+                이전
+              </button>
+              <button
+                className="px-2 py-1 rounded border"
+                onClick={() =>
+                  setListSlice((s) => {
+                    const total = Object.keys(progress.rows).length;
+                    const next = Math.min(Math.max(0, total - s.size), s.start + s.size);
+                    return { start: next, size: s.size };
+                  })
+                }
+              >
+                다음
+              </button>
+            </div>
+          </div>
+
+          <div className="border rounded-lg bg-white divide-y max-h-80 overflow-y-auto">
+            {Object.keys(progress.rows).length === 0 ? (
+              <div className="p-3 text-[12px] text-slate-500">아직 실행된 작업이 없습니다.</div>
+            ) : (
+              Object.entries(progress.rows)
+                .slice(listSlice.start, listSlice.start + listSlice.size)
+                .map(([k, r]) => (
+                  <div key={k} className="px-3 py-2 flex items-center justify-between text-[13px]">
+                    <div className="truncate pr-2">#{k}</div>
+                    <div className="flex items-center gap-3 shrink-0 text-slate-600">
+                      <span className="text-[12px]">pick {r.picked}</span>
+                      <span className="text-[12px]">save {r.saved}</span>
+                      <span className="text-[12px] text-slate-400">{r.status}</span>
+                    </div>
+                  </div>
+                ))
+            )}
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* 라이브러리 */}
+      <SectionCard title="에셋 라이브러리">
+        <AssetLibrary assets={assets} onPick={() => alert("해당 씬에 배치")} />
+      </SectionCard>
     </div>
   );
 }
