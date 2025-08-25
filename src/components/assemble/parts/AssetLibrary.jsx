@@ -5,6 +5,7 @@ export default function AssetLibrary({ assets = [], onPick }) {
         id: "dummy-" + i,
         type: i % 3 === 0 ? "video" : "image",
         thumbUrl: "",
+        label: i % 3 === 0 ? `Video ${i}` : `Image ${i}`,
       }));
 
   return (
@@ -13,13 +14,23 @@ export default function AssetLibrary({ assets = [], onPick }) {
         <button
           key={a.id}
           onClick={() => onPick?.(a)}
-          className="aspect-video bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center text-xs text-slate-500 hover:bg-slate-50"
+          className="aspect-video bg-slate-100 rounded-lg border border-slate-200 flex flex-col items-center justify-center text-[11px] text-slate-600 hover:bg-slate-50 px-2"
         >
           {a.thumbUrl ? (
-            // 실제 썸네일이 있으면 <img>로 교체
-            <span>{a.type}</span>
+            <img
+              src={a.thumbUrl}
+              alt={a.label || a.id}
+              className="w-full h-full object-cover rounded"
+            />
           ) : (
-            <span>{a.type === "video" ? "비디오" : "이미지"}</span>
+            <>
+              <div className="text-xs font-medium mb-0.5">
+                {a.label || a.id}
+              </div>
+              <div className="opacity-60">
+                {a.type === "video" ? "비디오" : "이미지"}
+              </div>
+            </>
           )}
         </button>
       ))}

@@ -43,7 +43,11 @@ function toBuffer(bufLike) {
     return Buffer.from(new Uint8Array(bufLike));
   }
   if (bufLike && ArrayBuffer.isView(bufLike)) {
-    return Buffer.from(bufLike.buffer, bufLike.byteOffset || 0, bufLike.byteLength);
+    return Buffer.from(
+      bufLike.buffer,
+      bufLike.byteOffset || 0,
+      bufLike.byteLength
+    );
   }
   throw new Error("unsupported_buffer_type");
 }
@@ -87,7 +91,10 @@ function streamDownloadToFile(url, outPath, depth = 0) {
       if (REDIRECT.has(res.statusCode) && res.headers.location) {
         const next = new URL(res.headers.location, url).toString();
         res.resume();
-        return streamDownloadToFile(next, outPath, depth + 1).then(resolve, reject);
+        return streamDownloadToFile(next, outPath, depth + 1).then(
+          resolve,
+          reject
+        );
       }
       if (![200, 206].includes(res.statusCode)) {
         res.resume();
@@ -125,7 +132,8 @@ function ensureUniquePath(dir, fileName) {
 
 /** OS별 기본 베이스 폴더 (ContentWeaver) */
 function getBaseRoot() {
-  const envBase = process.env.CW_BASE_DIR && String(process.env.CW_BASE_DIR).trim();
+  const envBase =
+    process.env.CW_BASE_DIR && String(process.env.CW_BASE_DIR).trim();
   if (process.platform === "win32") {
     return envBase || "C:\\ContentWeaver";
   }
@@ -151,7 +159,13 @@ function createDatedProjectRoot(baseDir) {
   const root = path.join(baseDir, folderName);
   ensureDirSync(root);
 
-  for (const sub of ["audio", "electron_data", "exports", "subtitle", "videos"]) {
+  for (const sub of [
+    "audio",
+    "electron_data",
+    "exports",
+    "subtitle",
+    "videos",
+  ]) {
     ensureDirSync(path.join(root, sub));
   }
 
@@ -185,7 +199,8 @@ ipcMain.handle("files/selectDatedProjectRoot", async () => {
       properties: ["openDirectory", "createDirectory"],
       buttonLabel: "이 위치에 생성",
     });
-    if (canceled || !filePaths?.length) return { ok: false, message: "canceled" };
+    if (canceled || !filePaths?.length)
+      return { ok: false, message: "canceled" };
 
     const baseDir = filePaths[0];
     const root = createDatedProjectRoot(baseDir);
@@ -246,7 +261,9 @@ ipcMain.handle("file:save-url", async (_e, payload = {}) => {
     });
     if (canceled || !filePath) return { ok: false, message: "canceled" };
 
-    const buf = url.startsWith("data:") ? parseDataUrl(url) : await downloadBuffer(url);
+    const buf = url.startsWith("data:")
+      ? parseDataUrl(url)
+      : await downloadBuffer(url);
 
     // JPG 재인코딩(알파 → 흰 배경)
     let img = sharp(buf, { failOnError: false });
@@ -256,8 +273,11 @@ ipcMain.handle("file:save-url", async (_e, payload = {}) => {
     } catch {
       return { ok: false, message: "not_image_data" };
     }
-    if (meta?.hasAlpha) img = img.flatten({ background: { r: 255, g: 255, b: 255 } });
-    const out = await img.jpeg({ quality: 93, progressive: true, chromaSubsampling: "4:2:0" }).toBuffer();
+    if (meta?.hasAlpha)
+      img = img.flatten({ background: { r: 255, g: 255, b: 255 } });
+    const out = await img
+      .jpeg({ quality: 93, progressive: true, chromaSubsampling: "4:2:0" })
+      .toBuffer();
 
     fs.writeFileSync(filePath, out);
     return { ok: true, path: filePath, savedAs: "jpg" };
@@ -321,7 +341,11 @@ ipcMain.handle("file:save-buffer", async (_evt, payload = {}) => {
 
     const out = toBuffer(buffer);
     await fs.promises.writeFile(filePath, out);
-    return { ok: true, path: filePath, mime: mime || "application/octet-stream" };
+    return {
+      ok: true,
+      path: filePath,
+      mime: mime || "application/octet-stream",
+    };
   } catch (err) {
     return { ok: false, message: String(err?.message || err) };
   }
@@ -360,6 +384,34 @@ ipcMain.handle("files/saveUrlToProject", async (_evt, payload = {}) => {
     const target = ensureUniquePath(dir, fileName);
     await streamDownloadToFile(url, target);
     return { ok: true, path: target };
+  } catch (err) {
+    return { ok: false, message: String(err?.message || err) };
+  }
+});
+
+// === 바이너리 읽기: 로컬 파일 → base64로 반환 ===
+ipcMain.handle("files/readBinary", async (_evt, payload = {}) => {
+  try {
+    const { path: filePath } = payload || {};
+    if (!filePath) throw new Error("path_required");
+    const buf = await fs.promises.readFile(filePath);
+    const ext = path.extname(filePath).toLowerCase();
+    const mime =
+      ext === ".mp4"
+        ? "video/mp4"
+        : ext === ".webm"
+        ? "video/webm"
+        : ext === ".mov"
+        ? "video/quicktime"
+        : ext === ".m4v"
+        ? "video/mp4"
+        : ext === ".mkv"
+        ? "video/x-matroska"
+        : ext === ".avi"
+        ? "video/x-msvideo"
+        : "application/octet-stream";
+
+    return { ok: true, data: buf.toString("base64"), mime };
   } catch (err) {
     return { ok: false, message: String(err?.message || err) };
   }

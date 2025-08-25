@@ -1,52 +1,68 @@
+import { useMemo, useState } from "react";
 import SceneList from "../parts/SceneList";
 import TimelineView from "../parts/TimelineView";
 import PropertiesDrawer from "../parts/PropertiesDrawer";
+import ScenePreview from "../parts/ScenePreview";
 
-export default function ArrangeTab({
-  scenes,
-  setScenes,
-  selectedSceneIdx,
-  selectScene,
-  assets = [], // ✅ 에셋 전달 받아서 Drawer에 넘김
-}) {
-  // ✅ 선택 인덱스 안전화
-  const safeIndex =
-    typeof selectedSceneIdx === "number" && selectedSceneIdx >= 0 && selectedSceneIdx < scenes.length
-      ? selectedSceneIdx
-      : Math.max(0, Math.min(selectedSceneIdx || 0, scenes.length - 1));
+// 상위에서 scenes 안 내려오면 안전한 기본
+const seedScenes = [
+  { id: "sc1", start: 0, end: 60 },
+  { id: "sc2", start: 60, end: 150 },
+  { id: "sc3", start: 150, end: 240 },
+  { id: "sc4", start: 240, end: 330 },
+  { id: "sc5", start: 330, end: 420 },
+];
 
-  const currentScene = scenes[safeIndex] || null;
+export default function ArrangeTab({ scenes: scenesProp }) {
+  const scenes = useMemo(
+    () => (scenesProp?.length ? scenesProp : seedScenes),
+    [scenesProp]
+  );
+  const [selected, setSelected] = useState(0);
 
-  // ✅ 개별 씬 업데이트(시간/텍스트/메타/assetId 등 변경)
-  const updateScene = (partial) => {
-    if (!currentScene) return;
-    setScenes((prev) => prev.map((s, i) => (i === safeIndex ? { ...s, ...(typeof partial === "function" ? partial(s) : partial) } : s)));
+  // 씬별 미리보기 URL
+  const [sceneUrls, setSceneUrls] = useState({}); // { [sceneId]: blob/http(s) url }
+
+  const currentScene = scenes[selected];
+  const currentUrl = currentScene ? sceneUrls[currentScene.id] : "";
+
+  // 오른쪽 속성패널에서 파일 고르면 현재 씬의 URL로 설정
+  const handlePickVideo = ({ url }) => {
+    const sid = currentScene?.id;
+    if (!sid) return;
+    setSceneUrls((m) => ({ ...m, [sid]: url }));
   };
 
-  // ✅ 에셋 배치/해제 콜백 (PropertiesDrawer에서 사용)
-  const assignAsset = (assetId) => updateScene({ assetId: assetId || null });
-
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-      <div className="lg:col-span-3">
-        <SceneList scenes={scenes} selected={safeIndex} onSelect={selectScene} />
+    <div className="grid grid-cols-12 gap-6">
+      {/* 왼쪽: 씬 목록 */}
+      <div className="col-span-3">
+        <SceneList scenes={scenes} selected={selected} onSelect={setSelected} />
       </div>
 
-      <div className="lg:col-span-6">
-        {/* ✅ 타임라인에서도 선택 이동 가능하도록 prop 전달 */}
-        <TimelineView scenes={scenes} selectedIndex={safeIndex} onSelect={selectScene} />
-      </div>
-
-      <div className="lg:col-span-3">
-        <PropertiesDrawer
-          // ✅ 현재 씬 + 수정/에셋배치 콜백 + 에셋 리스트 전달
-          scene={currentScene}
-          onChange={updateScene}
-          onAssignAsset={assignAsset}
-          assets={assets}
-          selectedIndex={safeIndex}
-          totalScenes={scenes.length}
+      {/* 가운데: 타임라인 + (아래) 씬 미리보기 */}
+      <div className="col-span-6">
+        <TimelineView
+          scenes={scenes}
+          selectedIndex={selected}
+          onSelect={setSelected}
         />
+
+        <div className="mt-4">
+          <div className="bg-white border border-slate-200 rounded-xl p-3">
+            <div className="text-sm font-semibold mb-2">씬 미리보기</div>
+            <ScenePreview
+              key={`${currentScene?.id || "none"}::${currentUrl || "no-src"}`} // 씬/영상 변경 시 자동 재생
+              scene={currentScene}
+              videoUrl={currentUrl}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 오른쪽: 기존 속성 패널 */}
+      <div className="col-span-3">
+        <PropertiesDrawer onPickVideo={handlePickVideo} />
       </div>
     </div>
   );
