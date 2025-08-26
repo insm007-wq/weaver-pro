@@ -1,14 +1,15 @@
 // src/components/assemble/tabs/ArrangeTab.jsx
 // -----------------------------------------------------------------------------
-// 배치 & 타임라인 탭 (오토플레이/루프 보강 버전)
+// 배치 & 타임라인 탭 (오토플레이/루프 보강 · 한 세트만 표시)
 // - 새 영상 선택/드롭 시 미리보기 <video>가 즉시 재생되고 끝나면 반복
+// - 씬 목록 + 타임라인 + 미리보기 + 속성 **한 번만** 렌더 (중복 제거)
 // - 기존 UI/기능은 그대로 유지
 // -----------------------------------------------------------------------------
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SectionCard from "../parts/SectionCard";
 import TimelineView from "../parts/TimelineView";
-import ScenePreview from "../parts/ScenePreview";
+import ScenePreview from "../parts/ScenePreview"; // (미사용 가능: 유지해도 동작 영향 없음)
 import SceneList from "../parts/SceneList";
 import PropertiesDrawer from "../parts/PropertiesDrawer";
 
@@ -227,39 +228,32 @@ export default function ArrangeTab({
     patchScene(selectedIdx, { transition: name });
 
   // ---------------------------------------------------------------------------
-  // 렌더
+  // 렌더 — 한 세트만 표시 (중복 제거)
+  //  * SceneList, TimelineView 내부에서 이미 SectionCard를 감싸고 있다면
+  //    여기선 **바깥 SectionCard를 제거**해 중복 타이틀/카드를 없앱니다.
   // ---------------------------------------------------------------------------
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-      {/* 씬 목록 */}
+      {/* 씬 목록 (내부 카드 사용) */}
       <div className="lg:col-span-3">
-        <SectionCard title={`씬 목록 ${scenes.length}개`}>
-          <SceneList
-            scenes={scenes}
-            selectedIndex={selectedIdx}
-            onSelect={(i) => setSelectedIdx(i)}
-          />
-        </SectionCard>
+        <SceneList
+          scenes={scenes}
+          selectedIndex={selectedIdx}
+          onSelect={(i) => setSelectedIdx(i)}
+        />
       </div>
 
-      {/* 타임라인 + 미리보기 */}
+      {/* 타임라인 (내부 카드 사용) + 미리보기 */}
       <div className="lg:col-span-6">
-        <SectionCard
-          title="타임라인"
-          right={
-            <div className="text-xs text-slate-500">
-              총 길이 {fmtTotal(scenes)} · 드래그/클릭으로 이동
-            </div>
-          }
-        >
-          <TimelineView
-            scenes={scenes}
-            selectedIndex={selectedIdx}
-            onSelect={(i) => setSelectedIdx(i)}
-            onScrub={() => {}}
-          />
-        </SectionCard>
+        {/* ✅ 외부 SectionCard 제거: TimelineView 가 자체 카드/헤더를 가지는 경우 중복 방지 */}
+        <TimelineView
+          scenes={scenes}
+          selectedIndex={selectedIdx}
+          onSelect={(i) => setSelectedIdx(i)}
+          onScrub={() => {}}
+        />
 
+        {/* 미리보기는 외부 카드 유지 (내부 카드 없음) */}
         <SectionCard title="씬 미리보기" className="mt-3" bodyClass="relative">
           <div
             onDragOver={onDragOver}
