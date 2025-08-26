@@ -1,54 +1,17 @@
 // src/components/assemble/parts/SubtitlePreview.jsx
-// -----------------------------------------------------------------------------
-// 자막 미리보기 (우측 패널 전체 높이 채우기 + 활성 라인 하이라이트 + 점프)
-// - props:
-//   * scenes: [{ id, start, end, text }]
-//   * currentTime?: number
-//   * onJump?: (sec:number) => void
-//   * className?: string  // 외부에서 높이 제어용 (예: h-full)
-// -----------------------------------------------------------------------------
-
-import { useEffect, useMemo, useRef } from "react";
+// - 우측 사이드에서 보기 좋은 리스트형 자막 미리보기
+// - 높이를 maxHeight로 제한하고 내부 스크롤
+// - 현재 재생 중인 씬은 강조, 클릭 시 onJump(i)로 점프
 
 export default function SubtitlePreview({
   scenes = [],
-  currentTime = 0,
+  activeIndex = -1,
   onJump,
-  className = "",
+  maxHeight = 280, // ← 필요하면 숫자만 바꿔서 높이 조정
+  embedded = false, // 호환용
 }) {
-  const containerRef = useRef(null);
-  const activeIdRef = useRef(null);
-
-  const activeIndex = useMemo(() => {
-    if (!Array.isArray(scenes) || scenes.length === 0) return -1;
-    const t = Number.isFinite(currentTime) ? currentTime : 0;
-    return scenes.findIndex((sc) => t >= sc.start && t < sc.end);
-  }, [scenes, currentTime]);
-
-  useEffect(() => {
-    if (activeIndex < 0) return;
-    const id = scenes[activeIndex]?.id;
-    if (!id) return;
-    if (activeIdRef.current === id) return;
-    activeIdRef.current = id;
-
-    const el = containerRef.current?.querySelector(`[data-sub-id="${id}"]`);
-    if (!el) return;
-
-    const parent = containerRef.current;
-    const parentRect = parent.getBoundingClientRect();
-    const rect = el.getBoundingClientRect();
-    const offset =
-      rect.top - parentRect.top - parent.clientHeight / 2 + rect.height / 2;
-    parent.scrollBy({ top: offset, behavior: "smooth" });
-  }, [activeIndex, scenes]);
-
-  const handleClick = (sec) => typeof onJump === "function" && onJump(sec);
-
   return (
-    <div
-      className={`bg-white border border-slate-200 rounded-xl p-3 flex flex-col ${className}`}
-    >
+    <div className="bg-white border border-slate-200 rounded-xl p-3">
       <div className="flex items-center justify-between mb-2">
         <div className="text-sm font-semibold">자막 미리보기</div>
         <div className="text-xs text-slate-500">
@@ -56,35 +19,28 @@ export default function SubtitlePreview({
         </div>
       </div>
 
-      {/* 핵심: flex-1 + min-h-0 로 부모 높이를 꽉 채우면서 내부만 스크롤 */}
-      <div ref={containerRef} className="flex-1 min-h-0 overflow-auto pr-1">
+      <div className="pr-1 overflow-auto" style={{ maxHeight }}>
         <div className="space-y-2">
           {scenes.map((sc, i) => {
-            const isActive =
-              activeIndex >= 0 && scenes[activeIndex]?.id === sc.id;
+            const active = i === activeIndex;
             return (
               <button
                 key={sc.id || i}
                 type="button"
-                data-sub-id={sc.id}
-                onClick={() => handleClick(sc.start)}
-                className={[
-                  "w-full text-left rounded-lg p-2 text-sm border transition-colors",
-                  isActive
-                    ? "border-blue-400 bg-blue-50/70"
-                    : "border-slate-200 hover:bg-slate-50",
-                ].join(" ")}
-                title="클릭하여 해당 시점으로 이동"
+                onClick={() => onJump?.(i)}
+                className={`w-full text-left rounded-lg border p-2 transition
+                  ${
+                    active
+                      ? "border-blue-400 bg-blue-50"
+                      : "border-slate-200 hover:bg-slate-50"
+                  }`}
+                title={`${mmss(sc.start)} ~ ${mmss(sc.end)}`}
               >
-                <div
-                  className={[
-                    "text-[11px] mb-1",
-                    isActive ? "text-blue-600" : "text-slate-500",
-                  ].join(" ")}
-                >
+                <div className="text-[11px] text-slate-500 mb-1">
                   {mmss(sc.start)} – {mmss(sc.end)}
                 </div>
-                <div className={isActive ? "text-slate-900" : "text-slate-700"}>
+                {/* 한 항목이 너무 커지지 않게 3줄까지만 보여줌 */}
+                <div className="text-slate-700 line-clamp-3">
                   {sc.text || `씬 ${i + 1}`}
                 </div>
               </button>
