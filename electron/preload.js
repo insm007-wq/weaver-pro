@@ -1,46 +1,82 @@
 // electron/preload.js
+// ============================================================================
+// 안전한 Renderer 브릿지 (contextBridge)
+// - 모든 호출은 ipcRenderer.invoke 기반 (Promise 반환)
+// - 이벤트 수신은 on/off 래퍼 제공 (채널 명세: preview:progress 등)
+// - 기존 잘 동작 중인 기능/채널은 유지하고, "프리뷰" 관련 API만 추가
+// ============================================================================
+
 const { contextBridge, ipcRenderer } = require("electron");
 
 console.log("[preload] loaded");
 
 /**
- * 안전한 렌더러 브릿지
- * - 모든 호출은 ipcRenderer.invoke 기반 (Promise 반환)
- * - 채널명은 main 쪽 ipcMain.handle 등록과 일치해야 함
+ * 작은 헬퍼: 문자열/객체 혼용 인자 안전 처리
+ * - 예: cancel("job_123") 또는 cancel({ jobId: "job_123" })
  */
+function asPayloadJobId(jobIdOrPayload) {
+  return typeof jobIdOrPayload === "string"
+    ? { jobId: jobIdOrPayload }
+    : jobIdOrPayload || {};
+}
+
+/**
+ * 작은 헬퍼: renderer에서 file:// 경로를 blob: URL로 변환
+ * - video 재생 시 보안/경로 이슈를 피하기 위한 래퍼
+ */
+async function pathToBlobUrlViaIPC(
+  p,
+  mimeFallback = "application/octet-stream"
+) {
+  if (!p) return null;
+  const raw = String(p).replace(/^file:\/\//, ""); // file:// 제거
+  const res = await ipcRenderer.invoke("files/readBinary", { path: raw });
+  if (!res?.ok) throw new Error(res?.message || "read_failed");
+
+  const b64 = res.data;
+  const binary = atob(b64);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+
+  const mime = res.mime || mimeFallback;
+  const blob = new Blob([bytes], { type: mime });
+  return URL.createObjectURL(blob); // ex) blob:… URL
+}
+
 contextBridge.exposeInMainWorld("api", {
-  // =========================
+  // ==========================================================================
   // 공통 Invoke
-  // =========================
+  // ==========================================================================
   invoke: (channel, payload) => {
     console.log("[preload] invoke:", channel);
     return ipcRenderer.invoke(channel, payload);
   },
 
-  // =========================
+  // ==========================================================================
   // 시스템/헬스
-  // =========================
+  // ==========================================================================
   healthCheck: () => ipcRenderer.invoke("health:check"),
 
-  // =========================
+  // ==========================================================================
   // 설정/시크릿
-  // =========================
+  // ==========================================================================
   getSetting: (key) => ipcRenderer.invoke("settings:get", key),
   setSetting: (payload) => ipcRenderer.invoke("settings:set", payload),
   getSecret: (key) => ipcRenderer.invoke("secrets:get", key),
   setSecret: (payload) => ipcRenderer.invoke("secrets:set", payload),
 
-  // =========================
+  // ==========================================================================
   // 프로젝트 루트 (날짜 폴더)
-  // =========================
+  // ==========================================================================
   selectDatedProjectRoot: () =>
     ipcRenderer.invoke("files/selectDatedProjectRoot"),
   getProjectRoot: () => ipcRenderer.invoke("files/getProjectRoot"),
 
-  // =========================
+  // ==========================================================================
   // 파일 선택/저장
-  // =========================
-  // SRT/MP3 파일 선택: files/select 사용 → 실패 시 pickers:select* 폴백
+  // ==========================================================================
+  // SRT/MP3 파일 선택: files/select 우선 → 실패 시 pickers:* 폴백
   selectSrt: () =>
     ipcRenderer
       .invoke("files/select", { type: "srt" })
@@ -70,9 +106,15 @@ contextBridge.exposeInMainWorld("api", {
   // 호환 alias
   readTextFile: (p) => ipcRenderer.invoke("files/readText", { path: p }),
 
-  // =========================
+  // 로컬 파일 바이너리 읽기
+  readBinary: (p) => ipcRenderer.invoke("files/readBinary", { path: p }),
+
+  // 로컬 경로/파일URL → blob: URL 변환 (video 재생용)
+  videoPathToUrl: (p) => pathToBlobUrlViaIPC(p),
+
+  // ==========================================================================
   // LLM/분석/번역
-  // =========================
+  // ==========================================================================
   generateScript: (payload) =>
     ipcRenderer.invoke("llm/generateScript", payload),
   aiExtractKeywords: (payload) =>
@@ -81,14 +123,14 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.invoke("ai:translateTerms", payload),
   imagefxAnalyze: (payload) => ipcRenderer.invoke("imagefx:analyze", payload),
 
-  // =========================
+  // ==========================================================================
   // 스톡/검색
-  // =========================
+  // ==========================================================================
   stockSearch: (payload) => ipcRenderer.invoke("stock:search", payload),
 
-  // =========================
+  // ==========================================================================
   // 스크립트/오디오/TTS
-  // =========================
+  // ==========================================================================
   scriptToSrt: (payload) => ipcRenderer.invoke("script/toSrt", payload),
   ttsSynthesizeByScenes: (payload) =>
     ipcRenderer.invoke("tts/synthesizeByScenes", payload),
@@ -98,17 +140,17 @@ contextBridge.exposeInMainWorld("api", {
   audioConcatScenes: (payload) =>
     ipcRenderer.invoke("audio/concatScenes", payload),
 
-  // =========================
+  // ==========================================================================
   // 이미지 생성
-  // =========================
+  // ==========================================================================
   generateThumbnails: (payload) =>
     ipcRenderer.invoke("replicate:generate", payload),
   generateThumbnailsGoogleImagen3: (payload) =>
     ipcRenderer.invoke("generateThumbnailsGoogleImagen3", payload),
 
-  // =========================
+  // ==========================================================================
   // 테스트 채널들
-  // =========================
+  // ==========================================================================
   testOpenAI: (apiKey) => ipcRenderer.invoke("openai:test", apiKey),
   testReplicate: (token) => ipcRenderer.invoke("replicate:test", token),
   testAnthropic: (apiKey) => ipcRenderer.invoke("anthropic:test", apiKey),
@@ -117,24 +159,47 @@ contextBridge.exposeInMainWorld("api", {
   testPexels: (key) => ipcRenderer.invoke("pexels:test", key),
   testPixabay: (key) => ipcRenderer.invoke("pixabay:test", key),
 
-  // 로컬 파일 바이너리 읽기
-  readBinary: (p) => ipcRenderer.invoke("files/readBinary", { path: p }),
+  // ==========================================================================
+  // 프리뷰(초안 내보내기) — 신규 추가
+  // ==========================================================================
+  /**
+   * preview.compose(payload)
+   * - payload: { scenes, cues, width, height, bitrateK, burnSubtitles, durationSec, jobId?, outputName? }
+   * - return: { url, path, duration }
+   */
+  preview: {
+    compose: (payload) => ipcRenderer.invoke("preview:compose", payload),
 
-  // 로컬 경로/파일URL → blob: URL 변환 (video 재생용)
-  videoPathToUrl: async (p) => {
-    if (!p) return null;
-    const raw = String(p).replace(/^file:\/\//, ""); // file:// 제거
-    const res = await ipcRenderer.invoke("files/readBinary", { path: raw });
-    if (!res?.ok) throw new Error(res?.message || "read_failed");
+    /**
+     * preview.cancel(jobIdOrPayload)
+     * - 인자: "job_xxx" 또는 { jobId: "job_xxx" }
+     */
+    cancel: (jobIdOrPayload) =>
+      ipcRenderer.invoke("preview:cancel", asPayloadJobId(jobIdOrPayload)),
 
-    const b64 = res.data;
-    const binary = atob(b64);
-    const len = binary.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+    /**
+     * preview.onProgress(handler)
+     * - 진행률 수신(phase, percent, time, etaSec 등)
+     * - 리스너 해제 함수(unsubscribe)를 반환
+     */
+    onProgress: (handler) => {
+      if (typeof handler !== "function") return () => {};
+      const wrapped = (_e, data) => handler(data);
+      ipcRenderer.on("preview:progress", wrapped);
+      // 해제 함수 반환(권장)
+      return () => ipcRenderer.off("preview:progress", wrapped);
+    },
 
-    const mime = res.mime || "application/octet-stream";
-    const blob = new Blob([bytes], { type: mime });
-    return URL.createObjectURL(blob); // ex) blob:… URL
+    /**
+     * preview.offProgress(handler?)
+     * - 특정 handler만 제거하거나, 미지정 시 모든 리스너 제거
+     */
+    offProgress: (handler) => {
+      if (handler) {
+        ipcRenderer.off("preview:progress", handler);
+      } else {
+        ipcRenderer.removeAllListeners("preview:progress");
+      }
+    },
   },
 });

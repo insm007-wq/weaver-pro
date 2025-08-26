@@ -1,4 +1,20 @@
-import { useMemo, useState, useRef, useLayoutEffect, useEffect, useRef as useRef2 } from "react";
+// src/components/assemble/AssembleEditor.jsx
+// -----------------------------------------------------------------------------
+// AssembleEditor (전체 수정본)
+// - ArrangeTab과 ReviewTab이 같은 씬 상태를 공유하도록 상위에서 보관
+// - ArrangeTab props 이름을 onChangeScenes / onChangeSelectedScene 으로 정렬
+//   (이전 setScenes / selectScene 사용 → 변경)
+// - 기존 UI/기능은 그대로 유지
+// -----------------------------------------------------------------------------
+
+import {
+  useMemo,
+  useState,
+  useRef,
+  useLayoutEffect,
+  useEffect,
+  useRef as useRef2,
+} from "react";
 import KeywordsTab from "./tabs/KeywordsTab.jsx";
 import ArrangeTab from "./tabs/ArrangeTab.jsx";
 import ReviewTab from "./tabs/ReviewTab.jsx";
@@ -11,7 +27,11 @@ function TabButton({ active, children, onClick }) {
       type="button"
       onClick={onClick}
       className={`h-9 px-3 rounded-lg text-sm border transition
-        ${active ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"}`}
+        ${
+          active
+            ? "bg-gray-900 text-white border-gray-900"
+            : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+        }`}
       aria-pressed={active}
     >
       {children}
@@ -42,18 +62,26 @@ export default function AssembleEditor() {
 
   // 상태
   const [tab, setTab] = useState("setup"); // setup | keywords | arrange | review
-  const [scenes, setScenes] = useState([]); // ← SRT에서 채움
+  const [scenes, setScenes] = useState([]); // ← SRT에서 채움 (상위 보관: Arrange/Review 공유)
   const [selectedSceneIdx, setSelectedSceneIdx] = useState(0);
 
   const [assets, setAssets] = useState([]); // {id,type,thumbUrl,durationSec,tags?}
   const [autoMatch, setAutoMatch] = useState(true);
-  const [autoOpts, setAutoOpts] = useState({ emptyOnly: true, byKeywords: true, byOrder: true, overwrite: false });
+  const [autoOpts, setAutoOpts] = useState({
+    emptyOnly: true,
+    byKeywords: true,
+    byOrder: true,
+    overwrite: false,
+  });
 
   const [srtConnected, setSrtConnected] = useState(false);
   const [mp3Connected, setMp3Connected] = useState(false);
   const [audioDur, setAudioDur] = useState(0);
 
-  const totalDur = useMemo(() => (scenes.length ? scenes[scenes.length - 1].end - scenes[0].start : 0), [scenes]);
+  const totalDur = useMemo(
+    () => (scenes.length ? scenes[scenes.length - 1].end - scenes[0].start : 0),
+    [scenes]
+  );
 
   const selectScene = (i) => setSelectedSceneIdx(i);
   const addAssets = (items) => setAssets((prev) => [...prev, ...items]);
@@ -64,9 +92,15 @@ export default function AssembleEditor() {
       setSelectedSceneIdx(0);
       return;
     }
-    if (selectedSceneIdx >= scenes.length) setSelectedSceneIdx(scenes.length - 1);
+    if (selectedSceneIdx >= scenes.length)
+      setSelectedSceneIdx(scenes.length - 1);
     if (selectedSceneIdx < 0) setSelectedSceneIdx(0);
   }, [scenes, selectedSceneIdx]);
+
+  // (개발 편의) 현재 씬 전역 노출
+  useEffect(() => {
+    window.__scenes = scenes;
+  }, [scenes]);
 
   // ===== SRT 로드 & 파싱 =====
   useEffect(() => {
@@ -74,7 +108,9 @@ export default function AssembleEditor() {
       try {
         const srtPath = await window.api.getSetting?.("paths.srt");
         if (!srtPath) return;
-        const raw = await (window.api.readText?.(srtPath) || window.api.readTextFile?.(srtPath));
+        const raw =
+          (await window.api.readText?.(srtPath)) ||
+          (await window.api.readTextFile?.(srtPath));
         const parsed = parseSrtToScenes(raw);
         if (parsed.length) {
           setScenes(parsed);
@@ -129,7 +165,10 @@ export default function AssembleEditor() {
         for (const i of emptyIdxs) {
           const sc = next[i];
           if (sc.assetId && !autoOpts.overwrite) continue;
-          const hit = candidates.find((a) => Array.isArray(a.tags) && a.tags.some((t) => sc.text?.includes(t)));
+          const hit = candidates.find(
+            (a) =>
+              Array.isArray(a.tags) && a.tags.some((t) => sc.text?.includes(t))
+          );
           if (hit) {
             sc.assetId = hit.id;
             used.add(hit.id);
@@ -152,14 +191,20 @@ export default function AssembleEditor() {
   }, [assets, autoMatch, autoOpts]);
 
   return (
-    <div ref={containerRef} className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-md" style={containerStyle}>
+    <div
+      ref={containerRef}
+      className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-md"
+      style={containerStyle}
+    >
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold flex items-center gap-2">
           <span>✨</span> 영상 구성
         </h1>
         <div className="text-xs text-gray-500">
-          총 길이 {totalDur.toFixed(1)}s{audioDur ? ` · 오디오 ${audioDur.toFixed(1)}s` : ""} · 씬 {scenes.length}개
+          총 길이 {totalDur.toFixed(1)}s
+          {audioDur ? ` · 오디오 ${audioDur.toFixed(1)}s` : ""} · 씬{" "}
+          {scenes.length}개
         </div>
       </div>
 
@@ -168,7 +213,10 @@ export default function AssembleEditor() {
         <TabButton active={tab === "setup"} onClick={() => setTab("setup")}>
           셋업
         </TabButton>
-        <TabButton active={tab === "keywords"} onClick={() => setTab("keywords")}>
+        <TabButton
+          active={tab === "keywords"}
+          onClick={() => setTab("keywords")}
+        >
           키워드 & 소스
         </TabButton>
         <TabButton active={tab === "arrange"} onClick={() => setTab("arrange")}>
@@ -194,13 +242,33 @@ export default function AssembleEditor() {
           />
         )}
 
-        {tab === "keywords" && <KeywordsTab assets={assets} addAssets={addAssets} autoMatch={autoMatch} />}
-
-        {tab === "arrange" && (
-          <ArrangeTab scenes={scenes} setScenes={setScenes} selectedSceneIdx={selectedSceneIdx} selectScene={selectScene} assets={assets} />
+        {tab === "keywords" && (
+          <KeywordsTab
+            assets={assets}
+            addAssets={addAssets}
+            autoMatch={autoMatch}
+          />
         )}
 
-        {tab === "review" && <ReviewTab scenes={scenes} selectedSceneIdx={selectedSceneIdx} srtConnected={srtConnected} mp3Connected={mp3Connected} />}
+        {tab === "arrange" && (
+          <ArrangeTab
+            // ✅ 변경: ArrangeTab이 기대하는 prop 이름으로 전달
+            scenes={scenes}
+            onChangeScenes={setScenes}
+            selectedSceneIdx={selectedSceneIdx}
+            onChangeSelectedScene={setSelectedSceneIdx}
+            // (참고) assets는 ArrangeTab 내부에서 더 이상 필요하지 않으므로 전달하지 않음
+          />
+        )}
+
+        {tab === "review" && (
+          <ReviewTab
+            scenes={scenes}
+            selectedSceneIdx={selectedSceneIdx}
+            srtConnected={srtConnected}
+            mp3Connected={mp3Connected}
+          />
+        )}
       </div>
     </div>
   );
