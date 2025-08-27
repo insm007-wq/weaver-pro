@@ -26,7 +26,9 @@ function debugScenes(label, scenes, policy) {
   try {
     const rows = (scenes || []).map((s, i) => {
       const sec = Number(s?.duration) || 0;
-      const n = Number(s?.charCount ?? (s?.text ? String(s.text).length : 0));
+      const n = Number.isFinite(s?.charCount)
+        ? Number(s.charCount)
+        : measureCharCount(s?.text || "");
       const b = policy?.boundsForSec ? policy.boundsForSec(sec) : null;
       return {
         i,
@@ -39,6 +41,15 @@ function debugScenes(label, scenes, policy) {
     });
     debug(label, rows);
   } catch {}
+}
+
+/* ======================= 문자수 측정(일관화) ======================= */
+/** 코드포인트 기준 문자수. NFC 정규화 + 제로폭/불가시 공백 제거 */
+function measureCharCount(s = "") {
+  const cleaned = String(s)
+    .normalize("NFC")
+    .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ""); // ZWJ/ZWNJ/ZWSP/BOM/NBSP 제거
+  return Array.from(cleaned).length;
 }
 
 /* ======================= 모델/폴백 ======================= */
@@ -223,7 +234,7 @@ function violatesLengthPolicy(doc, policy) {
   try {
     const scenes = Array.isArray(doc?.scenes) ? doc.scenes : [];
     const totalChars = scenes.reduce(
-      (s, x) => s + (x?.charCount ?? (x?.text ? String(x.text).length : 0)),
+      (s, x) => s + measureCharCount(x?.text || ""),
       0
     );
     const totalBad =
@@ -236,7 +247,7 @@ function violatesLengthPolicy(doc, policy) {
     for (const sc of scenes) {
       const sec = Number.isFinite(sc?.duration) ? Number(sc.duration) : 0;
       const { min, max } = policy.boundsForSec(sec);
-      const n = sc?.charCount ?? (sc?.text ? String(sc.text).length : 0);
+      const n = measureCharCount(sc?.text || "");
       if (n < min) anyStrictFail = true; // 최소치 미만 즉시 실패
       if (n && (n < min * 0.9 || n > max * 1.1)) softOutCount++;
     }
@@ -320,7 +331,7 @@ async function expandOrCondenseScenesOpenAI({
     .map((s, i) => {
       const sec = Number.isFinite(s?.duration) ? Number(s.duration) : 0;
       const { min, max } = policy.boundsForSec(sec);
-      const len = s?.charCount ?? String(s?.text || "").length;
+      const len = measureCharCount(s?.text || "");
       const under = min - len; // 양수면 부족
       const over = len - Math.round(max * 1.05); // 양수면 초과
       const gap = Math.max(under, over, 0);
@@ -335,7 +346,7 @@ async function expandOrCondenseScenesOpenAI({
   for (const i of badIdx) {
     const sc = out.scenes[i];
     const baseText = String(sc.text || "");
-    const curLen = sc?.charCount ?? baseText.length;
+    const curLen = measureCharCount(baseText);
 
     const sec = Number.isFinite(sc?.duration) ? Number(sc.duration) : 0;
     const {
@@ -389,11 +400,16 @@ async function expandOrCondenseScenesOpenAI({
     const unfenced = stripFence(raw || "");
     const obj = tryParse(unfenced) || {};
     const newText = String(obj?.text || baseText);
-    const newLen = Number.isFinite(obj?.charCount)
-      ? Math.round(Number(obj.charCount))
-      : newText.length;
+    const newLen = measureCharCount(newText);
 
-    out.scenes[i] = { ...sc, text: newText, charCount: newLen };
+    out.scenes[i] = {
+      ...sc,
+      text: newText,
+      charCount: newLen, // ✅ 우리 측정값
+      _aiCharCount: Number.isFinite(obj?.charCount)
+        ? Math.round(Number(obj.charCount))
+        : sc._aiCharCount,
+    };
     debug(`scene#${i} after`, {
       newLen,
       min: targetMin,
@@ -428,7 +444,7 @@ async function callOpenAIGpt5Mini(payload) {
 
   const policy = calcLengthPolicy({ duration, maxScenes, cpmMin, cpmMax });
 
-  // 프롬프트 선택: 프롬프트 탭은 원문, auto/ref는 정책형 프롬프트(=Anthropic과 동일 방향)
+  // 프롬프트 선택: 프롬프트 탭은 원문, auto/ref는 정책형 프롬프트
   const useCompiled = !!(compiledPrompt && String(compiledPrompt).trim());
   const userPrompt =
     useCompiled || customPrompt
@@ -441,6 +457,17 @@ async function callOpenAIGpt5Mini(payload) {
           policy,
         });
 
+  // 디버그: 보낸 프롬프트 일부 저장
+  try {
+    dumpRaw("openai-user-prompt", {
+      modelPrimary: primary,
+      wantedFamily,
+      usedCompiled: !!(useCompiled || customPrompt),
+      length: userPrompt.length,
+      head: userPrompt.slice(0, 800),
+    });
+  } catch {}
+
   const systemMsg = [
     "You are a professional Korean scriptwriter.",
     'Return ONLY JSON like: {"title":"...","scenes":[{"text":"...","duration":N,"charCount":N}]}',
@@ -452,7 +479,7 @@ async function callOpenAIGpt5Mini(payload) {
     { role: "user", content: userPrompt },
   ];
 
-  // 토큰 예산: 길이정책/장면수 기반으로 여유롭게
+  // 토큰 예산
   const requested = Math.max(
     6000,
     Math.ceil(policy.totalTgt * 1.2),
@@ -461,7 +488,7 @@ async function callOpenAIGpt5Mini(payload) {
       duration: Number(duration) || 5,
     })
   );
-  const budget = requested; // OpenAI는 모델별 하드캡 자체가 있으니 요청치 그대로 사용
+  const budget = requested;
   debug("token budget", { requested });
 
   let rawText = "";
@@ -513,19 +540,24 @@ async function callOpenAIGpt5Mini(payload) {
     }
   }
 
-  // 정규화 + charCount 채우기
-  parsed.scenes = parsed.scenes.map((s, i) => ({
-    ...(typeof s === "object" ? s : {}),
-    id: s?.id ? String(s.id) : `s${i + 1}`,
-    text: pickText(s),
-    duration: Number.isFinite(s?.duration)
-      ? Math.round(Number(s.duration))
-      : undefined,
-    charCount:
-      Number.isFinite(s?.charCount) && s.charCount > 0
-        ? Math.round(Number(s.charCount))
-        : (pickText(s) || "").length,
-  }));
+  // 정규화 + charCount 강제 재측정
+  parsed.scenes = parsed.scenes.map((s, i) => {
+    const text = pickText(s);
+    const measured = measureCharCount(text);
+    return {
+      ...(typeof s === "object" ? s : {}),
+      id: s?.id ? String(s.id) : `s${i + 1}`,
+      text,
+      duration: Number.isFinite(s?.duration)
+        ? Math.round(Number(s.duration))
+        : undefined,
+      _aiCharCount:
+        Number.isFinite(s?.charCount) && s.charCount > 0
+          ? Math.round(Number(s.charCount))
+          : undefined,
+      charCount: measured, // ✅ 우리 측정값 사용
+    };
+  });
   debugScenes("parsed scenes", parsed.scenes, policy);
 
   let out = formatScenes(parsed, topic, duration, maxScenes, {
@@ -563,18 +595,22 @@ async function callOpenAIGpt5Mini(payload) {
           tryParse(stripFence(repairText)) || {}
         );
         if (validateScriptDocLoose(fixed)) {
-          fixed.scenes = fixed.scenes.map((s, i) => ({
-            ...(typeof s === "object" ? s : {}),
-            id: out.scenes[i]?.id || `s${i + 1}`,
-            text: pickText(s),
-            duration: Number.isFinite(s?.duration)
-              ? Math.round(Number(s.duration))
-              : out.scenes[i].duration,
-            charCount:
-              Number.isFinite(s?.charCount) && s.charCount > 0
-                ? Math.round(Number(s.charCount))
-                : (pickText(s) || "").length,
-          }));
+          fixed.scenes = fixed.scenes.map((s, i) => {
+            const t = pickText(s);
+            return {
+              ...(typeof s === "object" ? s : {}),
+              id: out.scenes[i]?.id || `s${i + 1}`,
+              text: t,
+              duration: Number.isFinite(s?.duration)
+                ? Math.round(Number(s.duration))
+                : out.scenes[i].duration,
+              _aiCharCount:
+                Number.isFinite(s?.charCount) && s.charCount > 0
+                  ? Math.round(Number(s.charCount))
+                  : undefined,
+              charCount: measureCharCount(t),
+            };
+          });
           out = formatScenes(fixed, topic, duration, maxScenes, {
             fromCustomPrompt: false,
           });
