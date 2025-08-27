@@ -12,19 +12,298 @@ const {
   validateScriptDocLoose,
   formatScenes,
   estimateMaxTokens,
-  RATE_GUIDE,
   buildRepairInput,
   buildRepairInstruction,
-  // ANTHROPIC
 } = require("../common");
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
-/**
- * 프롬프트 탭을 강제 반영하는 규칙
- * - compiledPrompt 가 비었어도, payload.prompt 가 있으면 그것을 사용한다.
- * - customPrompt 플래그/compiled 존재 시: "사용자 프롬프트 기반"으로 간주(리페어 스킵 등).
- */
+/* ======================= DEBUG HELPERS ======================= */
+const DEBUG_LEN = true;
+function debug(...args) {
+  try {
+    if (DEBUG_LEN) console.log("[LEN]", ...args);
+  } catch {}
+}
+function debugScenes(label, scenes, policy) {
+  try {
+    const rows = (scenes || []).map((s, i) => {
+      const sec = Number(s?.duration) || 0;
+      const n = Number(s?.charCount ?? (s?.text ? String(s.text).length : 0));
+      const b = policy?.boundsForSec ? policy.boundsForSec(sec) : null;
+      return {
+        i,
+        sec,
+        chars: n,
+        min: b ? b.min : undefined,
+        tgt: b ? b.tgt : undefined,
+        max: b ? b.max : undefined,
+      };
+    });
+    debug(label, rows);
+  } catch {}
+}
+
+/* =======================================================================
+   길이-우선 가이드(자동/레퍼런스 전용)
+======================================================================= */
+const LENGTH_FIRST_GUIDE = [
+  "- 길이 정책을 최우선으로 지키세요(문장 수 제한 없음).",
+  "- 장면별 목표 글자수에 맞추되, 의미/논리/맥락은 풍부하게 유지하세요.",
+  "- 중복을 피하고, 구체 예시/수치/근거를 활용해 자연스럽게 분량을 채우세요.",
+  "- 불릿/목록/마크다운/코드펜스 금지. 자연스러운 문단 2~3개로 작성하세요.",
+].join("\n");
+
+/* =======================================================================
+   길이 정책 계산 (분당 300~400자) + Google TTS 안전 상한(≈1450자/scene)
+======================================================================= */
+function calcLengthPolicy({ duration, maxScenes, cpmMin, cpmMax }) {
+  const secs = Math.max(1, Number(duration || 0) * 60);
+  const scenes = Math.max(1, Number(maxScenes) || 1);
+
+  const minCpm = Number.isFinite(Number(cpmMin)) ? Number(cpmMin) : 300;
+  const maxCpm = Number.isFinite(Number(cpmMax)) ? Number(cpmMax) : 400;
+  const tgtCpm = Math.round((minCpm + maxCpm) / 2); // ≈ 350
+
+  const perSecMin = minCpm / 60;
+  const perSecMax = maxCpm / 60;
+  const perSecTgt = tgtCpm / 60;
+
+  const totalMin = Math.round(secs * perSecMin);
+  const totalMax = Math.round(secs * perSecMax);
+  const totalTgt = Math.round(secs * perSecTgt);
+
+  const SAFE_BYTE_LIMIT = 4800;
+  const AVG_BYTES_PER_KO_CHAR = 3;
+  const SAFE_CHAR_CAP = Math.floor(SAFE_BYTE_LIMIT / AVG_BYTES_PER_KO_CHAR); // ≈1600
+  const HARD_CAP = 1450;
+  const hardCap = Math.min(SAFE_CHAR_CAP, HARD_CAP);
+
+  const boundsForSec = (sec = 0) => {
+    const s = Math.max(1, Math.round(sec));
+    const min = Math.round(s * perSecMin);
+    const max = Math.min(Math.round(s * perSecMax), hardCap);
+    const tgt = Math.min(Math.round(s * perSecTgt), hardCap - 20);
+    return { min, max, tgt };
+  };
+
+  const policy = {
+    secs,
+    scenes,
+    minCpm,
+    maxCpm,
+    tgtCpm,
+    perSecMin,
+    perSecMax,
+    perSecTgt,
+    totalMin,
+    totalMax,
+    totalTgt,
+    hardCap,
+    boundsForSec,
+  };
+
+  debug("policy", {
+    durationMin: duration,
+    scenes,
+    cpmMin: minCpm,
+    cpmMax: maxCpm,
+    totalMin,
+    totalTgt,
+    totalMax,
+    hardCap,
+  });
+
+  return policy;
+}
+
+/* =======================================================================
+   정책형 프롬프트(자동/레퍼런스 전용)
+======================================================================= */
+function buildPolicyUserPrompt({ topic, style, type, referenceText, policy }) {
+  return [
+    `주제: ${topic || "(미지정)"}`,
+    `스타일: ${style || "(자유)"}`,
+    type === "reference" ? `\n[레퍼런스]\n${referenceText || ""}` : "",
+    "",
+    "길이 정책(매우 중요):",
+    `- 전체 글자수 목표(대략): ${policy.totalTgt}자 (허용 ${policy.totalMin}~${policy.totalMax}자).`,
+    `- 각 scene.text는 scene.duration(초)에 비례하여 작성(1초당 ${policy.perSecMin.toFixed(
+      2
+    )}~${policy.perSecMax.toFixed(2)}자, 타깃 ${policy.perSecTgt.toFixed(
+      2
+    )}자).`,
+    `- 장면당 최대 ${policy.hardCap}자(TTS 안전 한도).`,
+    `- 모든 scene.duration의 합은 총 재생시간(${policy.secs}s)과 거의 같아야 함(±2s).`,
+    "",
+    "- 각 씬은 scene.duration × 300자(최소치)를 반드시 충족해야 합니다. 하나라도 미달이면 결과를 반려합니다.",
+    LENGTH_FIRST_GUIDE,
+    '반드시 {"title":"...","scenes":[{"text":"...","duration":number,"charCount":number}]} JSON만 반환.',
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/* =======================================================================
+   정책 위반 판정
+======================================================================= */
+function violatesLengthPolicy(doc, policy) {
+  try {
+    const scenes = Array.isArray(doc?.scenes) ? doc.scenes : [];
+
+    const totalChars = scenes.reduce(
+      (s, x) => s + (x?.charCount ?? (x?.text ? String(x.text).length : 0)),
+      0
+    );
+    const totalBad =
+      totalChars < policy.totalMin * 0.95 ||
+      totalChars > policy.totalMax * 1.05;
+
+    let anyStrictFail = false;
+    let softOutCount = 0;
+
+    for (const sc of scenes) {
+      const sec = Number.isFinite(sc?.duration) ? Number(sc.duration) : 0;
+      const { min, max } = policy.boundsForSec(sec);
+      const n = sc?.charCount ?? (sc?.text ? String(sc.text).length : 0);
+
+      if (n < min) anyStrictFail = true; // 최소 미달 즉시 실패
+      if (n && (n < min * 0.9 || n > max * 1.1)) softOutCount++;
+    }
+    const ratioBad = scenes.length ? softOutCount / scenes.length : 0;
+
+    debug("violates check", {
+      totalChars,
+      totalMin: policy.totalMin,
+      totalMax: policy.totalMax,
+      totalBad,
+      anyStrictFail,
+      softOutRatio: ratioBad,
+    });
+
+    return anyStrictFail || totalBad || ratioBad >= 0.2;
+  } catch {
+    return false;
+  }
+}
+
+/* =======================================================================
+   씬별 확장/축약 보정 (duration 목표로 재작성)
+======================================================================= */
+async function expandOrCondenseScenes({
+  apiKey,
+  doc,
+  policy,
+  budget,
+  topic,
+  style,
+}) {
+  const out = { ...doc, scenes: [...doc.scenes] };
+
+  const badIdx = out.scenes
+    .map((s, i) => {
+      const sec = Number.isFinite(s?.duration) ? Number(s.duration) : 0;
+      const { min, max } = policy.boundsForSec(sec);
+      const len = s?.charCount ?? String(s?.text || "").length;
+      const under = min - len;
+      const over = len - Math.round(max * 1.05);
+      const gap = Math.max(under, over, 0);
+      return { i, gap, len, sec, min, max };
+    })
+    .filter((x) => x.gap > 0)
+    .sort((a, b) => b.gap - a.gap)
+    .map((x) => x.i);
+
+  debug("rewrite target idx", badIdx);
+
+  for (const i of badIdx) {
+    const sc = out.scenes[i];
+    const baseText = String(sc.text || "");
+    const curLen = sc?.charCount ?? baseText.length;
+
+    const sec = Number.isFinite(sc?.duration) ? Number(sc.duration) : 0;
+    const {
+      min: targetMin,
+      max: targetMax,
+      tgt: targetTgt,
+    } = policy.boundsForSec(sec);
+
+    if (curLen >= targetMin && curLen <= Math.round(targetMax * 1.05)) continue;
+
+    const system = 'Return ONLY JSON with {"text":"...","charCount":N}.';
+    const need = curLen < targetMin ? "확장" : "축약";
+    debug(`scene#${i} ${need} before`, {
+      sec,
+      curLen,
+      targetMin,
+      targetTgt,
+      targetMax,
+    });
+
+    const prompt = [
+      `주제/스타일은 유지하고, 아래 문장을 ${need}하여`,
+      `scene.duration=${sec}s 기준으로 공백 포함 ${targetMin}~${targetMax}자(목표 ${targetTgt}자) 분량으로 재작성하세요.`,
+      `- 최소 ${targetMin}자 미만은 허용하지 않습니다.`,
+      `- 장면당 최대 ${policy.hardCap}자(TTS 안전 한도)`,
+      "목차/불릿/마크다운 금지, 자연스러운 문단 2~3개.",
+      "",
+      `주제: ${topic || "(생략)"}`,
+      `스타일: ${style || "(자유)"}`,
+      "",
+      '반환 JSON 예: {"text":"...","charCount":123}',
+      "",
+      "[원문]",
+      baseText,
+    ].join("\n");
+
+    const res = await fetch(ANTRHOPIC_URL_SAFE(), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: DEFAULT_ANTHROPIC_MODEL,
+        max_tokens: Math.max(900, Math.floor(budget * 0.18)),
+        system,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.2,
+      }),
+    });
+
+    if (!res.ok) {
+      debug(`scene#${i} rewrite http fail`, res.status);
+      continue;
+    }
+    const data = await res.json().catch(() => null);
+    const raw = data?.content?.[0]?.text || "";
+    const unfenced = stripFence(raw);
+    const obj = tryParse(unfenced) || {};
+    const newText = String(obj?.text || baseText);
+    const newLen = Number.isFinite(obj?.charCount)
+      ? Math.round(Number(obj.charCount))
+      : newText.length;
+
+    out.scenes[i] = { ...sc, text: newText, charCount: newLen };
+    debug(`scene#${i} after`, {
+      newLen,
+      min: targetMin,
+      tgt: targetTgt,
+      max: targetMax,
+    });
+  }
+
+  return out;
+}
+
+function ANTRHOPIC_URL_SAFE() {
+  return ANTHROPIC_URL;
+}
+
+/* =======================================================================
+   메인 호출
+======================================================================= */
 async function callAnthropic({
   type,
   topic,
@@ -32,60 +311,52 @@ async function callAnthropic({
   duration,
   maxScenes,
   referenceText,
-  compiledPrompt, // 프론트에서 전달(없을 수 있음)
-  customPrompt, // 프론트에서 전달(없을 수 있음)
-  prompt, // 백워드 호환: prompt만 넘어오는 경우 지원
-  cpmMin, // 선택: 분당 최소 글자 (auto 탭에서 전달)
-  cpmMax, // 선택: 분당 최대 글자
+  compiledPrompt,
+  customPrompt,
+  prompt,
+  cpmMin,
+  cpmMax,
 }) {
   const apiKey = await getSecret("anthropicKey");
   if (!apiKey) throw new Error("Anthropic API Key가 설정되지 않았습니다.");
 
-  // compiledPrompt 우선, 없으면 prompt를 compiled로 승격
   const compiled =
     (typeof compiledPrompt === "string" && compiledPrompt.trim()) ||
     (typeof prompt === "string" && prompt.trim()) ||
     "";
-
   const useCompiled = compiled.length > 0;
 
-  // 숫자 안전 변환
-  const cpmMinNum = Number(cpmMin);
-  const cpmMaxNum = Number(cpmMax);
-  const hasCpmGuide = Number.isFinite(cpmMinNum) && Number.isFinite(cpmMaxNum);
+  debug("callAnthropic start", {
+    type,
+    durationMin: duration,
+    maxScenes,
+    useCompiled,
+    cpmMin,
+    cpmMax,
+    model: DEFAULT_ANTHROPIC_MODEL,
+  });
+
+  const policy = calcLengthPolicy({ duration, maxScenes, cpmMin, cpmMax });
 
   const sys = [
     "You are a professional Korean scriptwriter for YouTube long-form.",
     "Return ONLY JSON.",
   ].join("\n");
 
-  // 사용자 프롬프트가 있으면 그대로 사용, 없으면 안전한 fallback 구성
   const user = useCompiled
     ? compiled
-    : [
-        `주제: ${topic || "(미지정)"}`,
-        `스타일: ${style || "(자유)"}`,
-        `목표 길이(분): ${Number(duration) || 5}`,
-        `최대 장면 수(상한): ${Number(maxScenes) || 10}`,
-        type === "reference" ? `\n[레퍼런스]\n${referenceText || ""}` : "",
-        "\n요구사항:",
-        hasCpmGuide
-          ? `- 한국어 발화 속도: 분당 ${cpmMinNum}~${cpmMaxNum}자 기준으로 전체 분량을 맞추세요.`
-          : "",
-        RATE_GUIDE,
-        '최상위는 {"title": "...", "scenes":[{ "text": "...", "duration": number }]} 형태의 JSON만.',
-      ]
-        .filter(Boolean)
-        .join("\n");
+    : buildPolicyUserPrompt({ topic, style, type, referenceText, policy });
 
   const requested = Math.max(
-    3500,
+    6000,
+    Math.ceil(policy.totalTgt * 1.2),
     estimateMaxTokens({
       maxScenes: Number(maxScenes) || 10,
       duration: Number(duration) || 5,
     })
   );
   const budget = clampAnthropicTokens(requested, DEFAULT_ANTHROPIC_MODEL);
+  debug("token budget", { requested, budget });
 
   const body = {
     model: DEFAULT_ANTHROPIC_MODEL,
@@ -99,7 +370,7 @@ async function callAnthropic({
 
   const maxRetries = 1;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const res = await fetch(ANTHROPIC_URL, {
+    const res = await fetch(ANTRHOPIC_URL_SAFE(), {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -113,6 +384,14 @@ async function callAnthropic({
       const txt = await res.text().catch(() => "");
       const retryable =
         res.status === 429 || (res.status >= 500 && res.status < 600);
+      debug(
+        "http fail",
+        res.status,
+        "retryable:",
+        retryable,
+        "attempt:",
+        attempt
+      );
       if (retryable && attempt < maxRetries) {
         await sleep(800 * Math.pow(2, attempt));
         continue;
@@ -137,9 +416,15 @@ async function callAnthropic({
       id: s?.id ? String(s.id) : `s${idx + 1}`,
       text: pickText(s),
       duration: Number.isFinite(s?.duration)
-        ? Math.round(Number(s.duration))
+        ? Math.round(Number(s?.duration))
         : undefined,
+      charCount:
+        Number.isFinite(s?.charCount) && s.charCount > 0
+          ? Math.round(Number(s?.charCount))
+          : (pickText(s) || "").length,
     }));
+
+    debugScenes("parsed scenes", parsed.scenes, policy);
 
     parsedOut = formatScenes(parsed, topic, duration, maxScenes, {
       fromCustomPrompt: !!customPrompt || useCompiled,
@@ -155,18 +440,17 @@ async function callAnthropic({
     );
   }
 
-  // 자동/레퍼런스 모드에서만 길이 보정; 사용자 프롬프트 기반이면 건드리지 않음
-  if (
-    !useCompiled &&
-    !customPrompt &&
-    (type === "auto" || type === "reference")
-  ) {
-    const { needsRepair } = require("../common");
-    if (needsRepair(parsedOut.scenes)) {
+  // ✅ 자동/레퍼런스는 항상 길이 정책 강제 (customPrompt일 때만 예외)
+  if (!customPrompt && (type === "auto" || type === "reference")) {
+    let violated = violatesLengthPolicy(parsedOut, policy);
+    debug("violates after parse:", violated);
+
+    // (a) 구조/시간 보정 1회
+    if (violated) {
       try {
         const repairPrompt = buildRepairInstruction(topic, style);
         const repairInput = buildRepairInput(parsedOut);
-        const res = await fetch(ANTHROPIC_URL, {
+        const res = await fetch(ANTRHOPIC_URL_SAFE(), {
           method: "POST",
           headers: {
             "content-type": "application/json",
@@ -195,16 +479,43 @@ async function callAnthropic({
             id: parsedOut.scenes[i]?.id || `s${i + 1}`,
             text: pickText(s),
             duration: Number.isFinite(s?.duration)
-              ? Math.round(Number(s.duration))
+              ? Math.round(Number(s?.duration))
               : parsedOut.scenes[i].duration,
+            charCount:
+              Number.isFinite(s?.charCount) && s.charCount > 0
+                ? Math.round(Number(s?.charCount))
+                : (pickText(s) || "").length,
           }));
-          return formatScenes(fixed, topic, duration, maxScenes, {
+          debugScenes("after repair", fixed.scenes, policy);
+          parsedOut = formatScenes(fixed, topic, duration, maxScenes, {
             fromCustomPrompt: false,
           });
         }
       } catch (e) {
         dumpRaw("anthropic-repair-fail", String(e?.message || e));
       }
+
+      // (b) 씬별 확장/축약 — 최대 2패스
+      let pass = 0;
+      while (violatesLengthPolicy(parsedOut, policy) && pass < 2) {
+        debug("expand/condense pass", pass + 1);
+        try {
+          parsedOut = await expandOrCondenseScenes({
+            apiKey,
+            doc: parsedOut,
+            policy,
+            budget,
+            topic,
+            style,
+          });
+          debugScenes("after expand/condense", parsedOut.scenes, policy);
+        } catch (e) {
+          dumpRaw("anthropic-length-expand-fail", String(e?.message || e));
+          break;
+        }
+        pass++;
+      }
+      debug("violates final:", violatesLengthPolicy(parsedOut, policy));
     }
   }
 

@@ -16,13 +16,13 @@ import ScriptPromptTab from "./tabs/ScriptPromptTab";
 import ReferencePromptTab from "./tabs/ReferencePromptTab";
 
 /** ========================= 글자수 규칙 =========================
- * - 자동 탭(auto): 기존 정책 유지(분당 150~250자)
+ * - 자동 탭(auto): 기존 정책 유지(분당 300~400자)
  * - 프롬프트 탭은 "프롬프트 중심"
  *   - prompt-gen: 프롬프트 원문 그대로 전송 (치환 없음)
  *   - prompt-ref: 4개 값(duration/topic/style/maxScenes) + referenceText만 치환
  */
 const CHAR_BUDGETS = {
-  auto: { perMinMin: 150, perMinMax: 250 },
+  auto: { perMinMin: 300, perMinMax: 400 },
   perSceneFallback: { min: 500, max: 900 }, // ref/import 계산용
 };
 
@@ -269,6 +269,7 @@ export default function ScriptVoiceGenerator() {
               totalSeconds,
               cpmMin,
               cpmMax,
+              customPrompt: true,
               ...(prompt ? { prompt } : {}),
             };
 

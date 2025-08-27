@@ -1,5 +1,5 @@
-export const DUR_OPTIONS = [1, 3, 5, 7, 10, 15];
-export const MAX_SCENE_OPTIONS = [6, 8, 10, 12, 15, 20];
+export const DUR_OPTIONS = [1, 3, 5, 7, 10, 15, 20, 25, 30];
+export const MAX_SCENE_OPTIONS = [6, 8, 10, 12, 15, 20, 25, 30];
 
 export const LLM_OPTIONS = [
   { label: "Anthropic Claude 3.5/3.7", value: "anthropic" },
