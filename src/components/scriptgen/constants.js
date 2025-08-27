@@ -3,7 +3,6 @@ export const MAX_SCENE_OPTIONS = [6, 8, 10, 12, 15, 20, 25, 30];
 
 export const LLM_OPTIONS = [
   { label: "Anthropic Claude 3.5/3.7", value: "anthropic" },
-  { label: "Minimax abab", value: "minimax" },
   { label: "OpenAI GPT-5 mini", value: "openai-gpt5mini" },
 ];
 

@@ -1,4 +1,3 @@
-// electron/ipc/llm/providers/anthropic.js
 const { getSecret } = require("../../../services/secrets");
 const {
   DEFAULT_ANTHROPIC_MODEL,
@@ -73,12 +72,14 @@ function calcLengthPolicy({ duration, maxScenes, cpmMin, cpmMax }) {
   const totalMax = Math.round(secs * perSecMax);
   const totalTgt = Math.round(secs * perSecTgt);
 
+  // Google TTS input 5000 bytes 안전 여유 → 하드캡 약 1450자
   const SAFE_BYTE_LIMIT = 4800;
   const AVG_BYTES_PER_KO_CHAR = 3;
   const SAFE_CHAR_CAP = Math.floor(SAFE_BYTE_LIMIT / AVG_BYTES_PER_KO_CHAR); // ≈1600
   const HARD_CAP = 1450;
   const hardCap = Math.min(SAFE_CHAR_CAP, HARD_CAP);
 
+  // 초 단위 → 해당 씬의 [min, max, tgt] 글자수
   const boundsForSec = (sec = 0) => {
     const s = Math.max(1, Math.round(sec));
     const min = Math.round(s * perSecMin);
@@ -187,8 +188,70 @@ function violatesLengthPolicy(doc, policy) {
   }
 }
 
+/* ----------------------- per-scene rewrite helper ---------------------- */
+async function rewriteSceneOnce({ apiKey, sc, bounds, topic, style, budget }) {
+  const baseText = String(sc.text || "");
+  const curLen = sc?.charCount ?? baseText.length;
+
+  const { min: targetMin, max: targetMax, tgt: targetTgt } = bounds;
+
+  const system = 'Return ONLY JSON with {"text":"...","charCount":N}.';
+  const need = curLen < targetMin ? "확장" : "축약";
+  const prompt = [
+    `주제/스타일은 유지하고, 아래 문장을 ${need}하여`,
+    `공백 포함 ${targetMin}~${targetMax}자(목표 ${targetTgt}자) 분량으로 재작성하세요.`,
+    `- 최소 ${targetMin}자 미만은 허용하지 않습니다.`,
+    `- 장면당 최대 ${targetMax}자`,
+    "목차/불릿/마크다운 금지, 자연스러운 문단 2~3개.",
+    "",
+    `주제: ${topic || "(생략)"}`,
+    `스타일: ${style || "(자유)"}`,
+    "",
+    '반환 JSON 예: {"text":"...","charCount":123}',
+    "",
+    "[원문]",
+    baseText,
+  ].join("\n");
+
+  const perSceneBudget = clampAnthropicTokens(
+    Math.max(1500, Math.floor(budget * 0.25)),
+    DEFAULT_ANTHROPIC_MODEL
+  );
+
+  const res = await fetch(ANTHROPIC_URL, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: DEFAULT_ANTHROPIC_MODEL,
+      max_tokens: perSceneBudget,
+      system,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.2,
+    }),
+  });
+
+  if (!res.ok) {
+    debug("scene rewrite http fail", res.status);
+    return null;
+  }
+  const data = await res.json().catch(() => null);
+  const raw = data?.content?.[0]?.text || "";
+  const unfenced = stripFence(raw);
+  const obj = tryParse(unfenced) || {};
+  const newText = String(obj?.text || baseText);
+  const newLen = Number.isFinite(obj?.charCount)
+    ? Math.round(Number(obj.charCount))
+    : newText.length;
+
+  return { text: newText, charCount: newLen };
+}
+
 /* =======================================================================
-   씬별 확장/축약 보정 (duration 목표로 재작성)
+   씬별 확장/축약 보정 (duration 목표로 재작성) — 안정/병렬(동시 3)
 ======================================================================= */
 async function expandOrCondenseScenes({
   apiKey,
@@ -200,97 +263,56 @@ async function expandOrCondenseScenes({
 }) {
   const out = { ...doc, scenes: [...doc.scenes] };
 
-  const badIdx = out.scenes
+  // 위반 씬 선별
+  const targets = out.scenes
     .map((s, i) => {
       const sec = Number.isFinite(s?.duration) ? Number(s.duration) : 0;
-      const { min, max } = policy.boundsForSec(sec);
+      const bounds = policy.boundsForSec(sec);
       const len = s?.charCount ?? String(s?.text || "").length;
-      const under = min - len;
-      const over = len - Math.round(max * 1.05);
+      const under = bounds.min - len;
+      const over = len - Math.round(bounds.max * 1.05);
       const gap = Math.max(under, over, 0);
-      return { i, gap, len, sec, min, max };
+      return { i, gap, len, sec, bounds };
     })
     .filter((x) => x.gap > 0)
-    .sort((a, b) => b.gap - a.gap)
-    .map((x) => x.i);
+    .sort((a, b) => b.gap - a.gap);
 
-  debug("rewrite target idx", badIdx);
+  debug(
+    "rewrite target idx",
+    targets.map((t) => t.i)
+  );
 
-  for (const i of badIdx) {
-    const sc = out.scenes[i];
-    const baseText = String(sc.text || "");
-    const curLen = sc?.charCount ?? baseText.length;
+  // 동시 3개씩 처리
+  const CONCURRENCY = 3;
+  for (let k = 0; k < targets.length; k += CONCURRENCY) {
+    const batch = targets.slice(k, k + CONCURRENCY);
+    const results = await Promise.all(
+      batch.map((t) =>
+        rewriteSceneOnce({
+          apiKey,
+          sc: out.scenes[t.i],
+          bounds: t.bounds,
+          topic,
+          style,
+          budget,
+        }).catch(() => null)
+      )
+    );
 
-    const sec = Number.isFinite(sc?.duration) ? Number(sc.duration) : 0;
-    const {
-      min: targetMin,
-      max: targetMax,
-      tgt: targetTgt,
-    } = policy.boundsForSec(sec);
-
-    if (curLen >= targetMin && curLen <= Math.round(targetMax * 1.05)) continue;
-
-    const system = 'Return ONLY JSON with {"text":"...","charCount":N}.';
-    const need = curLen < targetMin ? "확장" : "축약";
-    debug(`scene#${i} ${need} before`, {
-      sec,
-      curLen,
-      targetMin,
-      targetTgt,
-      targetMax,
-    });
-
-    const prompt = [
-      `주제/스타일은 유지하고, 아래 문장을 ${need}하여`,
-      `scene.duration=${sec}s 기준으로 공백 포함 ${targetMin}~${targetMax}자(목표 ${targetTgt}자) 분량으로 재작성하세요.`,
-      `- 최소 ${targetMin}자 미만은 허용하지 않습니다.`,
-      `- 장면당 최대 ${policy.hardCap}자(TTS 안전 한도)`,
-      "목차/불릿/마크다운 금지, 자연스러운 문단 2~3개.",
-      "",
-      `주제: ${topic || "(생략)"}`,
-      `스타일: ${style || "(자유)"}`,
-      "",
-      '반환 JSON 예: {"text":"...","charCount":123}',
-      "",
-      "[원문]",
-      baseText,
-    ].join("\n");
-
-    const res = await fetch(ANTRHOPIC_URL_SAFE(), {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: DEFAULT_ANTHROPIC_MODEL,
-        max_tokens: Math.max(900, Math.floor(budget * 0.18)),
-        system,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.2,
-      }),
-    });
-
-    if (!res.ok) {
-      debug(`scene#${i} rewrite http fail`, res.status);
-      continue;
-    }
-    const data = await res.json().catch(() => null);
-    const raw = data?.content?.[0]?.text || "";
-    const unfenced = stripFence(raw);
-    const obj = tryParse(unfenced) || {};
-    const newText = String(obj?.text || baseText);
-    const newLen = Number.isFinite(obj?.charCount)
-      ? Math.round(Number(obj.charCount))
-      : newText.length;
-
-    out.scenes[i] = { ...sc, text: newText, charCount: newLen };
-    debug(`scene#${i} after`, {
-      newLen,
-      min: targetMin,
-      tgt: targetTgt,
-      max: targetMax,
+    results.forEach((r, idx) => {
+      const t = batch[idx];
+      if (!r) return;
+      out.scenes[t.i] = {
+        ...out.scenes[t.i],
+        text: r.text,
+        charCount: r.charCount,
+      };
+      debug(`scene#${t.i} after`, {
+        newLen: r.charCount,
+        min: t.bounds.min,
+        tgt: t.bounds.tgt,
+        max: t.bounds.max,
+      });
     });
   }
 
@@ -440,7 +462,7 @@ async function callAnthropic({
     );
   }
 
-  // ✅ 자동/레퍼런스는 항상 길이 정책 강제 (customPrompt일 때만 예외)
+  // 자동/레퍼런스만 길이 정책 보정 (프롬프트 탭은 우회)
   if (!customPrompt && (type === "auto" || type === "reference")) {
     let violated = violatesLengthPolicy(parsedOut, policy);
     debug("violates after parse:", violated);
@@ -495,10 +517,9 @@ async function callAnthropic({
         dumpRaw("anthropic-repair-fail", String(e?.message || e));
       }
 
-      // (b) 씬별 확장/축약 — 최대 2패스
-      let pass = 0;
-      while (violatesLengthPolicy(parsedOut, policy) && pass < 2) {
-        debug("expand/condense pass", pass + 1);
+      // (b) 씬별 확장/축약 — 동시 3개, 실패해도 계속
+      if (violatesLengthPolicy(parsedOut, policy)) {
+        debug("expand/condense (parallel) start");
         try {
           parsedOut = await expandOrCondenseScenes({
             apiKey,
@@ -511,11 +532,9 @@ async function callAnthropic({
           debugScenes("after expand/condense", parsedOut.scenes, policy);
         } catch (e) {
           dumpRaw("anthropic-length-expand-fail", String(e?.message || e));
-          break;
         }
-        pass++;
+        debug("violates final:", violatesLengthPolicy(parsedOut, policy));
       }
-      debug("violates final:", violatesLengthPolicy(parsedOut, policy));
     }
   }
 
