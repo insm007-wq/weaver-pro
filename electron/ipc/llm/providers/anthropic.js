@@ -1,4 +1,3 @@
-// electron/ipc/llm/providers/anthropic.js
 const { getSecret } = require("../../../services/secrets");
 const {
   DEFAULT_ANTHROPIC_MODEL,
@@ -18,8 +17,21 @@ const {
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
+/* ======================= 글자수(공백 포함) 통일 계산기 ======================= */
+function normalizeForCount(s) {
+  let t = String(s ?? "");
+  try {
+    t = t.normalize("NFC");
+  } catch {}
+  t = t.replace(/\r\n/g, "\n").replace(/[\u200B-\u200D\uFEFF]/g, "");
+  return t;
+}
+function countCharsKo(s) {
+  return Array.from(normalizeForCount(s)).length;
+}
+
 /* ======================= DEBUG HELPERS ======================= */
-const DEBUG_LEN = false;
+const DEBUG_LEN = true;
 function debug(...args) {
   try {
     if (DEBUG_LEN) console.log("[LEN]", ...args);
@@ -29,9 +41,10 @@ function debugScenes(label, scenes, policy) {
   try {
     const rows = (scenes || []).map((s, i) => {
       const sec = Number(s?.duration) || 0;
-      const n = Number.isFinite(s?.charCount)
-        ? Number(s.charCount)
-        : measureCharCount(s?.text || "");
+      const n =
+        Number.isFinite(s?.charCount) && s.charCount >= 0
+          ? s.charCount
+          : countCharsKo(s?.text);
       const b = policy?.boundsForSec ? policy.boundsForSec(sec) : null;
       return {
         i,
@@ -44,15 +57,6 @@ function debugScenes(label, scenes, policy) {
     });
     debug(label, rows);
   } catch {}
-}
-
-/* ======================= 문자수 측정(일관화) ======================= */
-/** 코드포인트 기준 문자수(NFC 정규화 + 제로폭/불가시 공백 제거) */
-function measureCharCount(s = "") {
-  const cleaned = String(s)
-    .normalize("NFC")
-    .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ""); // ZWJ/ZWNJ/ZWSP/BOM/NBSP
-  return Array.from(cleaned).length;
 }
 
 /* =======================================================================
@@ -84,10 +88,9 @@ function calcLengthPolicy({ duration, maxScenes, cpmMin, cpmMax }) {
   const totalMax = Math.round(secs * perSecMax);
   const totalTgt = Math.round(secs * perSecTgt);
 
-  // Google TTS input 5000 bytes 안전 여유 → 하드캡 약 1450자
   const SAFE_BYTE_LIMIT = 4800;
   const AVG_BYTES_PER_KO_CHAR = 3;
-  const SAFE_CHAR_CAP = Math.floor(SAFE_BYTE_LIMIT / AVG_BYTES_PER_KO_CHAR); // ≈1600
+  const SAFE_CHAR_CAP = Math.floor(SAFE_BYTE_LIMIT / AVG_BYTES_PER_KO_CHAR);
   const HARD_CAP = 1450;
   const hardCap = Math.min(SAFE_CHAR_CAP, HARD_CAP);
 
@@ -157,14 +160,16 @@ function buildPolicyUserPrompt({ topic, style, type, referenceText, policy }) {
 }
 
 /* =======================================================================
-   정책 위반 판정(우리 기준 charCount 사용)
+   정책 위반 판정
 ======================================================================= */
 function violatesLengthPolicy(doc, policy) {
   try {
     const scenes = Array.isArray(doc?.scenes) ? doc.scenes : [];
 
     const totalChars = scenes.reduce(
-      (s, x) => s + measureCharCount(x?.text || ""),
+      (s, x) =>
+        s +
+        (Number.isFinite(x?.charCount) ? x.charCount : countCharsKo(x?.text)),
       0
     );
     const totalBad =
@@ -177,7 +182,9 @@ function violatesLengthPolicy(doc, policy) {
     for (const sc of scenes) {
       const sec = Number.isFinite(sc?.duration) ? Number(sc.duration) : 0;
       const { min, max } = policy.boundsForSec(sec);
-      const n = measureCharCount(sc?.text || "");
+      const n = Number.isFinite(sc?.charCount)
+        ? sc.charCount
+        : countCharsKo(sc?.text);
 
       if (n < min) anyStrictFail = true; // 최소 미달 즉시 실패
       if (n && (n < min * 0.9 || n > max * 1.1)) softOutCount++;
@@ -202,7 +209,9 @@ function violatesLengthPolicy(doc, policy) {
 /* ----------------------- per-scene rewrite helper ---------------------- */
 async function rewriteSceneOnce({ apiKey, sc, bounds, topic, style, budget }) {
   const baseText = String(sc.text || "");
-  const curLen = measureCharCount(baseText);
+  const curLen = Number.isFinite(sc?.charCount)
+    ? sc.charCount
+    : countCharsKo(baseText);
 
   const { min: targetMin, max: targetMax, tgt: targetTgt } = bounds;
 
@@ -254,19 +263,13 @@ async function rewriteSceneOnce({ apiKey, sc, bounds, topic, style, budget }) {
   const unfenced = stripFence(raw);
   const obj = tryParse(unfenced) || {};
   const newText = String(obj?.text || baseText);
-  const newLen = measureCharCount(newText);
+  const newLen = countCharsKo(newText);
 
-  return {
-    text: newText,
-    charCount: newLen, // ✅ 우리 기준
-    _aiCharCount: Number.isFinite(obj?.charCount)
-      ? Math.round(Number(obj.charCount))
-      : undefined,
-  };
+  return { text: newText, charCount: newLen };
 }
 
 /* =======================================================================
-   씬별 확장/축약 보정 (duration 목표로 재작성) — 안정/병렬(동시 3)
+   씬별 확장/축약 보정 — 안정/병렬(동시 3)
 ======================================================================= */
 async function expandOrCondenseScenes({
   apiKey,
@@ -278,12 +281,13 @@ async function expandOrCondenseScenes({
 }) {
   const out = { ...doc, scenes: [...doc.scenes] };
 
-  // 위반 씬 선별
   const targets = out.scenes
     .map((s, i) => {
       const sec = Number.isFinite(s?.duration) ? Number(s.duration) : 0;
       const bounds = policy.boundsForSec(sec);
-      const len = measureCharCount(s?.text || "");
+      const len = Number.isFinite(s?.charCount)
+        ? s.charCount
+        : countCharsKo(s?.text);
       const under = bounds.min - len;
       const over = len - Math.round(bounds.max * 1.05);
       const gap = Math.max(under, over, 0);
@@ -297,7 +301,6 @@ async function expandOrCondenseScenes({
     targets.map((t) => t.i)
   );
 
-  // 동시 3개씩 처리
   const CONCURRENCY = 3;
   for (let k = 0; k < targets.length; k += CONCURRENCY) {
     const batch = targets.slice(k, k + CONCURRENCY);
@@ -320,8 +323,7 @@ async function expandOrCondenseScenes({
       out.scenes[t.i] = {
         ...out.scenes[t.i],
         text: r.text,
-        charCount: r.charCount, // ✅ 우리 기준
-        _aiCharCount: r._aiCharCount,
+        charCount: r.charCount,
       };
       debug(`scene#${t.i} after`, {
         newLen: r.charCount,
@@ -378,7 +380,7 @@ async function callAnthropic({
 
   const sys = [
     "You are a professional Korean scriptwriter for YouTube long-form.",
-    'Return ONLY JSON like {"title":"...","scenes":[{"text":"...","duration":N,"charCount":N}]}',
+    "Return ONLY JSON.",
   ].join("\n");
 
   const user = useCompiled
@@ -401,7 +403,6 @@ async function callAnthropic({
     max_tokens: budget,
     system: sys,
     messages: [{ role: "user", content: user }],
-    temperature: 0.2,
   };
 
   let lastRaw = null;
@@ -459,11 +460,7 @@ async function callAnthropic({
         duration: Number.isFinite(s?.duration)
           ? Math.round(Number(s?.duration))
           : undefined,
-        _aiCharCount:
-          Number.isFinite(s?.charCount) && s.charCount > 0
-            ? Math.round(Number(s?.charCount))
-            : undefined,
-        charCount: measureCharCount(text), // ✅ 우리 기준
+        charCount: countCharsKo(text),
       };
     });
 
@@ -483,7 +480,7 @@ async function callAnthropic({
     );
   }
 
-  // 자동/레퍼런스만 길이 정책 보정 (프롬프트 탭은 우회)
+  // 자동/레퍼런스만 길이 정책 보정 (프롬프트 탭은 분량 보정은 건너뛰되 카운트는 이미 통일)
   if (!customPrompt && (type === "auto" || type === "reference")) {
     let violated = violatesLengthPolicy(parsedOut, policy);
     debug("violates after parse:", violated);
@@ -510,7 +507,6 @@ async function callAnthropic({
                 content: repairPrompt + "\n\n[INPUT JSON]\n" + repairInput,
               },
             ],
-            temperature: 0.2,
           }),
         });
         const data = await res.json().catch(() => null);
@@ -519,19 +515,15 @@ async function callAnthropic({
         const fixed = coerceToScenesShape(tryParse(unfenced));
         if (validateScriptDocLoose(fixed)) {
           fixed.scenes = fixed.scenes.map((s, i) => {
-            const t = pickText(s);
+            const text = pickText(s);
             return {
               ...(typeof s === "object" ? s : {}),
               id: parsedOut.scenes[i]?.id || `s${i + 1}`,
-              text: t,
+              text,
               duration: Number.isFinite(s?.duration)
                 ? Math.round(Number(s?.duration))
                 : parsedOut.scenes[i].duration,
-              _aiCharCount:
-                Number.isFinite(s?.charCount) && s.charCount > 0
-                  ? Math.round(Number(s?.charCount))
-                  : undefined,
-              charCount: measureCharCount(t), // ✅ 우리 기준
+              charCount: countCharsKo(text),
             };
           });
           debugScenes("after repair", fixed.scenes, policy);
@@ -543,7 +535,7 @@ async function callAnthropic({
         dumpRaw("anthropic-repair-fail", String(e?.message || e));
       }
 
-      // (b) 씬별 확장/축약 — 동시 3개, 실패해도 계속
+      // (b) 씬별 확장/축약 — 동시 3개
       if (violatesLengthPolicy(parsedOut, policy)) {
         debug("expand/condense (parallel) start");
         try {

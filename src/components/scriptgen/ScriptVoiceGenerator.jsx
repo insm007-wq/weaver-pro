@@ -15,10 +15,23 @@ import { base64ToArrayBuffer } from "./utils/buffer";
 import ScriptPromptTab from "./tabs/ScriptPromptTab";
 import ReferencePromptTab from "./tabs/ReferencePromptTab";
 
+/* ========================= 공백 포함 글자수(정규화) 유틸 =========================
+   - 모델이 보고한 charCount가 부정확해도 항상 동일 기준으로 재계산하여 표시  */
+function safeCharCount(s) {
+  let t = String(s ?? "");
+  try {
+    t = t.normalize("NFC");
+  } catch {}
+  // 제로폭 등 제거
+  t = t.replace(/\r\n/g, "\n").replace(/[\u200B-\u200D\uFEFF]/g, "");
+  // 코드포인트 기준 길이
+  return Array.from(t).length;
+}
+
 /** ========================= 글자수 규칙 =========================
  * - 자동 탭(auto): 기존 정책 유지(분당 300~400자)
  * - 프롬프트 탭은 "프롬프트 중심"
- *   - prompt-gen: 프롬프트 원문 그대로 전송 (치환 없음)
+ *   - prompt-gen: 프롬프트 원문 그대로 전송
  *   - prompt-ref: 4개 값(duration/topic/style/maxScenes) + referenceText만 치환
  */
 const CHAR_BUDGETS = {
@@ -103,12 +116,9 @@ export default function ScriptVoiceGenerator() {
     pitch: 0,
   });
 
-  // ✅ 레퍼런스 입력을 탭별로 분리: Tab2(레퍼런스 기반), Tab5(레퍼런스 프롬프트)
+  // 탭별 입력/문서 분리
   const [refText, setRefText] = useState(""); // Tab2 전용
   const [promptRefText, setPromptRefText] = useState(""); // Tab5 전용
-
-  // ✅ 씬/대본을 탭별로 독립 보관 (공유 금지)
-  //    키: 'auto' | 'ref' | 'import' | 'prompt-gen' | 'prompt-ref'
   const [docs, setDocs] = useState({
     auto: null,
     ref: null,
@@ -116,8 +126,6 @@ export default function ScriptVoiceGenerator() {
     "prompt-gen": null,
     "prompt-ref": null,
   });
-
-  // 현재 탭의 문서만 미리보기에서 사용
   const currentDoc = docs[activeTab] || null;
 
   const importSrtRef = useRef(null);
@@ -226,7 +234,7 @@ export default function ScriptVoiceGenerator() {
       const topic = String(form.topic || "");
       const style = String(form.style || "");
 
-      // 자동/ref/import 계산치(프롬프트 탭은 계산해도 payload엔 안 실을 수 있음)
+      // 자동/ref/import 계산치
       const {
         totalSeconds,
         minCharacters,
@@ -241,7 +249,7 @@ export default function ScriptVoiceGenerator() {
       });
 
       // ----- 프롬프트 구성 -----
-      const prompt =
+      const compiledPrompt =
         tab === "prompt-gen"
           ? compilePromptRaw(genPrompt)
           : tab === "prompt-ref"
@@ -250,30 +258,32 @@ export default function ScriptVoiceGenerator() {
               topic,
               style,
               maxScenes,
-              referenceText: promptRefText, // Tab5 입력만 사용
+              referenceText: promptRefText,
             })
           : undefined;
 
       // ----- 공통 필드 -----
       const common = { llm: form.llmMain, duration, maxScenes, topic, style };
 
-      // ----- 베이스 payload (프롬프트 탭은 prompt만, 나머지는 계산치 포함) -----
-      const base =
-        tab === "prompt-gen" || tab === "prompt-ref"
-          ? { ...common, ...(prompt ? { prompt } : {}) }
-          : {
-              ...common,
-              minCharacters,
-              maxCharacters,
-              avgCharactersPerScene,
-              totalSeconds,
-              cpmMin,
-              cpmMax,
-              customPrompt: true,
-              ...(prompt ? { prompt } : {}),
-            };
+      // ----- payload 조립 -----
+      const isPromptTab = tab === "prompt-gen" || tab === "prompt-ref";
+      const base = isPromptTab
+        ? {
+            ...common,
+            ...(compiledPrompt ? { compiledPrompt } : {}),
+            customPrompt: true, // ✅ 프롬프트 탭에만 켬
+          }
+        : {
+            ...common,
+            // 자동/레퍼런스 탭: 길이정책 메타 포함
+            minCharacters,
+            maxCharacters,
+            avgCharactersPerScene,
+            totalSeconds,
+            cpmMin,
+            cpmMax,
+          };
 
-      // ----- 최종 호출 payload 조립 + 디버그 로그 출력 -----
       let invokePayload = null;
       if (normalized === "auto") {
         invokePayload = { ...base, type: "auto" };
@@ -281,20 +291,39 @@ export default function ScriptVoiceGenerator() {
         invokePayload = {
           ...base,
           type: "reference",
-          // Tab5(prompt-ref)은 promptRefText, Tab2(ref)은 refText
           referenceText: tab === "prompt-ref" ? promptRefText : refText,
         };
       } else if (normalized === "import") {
-        // import는 LLM 호출이 없으므로 패스
+        // import는 LLM 호출 없음
       }
 
-      // 🌈 디버그: 백엔드로 넘어가는 payload 확인용 (prompt는 preview만)
+      // 프롬프트 탭 로그 이벤트
+      if (isPromptTab) {
+        try {
+          window.dispatchEvent(
+            new CustomEvent("prompt:willSend", {
+              detail: {
+                tab,
+                model: form.llmMain,
+                compiledPrompt: compiledPrompt || "",
+                isPromptTab: true,
+                ts: Date.now(),
+              },
+            })
+          );
+        } catch {}
+      }
+
+      // 디버그 로그 (compiledPrompt preview만)
       try {
         if (invokePayload) {
           const dbg = { ...invokePayload };
-          if (dbg.prompt) {
-            dbg.promptPreview = String(dbg.prompt).slice(0, 400);
-            delete dbg.prompt;
+          if (dbg.compiledPrompt) {
+            dbg.compiledPromptPreview = String(dbg.compiledPrompt).slice(
+              0,
+              400
+            );
+            delete dbg.compiledPrompt;
           }
           console.groupCollapsed(
             "%c[LLM] llm/generateScript payload",
@@ -314,12 +343,9 @@ export default function ScriptVoiceGenerator() {
 
       // ----- 호출 -----
       let generatedDoc = null;
-      if (normalized === "auto") {
-        generatedDoc = await call("llm/generateScript", invokePayload);
-      } else if (normalized === "ref") {
+      if (normalized === "auto" || normalized === "ref") {
         generatedDoc = await call("llm/generateScript", invokePayload);
       } else if (normalized === "import") {
-        // 현재 탭(import)에 이미 로드되어 있는 문서를 사용
         generatedDoc = docs[tab] || null;
       }
 
@@ -328,7 +354,7 @@ export default function ScriptVoiceGenerator() {
       if (!generatedDoc?.scenes?.length)
         throw new Error("대본 생성 결과가 비어있습니다.");
 
-      // ✅ 생성된 문서를 현재 탭에만 저장 (다른 탭과 공유 금지)
+      // 현재 탭에만 저장
       setDocs((prev) => ({ ...prev, [tab]: generatedDoc }));
 
       // ---------- SRT ----------
@@ -413,7 +439,6 @@ export default function ScriptVoiceGenerator() {
     setError("");
     try {
       const parsed = await call("script/importSrt", { srtText: text });
-      // ⬇️ 가져온 문서도 import 탭에만 저장
       setDocs((prev) => ({ ...prev, import: parsed }));
       setStatus("idle");
       setPhase("대본 불러오기 완료");
@@ -444,7 +469,7 @@ export default function ScriptVoiceGenerator() {
     (activeTab === "ref" && refText.trim()) ||
     (activeTab === "import" && !!docs.import) ||
     (activeTab === "prompt-gen" && genPrompt.trim()) ||
-    (activeTab === "prompt-ref" && refPrompt.trim() && promptRefText.trim()); // Tab5는 refText 대신 promptRefText 확인
+    (activeTab === "prompt-ref" && refPrompt.trim() && promptRefText.trim());
 
   // ---------------- 렌더 ----------------
   return (
@@ -630,7 +655,25 @@ export default function ScriptVoiceGenerator() {
                     {secToTime(sc.start)}–{secToTime(sc.end)}
                   </Td>
                   <Td className="text-center">
-                    {sc.charCount ?? sc.text?.length}
+                    {(() => {
+                      const computed = safeCharCount(sc.text);
+                      const reported = Number.isFinite(sc?.charCount)
+                        ? sc.charCount
+                        : undefined;
+                      return (
+                        <>
+                          {computed}
+                          {reported !== undefined && reported !== computed && (
+                            <span
+                              className="ml-1 text-[10px] text-slate-400"
+                              title={`model:${reported}`}
+                            >
+                              ({reported})
+                            </span>
+                          )}
+                        </>
+                      );
+                    })()}
                   </Td>
                   <Td className="text-slate-700">{sc.text}</Td>
                 </tr>

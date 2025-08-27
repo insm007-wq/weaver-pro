@@ -1,4 +1,3 @@
-// electron/ipc/llm/providers/openai.js
 const OpenAI = require("openai");
 const { getSecret } = require("../../../services/secrets");
 const {
@@ -14,6 +13,22 @@ const {
   buildRepairInstruction,
 } = require("../common");
 
+/* ======================= 글자수(공백 포함) 통일 계산기 ======================= */
+// - NFC 정규화
+// - 제로폭 문자 제거(U+200B~U+200D, U+FEFF)
+// - 코드포인트 기준 길이(Array.from)
+function normalizeForCount(s) {
+  let t = String(s ?? "");
+  try {
+    t = t.normalize("NFC");
+  } catch {}
+  t = t.replace(/\r\n/g, "\n").replace(/[\u200B-\u200D\uFEFF]/g, "");
+  return t;
+}
+function countCharsKo(s) {
+  return Array.from(normalizeForCount(s)).length;
+}
+
 /* ======================= DEBUG ======================= */
 const DEBUG_LEN = false;
 function debug(...args) {
@@ -26,9 +41,10 @@ function debugScenes(label, scenes, policy) {
   try {
     const rows = (scenes || []).map((s, i) => {
       const sec = Number(s?.duration) || 0;
-      const n = Number.isFinite(s?.charCount)
-        ? Number(s.charCount)
-        : measureCharCount(s?.text || "");
+      const n =
+        Number.isFinite(s?.charCount) && s.charCount >= 0
+          ? s.charCount
+          : countCharsKo(s?.text);
       const b = policy?.boundsForSec ? policy.boundsForSec(sec) : null;
       return {
         i,
@@ -41,15 +57,6 @@ function debugScenes(label, scenes, policy) {
     });
     debug(label, rows);
   } catch {}
-}
-
-/* ======================= 문자수 측정(일관화) ======================= */
-/** 코드포인트 기준 문자수. NFC 정규화 + 제로폭/불가시 공백 제거 */
-function measureCharCount(s = "") {
-  const cleaned = String(s)
-    .normalize("NFC")
-    .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ""); // ZWJ/ZWNJ/ZWSP/BOM/NBSP 제거
-  return Array.from(cleaned).length;
 }
 
 /* ======================= 모델/폴백 ======================= */
@@ -234,7 +241,9 @@ function violatesLengthPolicy(doc, policy) {
   try {
     const scenes = Array.isArray(doc?.scenes) ? doc.scenes : [];
     const totalChars = scenes.reduce(
-      (s, x) => s + measureCharCount(x?.text || ""),
+      (s, x) =>
+        s +
+        (Number.isFinite(x?.charCount) ? x.charCount : countCharsKo(x?.text)),
       0
     );
     const totalBad =
@@ -247,7 +256,9 @@ function violatesLengthPolicy(doc, policy) {
     for (const sc of scenes) {
       const sec = Number.isFinite(sc?.duration) ? Number(sc.duration) : 0;
       const { min, max } = policy.boundsForSec(sec);
-      const n = measureCharCount(sc?.text || "");
+      const n = Number.isFinite(sc?.charCount)
+        ? sc.charCount
+        : countCharsKo(sc?.text);
       if (n < min) anyStrictFail = true; // 최소치 미만 즉시 실패
       if (n && (n < min * 0.9 || n > max * 1.1)) softOutCount++;
     }
@@ -331,7 +342,9 @@ async function expandOrCondenseScenesOpenAI({
     .map((s, i) => {
       const sec = Number.isFinite(s?.duration) ? Number(s.duration) : 0;
       const { min, max } = policy.boundsForSec(sec);
-      const len = measureCharCount(s?.text || "");
+      const len = Number.isFinite(s?.charCount)
+        ? s.charCount
+        : countCharsKo(s?.text);
       const under = min - len; // 양수면 부족
       const over = len - Math.round(max * 1.05); // 양수면 초과
       const gap = Math.max(under, over, 0);
@@ -346,7 +359,9 @@ async function expandOrCondenseScenesOpenAI({
   for (const i of badIdx) {
     const sc = out.scenes[i];
     const baseText = String(sc.text || "");
-    const curLen = measureCharCount(baseText);
+    const curLen = Number.isFinite(sc?.charCount)
+      ? sc.charCount
+      : countCharsKo(baseText);
 
     const sec = Number.isFinite(sc?.duration) ? Number(sc.duration) : 0;
     const {
@@ -400,16 +415,9 @@ async function expandOrCondenseScenesOpenAI({
     const unfenced = stripFence(raw || "");
     const obj = tryParse(unfenced) || {};
     const newText = String(obj?.text || baseText);
-    const newLen = measureCharCount(newText);
+    const newLen = countCharsKo(newText);
 
-    out.scenes[i] = {
-      ...sc,
-      text: newText,
-      charCount: newLen, // ✅ 우리 측정값
-      _aiCharCount: Number.isFinite(obj?.charCount)
-        ? Math.round(Number(obj.charCount))
-        : sc._aiCharCount,
-    };
+    out.scenes[i] = { ...sc, text: newText, charCount: newLen };
     debug(`scene#${i} after`, {
       newLen,
       min: targetMin,
@@ -430,7 +438,7 @@ async function callOpenAIGpt5Mini(payload) {
     prompt, // 프롬프트 탭에서 온 원문
     compiledPrompt, // 일부 탭에서 전달될 수 있음
     customPrompt, // 프롬프트 우선 모드 플래그
-    type, // 'auto' | 'reference' | 'import' | 'prompt-gen' | 'prompt-ref' ...
+    type, // 'auto' | 'reference' | 'import' | ...
     topic,
     style,
     duration,
@@ -444,7 +452,7 @@ async function callOpenAIGpt5Mini(payload) {
 
   const policy = calcLengthPolicy({ duration, maxScenes, cpmMin, cpmMax });
 
-  // 프롬프트 선택: 프롬프트 탭은 원문, auto/ref는 정책형 프롬프트
+  // 프롬프트 선택
   const useCompiled = !!(compiledPrompt && String(compiledPrompt).trim());
   const userPrompt =
     useCompiled || customPrompt
@@ -457,7 +465,7 @@ async function callOpenAIGpt5Mini(payload) {
           policy,
         });
 
-  // 디버그: 보낸 프롬프트 일부 저장
+  // 디버그 저장
   try {
     dumpRaw("openai-user-prompt", {
       modelPrimary: primary,
@@ -479,7 +487,6 @@ async function callOpenAIGpt5Mini(payload) {
     { role: "user", content: userPrompt },
   ];
 
-  // 토큰 예산
   const requested = Math.max(
     6000,
     Math.ceil(policy.totalTgt * 1.2),
@@ -495,7 +502,7 @@ async function callOpenAIGpt5Mini(payload) {
   let usedModel = primary;
   let notice = null;
 
-  // 1차(GPT-5) 시도
+  // 1차
   try {
     rawText = await chatJsonOrFallbackFreeText(
       client,
@@ -518,7 +525,7 @@ async function callOpenAIGpt5Mini(payload) {
   let parsed = null;
   if (rawText) parsed = coerceToScenesShape(extractLargestJson(rawText) || {});
 
-  // 폴백 조건: 응답 없음/파싱 실패
+  // 폴백
   if (!rawText || !validateScriptDocLoose(parsed)) {
     if (!notice) {
       notice =
@@ -540,10 +547,9 @@ async function callOpenAIGpt5Mini(payload) {
     }
   }
 
-  // 정규화 + charCount 강제 재측정
+  // 정규화 + charCount 강제 재계산
   parsed.scenes = parsed.scenes.map((s, i) => {
     const text = pickText(s);
-    const measured = measureCharCount(text);
     return {
       ...(typeof s === "object" ? s : {}),
       id: s?.id ? String(s.id) : `s${i + 1}`,
@@ -551,11 +557,7 @@ async function callOpenAIGpt5Mini(payload) {
       duration: Number.isFinite(s?.duration)
         ? Math.round(Number(s.duration))
         : undefined,
-      _aiCharCount:
-        Number.isFinite(s?.charCount) && s.charCount > 0
-          ? Math.round(Number(s.charCount))
-          : undefined,
-      charCount: measured, // ✅ 우리 측정값 사용
+      charCount: countCharsKo(text),
     };
   });
   debugScenes("parsed scenes", parsed.scenes, policy);
@@ -568,13 +570,13 @@ async function callOpenAIGpt5Mini(payload) {
     ),
   });
 
-  // 길이 정책 강제: 자동/레퍼런스 탭(프롬프트 중심이 아닐 때만)
+  // 길이 정책 강제: 자동/레퍼런스만 (프롬프트 탭은 분량 보정은 건너뛰되 카운트는 이미 통일됨)
   if ((type === "auto" || type === "reference") && !customPrompt) {
     let violated = violatesLengthPolicy(out, policy);
     debug("violates after parse:", violated);
 
     if (violated) {
-      // (a) 구조/시간 보정 1회
+      // (a) 구조/시간 보정
       try {
         const repairPrompt = buildRepairInstruction(topic, style);
         const repairInput = buildRepairInput(out);
@@ -596,19 +598,15 @@ async function callOpenAIGpt5Mini(payload) {
         );
         if (validateScriptDocLoose(fixed)) {
           fixed.scenes = fixed.scenes.map((s, i) => {
-            const t = pickText(s);
+            const text = pickText(s);
             return {
               ...(typeof s === "object" ? s : {}),
               id: out.scenes[i]?.id || `s${i + 1}`,
-              text: t,
+              text,
               duration: Number.isFinite(s?.duration)
                 ? Math.round(Number(s.duration))
                 : out.scenes[i].duration,
-              _aiCharCount:
-                Number.isFinite(s?.charCount) && s.charCount > 0
-                  ? Math.round(Number(s.charCount))
-                  : undefined,
-              charCount: measureCharCount(t),
+              charCount: countCharsKo(text),
             };
           });
           out = formatScenes(fixed, topic, duration, maxScenes, {
