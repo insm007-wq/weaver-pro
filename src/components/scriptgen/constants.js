@@ -1,3 +1,4 @@
+// src/constants.js
 export const DUR_OPTIONS = [1, 3, 5, 7, 10, 15, 20, 25, 30];
 export const MAX_SCENE_OPTIONS = [6, 8, 10, 12, 15, 20, 25, 30];
 
@@ -25,6 +26,7 @@ export const VOICES_BY_ENGINE = {
   openai: ["alloy", "nova", "verse"],
 };
 
+// ✅ 대본 프롬프트(원문 그대로 전송). 필요시 사용자가 직접 템플릿을 편집함.
 export const DEFAULT_GENERATE_PROMPT = `다음 조건에 맞는 {duration}분 길이의 영상 대본을 작성해주세요:
 
 주제: {topic}
@@ -109,30 +111,40 @@ export const DEFAULT_GENERATE_PROMPT = `다음 조건에 맞는 {duration}분 �
 ✅ 짧은 텍스트에 긴 duration 설정 금지
 ✅ 너무 긴 텍스트에 짧은 duration 설정 금지`;
 
-// src/components/constants.js
-export const DEFAULT_REFERENCE_PROMPT = `## 레퍼런스 대본 분석 및 적용
+// ✅ 레퍼런스 프롬프트 — {referenceText}, {duration}, {topic}, {maxScenes}만 치환
+export const DEFAULT_REFERENCE_PROMPT = `
+## 레퍼런스 대본 분석 및 적용
 
-다음 레퍼런스 대본을 분석하고 그 장점을 활용해주세요:
+요청 사양:
+- 분량: {duration}분
+- 최대 장면 수: {maxScenes}개
+- 주제: {topic}
+- 언어: 한국어
 
 === 레퍼런스 대본 ===
-{referenceScript}
+{referenceText}
 === 레퍼런스 대본 끝 ===
 
-레퍼런스 대본 분석 요청:
-1. 위 레퍼런스 대본의 어투와 스타일을 분석하세요
-2. 문장 구조와 전개 방식을 파악하세요
-3. 시청자의 관심을 끄는 방법을 찾으세요
-4. 정보 전달 방식과 설명 기법을 분석하세요
-5. 장면 전환과 흐름을 참고하세요
+지시사항:
+1) 레퍼런스의 어투/톤, 전개 방식, 설명 기법을 분석하세요.
+2) 구조적 장점은 유지하되, 내용은 주제({topic})에 맞춰 **완전히 새로 작성**하세요.
+3) 총 분량이 {duration}분을 충족하도록 충분한 텍스트를 작성하세요.
+4) 씬은 1~{maxScenes}개로 구성하고, **각 씬의 텍스트 길이와 duration이 일치**하도록 작성하세요
+   (짧은 텍스트에 긴 duration 금지).
+5) 각 씬마다 화면에 보여줄 **시각적 설명(visual_description)**을 1~2문장 포함하세요.
 
-적용 방법:
-- 레퍼런스 대본의 어투와 스타일을 유지하면서 내 주제({topic})에 맞게 변형
-- 레퍼런스 대본의 구조적 장점을 참고하되, 새로운 내용으로 완전히 재작성
-- 레퍼런스 대본의 시청자 참여 방식이나 설명 기법을 활용
-- 전체적인 톤앤매너와 전개 방식을 참고하여 더 매력적인 대본 생성
-
-주의사항:
-- 레퍼런스 대본의 내용을 복사하지 말고, 스타일과 구조만 참고하세요
-- 반드시 주제({topic})에 맞는 새로운 내용으로 작성하세요
-- 레퍼런스 대본보다 더 나은 품질의 대본을 만들어주세요
+반드시 유효한 JSON으로만 응답하세요:
+{
+  "title": "영상 제목",
+  "total_duration": {duration},
+  "scenes": [
+    {
+      "scene_number": 1,
+      "text": "씬 1의 상세 대본",
+      "duration": 60,
+      "character_count": "실제 글자 수",
+      "visual_description": "화면에 보여줄 내용"
+    }
+  ]
+}
 `.trim();

@@ -4,7 +4,7 @@ import { Card, TabButton, Th, Td } from "./parts/SmallUI";
 import { ProgressBar, IndeterminateBar } from "./parts/ProgressBar";
 import AutoTab from "./tabs/AutoTab";
 import RefTab from "./tabs/RefTab";
-import ImportTab from "./tabs/ImportTab";
+// import ImportTab from "./tabs/ImportTab"; // 🔒 가져오기 기능 전체 비활성
 import {
   VOICES_BY_ENGINE,
   DEFAULT_GENERATE_PROMPT,
@@ -32,11 +32,11 @@ function safeCharCount(s) {
  * - 자동 탭(auto): 기존 정책 유지(분당 300~400자)
  * - 프롬프트 탭은 "프롬프트 중심"
  *   - prompt-gen: 프롬프트 원문 그대로 전송
- *   - prompt-ref: 4개 값(duration/topic/style/maxScenes) + referenceText만 치환
+ *   - prompt-ref: {referenceText}, {duration}, {topic}, {maxScenes}만 치환
  */
 const CHAR_BUDGETS = {
   auto: { perMinMin: 300, perMinMax: 400 },
-  perSceneFallback: { min: 500, max: 900 }, // ref/import 계산용
+  perSceneFallback: { min: 500, max: 900 }, // ref 계산용
 };
 
 function computeCharBudget({ tab, durationMin, maxScenes }) {
@@ -66,7 +66,7 @@ function computeCharBudget({ tab, durationMin, maxScenes }) {
     };
   }
 
-  // ref/import: 대략 per-scene 기준
+  // ref: 대략 per-scene 기준
   const { min, max } = CHAR_BUDGETS.perSceneFallback;
   const minCharacters = scenes * min;
   const maxCharacters = scenes * max;
@@ -82,22 +82,41 @@ function compilePromptRaw(tpl) {
   return String(tpl ?? "");
 }
 
-/** 레퍼런스 프롬프트 치환 (4개 + referenceText) */
-function compileRefPrompt(
-  tpl,
-  { duration, topic, style, maxScenes, referenceText }
-) {
+/** 레퍼런스 프롬프트 치환 — 4개 키만 치환({referenceText}, {duration}, {topic}, {maxScenes}) */
+function compileRefPrompt(tpl, { referenceText, duration, topic, maxScenes }) {
   let s = String(tpl ?? "");
   const dict = {
-    duration,
-    topic,
-    style,
-    maxScenes,
     referenceText: referenceText ?? "",
+    duration: duration ?? "",
+    topic: topic ?? "",
+    maxScenes: maxScenes ?? "",
   };
-  for (const [k, v] of Object.entries(dict))
-    s = s.replaceAll(`{${k}}`, String(v ?? ""));
+  for (const [k, v] of Object.entries(dict)) {
+    s = s.replaceAll(`{${k}}`, String(v));
+  }
   return s;
+}
+
+/* ========================= 분량/씬수 추출 유틸 =========================
+   - prompt-gen 뿐 아니라 prompt-ref 템플릿(refPrompt)에서도
+     상단의 "N분", "최대 장면 수: M" 패턴을 읽어 duration/maxScenes 보정 */
+function extractDurationMinFromText(s) {
+  const t = String(s || "");
+  const m1 = t.match(/(\d+(?:\.\d+)?)\s*분/); // 예: 7분, 7.5분
+  const m2 = t.match(/(\d+(?:\.\d+)?)\s*(?:minutes?|mins?)/i);
+  const v = m1 ? parseFloat(m1[1]) : m2 ? parseFloat(m2[1]) : NaN;
+  if (!Number.isFinite(v)) return null;
+  return Math.max(1, Math.round(v));
+}
+function extractMaxScenesFromText(s) {
+  const t = String(s || "");
+  const m =
+    t.match(/최대\s*장면\s*수\s*[:=]?\s*(\d+)/) ||
+    t.match(/최대\s*장면수\s*[:=]?\s*(\d+)/) ||
+    t.match(/max\s*scenes?\s*[:=]?\s*(\d+)/i);
+  const v = m ? parseInt(m[1], 10) : NaN;
+  if (!Number.isFinite(v)) return null;
+  return Math.max(1, v);
 }
 
 export default function ScriptVoiceGenerator() {
@@ -116,20 +135,16 @@ export default function ScriptVoiceGenerator() {
     pitch: 0,
   });
 
-  // 탭별 입력/문서 분리
-  const [refText, setRefText] = useState(""); // Tab2 전용
-  const [promptRefText, setPromptRefText] = useState(""); // Tab5 전용
+  // 탭별 입력/문서 분리 (각 탭 독립 상태)
+  const [refText, setRefText] = useState(""); // 레퍼런스 기반 탭
+  const [promptRefText, setPromptRefText] = useState(""); // 레퍼런스 프롬프트 탭
   const [docs, setDocs] = useState({
     auto: null,
     ref: null,
-    import: null,
     "prompt-gen": null,
     "prompt-ref": null,
   });
   const currentDoc = docs[activeTab] || null;
-
-  const importSrtRef = useRef(null);
-  const importMp3Ref = useRef(null);
 
   // ---------------- 프롬프트 템플릿 ----------------
   const [genPrompt, setGenPrompt] = useState(DEFAULT_GENERATE_PROMPT);
@@ -216,9 +231,11 @@ export default function ScriptVoiceGenerator() {
   };
   useEffect(() => () => stopScriptIndicator(), []);
 
-  // ======================== 실행 플로우 ========================
+  // ======================== 실행 플로우(탭별 독립 실행) ========================
   const runGenerate = async (tab) => {
     // 백엔드 라우팅 기준으로 탭 정규화
+    //  - prompt-gen → auto 경로 사용(LLM 스크립트 생성)
+    //  - prompt-ref → ref 경로 사용(LLM 스크립트 생성, referenceText 제공)
     const normalized =
       tab === "prompt-gen" ? "auto" : tab === "prompt-ref" ? "ref" : tab;
 
@@ -229,12 +246,30 @@ export default function ScriptVoiceGenerator() {
     startScriptIndicator();
 
     try {
-      const duration = Number(form.durationMin);
-      const maxScenes = Number(form.maxScenes);
+      // ★ 기본은 폼 값
+      let duration = Number(form.durationMin);
+      let maxScenes = Number(form.maxScenes);
       const topic = String(form.topic || "");
       const style = String(form.style || "");
 
-      // 자동/ref/import 계산치
+      // ✅ prompt-gen: 프롬프트 상단의 "N분/최대 장면 수:M"을 읽어 오버라이드
+      if (tab === "prompt-gen") {
+        const dFromPrompt = extractDurationMinFromText(genPrompt);
+        if (Number.isFinite(dFromPrompt)) duration = dFromPrompt;
+        const sFromPrompt = extractMaxScenesFromText(genPrompt);
+        if (Number.isFinite(sFromPrompt)) maxScenes = sFromPrompt;
+      }
+
+      // ✅ prompt-ref: "레퍼런스 프롬프트(refPrompt) 본문"에서 분량/씬수를 읽어 오버라이드
+      //    - 사용 예: "요청 사양: 분량: 25분, 최대 장면 수: 15개"
+      if (tab === "prompt-ref") {
+        const dFromTpl = extractDurationMinFromText(refPrompt);
+        if (Number.isFinite(dFromTpl)) duration = dFromTpl;
+        const sFromTpl = extractMaxScenesFromText(refPrompt);
+        if (Number.isFinite(sFromTpl)) maxScenes = sFromTpl;
+      }
+
+      // 자동/ref 계산치 (프롬프트 탭은 정책치 전송 X)
       const {
         totalSeconds,
         minCharacters,
@@ -251,27 +286,26 @@ export default function ScriptVoiceGenerator() {
       // ----- 프롬프트 구성 -----
       const compiledPrompt =
         tab === "prompt-gen"
-          ? compilePromptRaw(genPrompt)
+          ? compilePromptRaw(genPrompt) // ✅ 원문 그대로 전송
           : tab === "prompt-ref"
           ? compileRefPrompt(refPrompt, {
+              referenceText: promptRefText, // ✅ 사용자 입력 레퍼런스
               duration,
               topic,
-              style,
               maxScenes,
-              referenceText: promptRefText,
             })
           : undefined;
 
       // ----- 공통 필드 -----
       const common = { llm: form.llmMain, duration, maxScenes, topic, style };
 
-      // ----- payload 조립 -----
+      // ----- payload 조립(탭 독립 분기) -----
       const isPromptTab = tab === "prompt-gen" || tab === "prompt-ref";
       const base = isPromptTab
         ? {
             ...common,
             ...(compiledPrompt ? { compiledPrompt } : {}),
-            customPrompt: true, // ✅ 프롬프트 탭에만 켬
+            customPrompt: true, // 🔒 프롬프트 탭은 길이 보정 루프 기본 비활성(백엔드에서 조건 처리)
           }
         : {
             ...common,
@@ -286,75 +320,33 @@ export default function ScriptVoiceGenerator() {
 
       let invokePayload = null;
       if (normalized === "auto") {
+        // 자동 생성(또는 prompt-gen)의 백엔드 라우트
         invokePayload = { ...base, type: "auto" };
       } else if (normalized === "ref") {
+        // 레퍼런스 기반(또는 prompt-ref)의 백엔드 라우트
         invokePayload = {
           ...base,
           type: "reference",
           referenceText: tab === "prompt-ref" ? promptRefText : refText,
         };
-      } else if (normalized === "import") {
-        // import는 LLM 호출 없음
       }
 
-      // 프롬프트 탭 로그 이벤트
-      if (isPromptTab) {
-        try {
-          window.dispatchEvent(
-            new CustomEvent("prompt:willSend", {
-              detail: {
-                tab,
-                model: form.llmMain,
-                compiledPrompt: compiledPrompt || "",
-                isPromptTab: true,
-                ts: Date.now(),
-              },
-            })
-          );
-        } catch {}
-      }
-
-      // 디버그 로그 (compiledPrompt preview만)
+      // ✅ 콘솔에 len 로그만 남김(로그 UI 없음)
       try {
-        if (invokePayload) {
-          const dbg = { ...invokePayload };
-          if (dbg.compiledPrompt) {
-            dbg.compiledPromptPreview = String(dbg.compiledPrompt).slice(
-              0,
-              400
-            );
-            delete dbg.compiledPrompt;
-          }
-          console.groupCollapsed(
-            "%c[LLM] llm/generateScript payload",
-            "color:#2563eb"
-          );
-          console.log(dbg);
-          console.groupEnd();
-        } else {
-          console.groupCollapsed(
-            "%c[LLM] import/no-llm run payload",
-            "color:#64748b"
-          );
-          console.log({ tab, normalized });
-          console.groupEnd();
+        if (compiledPrompt) {
+          console.log("[PROMPT LEN]", compiledPrompt.length);
         }
       } catch {}
 
       // ----- 호출 -----
-      let generatedDoc = null;
-      if (normalized === "auto" || normalized === "ref") {
-        generatedDoc = await call("llm/generateScript", invokePayload);
-      } else if (normalized === "import") {
-        generatedDoc = docs[tab] || null;
-      }
+      let generatedDoc = await call("llm/generateScript", invokePayload);
 
       // ----- 결과 처리 -----
       stopScriptIndicator();
       if (!generatedDoc?.scenes?.length)
         throw new Error("대본 생성 결과가 비어있습니다.");
 
-      // 현재 탭에만 저장
+      // 현재 탭의 결과만 저장(탭 독립)
       setDocs((prev) => ({ ...prev, [tab]: generatedDoc }));
 
       // ---------- SRT ----------
@@ -423,51 +415,13 @@ export default function ScriptVoiceGenerator() {
         e?.message ||
         "오류가 발생했습니다.";
       setError(msg);
-      try {
-        console.error("[generate] failed:", e);
-      } catch {}
     }
   };
 
-  // ---------------- 가져오기(SRT/MP3) ----------------
-  const handleImportSrt = async () => {
-    const file = importSrtRef.current?.files?.[0];
-    if (!file) return;
-    const text = await file.text();
-    setStatus("running");
-    setPhase("IMPORT");
-    setError("");
-    try {
-      const parsed = await call("script/importSrt", { srtText: text });
-      setDocs((prev) => ({ ...prev, import: parsed }));
-      setStatus("idle");
-      setPhase("대본 불러오기 완료");
-    } catch (e) {
-      setStatus("error");
-      setError(e?.message || "SRT 파싱 실패");
-    }
-  };
-
-  const handleUseUploadedMp3 = async () => {
-    const file = importMp3Ref.current?.files?.[0];
-    if (!file) return;
-    try {
-      await call("files/saveToProject", {
-        category: "audio",
-        fileName: "narration.mp3",
-        buffer: await file.arrayBuffer(),
-      });
-      setPhase("업로드한 오디오 저장 완료");
-    } catch {
-      setError("MP3 저장 실패");
-    }
-  };
-
-  // ---------------- 실행 가능 조건 ----------------
+  // ---------------- 실행 가능 조건(탭별 독립) ----------------
   const canRun =
     (activeTab === "auto" && form.topic.trim()) ||
     (activeTab === "ref" && refText.trim()) ||
-    (activeTab === "import" && !!docs.import) ||
     (activeTab === "prompt-gen" && genPrompt.trim()) ||
     (activeTab === "prompt-ref" && refPrompt.trim() && promptRefText.trim());
 
@@ -544,11 +498,6 @@ export default function ScriptVoiceGenerator() {
           label="레퍼런스 기반"
         />
         <TabButton
-          active={activeTab === "import"}
-          onClick={() => setActiveTab("import")}
-          label="가져오기 (SRT/MP3)"
-        />
-        <TabButton
           active={activeTab === "prompt-gen"}
           onClick={() => setActiveTab("prompt-gen")}
           label="대본 프롬프트"
@@ -577,19 +526,6 @@ export default function ScriptVoiceGenerator() {
           voices={voices}
           refText={refText}
           setRefText={setRefText}
-        />
-      )}
-
-      {activeTab === "import" && (
-        <ImportTab
-          form={form}
-          onChange={onChange}
-          voices={voices}
-          importSrtRef={importSrtRef}
-          importMp3Ref={importMp3Ref}
-          onImportSrt={handleImportSrt}
-          onUseMp3={handleUseUploadedMp3}
-          onRun={() => runGenerate("import")}
         />
       )}
 
