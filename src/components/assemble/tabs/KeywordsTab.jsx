@@ -3,6 +3,7 @@
 // 키워드 추출 + 스톡 영상 다운로드 탭 (한글 키워드 그대로 사용 / 번역·중복 옵션 제거)
 // - 버튼 클릭 시: 키워드가 없으면 AI로 추출 → 바로 Pexels/Pixabay에서 다운로드
 // - 검색: 엄격 1차 시도 → 없으면 1회 완화 폴백
+// - 진행률(퍼센트)은 저장 + 건너뜀(결과 없음/실패 등) 기준으로 반영
 // ----------------------------------------------------------------------------
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import SectionCard from "../parts/SectionCard";
@@ -18,7 +19,7 @@ const RES_PRESETS = [
 ];
 
 /* 진행상황 reducer */
-const progInit = { total: 0, picked: 0, saved: 0, rows: {} };
+const progInit = { total: 0, picked: 0, saved: 0, skipped: 0, rows: {} };
 function progReducer(state, action) {
   switch (action.type) {
     case "init": {
@@ -29,6 +30,7 @@ function progReducer(state, action) {
         total: action.keywords.length * action.perKeyword,
         picked: 0,
         saved: 0,
+        skipped: 0,
         rows,
       };
     }
@@ -61,6 +63,15 @@ function progReducer(state, action) {
           ...state.rows,
           [k]: { ...row, saved: nextSaved, status: "저장 중" },
         },
+      };
+    }
+    case "skip": {
+      const { k, n = 1 } = action;
+      const row = state.rows[k] || { picked: 0, saved: 0, status: "" };
+      return {
+        ...state,
+        skipped: state.skipped + n,
+        rows: { ...state.rows, [k]: { ...row } },
       };
     }
     case "done": {
@@ -99,7 +110,7 @@ export default function KeywordsTab() {
   // 진행 상황
   const [progress, dispatchProg] = useReducer(progReducer, progInit);
   const percent = progress.total
-    ? Math.round((progress.saved / progress.total) * 100)
+    ? Math.round(((progress.saved + progress.skipped) / progress.total) * 100)
     : 0;
   const savedRef = useRef(0);
   useEffect(() => {
@@ -277,24 +288,43 @@ export default function KeywordsTab() {
             });
           }
 
-          if (!r?.ok)
-            return dispatchProg({ type: "status", k, status: "실패" });
-          if (!Array.isArray(r.items) || r.items.length === 0)
-            return dispatchProg({ type: "status", k, status: "결과 없음" });
+          if (!r?.ok) {
+            dispatchProg({ type: "status", k, status: "실패" });
+            dispatchProg({ type: "skip", k, n: perKeyword }); // 실패도 완료(건너뜀)로 집계
+            return;
+          }
+          if (!Array.isArray(r.items) || r.items.length === 0) {
+            dispatchProg({ type: "status", k, status: "결과 없음" });
+            dispatchProg({ type: "skip", k, n: perKeyword }); // 결과 없음 → 전부 건너뜀
+            return;
+          }
 
           // 상위 결과에서 perKeyword 개수만 선택
           const picked = r.items.slice(0, Math.max(1, perKeyword));
           dispatchProg({ type: "picked", k, n: picked.length });
 
           for (const item of picked) {
-            if (!item?.url) continue;
+            if (!item?.url) {
+              dispatchProg({ type: "skip", k, n: 1 }); // URL 없으면 건너뜀
+              continue;
+            }
             dispatchProg({ type: "saved", k, n: 1 });
-            await window.api.saveUrlToProject({
-              url: item.url,
-              category: "videos",
-              fileName: item.filename,
-            });
+            try {
+              await window.api.saveUrlToProject({
+                url: item.url,
+                category: "videos",
+                fileName: item.filename,
+              });
+            } catch {
+              // 저장 실패도 진행률상 완료 처리로 집계
+              dispatchProg({ type: "skip", k, n: 1 });
+            }
           }
+
+          // 선택수가 목표보다 적으면 그 차이만큼 건너뜀
+          const deficit = Math.max(0, perKeyword - picked.length);
+          if (deficit) dispatchProg({ type: "skip", k, n: deficit });
+
           dispatchProg({ type: "done", k });
         })
       );
