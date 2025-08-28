@@ -4,6 +4,7 @@
 // - 버튼 클릭 시: 키워드가 없으면 AI로 추출 → 바로 Pexels/Pixabay에서 다운로드
 // - 검색: 엄격 1차 시도 → 없으면 1회 완화 폴백
 // - 진행률(퍼센트)은 저장 + 건너뜀(결과 없음/실패 등) 기준으로 반영
+// - 파일명 규칙: <키워드>_<번호2자리>_<provider>-<assetId>_<W>x<H>.<ext>
 // ----------------------------------------------------------------------------
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import SectionCard from "../parts/SectionCard";
@@ -18,7 +19,59 @@ const RES_PRESETS = [
   { id: "uhd", label: "4K (3840×2160)", w: 3840, h: 2160 },
 ];
 
-/* 진행상황 reducer */
+/* ============================== 파일명 유틸 ============================== */
+const pad2 = (n) => String(n).padStart(2, "0");
+const safe = (s) =>
+  String(s || "")
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .replace(/\s+/g, "_")
+    .slice(0, 40);
+
+function guessProvider(urlOrHost = "", fallback = "stock") {
+  const s = String(urlOrHost).toLowerCase();
+  if (s.includes("pexels")) return "pexels";
+  if (s.includes("pixabay")) return "pixabay";
+  return fallback;
+}
+
+function guessExt(from = "", def = "mp4") {
+  const m = String(from).match(/\.([a-z0-9]{2,4})(?:\?|#|$)/i);
+  return (m && m[1].toLowerCase()) || def;
+}
+
+function guessId(from = "") {
+  // url, filename 에서 가장 긴 숫자 덩어리 추출
+  const all = String(from).match(/\d{3,}/g);
+  return all && all.length ? all.sort((a, b) => b.length - a.length)[0] : null;
+}
+
+function guessWH(from = "", fallbackW, fallbackH) {
+  const m = String(from).match(/(\d{3,5})x(\d{3,5})/i);
+  if (m) return { w: +m[1], h: +m[2] };
+  return { w: fallbackW, h: fallbackH };
+}
+
+function buildNiceName(keyword, seq, item, chosenRes) {
+  const k = safe(keyword);
+  const host = tryGet(() => new URL(item.url).host) || "";
+  const provider = safe(item.provider || guessProvider(host));
+  const base = item.filename || item.url || "";
+  const ext = guessExt(base, "mp4");
+  const id = item.assetId || guessId(base) || "x";
+  const wh = guessWH(base, chosenRes.w, chosenRes.h);
+  return `${k}_${pad2(seq)}_${provider}-${id}_${wh.w}x${wh.h}.${ext}`;
+}
+
+function tryGet(fn, d = null) {
+  try {
+    return fn();
+  } catch {
+    return d;
+  }
+}
+
+/* ============================== 진행상황 reducer ============================== */
 const progInit = { total: 0, picked: 0, saved: 0, skipped: 0, rows: {} };
 function progReducer(state, action) {
   switch (action.type) {
@@ -122,6 +175,9 @@ export default function KeywordsTab() {
     () => RES_PRESETS.find((r) => r.id === resPreset) || RES_PRESETS[2],
     [resPreset]
   );
+
+  // 키워드별 시퀀스 (파일명 01, 02…)
+  const seqRef = useRef({});
 
   // 초기 키 확인
   useEffect(() => {
@@ -267,6 +323,9 @@ export default function KeywordsTab() {
       };
 
       const limit = pLimit(Math.max(1, Math.min(6, concurrency)));
+      seqRef.current = {}; // 파일명 번호 초기화 (키워드별)
+
+      const newlySaved = []; // 자동 배치용 메타(옵션)
 
       // 5) 병렬 작업 실행
       const tasks = runKeywords.map((k) =>
@@ -308,15 +367,34 @@ export default function KeywordsTab() {
               dispatchProg({ type: "skip", k, n: 1 }); // URL 없으면 건너뜀
               continue;
             }
+
+            // ★ 여기서 파일명 규칙 적용
+            const seq = (seqRef.current[k] = (seqRef.current[k] || 0) + 1);
+            const niceName = buildNiceName(k, seq, item, chosenRes);
+
             dispatchProg({ type: "saved", k, n: 1 });
             try {
-              await window.api.saveUrlToProject({
+              const save = await window.api.saveUrlToProject({
                 url: item.url,
                 category: "videos",
-                fileName: item.filename,
+                fileName: niceName,
               });
+
+              if (save?.ok) {
+                newlySaved.push({
+                  path: save.path,
+                  keyword: k,
+                  width: chosenRes.w,
+                  height: chosenRes.h,
+                  provider: item.provider || guessProvider(item.url || ""),
+                  assetId: item.assetId || guessId(item.url || "") || undefined,
+                  savedAt: Date.now(),
+                });
+              } else {
+                // 저장 실패도 진행률상 완료 처리로 집계(이미 saved +1 했으니 별도 skip 필요 없음)
+              }
             } catch {
-              // 저장 실패도 진행률상 완료 처리로 집계
+              // 저장 호출 자체 실패 → 스킵으로 보정
               dispatchProg({ type: "skip", k, n: 1 });
             }
           }
@@ -330,6 +408,14 @@ export default function KeywordsTab() {
       );
 
       await Promise.allSettled(tasks);
+
+      // (옵션) electron/services/autoplace.js 를 IPC로 노출했다면 자동 배치 호출
+      if (typeof window.api?.autoPlace === "function") {
+        try {
+          await window.api.autoPlace(newlySaved);
+        } catch {}
+      }
+
       setMsg(`다운로드 완료: ${savedRef.current}/${targetTotal}`);
     } catch (e) {
       console.error(e);
