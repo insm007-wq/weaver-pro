@@ -1,6 +1,6 @@
 // src/components/assemble/tabs/ArrangeTab.jsx
 // -----------------------------------------------------------------------------
-// 배치 & 타임라인 탭 (오토플레이/루프 보강 · 한 세트만 표시)
+//   배치 & 타임라인 탭 (오토플레이/루프 보강 · 한 세트만 표시)
 // - 새 영상 선택/드롭 시 미리보기 <video>가 즉시 재생되고 끝나면 반복
 // - 씬 목록 + 타임라인 + 미리보기 + 속성 **한 번만** 렌더 (중복 제거)
 // - 기존 UI/기능은 그대로 유지
@@ -9,7 +9,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SectionCard from "../parts/SectionCard";
 import TimelineView from "../parts/TimelineView";
-import ScenePreview from "../parts/ScenePreview"; // (미사용 가능: 유지해도 동작 영향 없음)
 import SceneList from "../parts/SceneList";
 import PropertiesDrawer from "../parts/PropertiesDrawer";
 

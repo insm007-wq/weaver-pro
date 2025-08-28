@@ -6,6 +6,8 @@
 // - 버퍼/URL 저장, 텍스트/바이너리 읽기
 // - ★ 스트리밍 다운로드: files/saveUrlToProject
 // - (이미지 처리용 sharp 제거)  → file:save-url 은 단순 저장만 수행
+// - ★ 테스트 모드: 동일 이름 덮어쓰기(폴더 (1) 생성/파일 (1) 접미사 방지)
+//   - OVERWRITE_MODE=true 로 동작 (필요시 false로 바꾸면 기존 방식 복원)
 // ============================================================================
 
 const { ipcMain, dialog, app } = require("electron");
@@ -16,7 +18,12 @@ const http = require("http");
 
 const REDIRECT = new Set([301, 302, 303, 307, 308]);
 
-// 현재 세션에서 선택/생성된 프로젝트 루트 (YYYY-MM-DD or YYYY-MM-DD (1) …)
+// ★ 테스트 모드: 덮어쓰기
+const OVERWRITE_MODE =
+  process.env.CW_OVERWRITE === "1" ||
+  process.env.NODE_ENV === "development" ||
+  true; // ← 테스트 동안 true 고정 (배포시 false로)
+
 let CURRENT_ROOT = null;
 
 /* =============================== utils =============================== */
@@ -123,23 +130,29 @@ function streamDownloadToFile(url, outPath, depth = 0) {
   });
 }
 
-/** 윈도우 스타일 파일명 중복 방지: name.ext → name (1).ext … */
-function ensureUniquePath(dir, fileName) {
+/**
+ * 파일 경로 결정:
+ * - OVERWRITE_MODE=true  : 같은 이름이 있어도 그대로 덮어쓰기
+ * - OVERWRITE_MODE=false : name.ext, name (1).ext, name (2).ext …
+ */
+function ensurePath(dir, fileName) {
   const parsed = path.parse(fileName || "file");
-  const safeBase = path.basename(sanitize(parsed.base)); // 하위 폴더 침범 방지
-  const baseName = safeBase || "file";
-  const nameOnly = path.parse(baseName).name;
-  const ext = path.parse(baseName).ext || "";
+  const safeBase = path.basename(sanitize(parsed.base)) || "file";
+  const out = path.join(dir, safeBase);
+  if (OVERWRITE_MODE) return out;
+
+  const nameOnly = path.parse(safeBase).name;
+  const ext = path.parse(safeBase).ext || "";
   let n = 0;
-  let out = path.join(dir, baseName);
-  while (fs.existsSync(out)) {
+  let candidate = out;
+  while (fs.existsSync(candidate)) {
     n += 1;
-    out = path.join(dir, `${nameOnly} (${n})${ext}`);
+    candidate = path.join(dir, `${nameOnly} (${n})${ext}`);
   }
-  return out;
+  return candidate;
 }
 
-/* =========== 날짜 프로젝트 루트 생성/질의 (YYYY-MM-DD (n)) =========== */
+/* =========== 날짜 프로젝트 루트 생성/질의 (YYYY-MM-DD) =========== */
 
 /** OS별 기본 베이스 폴더 */
 function getBaseRoot() {
@@ -151,9 +164,11 @@ function getBaseRoot() {
   return envBase || path.join(app.getPath("documents"), "ContentWeaver");
 }
 
-/** 베이스 아래에 YYYY-MM-DD 또는 YYYY-MM-DD (1) … 이름 제안 */
-function suggestDatedFolderName(baseDir) {
+/** 베이스 아래에 폴더 이름 결정(덮어쓰기 모드면 (1) 제거) */
+function decideDatedFolderName(baseDir) {
   const baseName = ymd();
+  if (OVERWRITE_MODE) return baseName; // 항상 YYYY-MM-DD 사용 (있으면 재사용)
+  // 비-덮어쓰기 모드에서는 (1), (2) 증가
   let name = baseName;
   let n = 0;
   while (fs.existsSync(path.join(baseDir, name))) {
@@ -166,8 +181,9 @@ function suggestDatedFolderName(baseDir) {
 /** 날짜 프로젝트 루트 생성(하위 디렉토리 포함) */
 function createDatedProjectRoot(baseDir) {
   ensureDirSync(baseDir);
-  const folderName = suggestDatedFolderName(baseDir);
+  const folderName = decideDatedFolderName(baseDir);
   const root = path.join(baseDir, folderName);
+  // 덮어쓰기 모드: 이미 있어도 그대로 사용
   ensureDirSync(root);
   for (const sub of ["audio", "electron_data", "exports", "subtitle", "videos"])
     ensureDirSync(path.join(root, sub));
@@ -195,7 +211,7 @@ ipcMain.handle("files:exists", async (_e, filePath) => {
   }
 });
 
-/** ✅ 베이스 폴더 선택 → 날짜 폴더 자동 생성 + 하위 디렉토리 생성 */
+/** ✅ 베이스 폴더 선택 → 날짜 폴더 생성(덮어쓰기 모드면 YYYY-MM-DD 재사용) */
 ipcMain.handle("files/selectDatedProjectRoot", async () => {
   try {
     const baseSuggest = getBaseRoot();
@@ -291,6 +307,7 @@ ipcMain.handle("file:save-url", async (_e, payload = {}) => {
  * ✅ URL(주로 동영상)을 현재 프로젝트에 바로 저장 (대화상자 없음)
  * payload: { url, category?="videos", fileName? }
  *  - 리다이렉트/대용량 스트리밍 지원
+ *  - OVERWRITE_MODE=true 이면 동일 파일명 덮어쓰기
  */
 ipcMain.handle("files/saveUrlToProject", async (_evt, payload = {}) => {
   try {
@@ -304,7 +321,7 @@ ipcMain.handle("files/saveUrlToProject", async (_evt, payload = {}) => {
     const dir = path.join(root, sanitize(category));
     ensureDirSync(dir);
 
-    // 파일명 결정: 우선 전달값, 없으면 URL 경로에서 추출, 실패 시 기본값
+    // 파일명 결정
     let base =
       (fileName && String(fileName).trim()) ||
       (() => {
@@ -317,9 +334,12 @@ ipcMain.handle("files/saveUrlToProject", async (_evt, payload = {}) => {
         }
       })();
 
-    const outPath = ensureUniquePath(dir, base);
+    const outPath = ensurePath(dir, base);
 
-    // 스트리밍 다운로드
+    // 스트리밍 다운로드 (덮어쓰기 모드면 기존 파일 위에 쓰기)
+    if (OVERWRITE_MODE && fs.existsSync(outPath)) {
+      await fs.promises.rm(outPath, { force: true });
+    }
     await streamDownloadToFile(url, outPath);
 
     return { ok: true, path: outPath };
@@ -339,7 +359,10 @@ ipcMain.handle("files/saveToProject", async (_evt, payload = {}) => {
     const dir = path.join(root, sanitize(category));
     ensureDirSync(dir);
 
-    const targetPath = ensureUniquePath(dir, fileName);
+    const targetPath = ensurePath(dir, fileName);
+    if (OVERWRITE_MODE && fs.existsSync(targetPath)) {
+      await fs.promises.rm(targetPath, { force: true });
+    }
     const out = toBuffer(buffer);
     await fs.promises.writeFile(targetPath, out);
 
