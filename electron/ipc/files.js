@@ -1,10 +1,11 @@
 // electron/ipc/files.js
 // ============================================================================
-// 파일/폴더 유틸 IPC 모듈 (전체본)
+// 파일/폴더 유틸 IPC 모듈 (전체)
 // - 날짜 기반 프로젝트 루트 생성 및 하위 디렉토리 생성
 // - 파일/폴더 존재 확인 (files:exists)
-// - 윈도우 스타일 중복 이름 제안 (ensureUniquePath)
-// - 버퍼/URL 저장, 텍스트/바이너리 읽기 등
+// - 버퍼/URL 저장, 텍스트/바이너리 읽기
+// - ★ 스트리밍 다운로드: files/saveUrlToProject
+// - (이미지 처리용 sharp 제거)  → file:save-url 은 단순 저장만 수행
 // ============================================================================
 
 const { ipcMain, dialog, app } = require("electron");
@@ -12,29 +13,28 @@ const fs = require("fs");
 const path = require("path");
 const https = require("https");
 const http = require("http");
-const sharp = require("sharp");
 
 const REDIRECT = new Set([301, 302, 303, 307, 308]);
 
-// 현재 세션에서 선택/생성된 프로젝트 루트 (YYYY-MM-DD or YYYY-MM-DD (1) ...)
+// 현재 세션에서 선택/생성된 프로젝트 루트 (YYYY-MM-DD or YYYY-MM-DD (1) …)
 let CURRENT_ROOT = null;
 
 /* =============================== utils =============================== */
 
-/** yyyy-mm-dd (오늘) */
+/** yyyy-mm-dd (오늘) 문자열 */
 function ymd(today = new Date()) {
   const y = today.getFullYear();
   const m = String(today.getMonth() + 1).padStart(2, "0");
   const d = String(today.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`; // 예: 2025-08-23
+  return `${y}-${m}-${d}`;
 }
 
-/** 디렉터리 보장 */
+/** 디렉터리 존재 보장 */
 function ensureDirSync(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
-/** 경로 문자열 정리 (상위 디렉터리 이탈/중복 슬래시 등 제거) */
+/** 경로 문자열 정리 (상위 폴더 이탈, 중복 슬래시 제거) */
 function sanitize(p) {
   return String(p || "")
     .replace(/\\/g, "/")
@@ -69,7 +69,7 @@ function parseDataUrl(dataUrl) {
   return Buffer.from(m[2], "base64");
 }
 
-/** 소형 파일 다운로드 → Buffer */
+/** 소형 파일 다운로드 → Buffer (리다이렉트 처리) */
 function downloadBuffer(url, depth = 0) {
   return new Promise((resolve, reject) => {
     if (depth > 5) return reject(new Error("too_many_redirects"));
@@ -94,7 +94,7 @@ function downloadBuffer(url, depth = 0) {
   });
 }
 
-/** 대용량(영상 등) 다운로드 → 파일로 저장(스트리밍) */
+/** 대용량(영상 등) 다운로드 → 파일로 저장(스트리밍, 리다이렉트 처리) */
 function streamDownloadToFile(url, outPath, depth = 0) {
   return new Promise((resolve, reject) => {
     if (depth > 5) return reject(new Error("too_many_redirects"));
@@ -123,19 +123,18 @@ function streamDownloadToFile(url, outPath, depth = 0) {
   });
 }
 
-/** 윈도우 스타일 파일명 중복 방지: name.ext → name (1).ext ... */
+/** 윈도우 스타일 파일명 중복 방지: name.ext → name (1).ext … */
 function ensureUniquePath(dir, fileName) {
   const parsed = path.parse(fileName || "file");
   const safeBase = path.basename(sanitize(parsed.base)); // 하위 폴더 침범 방지
   const baseName = safeBase || "file";
   const nameOnly = path.parse(baseName).name;
   const ext = path.parse(baseName).ext || "";
-
   let n = 0;
   let out = path.join(dir, baseName);
   while (fs.existsSync(out)) {
     n += 1;
-    out = path.join(dir, `${nameOnly} (${n})${ext}`); // 공백 + 괄호
+    out = path.join(dir, `${nameOnly} (${n})${ext}`);
   }
   return out;
 }
@@ -164,23 +163,14 @@ function suggestDatedFolderName(baseDir) {
   return name;
 }
 
-/** 날짜 프로젝트 루트 생성(하위 5개 디렉토리 포함) */
+/** 날짜 프로젝트 루트 생성(하위 디렉토리 포함) */
 function createDatedProjectRoot(baseDir) {
   ensureDirSync(baseDir);
   const folderName = suggestDatedFolderName(baseDir);
   const root = path.join(baseDir, folderName);
   ensureDirSync(root);
-
-  for (const sub of [
-    "audio",
-    "electron_data",
-    "exports",
-    "subtitle",
-    "videos",
-  ]) {
+  for (const sub of ["audio", "electron_data", "exports", "subtitle", "videos"])
     ensureDirSync(path.join(root, sub));
-  }
-
   CURRENT_ROOT = root;
   return root;
 }
@@ -194,7 +184,7 @@ function getProjectRoot() {
 
 /* =============================== IPCs =============================== */
 
-/** ✅ 파일/폴더 존재 확인: window.api.checkPathExists(path) */
+/** ✅ 파일/폴더 존재 확인 */
 ipcMain.handle("files:exists", async (_e, filePath) => {
   try {
     if (!filePath) return { exists: false };
@@ -205,14 +195,10 @@ ipcMain.handle("files:exists", async (_e, filePath) => {
   }
 });
 
-/**
- * ✅ 베이스 폴더 선택 → 날짜 폴더 자동 생성 + 하위 디렉토리 생성
- * 반환: { ok, root, subdirs: { audio, electron_data, exports, subtitle, videos } }
- */
+/** ✅ 베이스 폴더 선택 → 날짜 폴더 자동 생성 + 하위 디렉토리 생성 */
 ipcMain.handle("files/selectDatedProjectRoot", async () => {
   try {
     const baseSuggest = getBaseRoot();
-
     const { canceled, filePaths } = await dialog.showOpenDialog({
       title: "저장 위치(베이스 폴더) 선택",
       defaultPath: baseSuggest,
@@ -221,10 +207,8 @@ ipcMain.handle("files/selectDatedProjectRoot", async () => {
     });
     if (canceled || !filePaths?.length)
       return { ok: false, message: "canceled" };
-
     const baseDir = filePaths[0];
     const root = createDatedProjectRoot(baseDir);
-
     const sub = {
       audio: path.join(root, "audio"),
       electron_data: path.join(root, "electron_data"),
@@ -257,59 +241,97 @@ ipcMain.handle("files/getProjectRoot", async () => {
 
 /* ========================== 저장/읽기 핸들러 ========================== */
 
-/** 이미지/데이터 URL을 OS 저장 대화상자로 저장 (항상 JPG) — 이미지 전용 */
+/**
+ * ✅ 이미지/데이터 URL을 OS 저장 대화상자로 저장
+ * - sharp 없이 단순 저장 (확장자는 suggestedName 또는 URL에서 추정)
+ */
 ipcMain.handle("file:save-url", async (_e, payload = {}) => {
   try {
-    const { url, suggestedName } = payload;
+    const { url, suggestedName = "image.jpg" } = payload || {};
     if (!url || typeof url !== "string") {
       return { ok: false, message: "url_required" };
     }
-    const baseName = (suggestedName || "thumbnail").replace(/\.[^/.]+$/, "");
 
-    // 기본 경로: 현재 프로젝트 루트의 exports 폴더
+    // 기본 저장 위치: 프로젝트/exports
     const root = getProjectRoot();
     const exportsDir = path.join(root, "exports");
     ensureDirSync(exportsDir);
-    const defaultPath = path.join(exportsDir, `${baseName}.jpg`);
 
+    // 확장자/기본 파일명 결정
+    const guessExt = () => {
+      if (suggestedName && path.extname(suggestedName)) {
+        return suggestedName;
+      }
+      try {
+        const u = new URL(url);
+        const base = path.basename(u.pathname);
+        if (base && path.extname(base)) return base;
+      } catch {}
+      return "image.jpg";
+    };
+
+    const defaultPath = path.join(exportsDir, guessExt());
     const { canceled, filePath } = await dialog.showSaveDialog({
       defaultPath,
-      filters: [{ name: "JPEG", extensions: ["jpg", "jpeg"] }],
+      filters: [{ name: "Images", extensions: ["jpg", "jpeg", "png", "webp"] }],
     });
     if (canceled || !filePath) return { ok: false, message: "canceled" };
 
     const buf = url.startsWith("data:")
       ? parseDataUrl(url)
       : await downloadBuffer(url);
-
-    // JPG 재인코딩(알파 → 흰 배경)
-    let img = sharp(buf, { failOnError: false });
-    let meta;
-    try {
-      meta = await img.metadata();
-    } catch {
-      return { ok: false, message: "not_image_data" };
-    }
-    if (meta?.hasAlpha)
-      img = img.flatten({ background: { r: 255, g: 255, b: 255 } });
-    const out = await img
-      .jpeg({ quality: 93, progressive: true, chromaSubsampling: "4:2:0" })
-      .toBuffer();
-
-    fs.writeFileSync(filePath, out);
-    return { ok: true, path: filePath, savedAs: "jpg" };
+    await fs.promises.writeFile(filePath, buf);
+    return { ok: true, path: filePath };
   } catch (err) {
     return { ok: false, message: String(err?.message || err) };
   }
 });
 
 /**
- * 프로젝트 폴더에 버퍼 저장
- * payload: { category: "audio"|"electron_data"|"exports"|"subtitle"|"videos"|string, fileName, buffer }
+ * ✅ URL(주로 동영상)을 현재 프로젝트에 바로 저장 (대화상자 없음)
+ * payload: { url, category?="videos", fileName? }
+ *  - 리다이렉트/대용량 스트리밍 지원
  */
+ipcMain.handle("files/saveUrlToProject", async (_evt, payload = {}) => {
+  try {
+    const { url, category = "videos", fileName } = payload || {};
+    if (!url || typeof url !== "string") {
+      return { ok: false, message: "url_required" };
+    }
+
+    // 저장 디렉터리 준비
+    const root = getProjectRoot();
+    const dir = path.join(root, sanitize(category));
+    ensureDirSync(dir);
+
+    // 파일명 결정: 우선 전달값, 없으면 URL 경로에서 추출, 실패 시 기본값
+    let base =
+      (fileName && String(fileName).trim()) ||
+      (() => {
+        try {
+          const u = new URL(url);
+          const last = path.basename(u.pathname);
+          return last || "download.bin";
+        } catch {
+          return "download.bin";
+        }
+      })();
+
+    const outPath = ensureUniquePath(dir, base);
+
+    // 스트리밍 다운로드
+    await streamDownloadToFile(url, outPath);
+
+    return { ok: true, path: outPath };
+  } catch (err) {
+    return { ok: false, message: String(err?.message || err) };
+  }
+});
+
+/** ✅ 프로젝트 폴더에 버퍼 저장 */
 ipcMain.handle("files/saveToProject", async (_evt, payload = {}) => {
   try {
-    const { category = "misc", fileName, buffer } = payload;
+    const { category = "misc", fileName, buffer } = payload || {};
     if (!fileName) throw new Error("fileName_required");
     if (!buffer) throw new Error("buffer_required");
 
@@ -327,13 +349,12 @@ ipcMain.handle("files/saveToProject", async (_evt, payload = {}) => {
   }
 });
 
-/** 다른 이름으로 저장(대화상자) – SRT/MP3 등 */
+/** ✅ 다른 이름으로 저장(대화상자) – SRT/MP3 등 */
 ipcMain.handle("file:save-buffer", async (_evt, payload = {}) => {
   try {
-    const { buffer, suggestedName = "file.bin", mime } = payload;
+    const { buffer, suggestedName = "file.bin", mime } = payload || {};
     if (!buffer) throw new Error("buffer_required");
 
-    // 현재 프로젝트의 적절한 기본 폴더 제안
     const root = getProjectRoot();
     const lower = suggestedName.toLowerCase();
     let baseDir = root;
@@ -366,7 +387,7 @@ ipcMain.handle("file:save-buffer", async (_evt, payload = {}) => {
   }
 });
 
-/** 텍스트 파일 읽기 (SRT/텍스트) */
+/** ✅ 텍스트 파일 읽기 (SRT/텍스트) */
 ipcMain.handle("files/readText", async (_evt, payload = {}) => {
   try {
     const { path: filePath, encoding = "utf8" } = payload || {};
@@ -374,11 +395,11 @@ ipcMain.handle("files/readText", async (_evt, payload = {}) => {
     const buf = await fs.promises.readFile(filePath);
     return buf.toString(encoding).replace(/^\uFEFF/, "");
   } catch (err) {
-    throw err; // renderer에서 catch하도록
+    throw err; // renderer에서 catch
   }
 });
 
-/** 바이너리 읽기: 로컬 파일 → base64로 반환 */
+/** ✅ 바이너리 읽기: 로컬 파일 → base64로 반환 */
 ipcMain.handle("files/readBinary", async (_evt, payload = {}) => {
   try {
     const { path: filePath } = payload || {};

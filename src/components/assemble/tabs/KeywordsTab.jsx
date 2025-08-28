@@ -1,4 +1,9 @@
 // src/components/tabs/KeywordsTab.jsx
+// ----------------------------------------------------------------------------
+// 키워드 추출 + 스톡 영상 다운로드 탭 (한글 키워드 그대로 사용 / 번역·중복 옵션 제거)
+// - 버튼 클릭 시: 키워드가 없으면 AI로 추출 → 바로 Pexels/Pixabay에서 다운로드
+// - 검색: 엄격 1차 시도 → 없으면 1회 완화 폴백
+// ----------------------------------------------------------------------------
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import SectionCard from "../parts/SectionCard";
 import { extractKeywords as fallbackExtract } from "../../../utils/extractKeywords";
@@ -18,8 +23,14 @@ function progReducer(state, action) {
   switch (action.type) {
     case "init": {
       const rows = {};
-      for (const k of action.keywords) rows[k] = { picked: 0, saved: 0, status: "대기" };
-      return { total: action.keywords.length * action.perKeyword, picked: 0, saved: 0, rows };
+      for (const k of action.keywords)
+        rows[k] = { picked: 0, saved: 0, status: "대기" };
+      return {
+        total: action.keywords.length * action.perKeyword,
+        picked: 0,
+        saved: 0,
+        rows,
+      };
     }
     case "status": {
       const { k, status } = action;
@@ -30,18 +41,35 @@ function progReducer(state, action) {
       const { k, n = 1 } = action;
       const row = state.rows[k] || { picked: 0, saved: 0, status: "" };
       const nextPicked = row.picked + n;
-      return { ...state, picked: state.picked + n, rows: { ...state.rows, [k]: { ...row, picked: nextPicked, status: `선택 ${nextPicked}` } } };
+      return {
+        ...state,
+        picked: state.picked + n,
+        rows: {
+          ...state.rows,
+          [k]: { ...row, picked: nextPicked, status: `선택 ${nextPicked}` },
+        },
+      };
     }
     case "saved": {
       const { k, n = 1 } = action;
       const row = state.rows[k] || { picked: 0, saved: 0, status: "" };
       const nextSaved = row.saved + n;
-      return { ...state, saved: state.saved + n, rows: { ...state.rows, [k]: { ...row, saved: nextSaved, status: "저장 중" } } };
+      return {
+        ...state,
+        saved: state.saved + n,
+        rows: {
+          ...state.rows,
+          [k]: { ...row, saved: nextSaved, status: "저장 중" },
+        },
+      };
     }
     case "done": {
       const { k } = action;
       const row = state.rows[k] || { picked: 0, saved: 0, status: "" };
-      return { ...state, rows: { ...state.rows, [k]: { ...row, status: "완료" } } };
+      return {
+        ...state,
+        rows: { ...state.rows, [k]: { ...row, status: "완료" } },
+      };
     }
     default:
       return state;
@@ -52,41 +80,46 @@ export default function KeywordsTab() {
   // ---------------- state ----------------
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  const [keywords, setKeywords] = useState([]); // 자동 추출 후 저장
+  const [keywords, setKeywords] = useState([]); // 자동 추출 후 화면에 유지
 
-  // 옵션
+  // 옵션(필요한 것만 유지)
   const [minMB, setMinMB] = useState(1);
   const [maxMB, setMaxMB] = useState(14);
   const [resPreset, setResPreset] = useState("fhd");
   const [perKeyword, setPerKeyword] = useState(1);
   const [concurrency, setConcurrency] = useState(3);
-  const [dedupAcrossKeywords, setDedupAcrossKeywords] = useState(true);
   const [usePexels, setUsePexels] = useState(true);
   const [usePixabay, setUsePixabay] = useState(true);
-  const [autoTranslate, setAutoTranslate] = useState(true);
-  const [strictKeyword, setStrictKeyword] = useState(true);
   const [maxKeywordsToUse, setMaxKeywordsToUse] = useState(30);
 
-  // provider key
+  // provider key 보유 상태
   const [hasPexelsKey, setHasPexelsKey] = useState(false);
   const [hasPixabayKey, setHasPixabayKey] = useState(false);
 
   // 진행 상황
   const [progress, dispatchProg] = useReducer(progReducer, progInit);
-  const percent = progress.total ? Math.round((progress.saved / progress.total) * 100) : 0;
+  const percent = progress.total
+    ? Math.round((progress.saved / progress.total) * 100)
+    : 0;
   const savedRef = useRef(0);
   useEffect(() => {
     savedRef.current = progress.saved;
   }, [progress.saved]);
   const [listSlice, setListSlice] = useState({ start: 0, size: 20 });
 
-  const chosenRes = useMemo(() => RES_PRESETS.find((r) => r.id === resPreset) || RES_PRESETS[2], [resPreset]);
+  const chosenRes = useMemo(
+    () => RES_PRESETS.find((r) => r.id === resPreset) || RES_PRESETS[2],
+    [resPreset]
+  );
 
-  // API 키 확인
+  // 초기 키 확인
   useEffect(() => {
     (async () => {
       try {
-        const [px, pb] = await Promise.all([window.api.getSecret?.("pexelsApiKey"), window.api.getSecret?.("pixabayApiKey")]);
+        const [px, pb] = await Promise.all([
+          window.api.getSecret?.("pexelsApiKey"),
+          window.api.getSecret?.("pixabayApiKey"),
+        ]);
         setHasPexelsKey(!!px);
         setHasPixabayKey(!!pb);
         if (!px) setUsePexels(false);
@@ -123,6 +156,7 @@ export default function KeywordsTab() {
       });
   };
 
+  /** SRT(연결됨)에서 본문만 정리 */
   const readCleanSrt = async () => {
     const srtPath = await window.api.getSetting?.("paths.srt");
     if (!srtPath) {
@@ -133,9 +167,13 @@ export default function KeywordsTab() {
     return String(raw || "")
       .replace(/\r/g, "\n")
       .replace(/\d+\s*\n(?=\d{2}:\d{2}:\d{2},\d{3})/g, "")
-      .replace(/\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}.*\n/g, "");
+      .replace(
+        /\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}.*\n/g,
+        ""
+      );
   };
 
+  /** AI로 한글 키워드만 추출 (번역 없음) */
   const extractKeywordsAuto = async (topK = 60) => {
     const text = await readCleanSrt();
     if (!text) return [];
@@ -143,65 +181,69 @@ export default function KeywordsTab() {
       const apiKey = await window.api.getSecret?.("openaiKey");
       if (apiKey && typeof window.api.aiExtractKeywords === "function") {
         setMsg("AI가 키워드를 추출 중…");
-        const r = await window.api.aiExtractKeywords({ apiKey, text, topK, language: "ko" });
-        if (r?.ok && Array.isArray(r.keywords) && r.keywords.length) return r.keywords;
+        const r = await window.api.aiExtractKeywords({
+          apiKey,
+          text,
+          topK,
+          language: "ko",
+        });
+        if (r?.ok && Array.isArray(r.keywords) && r.keywords.length)
+          return r.keywords;
       }
     } catch {}
-    // 로컬 대체
     const local = fallbackExtract(text, { topK, minLen: 2 });
     return Array.isArray(local) ? local : [];
   };
 
   // ---------------- download (자동 추출 → 다운로드) ----------------
   const downloadFromKeywords = async () => {
-    // 버튼은 항상 활성화: 빈 경우 자동 추출
     let baseKeywords = keywords;
+
     try {
       setBusy(true);
 
+      // 1) 키워드가 비어 있으면 먼저 자동 추출
       if (!Array.isArray(baseKeywords) || baseKeywords.length === 0) {
         setMsg("SRT에서 키워드 추출 중…");
-        const extracted = await extractKeywordsAuto(Math.max(60, maxKeywordsToUse));
+        const extracted = await extractKeywordsAuto(
+          Math.max(60, maxKeywordsToUse)
+        );
         if (!extracted.length) {
           setMsg("키워드 추출 실패");
           alert("키워드를 추출하지 못했습니다.");
           return;
         }
         baseKeywords = extracted;
-        setKeywords(extracted); // 화면에도 유지
+        setKeywords(extracted); // 같은 클릭으로 이어서 다운로드
         setMsg(`키워드 ${extracted.length}개 추출됨 · 다운로드 시작`);
       }
 
-      const providerList = [...(usePexels && hasPexelsKey ? ["pexels"] : []), ...(usePixabay && hasPixabayKey ? ["pixabay"] : [])];
+      // 2) 실행 시점에 실제 키 조회 → providerList 구성
+      const [pexelsKey, pixabayKey] = await Promise.all([
+        window.api.getSecret?.("pexelsApiKey"),
+        window.api.getSecret?.("pixabayApiKey"),
+      ]);
+
+      const providerList = [
+        ...(usePexels && pexelsKey ? ["pexels"] : []),
+        ...(usePixabay && pixabayKey ? ["pixabay"] : []),
+      ];
       if (providerList.length === 0) {
         alert("사용할 수 있는 제공사가 없습니다. (Pexels/Pixabay 키 확인)");
         return;
       }
 
-      const runKeywords = baseKeywords.slice(0, Math.max(1, Math.min(maxKeywordsToUse, baseKeywords.length)));
+      // 3) 작업 집합/진행상황 초기화
+      const runKeywords = baseKeywords.slice(
+        0,
+        Math.max(1, Math.min(maxKeywordsToUse, baseKeywords.length))
+      );
       dispatchProg({ type: "init", keywords: runKeywords, perKeyword });
       setListSlice((s) => ({ ...s, start: 0 }));
       const targetTotal = runKeywords.length * perKeyword;
 
-      const [pexelsKey, pixabayKey, openaiKey] = await Promise.all([
-        window.api.getSecret?.("pexelsApiKey"),
-        window.api.getSecret?.("pixabayApiKey"),
-        window.api.getSecret?.("openaiKey"),
-      ]);
-
-      // 번역(ko→en)
-      let enMap = {};
-      if (autoTranslate && openaiKey && typeof window.api.aiTranslateTerms === "function") {
-        const koTerms = runKeywords.filter((k) => /[ㄱ-ㅎ가-힣]/.test(k));
-        if (koTerms.length) {
-          try {
-            const tr = await window.api.aiTranslateTerms({ apiKey: openaiKey, terms: koTerms });
-            if (tr?.ok && Array.isArray(tr.terms)) koTerms.forEach((ko, i) => (enMap[ko] = tr.terms[i] || ko));
-          } catch {}
-        }
-      }
-
-      const SEARCH_OPTS = {
+      // 4) 검색 옵션 (한글 키워드 그대로 사용)
+      const SEARCH_OPTS_BASE = {
         perPage: Math.min(10, perKeyword * 3),
         minBytes: Math.max(0, Math.floor(minMB * MB)),
         maxBytes: Math.max(0, Math.floor(maxMB * MB)),
@@ -211,42 +253,47 @@ export default function KeywordsTab() {
         pexelsKey,
         pixabayKey,
         type: "videos",
-        strictKeyword,
       };
 
       const limit = pLimit(Math.max(1, Math.min(6, concurrency)));
-      const seenGlobal = new Set();
 
+      // 5) 병렬 작업 실행
       const tasks = runKeywords.map((k) =>
         limit(async () => {
           dispatchProg({ type: "status", k, status: "검색 중" });
 
-          const kEn = enMap[k];
-          const queries = kEn && kEn !== k ? [k, kEn] : [k];
-
-          let r = await window.api.stockSearch({ queries, ...SEARCH_OPTS });
-          if ((!r?.ok || !Array.isArray(r.items) || r.items.length === 0) && strictKeyword) {
+          // 먼저 엄격 검색 → 없으면 완화 1회
+          let r = await window.api.stockSearch({
+            queries: [k],
+            ...SEARCH_OPTS_BASE,
+            strictKeyword: true,
+          });
+          if (!r?.ok || !Array.isArray(r.items) || r.items.length === 0) {
             dispatchProg({ type: "status", k, status: "재시도(완화)" });
-            r = await window.api.stockSearch({ queries, ...SEARCH_OPTS, strictKeyword: false });
+            r = await window.api.stockSearch({
+              queries: [k],
+              ...SEARCH_OPTS_BASE,
+              strictKeyword: false,
+            });
           }
 
-          if (!r?.ok) return dispatchProg({ type: "status", k, status: "실패" });
-          if (!Array.isArray(r.items) || r.items.length === 0) return dispatchProg({ type: "status", k, status: "결과 없음" });
+          if (!r?.ok)
+            return dispatchProg({ type: "status", k, status: "실패" });
+          if (!Array.isArray(r.items) || r.items.length === 0)
+            return dispatchProg({ type: "status", k, status: "결과 없음" });
 
-          const picked = [];
-          for (const it of r.items) {
-            if (!it?.url) continue;
-            if (dedupAcrossKeywords && seenGlobal.has(it.url)) continue;
-            seenGlobal.add(it.url);
-            picked.push(it);
-            if (picked.length >= perKeyword) break;
-          }
-          if (!picked.length) return dispatchProg({ type: "status", k, status: "결과 없음" });
+          // 상위 결과에서 perKeyword 개수만 선택
+          const picked = r.items.slice(0, Math.max(1, perKeyword));
           dispatchProg({ type: "picked", k, n: picked.length });
 
           for (const item of picked) {
+            if (!item?.url) continue;
             dispatchProg({ type: "saved", k, n: 1 });
-            await window.api.saveUrlToProject({ url: item.url, category: "videos", fileName: item.filename });
+            await window.api.saveUrlToProject({
+              url: item.url,
+              category: "videos",
+              fileName: item.filename,
+            });
           }
           dispatchProg({ type: "done", k });
         })
@@ -263,13 +310,17 @@ export default function KeywordsTab() {
     }
   };
 
-  const estimatedDownloads = Math.min(keywords.length, maxKeywordsToUse) * perKeyword;
+  const estimatedDownloads =
+    Math.min(keywords.length, maxKeywordsToUse) * perKeyword;
 
   return (
     <div className="w-full max-w-screen-xl mx-auto px-4">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start [&>*]:min-w-0">
         {/* 다운로드 옵션 */}
-        <SectionCard title="다운로드 옵션" right={<span className="text-xs text-slate-500">필터 & 제공사</span>}>
+        <SectionCard
+          title="다운로드 옵션"
+          right={<span className="text-xs text-slate-500">필터 & 제공사</span>}
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="text-xs text-slate-700 flex flex-col gap-1 min-w-0">
               해상도
@@ -294,7 +345,9 @@ export default function KeywordsTab() {
                 min={1}
                 max={6}
                 value={perKeyword}
-                onChange={(e) => setPerKeyword(Math.max(1, Math.min(6, +e.target.value || 1)))}
+                onChange={(e) =>
+                  setPerKeyword(Math.max(1, Math.min(6, +e.target.value || 1)))
+                }
                 className="h-9 px-3 rounded-lg border border-slate-200 text-sm w-full"
                 disabled={busy}
               />
@@ -333,7 +386,9 @@ export default function KeywordsTab() {
                 min={1}
                 max={6}
                 value={concurrency}
-                onChange={(e) => setConcurrency(Math.max(1, Math.min(6, +e.target.value || 1)))}
+                onChange={(e) =>
+                  setConcurrency(Math.max(1, Math.min(6, +e.target.value || 1)))
+                }
                 className="h-9 px-3 rounded-lg border border-slate-200 text-sm w-full"
                 disabled={busy}
               />
@@ -346,39 +401,31 @@ export default function KeywordsTab() {
                 min={1}
                 max={300}
                 value={maxKeywordsToUse}
-                onChange={(e) => setMaxKeywordsToUse(Math.max(1, Math.min(300, +e.target.value || 30)))}
+                onChange={(e) =>
+                  setMaxKeywordsToUse(
+                    Math.max(1, Math.min(300, +e.target.value || 30))
+                  )
+                }
                 className="h-9 px-3 rounded-lg border border-slate-200 text-sm w-full"
                 disabled={busy}
               />
-              <span className="text-[11px] text-slate-400 break-words">긴 대본일 때 과도한 호출을 방지합니다.</span>
-            </label>
-
-            <label className="text-xs text-slate-700 flex items-center gap-2 min-w-0">
-              <input
-                type="checkbox"
-                className="h-4 w-4"
-                checked={dedupAcrossKeywords}
-                onChange={(e) => setDedupAcrossKeywords(!!e.target.checked)}
-                disabled={busy}
-              />
-              키워드 간 중복 영상 제거
-            </label>
-
-            <label className="text-xs text-slate-700 flex items-center gap-2 min-w-0">
-              <input type="checkbox" className="h-4 w-4" checked={autoTranslate} onChange={(e) => setAutoTranslate(!!e.target.checked)} disabled={busy} />
-              한→영 자동 변환(권장)
-            </label>
-
-            <label className="text-xs text-slate-700 flex items-center gap-2 min-w-0">
-              <input type="checkbox" className="h-4 w-4" checked={strictKeyword} onChange={(e) => setStrictKeyword(!!e.target.checked)} disabled={busy} />
-              키워드 엄격(태그 포함 필수)
+              <span className="text-[11px] text-slate-400 break-words">
+                긴 대본일 때 과도한 호출을 방지합니다.
+              </span>
             </label>
           </div>
 
+          {/* 제공사 선택 */}
           <div className="mt-4">
-            <div className="text-xs font-medium text-slate-700 mb-2">제공사</div>
+            <div className="text-xs font-medium text-slate-700 mb-2">
+              제공사
+            </div>
             <div className="flex flex-wrap gap-3 text-sm">
-              <label className={`inline-flex items-center gap-2 ${!hasPexelsKey ? "opacity-50" : ""}`}>
+              <label
+                className={`inline-flex items-center gap-2 ${
+                  !hasPexelsKey ? "opacity-50" : ""
+                }`}
+              >
                 <input
                   type="checkbox"
                   className="h-4 w-4"
@@ -388,7 +435,11 @@ export default function KeywordsTab() {
                 />
                 Pexels {hasPexelsKey ? "" : "(키 없음)"}
               </label>
-              <label className={`inline-flex items-center gap-2 ${!hasPixabayKey ? "opacity-50" : ""}`}>
+              <label
+                className={`inline-flex items-center gap-2 ${
+                  !hasPixabayKey ? "opacity-50" : ""
+                }`}
+              >
                 <input
                   type="checkbox"
                   className="h-4 w-4"
@@ -416,18 +467,23 @@ export default function KeywordsTab() {
               <button
                 onClick={downloadFromKeywords}
                 className="h-9 px-3 rounded-lg bg-emerald-600 text-white text-sm hover:bg-emerald-500 disabled:opacity-60"
-                disabled={busy} // ← 키워드가 없어도 자동 추출을 위해 busy만 체크
+                disabled={busy}
                 title="SRT에서 키워드 자동 추출 후 스톡 영상 다운로드"
               >
                 {busy ? "추출+다운로드 중…" : "키워드로 영상 받기"}
               </button>
-              {msg && <div className="mt-2 text-[12px] text-slate-600">{msg}</div>}
+              {msg && (
+                <div className="mt-2 text-[12px] text-slate-600">{msg}</div>
+              )}
             </div>
           </div>
         </SectionCard>
 
         {/* 진행 상황 */}
-        <SectionCard title="진행 상황" right={<span className="text-xs text-slate-400">실시간</span>}>
+        <SectionCard
+          title="진행 상황"
+          right={<span className="text-xs text-slate-400">실시간</span>}
+        >
           <div className="text-sm text-slate-700">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[12px] text-slate-600">
@@ -436,18 +492,30 @@ export default function KeywordsTab() {
               <span className="text-[12px] text-slate-600">{percent}%</span>
             </div>
             <div className="h-1.5 w-full rounded bg-slate-100 overflow-hidden">
-              <div className="h-1.5 bg-emerald-500 transition-[width] duration-300" style={{ width: `${percent}%` }} />
+              <div
+                className="h-1.5 bg-emerald-500 transition-[width] duration-300"
+                style={{ width: `${percent}%` }}
+              />
             </div>
 
             <div className="mt-3 mb-1 flex items-center justify-between text-[12px] text-slate-500">
               <div>
                 다운로드 완료: <b>{progress.saved}</b>개
                 <span className="ml-1">
-                  (키워드 {Object.keys(progress.rows).length}개, 키워드당 {perKeyword}개 목표)
+                  (키워드 {Object.keys(progress.rows).length}개, 키워드당{" "}
+                  {perKeyword}개 목표)
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <button className="px-2 py-1 rounded border" onClick={() => setListSlice((s) => ({ start: Math.max(0, s.start - s.size), size: s.size }))}>
+                <button
+                  className="px-2 py-1 rounded border"
+                  onClick={() =>
+                    setListSlice((s) => ({
+                      start: Math.max(0, s.start - s.size),
+                      size: s.size,
+                    }))
+                  }
+                >
                   이전
                 </button>
                 <button
@@ -455,7 +523,10 @@ export default function KeywordsTab() {
                   onClick={() =>
                     setListSlice((s) => {
                       const total = Object.keys(progress.rows).length;
-                      const next = Math.min(Math.max(0, total - s.size), s.start + s.size);
+                      const next = Math.min(
+                        Math.max(0, total - s.size),
+                        s.start + s.size
+                      );
                       return { start: next, size: s.size };
                     })
                   }
@@ -467,17 +538,24 @@ export default function KeywordsTab() {
 
             <div className="border rounded-lg bg-white divide-y max-h-80 overflow-y-auto">
               {Object.keys(progress.rows).length === 0 ? (
-                <div className="p-3 text-[12px] text-slate-500">아직 실행된 작업이 없습니다.</div>
+                <div className="p-3 text-[12px] text-slate-500">
+                  아직 실행된 작업이 없습니다.
+                </div>
               ) : (
                 Object.entries(progress.rows)
                   .slice(listSlice.start, listSlice.start + listSlice.size)
                   .map(([k, r]) => (
-                    <div key={k} className="px-3 py-2 flex items-center justify-between text-[13px]">
+                    <div
+                      key={k}
+                      className="px-3 py-2 flex items-center justify-between text-[13px]"
+                    >
                       <div className="truncate pr-2">#{k}</div>
                       <div className="flex items-center gap-3 shrink-0 text-slate-600">
                         <span className="text-[12px]">pick {r.picked}</span>
                         <span className="text-[12px]">save {r.saved}</span>
-                        <span className="text-[12px] text-slate-400">{r.status}</span>
+                        <span className="text-[12px] text-slate-400">
+                          {r.status}
+                        </span>
                       </div>
                     </div>
                   ))
