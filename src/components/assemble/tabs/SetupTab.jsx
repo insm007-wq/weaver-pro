@@ -1,9 +1,19 @@
-// src/scriptgen/tabs/SetupTab.jsx
-import { useEffect, useState } from "react";
-import SectionCard from "../parts/SectionCard";
-import useAutoMatch from "../../../hooks/useAutoMatch";
+// src/components/assemble/tabs/SetupTab.jsx
+// ============================================================================
+// 셋업 탭
+// - SRT / MP3 선택, 경로 표시/복사
+// - 자동 매칭 토글/옵션 저장 (즉시 저장)
+// - ✅ 파일 이동/삭제 시 즉시 "해제" (watcher + 포커스 복귀 재검사)
+// - 콘솔 로그로 상태 추적 (값 확인용)
+// ============================================================================
 
-/* Toggle */
+import { useEffect, useState, useCallback } from "react";
+import SectionCard from "../parts/SectionCard";
+
+/* -------------------------------------------------------------------------- */
+/* 작은 컴포넌트들                                                             */
+/* -------------------------------------------------------------------------- */
+
 function Toggle({ checked, onChange, label }) {
   return (
     <label className="inline-flex items-center gap-2">
@@ -11,7 +21,7 @@ function Toggle({ checked, onChange, label }) {
         type="checkbox"
         className="peer sr-only"
         checked={!!checked}
-        onChange={(e) => onChange(e.target.checked)}
+        onChange={(e) => onChange?.(e.target.checked)}
       />
       <span
         className={`w-10 h-6 rounded-full transition relative ${
@@ -29,9 +39,9 @@ function Toggle({ checked, onChange, label }) {
   );
 }
 
-/** 파일명만 표시 + 경로 보기/복사 */
+/** 파일명만 표시 + 경로 보기/복사 컨트롤. path 없으면 '미선택' */
 function FileRow({ icon, label, path, showFull, onToggleFull }) {
-  const fileName = path ? path.split(/[/\\]/).pop() : null;
+  const fileName = path ? String(path).split(/[/\\]/).pop() : null;
 
   const copyPath = async () => {
     if (!path) return;
@@ -53,7 +63,6 @@ function FileRow({ icon, label, path, showFull, onToggleFull }) {
       <div className="w-full max-w-full overflow-hidden">
         <div
           className={`truncate ${path ? "text-slate-600" : "text-slate-400"}`}
-          title={fileName || undefined}
         >
           {fileName || "미선택"}
         </div>
@@ -87,6 +96,10 @@ function FileRow({ icon, label, path, showFull, onToggleFull }) {
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* 유틸                                                                       */
+/* -------------------------------------------------------------------------- */
+
 const DEFAULT_AUTO_OPTS = {
   emptyOnly: true,
   byKeywords: true,
@@ -94,139 +107,211 @@ const DEFAULT_AUTO_OPTS = {
   overwrite: false,
 };
 
+const norm = (p) => (p ? String(p).replace(/\\/g, "/").toLowerCase() : "");
+
+/** 안전 저장 헬퍼 */
+const saveSetting = (key, value) =>
+  window.api
+    .setSetting?.({ key, value })
+    .catch((e) => console.warn("[SetupTab] setSetting error:", e));
+
+/** 경로 존재 확인 */
+async function checkExists(p) {
+  try {
+    const res = await window.api.checkPathExists?.(p);
+    return !!res?.exists;
+  } catch {
+    return false;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* 메인 컴포넌트                                                              */
+/* -------------------------------------------------------------------------- */
+
 export default function SetupTab({
   srtConnected,
   mp3Connected,
   setSrtConnected,
   setMp3Connected,
+  autoMatch,
+  setAutoMatch,
+  autoOpts,
+  setAutoOpts,
 }) {
-  // 자동 매칭: 공용 훅
-  const {
-    enabled: autoMatch,
-    setEnabled: setAutoMatch,
-    options: autoOpts,
-    setOption: setAutoOpt,
-  } = useAutoMatch();
-
-  // 자막/오디오 경로 저장/복원
+  // 경로 / UI
   const [srtPath, setSrtPath] = useState(null);
   const [mp3Path, setMp3Path] = useState(null);
   const [showFullSrt, setShowFullSrt] = useState(false);
   const [showFullMp3, setShowFullMp3] = useState(false);
 
-  const checkExists = async (p) => {
-    try {
-      const res = await window.api?.checkPathExists?.(p);
-      return !!res?.exists;
-    } catch {
-      return false;
-    }
-  };
-
-  // 최초 로드: settings에서 복원 + 실제 존재 검사
+  /* ----------------------------- 초기 복원 ----------------------------- */
   useEffect(() => {
     (async () => {
       try {
-        const srt = await window.api.getSetting?.("paths.srt");
-        const mp3 = await window.api.getSetting?.("paths.mp3");
+        // paths
+        const [srtSaved, mp3Saved] = await Promise.all([
+          window.api.getSetting?.("paths.srt"),
+          window.api.getSetting?.("paths.mp3"),
+        ]);
 
-        if (srt && (await checkExists(srt))) {
-          setSrtPath(srt);
+        // 존재 확인
+        const [srtOk, mp3Ok] = await Promise.all([
+          srtSaved ? checkExists(srtSaved) : Promise.resolve(false),
+          mp3Saved ? checkExists(mp3Saved) : Promise.resolve(false),
+        ]);
+
+        console.log("[SetupTab] restore", { srtSaved, srtOk, mp3Saved, mp3Ok });
+
+        if (srtOk) {
+          setSrtPath(srtSaved);
           setSrtConnected?.(true);
         } else {
           setSrtPath(null);
           setSrtConnected?.(false);
-          if (srt)
-            await window.api.setSetting?.({ key: "paths.srt", value: "" });
+          if (srtSaved) await saveSetting("paths.srt", ""); // 깨끗이 정리
         }
 
-        if (mp3 && (await checkExists(mp3))) {
-          setMp3Path(mp3);
+        if (mp3Ok) {
+          setMp3Path(mp3Saved);
           setMp3Connected?.(true);
         } else {
           setMp3Path(null);
           setMp3Connected?.(false);
-          if (mp3)
-            await window.api.setSetting?.({ key: "paths.mp3", value: "" });
+          if (mp3Saved) await saveSetting("paths.mp3", "");
+        }
+
+        // auto-match
+        const [am, ao] = await Promise.all([
+          window.api.getSetting?.("autoMatch.enabled"),
+          window.api.getSetting?.("autoMatch.options"),
+        ]);
+
+        if (typeof setAutoMatch === "function") {
+          const on = am === true || am === "true" || am === 1 || am === "1";
+          setAutoMatch(on);
+        }
+        if (typeof setAutoOpts === "function") {
+          let parsed = {};
+          try {
+            parsed = typeof ao === "string" ? JSON.parse(ao || "{}") : ao || {};
+          } catch {
+            parsed = {};
+          }
+          setAutoOpts((s) => ({
+            ...DEFAULT_AUTO_OPTS,
+            ...(s || {}),
+            ...parsed,
+          }));
         }
       } catch (e) {
-        console.warn("초기 설정 복원 실패:", e);
+        console.warn("[SetupTab] 초기 설정 복원 실패:", e);
       }
     })();
-  }, [setMp3Connected, setSrtConnected]);
+  }, [setMp3Connected, setSrtConnected, setAutoMatch, setAutoOpts]);
 
-  // 주기적 유효성 확인 (삭제/이동 시 연결 해제)
+  /* ------------------------ 자동 저장 (토글/옵션) ------------------------ */
   useEffect(() => {
-    const t = setInterval(async () => {
-      if (srtPath && !(await checkExists(srtPath))) {
-        setSrtPath(null);
-        setSrtConnected?.(false);
-        await window.api.setSetting?.({ key: "paths.srt", value: "" });
-      }
-      if (mp3Path && !(await checkExists(mp3Path))) {
-        setMp3Path(null);
-        setMp3Connected?.(false);
-        await window.api.setSetting?.({ key: "paths.mp3", value: "" });
-      }
-    }, 3000);
-    return () => clearInterval(t);
-  }, [srtPath, mp3Path, setMp3Connected, setSrtConnected]);
+    const t = setTimeout(() => {
+      saveSetting("autoMatch.enabled", String(!!autoMatch));
+      saveSetting("autoMatch.options", JSON.stringify(autoOpts || {}));
+      console.log("[SetupTab] autosave", { autoMatch, autoOpts });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [autoMatch, autoOpts]);
 
-  // --- 선택 핸들러 (즉시 경고 제거: 선택값을 신뢰하고 저장) ---
-  const handlePickSrt = async () => {
+  /* ------------------- 선택 핸들러 (SRT / MP3) ------------------- */
+  const handlePickSrt = useCallback(async () => {
     try {
       const res = await window.api?.selectSrt?.();
       if (!res || res.canceled) return;
-      const filePath =
-        res.filePath ||
-        (Array.isArray(res.filePaths) ? res.filePaths[0] : null);
-      if (!filePath) return;
-
-      // 존재 체크는 시도하되, 실패해도 경로를 우선 저장하고 주기 점검에서 끊음
-      try {
-        const chk = await window.api?.checkPathExists?.(filePath);
-        if (chk && chk.exists === false) {
-          console.warn("[SetupTab] exists:false but accepting path:", filePath);
-        }
-      } catch {}
-
-      setSrtPath(filePath);
+      setSrtPath(res.filePath);
       setSrtConnected?.(true);
       setShowFullSrt(false);
-      await window.api.setSetting?.({ key: "paths.srt", value: filePath });
+      await saveSetting("paths.srt", res.filePath);
+      console.log("[SetupTab] SRT selected:", res.filePath);
     } catch (e) {
       console.error(e);
       alert("SRT 선택 중 오류가 발생했습니다.");
     }
-  };
+  }, [setSrtConnected]);
 
-  const handlePickMp3 = async () => {
+  const handlePickMp3 = useCallback(async () => {
     try {
       const res = await window.api?.selectMp3?.();
       if (!res || res.canceled) return;
-      const filePath =
-        res.filePath ||
-        (Array.isArray(res.filePaths) ? res.filePaths[0] : null);
-      if (!filePath) return;
-
-      try {
-        const chk = await window.api?.checkPathExists?.(filePath);
-        if (chk && chk.exists === false) {
-          console.warn("[SetupTab] exists:false but accepting path:", filePath);
-        }
-      } catch {}
-
-      setMp3Path(filePath);
+      setMp3Path(res.filePath);
       setMp3Connected?.(true);
       setShowFullMp3(false);
-      await window.api.setSetting?.({ key: "paths.mp3", value: filePath });
+      await saveSetting("paths.mp3", res.filePath);
+      console.log("[SetupTab] MP3 selected:", res.filePath);
     } catch (e) {
       console.error(e);
       alert("오디오(MP3) 선택 중 오류가 발생했습니다.");
     }
-  };
+  }, [setMp3Connected]);
 
-  /* ------------------------------- 렌더 ------------------------------- */
+  /* ---------------- 파일 이동/삭제 감지: watcher + 포커스 재검사 -------------- */
+
+  // 1) OS 파일 이벤트 (즉시 해제)
+  useEffect(() => {
+    // 중복 감시 방지 위해 고유 경로만
+    const targets = [srtPath, mp3Path].filter(Boolean);
+    if (targets.length === 0) return;
+
+    const off = window.api.onPathMissing?.(({ path }) => {
+      const p = norm(path);
+      if (srtPath && norm(srtPath) === p) {
+        console.log("[SetupTab] watcher: SRT missing", srtPath);
+        setSrtPath(null);
+        setSrtConnected?.(false);
+        saveSetting("paths.srt", "");
+      }
+      if (mp3Path && norm(mp3Path) === p) {
+        console.log("[SetupTab] watcher: MP3 missing", mp3Path);
+        setMp3Path(null);
+        setMp3Connected?.(false);
+        saveSetting("paths.mp3", "");
+      }
+    });
+
+    targets.forEach((p) => window.api.watchPath?.(p));
+    console.log("[SetupTab] watch start:", targets);
+
+    return () => {
+      if (off) off();
+      targets.forEach((p) => window.api.unwatchPath?.(p));
+      console.log("[SetupTab] watch cleanup:", targets);
+    };
+  }, [srtPath, mp3Path, setSrtConnected, setMp3Connected]);
+
+  // 2) 백업: 포커스 돌아오면 한 번 더 확인
+  useEffect(() => {
+    const onFocus = async () => {
+      if (srtPath) {
+        const ok = await checkExists(srtPath);
+        if (!ok) {
+          console.log("[SetupTab] focus check: SRT missing", srtPath);
+          setSrtPath(null);
+          setSrtConnected?.(false);
+          saveSetting("paths.srt", "");
+        }
+      }
+      if (mp3Path) {
+        const ok = await checkExists(mp3Path);
+        if (!ok) {
+          console.log("[SetupTab] focus check: MP3 missing", mp3Path);
+          setMp3Path(null);
+          setMp3Connected?.(false);
+          saveSetting("paths.mp3", "");
+        }
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [srtPath, mp3Path, setSrtConnected, setMp3Connected]);
+
+  /* ------------------------------- 렌더 -------------------------------- */
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* 자막 / 오디오 연결 */}
@@ -261,6 +346,7 @@ export default function SetupTab({
             </button>
           </div>
 
+          {/* 항상 두 줄 렌더 → 레이아웃 흔들림 방지 */}
           <div className="space-y-1">
             <FileRow
               icon="📜"
@@ -302,8 +388,8 @@ export default function SetupTab({
             ].map(([k, label]) => (
               <Toggle
                 key={k}
-                checked={!!(autoOpts?.[k] ?? DEFAULT_AUTO_OPTS[k])}
-                onChange={(v) => setAutoOpt(k, v)}
+                checked={!!autoOpts?.[k]}
+                onChange={(v) => setAutoOpts((s) => ({ ...(s || {}), [k]: v }))}
                 label={label}
               />
             ))}
