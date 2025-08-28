@@ -4,7 +4,6 @@ import { Card, TabButton, Th, Td } from "./parts/SmallUI";
 import { ProgressBar, IndeterminateBar } from "./parts/ProgressBar";
 import AutoTab from "./tabs/AutoTab";
 import RefTab from "./tabs/RefTab";
-// import ImportTab from "./tabs/ImportTab";
 import {
   VOICES_BY_ENGINE,
   DEFAULT_GENERATE_PROMPT,

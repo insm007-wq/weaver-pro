@@ -1,19 +1,35 @@
+// src/scriptgen/tabs/SetupTab.jsx
 import { useEffect, useState } from "react";
 import SectionCard from "../parts/SectionCard";
+import useAutoMatch from "../../../hooks/useAutoMatch";
 
+/* Toggle */
 function Toggle({ checked, onChange, label }) {
   return (
     <label className="inline-flex items-center gap-2">
-      <input type="checkbox" className="peer sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      <span className={`w-10 h-6 rounded-full transition ${checked ? "bg-blue-600" : "bg-slate-300"} relative`}>
-        <span className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-4" : ""}`} />
+      <input
+        type="checkbox"
+        className="peer sr-only"
+        checked={!!checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span
+        className={`w-10 h-6 rounded-full transition relative ${
+          checked ? "bg-blue-600" : "bg-slate-300"
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+            checked ? "translate-x-4" : ""
+          }`}
+        />
       </span>
       <span className="text-sm text-slate-700">{label}</span>
     </label>
   );
 }
 
-/** 파일명만 표시 + 경로 보기/복사 컨트롤. path 없으면 '미선택' */
+/** 파일명만 표시 + 경로 보기/복사 */
 function FileRow({ icon, label, path, showFull, onToggleFull }) {
   const fileName = path ? path.split(/[/\\]/).pop() : null;
 
@@ -35,7 +51,12 @@ function FileRow({ icon, label, path, showFull, onToggleFull }) {
       </div>
 
       <div className="w-full max-w-full overflow-hidden">
-        <div className={`truncate ${path ? "text-slate-600" : "text-slate-400"}`}>{fileName || "미선택"}</div>
+        <div
+          className={`truncate ${path ? "text-slate-600" : "text-slate-400"}`}
+          title={fileName || undefined}
+        >
+          {fileName || "미선택"}
+        </div>
       </div>
 
       <div className="flex items-center gap-1">
@@ -57,7 +78,11 @@ function FileRow({ icon, label, path, showFull, onToggleFull }) {
         </button>
       </div>
 
-      {showFull && path && <div className="col-span-3 text-[11px] text-slate-400 break-all mt-0.5">{path}</div>}
+      {showFull && path && (
+        <div className="col-span-3 text-[11px] text-slate-400 break-all mt-0.5">
+          {path}
+        </div>
+      )}
     </div>
   );
 }
@@ -69,75 +94,106 @@ const DEFAULT_AUTO_OPTS = {
   overwrite: false,
 };
 
-export default function SetupTab({ srtConnected, mp3Connected, setSrtConnected, setMp3Connected, autoMatch, setAutoMatch, autoOpts, setAutoOpts }) {
-  // 경로는 Settings에 영구 저장/복원 → 탭 왔다갔다 해도 유지
+export default function SetupTab({
+  srtConnected,
+  mp3Connected,
+  setSrtConnected,
+  setMp3Connected,
+}) {
+  // 자동 매칭: 공용 훅
+  const {
+    enabled: autoMatch,
+    setEnabled: setAutoMatch,
+    options: autoOpts,
+    setOption: setAutoOpt,
+  } = useAutoMatch();
+
+  // 자막/오디오 경로 저장/복원
   const [srtPath, setSrtPath] = useState(null);
   const [mp3Path, setMp3Path] = useState(null);
   const [showFullSrt, setShowFullSrt] = useState(false);
   const [showFullMp3, setShowFullMp3] = useState(false);
 
-  // 최초 로드: Settings에서 복원
+  const checkExists = async (p) => {
+    try {
+      const res = await window.api?.checkPathExists?.(p);
+      return !!res?.exists;
+    } catch {
+      return false;
+    }
+  };
+
+  // 최초 로드: settings에서 복원 + 실제 존재 검사
   useEffect(() => {
     (async () => {
       try {
-        // 파일 경로 복원
         const srt = await window.api.getSetting?.("paths.srt");
         const mp3 = await window.api.getSetting?.("paths.mp3");
-        if (srt) {
+
+        if (srt && (await checkExists(srt))) {
           setSrtPath(srt);
           setSrtConnected?.(true);
-        }
-        if (mp3) {
-          setMp3Path(mp3);
-          setMp3Connected?.(true);
+        } else {
+          setSrtPath(null);
+          setSrtConnected?.(false);
+          if (srt)
+            await window.api.setSetting?.({ key: "paths.srt", value: "" });
         }
 
-        // 자동 매칭 복원
-        const am = await window.api.getSetting?.("autoMatch.enabled");
-        const ao = await window.api.getSetting?.("autoMatch.options");
-        if (typeof setAutoMatch === "function") {
-          const on = am === true || am === "true" || am === 1 || am === "1";
-          setAutoMatch(on);
-        }
-        if (typeof setAutoOpts === "function") {
-          let parsed = {};
-          try {
-            parsed = typeof ao === "string" ? JSON.parse(ao || "{}") : ao || {};
-          } catch {
-            parsed = {};
-          }
-          setAutoOpts((s) => ({ ...DEFAULT_AUTO_OPTS, ...(s || {}), ...parsed }));
+        if (mp3 && (await checkExists(mp3))) {
+          setMp3Path(mp3);
+          setMp3Connected?.(true);
+        } else {
+          setMp3Path(null);
+          setMp3Connected?.(false);
+          if (mp3)
+            await window.api.setSetting?.({ key: "paths.mp3", value: "" });
         }
       } catch (e) {
         console.warn("초기 설정 복원 실패:", e);
       }
     })();
-  }, [setMp3Connected, setSrtConnected, setAutoMatch, setAutoOpts]);
+  }, [setMp3Connected, setSrtConnected]);
 
-  // 자동 저장(디바운스)
+  // 주기적 유효성 확인 (삭제/이동 시 연결 해제)
   useEffect(() => {
-    const save = () => {
-      window.api.setSetting?.({
-        key: "autoMatch.enabled",
-        value: String(!!autoMatch),
-      });
-      window.api.setSetting?.({
-        key: "autoMatch.options",
-        value: JSON.stringify(autoOpts || {}),
-      });
-    };
-    const t = setTimeout(save, 300);
-    return () => clearTimeout(t);
-  }, [autoMatch, autoOpts]);
+    const t = setInterval(async () => {
+      if (srtPath && !(await checkExists(srtPath))) {
+        setSrtPath(null);
+        setSrtConnected?.(false);
+        await window.api.setSetting?.({ key: "paths.srt", value: "" });
+      }
+      if (mp3Path && !(await checkExists(mp3Path))) {
+        setMp3Path(null);
+        setMp3Connected?.(false);
+        await window.api.setSetting?.({ key: "paths.mp3", value: "" });
+      }
+    }, 3000);
+    return () => clearInterval(t);
+  }, [srtPath, mp3Path, setMp3Connected, setSrtConnected]);
 
+  // --- 선택 핸들러 (즉시 경고 제거: 선택값을 신뢰하고 저장) ---
   const handlePickSrt = async () => {
     try {
       const res = await window.api?.selectSrt?.();
       if (!res || res.canceled) return;
-      setSrtPath(res.filePath);
+      const filePath =
+        res.filePath ||
+        (Array.isArray(res.filePaths) ? res.filePaths[0] : null);
+      if (!filePath) return;
+
+      // 존재 체크는 시도하되, 실패해도 경로를 우선 저장하고 주기 점검에서 끊음
+      try {
+        const chk = await window.api?.checkPathExists?.(filePath);
+        if (chk && chk.exists === false) {
+          console.warn("[SetupTab] exists:false but accepting path:", filePath);
+        }
+      } catch {}
+
+      setSrtPath(filePath);
       setSrtConnected?.(true);
       setShowFullSrt(false);
-      await window.api.setSetting?.({ key: "paths.srt", value: res.filePath });
+      await window.api.setSetting?.({ key: "paths.srt", value: filePath });
     } catch (e) {
       console.error(e);
       alert("SRT 선택 중 오류가 발생했습니다.");
@@ -148,27 +204,44 @@ export default function SetupTab({ srtConnected, mp3Connected, setSrtConnected, 
     try {
       const res = await window.api?.selectMp3?.();
       if (!res || res.canceled) return;
-      setMp3Path(res.filePath);
+      const filePath =
+        res.filePath ||
+        (Array.isArray(res.filePaths) ? res.filePaths[0] : null);
+      if (!filePath) return;
+
+      try {
+        const chk = await window.api?.checkPathExists?.(filePath);
+        if (chk && chk.exists === false) {
+          console.warn("[SetupTab] exists:false but accepting path:", filePath);
+        }
+      } catch {}
+
+      setMp3Path(filePath);
       setMp3Connected?.(true);
       setShowFullMp3(false);
-      await window.api.setSetting?.({ key: "paths.mp3", value: res.filePath });
+      await window.api.setSetting?.({ key: "paths.mp3", value: filePath });
     } catch (e) {
       console.error(e);
       alert("오디오(MP3) 선택 중 오류가 발생했습니다.");
     }
   };
 
-  /* --------------------------------- 렌더 --------------------------------- */
+  /* ------------------------------- 렌더 ------------------------------- */
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* 자막 / 오디오 연결 */}
-      <SectionCard title="자막 / 오디오 연결" right={<span className="text-xs text-slate-500">프로젝트 준비</span>}>
+      <SectionCard
+        title="자막 / 오디오 연결"
+        right={<span className="text-xs text-slate-500">프로젝트 준비</span>}
+      >
         <div className="flex flex-col gap-3">
           <div className="flex flex-col sm:flex-row gap-3">
             <button
               onClick={handlePickSrt}
               className={`h-10 px-4 rounded-lg text-sm border ${
-                srtConnected ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                srtConnected
+                  ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
               }`}
               title={srtConnected ? "SRT 연결됨" : "SRT 파일 선택"}
             >
@@ -178,7 +251,9 @@ export default function SetupTab({ srtConnected, mp3Connected, setSrtConnected, 
             <button
               onClick={handlePickMp3}
               className={`h-10 px-4 rounded-lg text-sm border ${
-                mp3Connected ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                mp3Connected
+                  ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
               }`}
               title={mp3Connected ? "오디오 연결됨" : "MP3 파일 선택"}
             >
@@ -186,18 +261,38 @@ export default function SetupTab({ srtConnected, mp3Connected, setSrtConnected, 
             </button>
           </div>
 
-          {/* 항상 두 줄 렌더 → 레이아웃 흔들림 방지 */}
           <div className="space-y-1">
-            <FileRow icon="📜" label="SRT:" path={srtPath} showFull={showFullSrt} onToggleFull={() => setShowFullSrt((v) => !v)} />
-            <FileRow icon="🎧" label="MP3:" path={mp3Path} showFull={showFullMp3} onToggleFull={() => setShowFullMp3((v) => !v)} />
+            <FileRow
+              icon="📜"
+              label="SRT:"
+              path={srtPath}
+              showFull={showFullSrt}
+              onToggleFull={() => setShowFullSrt((v) => !v)}
+            />
+            <FileRow
+              icon="🎧"
+              label="MP3:"
+              path={mp3Path}
+              showFull={showFullMp3}
+              onToggleFull={() => setShowFullMp3((v) => !v)}
+            />
           </div>
         </div>
       </SectionCard>
 
       {/* 자동 매칭 */}
-      <SectionCard title="자동 매칭" right={<span className="text-xs text-slate-500">신규 에셋 자동 배치</span>}>
+      <SectionCard
+        title="자동 매칭"
+        right={
+          <span className="text-xs text-slate-500">신규 에셋 자동 배치</span>
+        }
+      >
         <div className="flex flex-col gap-4">
-          <Toggle checked={!!autoMatch} onChange={setAutoMatch} label="자동 매칭 ON/OFF" />
+          <Toggle
+            checked={!!autoMatch}
+            onChange={setAutoMatch}
+            label="자동 매칭 ON/OFF"
+          />
           <div className="grid grid-cols-2 gap-3">
             {[
               ["emptyOnly", "빈 씬만 채우기"],
@@ -205,10 +300,18 @@ export default function SetupTab({ srtConnected, mp3Connected, setSrtConnected, 
               ["byOrder", "순차 배치 사용"],
               ["overwrite", "덮어쓰기 허용"],
             ].map(([k, label]) => (
-              <Toggle key={k} checked={!!autoOpts?.[k]} onChange={(v) => setAutoOpts((s) => ({ ...(s || {}), [k]: v }))} label={label} />
+              <Toggle
+                key={k}
+                checked={!!(autoOpts?.[k] ?? DEFAULT_AUTO_OPTS[k])}
+                onChange={(v) => setAutoOpt(k, v)}
+                label={label}
+              />
             ))}
           </div>
-          <div className="text-[12px] text-slate-500">새로 다운로드된 에셋을 감지하면 규칙에 따라 빈 씬부터 자동 배치합니다. 실패 시 자동으로 OFF 됩니다.</div>
+          <div className="text-[12px] text-slate-500">
+            새로 다운로드된 에셋을 감지하면 규칙에 따라 빈 씬부터 자동
+            배치합니다. 실패 시 자동으로 OFF 됩니다.
+          </div>
         </div>
       </SectionCard>
     </div>

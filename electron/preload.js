@@ -2,28 +2,26 @@
 // ============================================================================
 // 안전한 Renderer 브릿지 (contextBridge)
 // - 모든 호출은 ipcRenderer.invoke 기반 (Promise 반환)
-// - 이벤트 수신은 on/off 래퍼 제공 (채널 명세: preview:progress 등)
-// - 기존 잘 동작 중인 기능/채널은 유지하고, "프리뷰" 관련 API만 추가
+// - 이벤트 수신은 on/off 래퍼 제공
+// - 기존 기능 유지 + (settings 변경 브로드캐스트, 파일 유틸) 추가
 // ============================================================================
 
 const { contextBridge, ipcRenderer } = require("electron");
 
 console.log("[preload] loaded");
 
-/**
- * 작은 헬퍼: 문자열/객체 혼용 인자 안전 처리
- * - 예: cancel("job_123") 또는 cancel({ jobId: "job_123" })
- */
+/* ----------------------------------------------------------------------------
+ * helpers
+ * --------------------------------------------------------------------------*/
+
+/** 문자열/객체 혼용 인자 안전 처리 (예: cancel("job_123") 또는 { jobId:"job_123" }) */
 function asPayloadJobId(jobIdOrPayload) {
   return typeof jobIdOrPayload === "string"
     ? { jobId: jobIdOrPayload }
     : jobIdOrPayload || {};
 }
 
-/**
- * 작은 헬퍼: renderer에서 file:// 경로를 blob: URL로 변환
- * - video 재생 시 보안/경로 이슈를 피하기 위한 래퍼
- */
+/** file:// 경로를 blob: URL로 변환 (video 재생용) */
 async function pathToBlobUrlViaIPC(
   p,
   mimeFallback = "application/octet-stream"
@@ -41,9 +39,27 @@ async function pathToBlobUrlViaIPC(
 
   const mime = res.mime || mimeFallback;
   const blob = new Blob([bytes], { type: mime });
-  return URL.createObjectURL(blob); // ex) blob:… URL
+  return URL.createObjectURL(blob); // blob:… URL
 }
 
+/** settings:changed 브로드캐스트 구독기 */
+function onSettingsChanged(handler) {
+  if (typeof handler !== "function") return () => {};
+  const wrapped = (_e, payload) => {
+    try {
+      handler(payload);
+    } catch (err) {
+      console.warn("[preload] settings:changed handler error:", err);
+    }
+  };
+  ipcRenderer.on("settings:changed", wrapped);
+  // 반드시 해제 가능하도록 unsubscribe 반환
+  return () => ipcRenderer.removeListener("settings:changed", wrapped);
+}
+
+/* ----------------------------------------------------------------------------
+ * expose API
+ * --------------------------------------------------------------------------*/
 contextBridge.exposeInMainWorld("api", {
   // ==========================================================================
   // 공통 Invoke
@@ -63,6 +79,11 @@ contextBridge.exposeInMainWorld("api", {
   // ==========================================================================
   getSetting: (key) => ipcRenderer.invoke("settings:get", key),
   setSetting: (payload) => ipcRenderer.invoke("settings:set", payload),
+  // 배치 저장(선택사항): [{key,value}, ...]
+  setSettings: (items) => ipcRenderer.invoke("settings:setMany", items),
+  // ✅ settings 변경 브로드캐스트 구독 추가
+  onSettingsChanged,
+
   getSecret: (key) => ipcRenderer.invoke("secrets:get", key),
   setSecret: (payload) => ipcRenderer.invoke("secrets:set", payload),
 
@@ -74,9 +95,23 @@ contextBridge.exposeInMainWorld("api", {
   getProjectRoot: () => ipcRenderer.invoke("files/getProjectRoot"),
 
   // ==========================================================================
+  // 파일 유틸 (신규 추가)
+  // ==========================================================================
+  /** ✅ 경로 존재 확인: {exists, isFile, isDir} */
+  checkPathExists: (p) => ipcRenderer.invoke("files:exists", p),
+  /** ✅ 윈도우 스타일 이름 제안: {dir, base, kind:"file"|"dir", ext?} → {name, fullPath} */
+  nextAvailableName: (opts) =>
+    ipcRenderer.invoke("files:nextAvailableName", opts),
+  /** ✅ 오늘 날짜 "YYYY-MM-DD" */
+  todayStr: () => ipcRenderer.invoke("files:todayStr"),
+  /** ✅ 디렉터리 재귀 생성 */
+  mkDirRecursive: (dirPath) =>
+    ipcRenderer.invoke("fs:mkDirRecursive", { dirPath }),
+
+  // ==========================================================================
   // 파일 선택/저장
   // ==========================================================================
-  // SRT/MP3 파일 선택: files/select 우선 → 실패 시 pickers:* 폴백
+  // SRT/MP3 파일 선택: files/select 우선 → 실패 시 pickers:* 폴백 (기존 로직 유지)
   selectSrt: () =>
     ipcRenderer
       .invoke("files/select", { type: "srt" })
@@ -97,7 +132,7 @@ contextBridge.exposeInMainWorld("api", {
   saveBufferToProject: ({ category, fileName, buffer }) =>
     ipcRenderer.invoke("files/saveToProject", { category, fileName, buffer }),
 
-  // 텍스트 읽기 (SRT/일반 텍스트) — 문자열 경로/옵션 객체 모두 지원
+  // 텍스트 읽기 (SRT/일반 텍스트)
   readText: (fileOrOpts) => {
     const payload =
       typeof fileOrOpts === "string" ? { path: fileOrOpts } : fileOrOpts || {};
@@ -160,7 +195,7 @@ contextBridge.exposeInMainWorld("api", {
   testPixabay: (key) => ipcRenderer.invoke("pixabay:test", key),
 
   // ==========================================================================
-  // 프리뷰(초안 내보내기) — 신규 추가
+  // 프리뷰(초안 내보내기)
   // ==========================================================================
   /**
    * preview.compose(payload)
@@ -170,36 +205,22 @@ contextBridge.exposeInMainWorld("api", {
   preview: {
     compose: (payload) => ipcRenderer.invoke("preview:compose", payload),
 
-    /**
-     * preview.cancel(jobIdOrPayload)
-     * - 인자: "job_xxx" 또는 { jobId: "job_xxx" }
-     */
+    /** preview.cancel("job_xxx" | {jobId}) */
     cancel: (jobIdOrPayload) =>
       ipcRenderer.invoke("preview:cancel", asPayloadJobId(jobIdOrPayload)),
 
-    /**
-     * preview.onProgress(handler)
-     * - 진행률 수신(phase, percent, time, etaSec 등)
-     * - 리스너 해제 함수(unsubscribe)를 반환
-     */
+    /** 진행률 수신 subscribe → unsubscribe 반환 */
     onProgress: (handler) => {
       if (typeof handler !== "function") return () => {};
       const wrapped = (_e, data) => handler(data);
       ipcRenderer.on("preview:progress", wrapped);
-      // 해제 함수 반환(권장)
       return () => ipcRenderer.off("preview:progress", wrapped);
     },
 
-    /**
-     * preview.offProgress(handler?)
-     * - 특정 handler만 제거하거나, 미지정 시 모든 리스너 제거
-     */
+    /** 특정 핸들러만 or 전체 해제 */
     offProgress: (handler) => {
-      if (handler) {
-        ipcRenderer.off("preview:progress", handler);
-      } else {
-        ipcRenderer.removeAllListeners("preview:progress");
-      }
+      if (handler) ipcRenderer.off("preview:progress", handler);
+      else ipcRenderer.removeAllListeners("preview:progress");
     },
   },
 });

@@ -1,4 +1,12 @@
 // electron/ipc/files.js
+// ============================================================================
+// 파일/폴더 유틸 IPC 모듈 (전체본)
+// - 날짜 기반 프로젝트 루트 생성 및 하위 디렉토리 생성
+// - 파일/폴더 존재 확인 (files:exists)
+// - 윈도우 스타일 중복 이름 제안 (ensureUniquePath)
+// - 버퍼/URL 저장, 텍스트/바이너리 읽기 등
+// ============================================================================
+
 const { ipcMain, dialog, app } = require("electron");
 const fs = require("fs");
 const path = require("path");
@@ -8,23 +16,25 @@ const sharp = require("sharp");
 
 const REDIRECT = new Set([301, 302, 303, 307, 308]);
 
-// 현재 세션에서 선택/생성된 프로젝트 루트 (날짜 폴더)
+// 현재 세션에서 선택/생성된 프로젝트 루트 (YYYY-MM-DD or YYYY-MM-DD (1) ...)
 let CURRENT_ROOT = null;
 
-/* ---------------- utils ---------------- */
+/* =============================== utils =============================== */
 
+/** yyyy-mm-dd (오늘) */
 function ymd(today = new Date()) {
   const y = today.getFullYear();
   const m = String(today.getMonth() + 1).padStart(2, "0");
   const d = String(today.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`; // 2025-08-23
+  return `${y}-${m}-${d}`; // 예: 2025-08-23
 }
 
+/** 디렉터리 보장 */
 function ensureDirSync(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
-/** 경로 문자열 정리 (선행 슬래시/역슬래시 제거, 중복 슬래시 정리, 상위 디렉터리 이탈 패턴 제거) */
+/** 경로 문자열 정리 (상위 디렉터리 이탈/중복 슬래시 등 제거) */
 function sanitize(p) {
   return String(p || "")
     .replace(/\\/g, "/")
@@ -33,7 +43,7 @@ function sanitize(p) {
     .replace(/\/{2,}/g, "/");
 }
 
-/** 다양한 버퍼 표현을 Node Buffer로 */
+/** 다양한 버퍼 형태 → Node Buffer */
 function toBuffer(bufLike) {
   if (Buffer.isBuffer(bufLike)) return bufLike;
   if (bufLike && bufLike.type === "Buffer" && Array.isArray(bufLike.data)) {
@@ -52,12 +62,14 @@ function toBuffer(bufLike) {
   throw new Error("unsupported_buffer_type");
 }
 
+/** data:URL → Buffer */
 function parseDataUrl(dataUrl) {
   const m = /^data:(.*?);base64,(.*)$/i.exec(dataUrl);
   if (!m) throw new Error("invalid_data_url");
   return Buffer.from(m[2], "base64");
 }
 
+/** 소형 파일 다운로드 → Buffer */
 function downloadBuffer(url, depth = 0) {
   return new Promise((resolve, reject) => {
     if (depth > 5) return reject(new Error("too_many_redirects"));
@@ -82,7 +94,7 @@ function downloadBuffer(url, depth = 0) {
   });
 }
 
-/** 대용량(영상 등)은 스트리밍으로 바로 저장 */
+/** 대용량(영상 등) 다운로드 → 파일로 저장(스트리밍) */
 function streamDownloadToFile(url, outPath, depth = 0) {
   return new Promise((resolve, reject) => {
     if (depth > 5) return reject(new Error("too_many_redirects"));
@@ -111,10 +123,10 @@ function streamDownloadToFile(url, outPath, depth = 0) {
   });
 }
 
-/** 파일명 중복 방지 (항상 basename만 사용해 하위 폴더 밖으로 새지 않도록) */
+/** 윈도우 스타일 파일명 중복 방지: name.ext → name (1).ext ... */
 function ensureUniquePath(dir, fileName) {
   const parsed = path.parse(fileName || "file");
-  const safeBase = path.basename(sanitize(parsed.base)); // 예: "clip.mp4"
+  const safeBase = path.basename(sanitize(parsed.base)); // 하위 폴더 침범 방지
   const baseName = safeBase || "file";
   const nameOnly = path.parse(baseName).name;
   const ext = path.parse(baseName).ext || "";
@@ -123,14 +135,14 @@ function ensureUniquePath(dir, fileName) {
   let out = path.join(dir, baseName);
   while (fs.existsSync(out)) {
     n += 1;
-    out = path.join(dir, `${nameOnly}(${n})${ext}`);
+    out = path.join(dir, `${nameOnly} (${n})${ext}`); // 공백 + 괄호
   }
   return out;
 }
 
-/* -------------- 날짜 프로젝트 루트 -------------- */
+/* =========== 날짜 프로젝트 루트 생성/질의 (YYYY-MM-DD (n)) =========== */
 
-/** OS별 기본 베이스 폴더 (ContentWeaver) */
+/** OS별 기본 베이스 폴더 */
 function getBaseRoot() {
   const envBase =
     process.env.CW_BASE_DIR && String(process.env.CW_BASE_DIR).trim();
@@ -140,14 +152,14 @@ function getBaseRoot() {
   return envBase || path.join(app.getPath("documents"), "ContentWeaver");
 }
 
-/** 베이스 아래에 YYYY-MM-DD 또는 YYYY-MM-DD_n 폴더 이름 제안 */
+/** 베이스 아래에 YYYY-MM-DD 또는 YYYY-MM-DD (1) … 이름 제안 */
 function suggestDatedFolderName(baseDir) {
-  const baseName = ymd(); // 오늘 날짜
+  const baseName = ymd();
   let name = baseName;
   let n = 0;
   while (fs.existsSync(path.join(baseDir, name))) {
     n += 1;
-    name = `${baseName}_${n}`; // _1, _2, _3 …
+    name = `${baseName} (${n})`;
   }
   return name;
 }
@@ -173,20 +185,28 @@ function createDatedProjectRoot(baseDir) {
   return root;
 }
 
-/** 현재 프로젝트 루트 반환(없으면 기본 베이스 아래 오늘 날짜 폴더 자동 생성) */
+/** 현재 프로젝트 루트 반환(없으면 기본 베이스 아래에 자동 생성) */
 function getProjectRoot() {
   if (CURRENT_ROOT && fs.existsSync(CURRENT_ROOT)) return CURRENT_ROOT;
   const base = getBaseRoot();
   return (CURRENT_ROOT = createDatedProjectRoot(base));
 }
 
-/* -------------- IPC: 폴더 선택 + 자동 생성 -------------- */
+/* =============================== IPCs =============================== */
+
+/** ✅ 파일/폴더 존재 확인: window.api.checkPathExists(path) */
+ipcMain.handle("files:exists", async (_e, filePath) => {
+  try {
+    if (!filePath) return { exists: false };
+    const st = fs.statSync(String(filePath));
+    return { exists: true, isFile: st.isFile(), isDir: st.isDirectory() };
+  } catch {
+    return { exists: false };
+  }
+});
 
 /**
- * 사용자가 베이스 폴더를 고르면 그 아래에
- *  YYYY-MM-DD(또는 _1, _2…) 폴더를 자동 생성하고
- *  audio/electron_data/exports/subtitle/videos를 만든다.
- *
+ * ✅ 베이스 폴더 선택 → 날짜 폴더 자동 생성 + 하위 디렉토리 생성
  * 반환: { ok, root, subdirs: { audio, electron_data, exports, subtitle, videos } }
  */
 ipcMain.handle("files/selectDatedProjectRoot", async () => {
@@ -218,7 +238,7 @@ ipcMain.handle("files/selectDatedProjectRoot", async () => {
   }
 });
 
-/** 현재 프로젝트 루트 질의 */
+/** ✅ 현재 프로젝트 루트 질의 */
 ipcMain.handle("files/getProjectRoot", async () => {
   try {
     const root = getProjectRoot();
@@ -235,12 +255,9 @@ ipcMain.handle("files/getProjectRoot", async () => {
   }
 });
 
-/* -------------- 저장/읽기 핸들러들 -------------- */
+/* ========================== 저장/읽기 핸들러 ========================== */
 
-/**
- * 이미지/데이터 URL을 OS 저장 대화상자로 저장 (항상 JPG)
- * ⚠️ 이미지 전용
- */
+/** 이미지/데이터 URL을 OS 저장 대화상자로 저장 (항상 JPG) — 이미지 전용 */
 ipcMain.handle("file:save-url", async (_e, payload = {}) => {
   try {
     const { url, suggestedName } = payload;
@@ -310,9 +327,7 @@ ipcMain.handle("files/saveToProject", async (_evt, payload = {}) => {
   }
 });
 
-/**
- * 다른 이름으로 저장(대화상자) – SRT/MP3 등
- */
+/** 다른 이름으로 저장(대화상자) – SRT/MP3 등 */
 ipcMain.handle("file:save-buffer", async (_evt, payload = {}) => {
   try {
     const { buffer, suggestedName = "file.bin", mime } = payload;
@@ -351,11 +366,7 @@ ipcMain.handle("file:save-buffer", async (_evt, payload = {}) => {
   }
 });
 
-/**
- * 텍스트 파일 읽기 (SRT/텍스트)
- * invoke: "files/readText", { path, encoding? }
- * return: string (BOM 제거)
- */
+/** 텍스트 파일 읽기 (SRT/텍스트) */
 ipcMain.handle("files/readText", async (_evt, payload = {}) => {
   try {
     const { path: filePath, encoding = "utf8" } = payload || {};
@@ -367,29 +378,7 @@ ipcMain.handle("files/readText", async (_evt, payload = {}) => {
   }
 });
 
-/**
- * URL을 현재 프로젝트 폴더에 자동 저장 (대화창 없음, 빠른 스트리밍)
- * payload: { url, category?: "videos"|..., fileName }
- */
-ipcMain.handle("files/saveUrlToProject", async (_evt, payload = {}) => {
-  try {
-    const { url, category = "videos", fileName } = payload || {};
-    if (!url) throw new Error("url_required");
-    if (!fileName) throw new Error("fileName_required");
-
-    const root = getProjectRoot();
-    const dir = path.join(root, sanitize(category));
-    ensureDirSync(dir);
-
-    const target = ensureUniquePath(dir, fileName);
-    await streamDownloadToFile(url, target);
-    return { ok: true, path: target };
-  } catch (err) {
-    return { ok: false, message: String(err?.message || err) };
-  }
-});
-
-// === 바이너리 읽기: 로컬 파일 → base64로 반환 ===
+/** 바이너리 읽기: 로컬 파일 → base64로 반환 */
 ipcMain.handle("files/readBinary", async (_evt, payload = {}) => {
   try {
     const { path: filePath } = payload || {};
@@ -417,7 +406,7 @@ ipcMain.handle("files/readBinary", async (_evt, payload = {}) => {
   }
 });
 
-/* 선택적으로 외부에서 CURRENT_ROOT에 접근할 수 있게 export */
+/* ============================== exports ============================== */
 module.exports = {
   getProjectRoot,
 };
