@@ -4,7 +4,13 @@ import { Card, FormGrid, TextField, SelectField } from "../parts/SmallUI";
 import { DUR_OPTIONS, MAX_SCENE_OPTIONS, LLM_OPTIONS } from "../constants";
 import TtsPanel from "../parts/TtsPanel";
 
-export default function RefTab({ form, onChange, voices, refText, setRefText }) {
+export default function RefTab({
+  form,
+  onChange,
+  voices,
+  refText,
+  setRefText,
+}) {
   const refCounts = useMemo(() => {
     const t = refText || "";
     return { chars: t.length, lines: t ? t.split(/\r?\n/).length : 0 };
@@ -13,8 +19,18 @@ export default function RefTab({ form, onChange, voices, refText, setRefText }) 
   return (
     <Card>
       <FormGrid>
-        <TextField label="주제" value={form.topic} onChange={(v) => onChange("topic", v)} placeholder="예) 세종시 주거 정보 가이드" />
-        <TextField label="스타일" value={form.style} onChange={(v) => onChange("style", v)} placeholder="예) 다큐멘터리, 차분한 톤" />
+        <TextField
+          label="주제"
+          value={form.topic}
+          onChange={(v) => onChange("topic", v)}
+          placeholder="예) 세종시 주거 정보 가이드"
+        />
+        <TextField
+          label="스타일"
+          value={form.style}
+          onChange={(v) => onChange("style", v)}
+          placeholder="예) 다큐멘터리, 차분한 톤"
+        />
         <SelectField
           label="길이(분)"
           value={form.durationMin}
@@ -27,12 +43,19 @@ export default function RefTab({ form, onChange, voices, refText, setRefText }) 
           options={MAX_SCENE_OPTIONS.map((v) => ({ label: `${v}`, value: v }))}
           onChange={(v) => onChange("maxScenes", Number(v))}
         />
-        <SelectField label="LLM (대본)" value={form.llmMain} options={LLM_OPTIONS} onChange={(v) => onChange("llmMain", v)} />
+        <SelectField
+          label="LLM (대본)"
+          value={form.llmMain}
+          options={LLM_OPTIONS}
+          onChange={(v) => onChange("llmMain", v)}
+        />
       </FormGrid>
 
       <div className="mt-4">
         <div className="flex items-center justify-between mb-1">
-          <label className="block text-xs font-medium text-slate-600">레퍼런스 대본</label>
+          <label className="block text-xs font-medium text-slate-600">
+            레퍼런스 대본
+          </label>
           <span className="text-[11px] text-slate-500">
             {refCounts.lines}줄 · {refCounts.chars}자
           </span>
