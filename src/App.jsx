@@ -1,5 +1,12 @@
 // src/App.jsx
-import { useCallback, useMemo, useState, Suspense, lazy } from "react";
+import {
+  useCallback,
+  useMemo,
+  useState,
+  useEffect,
+  Suspense,
+  lazy,
+} from "react";
 
 // ✅ 코드 스플리팅: 초기 로드 가벼움
 const Sidebar = lazy(() => import("./components/Sidebar"));
@@ -22,7 +29,7 @@ const DraftExportPage = lazy(() =>
 );
 // ⬇️ 편집 및 다듬기(Refine)
 const RefineEditor = lazy(() => import("./components/refine/RefineEditor"));
-// ⬇️ 최종 완성(Finalize) ★ 추가
+// ⬇️ 최종 완성(Finalize)
 const FinalizePage = lazy(() => import("./components/finalize/FinalizePage"));
 
 /** ✅ 공용 스피너 */
@@ -55,6 +62,22 @@ export default function App() {
 
   /** ✅ 모든 페이지를 프로젝트 없이도 열 수 있게 고정 허용 */
   const canOpenWithoutProject = true;
+
+  /** ✅ (새로 추가) 전역 다운로드 큐: 탭이 꺼져 있어도 파일을 기억 */
+  useEffect(() => {
+    if (!window.__autoPlaceQueue) window.__autoPlaceQueue = [];
+    const off = window.api?.onFileDownloaded?.((payload) => {
+      try {
+        // payload: { path, category, fileName }
+        if (payload?.path) window.__autoPlaceQueue.push(payload);
+      } catch {}
+    });
+    return () => {
+      try {
+        off && off();
+      } catch {}
+    };
+  }, []);
 
   /** ✅ 메인 콘텐츠 분기 */
   const mainContent = useMemo(() => {
