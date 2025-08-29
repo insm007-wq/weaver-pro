@@ -8,9 +8,10 @@
 // - (이미지 처리용 sharp 제거)  → file:save-url 은 단순 저장만 수행
 // - ★ 테스트 모드: 동일 이름 덮어쓰기(폴더 (1) 생성/파일 (1) 접미사 방지)
 //   - OVERWRITE_MODE=true 로 동작 (필요시 false로 바꾸면 기존 방식 복원)
+// - ★ 저장 완료 브로드캐스트: "files:downloaded" (renderer 구독 → 자동배치)
 // ============================================================================
 
-const { ipcMain, dialog, app } = require("electron");
+const { ipcMain, dialog, app, BrowserWindow } = require("electron");
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
@@ -308,20 +309,19 @@ ipcMain.handle("file:save-url", async (_e, payload = {}) => {
  * payload: { url, category?="videos", fileName? }
  *  - 리다이렉트/대용량 스트리밍 지원
  *  - OVERWRITE_MODE=true 이면 동일 파일명 덮어쓰기
+ *  - 저장 완료 시 "files:downloaded" 브로드캐스트
  */
-ipcMain.handle("files/saveUrlToProject", async (_evt, payload = {}) => {
+ipcMain.handle("files/saveUrlToProject", async (evt, payload = {}) => {
   try {
     const { url, category = "videos", fileName } = payload || {};
     if (!url || typeof url !== "string") {
       return { ok: false, message: "url_required" };
     }
 
-    // 저장 디렉터리 준비
     const root = getProjectRoot();
     const dir = path.join(root, sanitize(category));
     ensureDirSync(dir);
 
-    // 파일명 결정
     let base =
       (fileName && String(fileName).trim()) ||
       (() => {
@@ -336,11 +336,26 @@ ipcMain.handle("files/saveUrlToProject", async (_evt, payload = {}) => {
 
     const outPath = ensurePath(dir, base);
 
-    // 스트리밍 다운로드 (덮어쓰기 모드면 기존 파일 위에 쓰기)
+    // 덮어쓰기 모드면 기존 파일 제거 후 저장
     if (OVERWRITE_MODE && fs.existsSync(outPath)) {
       await fs.promises.rm(outPath, { force: true });
     }
     await streamDownloadToFile(url, outPath);
+
+    // ✅ 저장 완료 브로드캐스트
+    const payloadOut = {
+      path: outPath,
+      category,
+      fileName: path.basename(outPath),
+    };
+    try {
+      evt?.sender?.send("files:downloaded", payloadOut);
+    } catch {}
+    try {
+      BrowserWindow.getAllWindows().forEach((w) =>
+        w.webContents.send("files:downloaded", payloadOut)
+      );
+    } catch {}
 
     return { ok: true, path: outPath };
   } catch (err) {
@@ -348,8 +363,8 @@ ipcMain.handle("files/saveUrlToProject", async (_evt, payload = {}) => {
   }
 });
 
-/** ✅ 프로젝트 폴더에 버퍼 저장 */
-ipcMain.handle("files/saveToProject", async (_evt, payload = {}) => {
+/** ✅ 프로젝트 폴더에 버퍼 저장 (저장 이벤트 브로드캐스트 포함) */
+ipcMain.handle("files/saveToProject", async (evt, payload = {}) => {
   try {
     const { category = "misc", fileName, buffer } = payload || {};
     if (!fileName) throw new Error("fileName_required");
@@ -365,6 +380,21 @@ ipcMain.handle("files/saveToProject", async (_evt, payload = {}) => {
     }
     const out = toBuffer(buffer);
     await fs.promises.writeFile(targetPath, out);
+
+    // ✅ 저장 완료 브로드캐스트
+    const payloadOut = {
+      path: targetPath,
+      category,
+      fileName: path.basename(targetPath),
+    };
+    try {
+      evt?.sender?.send("files:downloaded", payloadOut);
+    } catch {}
+    try {
+      BrowserWindow.getAllWindows().forEach((w) =>
+        w.webContents.send("files:downloaded", payloadOut)
+      );
+    } catch {}
 
     return { ok: true, path: targetPath };
   } catch (err) {
@@ -447,6 +477,47 @@ ipcMain.handle("files/readBinary", async (_evt, payload = {}) => {
     return { ok: true, data: buf.toString("base64"), mime };
   } catch (err) {
     return { ok: false, message: String(err?.message || err) };
+  }
+});
+
+/* ========= 추가 유틸 IPC (preload에서 참조 중이면 필요) ========= */
+
+/** 오늘 날짜 문자열 */
+ipcMain.handle("files:todayStr", async () => ymd());
+
+/** 디렉터리 재귀 생성 */
+ipcMain.handle("fs:mkDirRecursive", async (_e, { dirPath }) => {
+  try {
+    ensureDirSync(String(dirPath || ""));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: String(e?.message || e) };
+  }
+});
+
+/**
+ * 다음 사용 가능한 이름 조회
+ * payload: { dir, base, kind?: "file"|"dir" }
+ */
+ipcMain.handle("files:nextAvailableName", async (_e, { dir, base, kind }) => {
+  try {
+    const d = String(dir || "");
+    const b = String(base || "");
+    ensureDirSync(d);
+    if (OVERWRITE_MODE) {
+      return { ok: true, name: b, fullPath: path.join(d, b) };
+    }
+    const nameOnly = path.parse(b).name;
+    const ext = path.parse(b).ext || "";
+    let n = 0;
+    let candidate = path.join(d, b);
+    while (fs.existsSync(candidate)) {
+      n += 1;
+      candidate = path.join(d, `${nameOnly} (${n})${ext}`);
+    }
+    return { ok: true, name: path.basename(candidate), fullPath: candidate };
+  } catch (e) {
+    return { ok: false, message: String(e?.message || e) };
   }
 });
 

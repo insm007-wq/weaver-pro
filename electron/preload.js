@@ -57,6 +57,21 @@ function onSettingsChanged(handler) {
   return () => ipcRenderer.removeListener("settings:changed", wrapped);
 }
 
+/** files:downloaded 브로드캐스트 구독기 (다운로드 → 프로젝트 저장 완료) */
+function onFileDownloaded(handler) {
+  if (typeof handler !== "function") return () => {};
+  const wrapped = (_e, payload) => {
+    try {
+      handler(payload); // { path, category, fileName }
+    } catch (err) {
+      console.warn("[preload] files:downloaded handler error:", err);
+    }
+  };
+  ipcRenderer.on("files:downloaded", wrapped);
+  // 언구독 함수 반환
+  return () => ipcRenderer.removeListener("files:downloaded", wrapped);
+}
+
 /* ----------------------------------------------------------------------------
  * expose API
  * --------------------------------------------------------------------------*/
@@ -146,6 +161,9 @@ contextBridge.exposeInMainWorld("api", {
 
   // 로컬 경로/파일URL → blob: URL 변환 (video 재생용)
   videoPathToUrl: (p) => pathToBlobUrlViaIPC(p),
+
+  // ✅ 새로 추가: 다운로드 완료 브로드캐스트 구독
+  onFileDownloaded,
 
   // ==========================================================================
   // LLM/분석/번역
