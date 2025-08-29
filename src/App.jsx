@@ -12,18 +12,18 @@ const ThumbnailGenerator = lazy(() =>
 const ScriptVoiceGenerator = lazy(() =>
   import("./components/scriptgen/ScriptVoiceGenerator")
 );
-// ⬇️ 새로 추가: 영상 구성(Assemble)
+// ⬇️ 영상 구성(Assemble)
 const AssembleEditor = lazy(() =>
   import("./components/assemble/AssembleEditor")
 );
-
-/** ✅ 프로젝트 없이도 열 수 있는 페이지 (재생성 방지) */
-const ALLOW_WITHOUT_PROJECT = new Set([
-  "thumbnail",
-  "settings",
-  "script",
-  "assemble",
-]);
+// ⬇️ 초안 내보내기(Draft Export)
+const DraftExportPage = lazy(() =>
+  import("./components/draftexport/DraftExportPage")
+);
+// ⬇️ 편집 및 다듬기(Refine)
+const RefineEditor = lazy(() => import("./components/refine/RefineEditor"));
+// ⬇️ 최종 완성(Finalize) ★ 추가
+const FinalizePage = lazy(() => import("./components/finalize/FinalizePage"));
 
 /** ✅ 공용 스피너 */
 function Spinner({ label = "Loading..." }) {
@@ -53,20 +53,15 @@ export default function App() {
     setCurrentPage("settings");
   }, []);
 
-  /** ✅ 초기 화면/접근 가능 여부 계산 메모 */
-  const canOpenWithoutProject = useMemo(
-    () => ALLOW_WITHOUT_PROJECT.has(currentPage),
-    [currentPage]
-  );
+  /** ✅ 모든 페이지를 프로젝트 없이도 열 수 있게 고정 허용 */
+  const canOpenWithoutProject = true;
 
-  /** ✅ 메인 콘텐츠 분기: 조기 리턴으로 단순화 */
+  /** ✅ 메인 콘텐츠 분기 */
   const mainContent = useMemo(() => {
-    // 프로젝트가 없고, 화이트리스트가 아니면 초기 프로젝트 생성 화면
     if (!projectName && !canOpenWithoutProject) {
       return <ProjectInit onCreate={handleCreateProject} />;
     }
 
-    // 페이지 라우팅
     switch (currentPage) {
       case "thumbnail":
         return <ThumbnailGenerator />;
@@ -78,34 +73,27 @@ export default function App() {
         return <AssembleEditor />;
 
       case "draft":
-        // 프로젝트 있어야 의미 있음
-        if (!projectName) return null;
-        return (
-          <div className="bg-white shadow-xl rounded-xl p-8 w-full max-w-2xl">
-            <h1 className="text-2xl font-bold mb-4">{projectName}</h1>
-            <div className="bg-gray-100 p-4 rounded">
-              <p className="text-sm text-gray-700">
-                <code>CachedPromise&lt;DocumentContent&gt;</code>, document
-                content would be a <code>LazyD.property Couch</code>.
-              </p>
-            </div>
-          </div>
-        );
+        return <DraftExportPage />;
+
+      case "refine":
+        return <RefineEditor />;
+
+      case "finalize":
+        return <FinalizePage />;
 
       case "settings":
-        // ⬅️ 설정을 “전체 화면 페이지”로 렌더
         return <SettingsPage onBack={() => setCurrentPage(null)} />;
 
       default:
-        // 기본 대시 카드 (프로젝트 있는 경우만)
-        if (!projectName) return null;
+        // 기본 대시 카드 (프로젝트 없어도 표시)
         return (
           <div className="bg-white shadow-xl rounded-xl p-8 w-full max-w-2xl">
-            <h1 className="text-2xl font-bold mb-4">{projectName}</h1>
+            <h1 className="text-2xl font-bold mb-4">
+              {projectName || "Content Weaver Pro"}
+            </h1>
             <div className="bg-gray-100 p-4 rounded">
               <p className="text-sm text-gray-700">
-                <code>CachedPromise&lt;DocumentContent&gt;</code>, document
-                content would be a <code>LazyD.property Couch</code>.
+                시작하려면 오른쪽 사이드바에서 메뉴를 선택하세요.
               </p>
             </div>
           </div>

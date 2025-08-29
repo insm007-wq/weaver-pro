@@ -4,18 +4,53 @@ export default function Sidebar({ onSelectMenu }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const globalMenu = [
-    { icon: "🗂️", label: "프로젝트 관리", desc: "새 프로젝트 생성 및 관리", key: "project" },
-    { icon: "🖼️", label: "AI 썸네일 생성기", desc: "독립형 썸네일 제작 유틸리티", key: "thumbnail" },
-    { icon: "⚙️", label: "전역 설정", desc: "API 및 계정 설정", key: "settings" },
+    {
+      icon: "🗂️",
+      label: "프로젝트 관리",
+      desc: "새 프로젝트 생성 및 관리",
+      key: "project",
+    },
+    {
+      icon: "🖼️",
+      label: "AI 썸네일 생성기",
+      desc: "독립형 썸네일 제작 유틸리티",
+      key: "thumbnail",
+    },
+    {
+      icon: "⚙️",
+      label: "전역 설정",
+      desc: "API 및 계정 설정",
+      key: "settings",
+    },
   ];
 
   const projectMenu = [
     { icon: "📜", label: "대본", desc: "대본 및 음성 생성", key: "script" },
-    { icon: "✨", label: "영상 구성", desc: "AI 전략 설정 및 타임라인 생성", key: "assemble" },
-    { icon: "🚀", label: "초안 내보내기", desc: "Draft 영상 렌더링", key: "draft" },
-    { icon: "🎬", label: "편집 및 다듬기", desc: "세부 편집 및 교체", key: "edit" },
+    {
+      icon: "✨",
+      label: "영상 구성",
+      desc: "AI 전략 설정 및 타임라인 생성",
+      key: "assemble",
+    },
+    {
+      icon: "🚀",
+      label: "초안 내보내기",
+      desc: "Draft 영상 렌더링",
+      key: "draft",
+    },
+    {
+      icon: "🎬",
+      label: "편집 및 다듬기",
+      desc: "세부 편집 및 교체",
+      key: "refine",
+    },
     { icon: "🏆", label: "최종 완성", desc: "최종 영상 출력", key: "finalize" },
-    { icon: "🔧", label: "프로젝트 설정", desc: "프롬프트 및 모델 설정", key: "projectSettings" },
+    {
+      icon: "🔧",
+      label: "프로젝트 설정",
+      desc: "프롬프트 및 모델 설정",
+      key: "projectSettings",
+    },
   ];
 
   const handleMenuClick = (key) => {
@@ -31,7 +66,10 @@ export default function Sidebar({ onSelectMenu }) {
       <div>
         {/* Toggle */}
         <div className="flex justify-end p-4">
-          <button onClick={() => setIsCollapsed(!isCollapsed)} className="text-sm bg-slate-100 rounded px-2 py-1 hover:bg-slate-200 transition">
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="text-sm bg-slate-100 rounded px-2 py-1 hover:bg-slate-200 transition"
+          >
             {isCollapsed ? "➡️" : "⬅️"}
           </button>
         </div>
@@ -62,7 +100,9 @@ export default function Sidebar({ onSelectMenu }) {
                 {!isCollapsed ? (
                   <div>
                     <div className="text-slate-800">{item.label}</div>
-                    <div className="text-xs text-slate-500 ml-1">{item.desc}</div>
+                    <div className="text-xs text-slate-500 ml-1">
+                      {item.desc}
+                    </div>
                   </div>
                 ) : (
                   <span className="absolute left-16 bg-white text-xs shadow px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap z-10">
@@ -75,7 +115,11 @@ export default function Sidebar({ onSelectMenu }) {
         </nav>
 
         {/* Divider */}
-        {!isCollapsed && <div className="px-6 py-1 text-xs text-slate-400 border-b border-slate-200">프로젝트 작업 영역</div>}
+        {!isCollapsed && (
+          <div className="px-6 py-1 text-xs text-slate-400 border-b border-slate-200">
+            프로젝트 작업 영역
+          </div>
+        )}
 
         {/* Project Menu */}
         <nav className="px-4 py-2">
@@ -90,7 +134,9 @@ export default function Sidebar({ onSelectMenu }) {
                 {!isCollapsed ? (
                   <div>
                     <div className="text-slate-800">{item.label}</div>
-                    <div className="text-xs text-slate-500 ml-1">{item.desc}</div>
+                    <div className="text-xs text-slate-500 ml-1">
+                      {item.desc}
+                    </div>
                   </div>
                 ) : (
                   <span className="absolute left-16 bg-white text-xs shadow px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap z-10">
