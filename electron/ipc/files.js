@@ -9,6 +9,7 @@
 // - ★ 테스트 모드: 동일 이름 덮어쓰기(폴더 (1) 생성/파일 (1) 접미사 방지)
 //   - OVERWRITE_MODE=true 로 동작 (필요시 false로 바꾸면 기존 방식 복원)
 // - ★ 저장 완료 브로드캐스트: "files:downloaded" (renderer 구독 → 자동배치)
+//   - ✅ 2025-09: 중복 전송 방지(딱 1번만 전송)
 // ============================================================================
 
 const { ipcMain, dialog, app, BrowserWindow } = require("electron");
@@ -199,6 +200,22 @@ function getProjectRoot() {
   return (CURRENT_ROOT = createDatedProjectRoot(base));
 }
 
+/* ========================= 단일 브로드캐스트 유틸 ========================= */
+/**
+ * ✅ 저장 완료 브로드캐스트(딱 1번만 전송)
+ * - 모든 BrowserWindow에 동일하게 전파
+ * - 과거처럼 sender + allWindows 두 번 보내 중복되는 문제 제거
+ */
+function broadcastDownloadedOnce(payloadOut) {
+  try {
+    BrowserWindow.getAllWindows().forEach((w) => {
+      w.webContents.send("files:downloaded", payloadOut);
+    });
+  } catch {
+    // 무시 (창이 없거나 닫히는 중일 수 있음)
+  }
+}
+
 /* =============================== IPCs =============================== */
 
 /** ✅ 파일/폴더 존재 확인 */
@@ -309,9 +326,9 @@ ipcMain.handle("file:save-url", async (_e, payload = {}) => {
  * payload: { url, category?="videos", fileName? }
  *  - 리다이렉트/대용량 스트리밍 지원
  *  - OVERWRITE_MODE=true 이면 동일 파일명 덮어쓰기
- *  - 저장 완료 시 "files:downloaded" 브로드캐스트
+ *  - 저장 완료 시 "files:downloaded" 브로드캐스트(1회)
  */
-ipcMain.handle("files/saveUrlToProject", async (evt, payload = {}) => {
+ipcMain.handle("files/saveUrlToProject", async (_evt, payload = {}) => {
   try {
     const { url, category = "videos", fileName } = payload || {};
     if (!url || typeof url !== "string") {
@@ -342,20 +359,13 @@ ipcMain.handle("files/saveUrlToProject", async (evt, payload = {}) => {
     }
     await streamDownloadToFile(url, outPath);
 
-    // ✅ 저장 완료 브로드캐스트
+    // ✅ 저장 완료 브로드캐스트 (한 번만 전송)
     const payloadOut = {
       path: outPath,
       category,
       fileName: path.basename(outPath),
     };
-    try {
-      evt?.sender?.send("files:downloaded", payloadOut);
-    } catch {}
-    try {
-      BrowserWindow.getAllWindows().forEach((w) =>
-        w.webContents.send("files:downloaded", payloadOut)
-      );
-    } catch {}
+    broadcastDownloadedOnce(payloadOut);
 
     return { ok: true, path: outPath };
   } catch (err) {
@@ -363,8 +373,8 @@ ipcMain.handle("files/saveUrlToProject", async (evt, payload = {}) => {
   }
 });
 
-/** ✅ 프로젝트 폴더에 버퍼 저장 (저장 이벤트 브로드캐스트 포함) */
-ipcMain.handle("files/saveToProject", async (evt, payload = {}) => {
+/** ✅ 프로젝트 폴더에 버퍼 저장 (저장 이벤트 브로드캐스트 포함, 1회) */
+ipcMain.handle("files/saveToProject", async (_evt, payload = {}) => {
   try {
     const { category = "misc", fileName, buffer } = payload || {};
     if (!fileName) throw new Error("fileName_required");
@@ -381,20 +391,13 @@ ipcMain.handle("files/saveToProject", async (evt, payload = {}) => {
     const out = toBuffer(buffer);
     await fs.promises.writeFile(targetPath, out);
 
-    // ✅ 저장 완료 브로드캐스트
+    // ✅ 저장 완료 브로드캐스트 (한 번만 전송)
     const payloadOut = {
       path: targetPath,
       category,
       fileName: path.basename(targetPath),
     };
-    try {
-      evt?.sender?.send("files:downloaded", payloadOut);
-    } catch {}
-    try {
-      BrowserWindow.getAllWindows().forEach((w) =>
-        w.webContents.send("files:downloaded", payloadOut)
-      );
-    } catch {}
+    broadcastDownloadedOnce(payloadOut);
 
     return { ok: true, path: targetPath };
   } catch (err) {

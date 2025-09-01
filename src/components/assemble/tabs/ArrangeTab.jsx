@@ -1,8 +1,8 @@
 // src/components/assemble/tabs/ArrangeTab.jsx
 // -----------------------------------------------------------------------------
-//   배치 & 타임라인 탭 (로컬 선택/드롭 교체 보강 + 자동 배치 그대로 유지)
+//   배치 & 타임라인 탭 (자동 배치/놓친 이벤트 복구 + 수동 교체 보강)
+//   - UI/레이아웃 변경 없음
 // -----------------------------------------------------------------------------
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SectionCard from "../parts/SectionCard";
 import TimelineView from "../parts/TimelineView";
@@ -21,44 +21,31 @@ function ensureSceneDefaults(sc) {
     transition: "none",
     ...sc,
     asset: {
-      type: sc?.asset?.type || null, // 'video' | 'image'
-      path: sc?.asset?.path || null, // 절대경로
+      type: sc?.asset?.type || null,
+      path: sc?.asset?.path || null,
       ...sc?.asset,
     },
   };
 }
-function basename(p = "") {
-  return String(p).split(/[\\/]/).pop();
-}
-function stripExt(n = "") {
-  return String(n).replace(/\.[^.]+$/, "");
-}
-function extname(n = "") {
-  const m = /\.[^.]+$/.exec(n);
-  return m ? m[0].toLowerCase() : "";
-}
-/** 간단 MIME 추정 (없으면 video로) */
-function guessMimeByExt(name = "") {
-  const e = extname(name);
-  if (/\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(e)) return "image/*";
-  if (/\.(mp4|mov|m4v|webm|mkv|avi)$/i.test(e)) return "video/*";
-  return "video/*";
-}
-/** 파일명 → 키워드 첫 토큰 */
-function keywordFromFileName(name = "") {
-  const base = decodeURIComponent(stripExt(basename(name)));
-  const token = base.split(/[_\-\s]+/)[0] || "";
-  return token.trim();
-}
-function sceneTextBlob(sc) {
+const basename = (p = "") => String(p).split(/[\\/]/).pop();
+const stripExt = (n = "") => String(n).replace(/\.[^.]+$/, "");
+const extname = (n = "") => (/\.[^.]+$/.exec(n)?.[0] || "").toLowerCase();
+/** 파일명 → 키워드 첫 토큰(언더스코어/하이픈/스페이스 기준) */
+const keywordFromFileName = (name = "") =>
+  (
+    decodeURIComponent(stripExt(basename(name))).split(/[_\-\s]+/)[0] || ""
+  ).trim();
+const sceneTextBlob = (sc) => {
   const list = [];
   if (Array.isArray(sc?.keywords)) list.push(sc.keywords.join(" "));
   if (sc?.text) list.push(sc.text);
   if (sc?.title) list.push(sc.title);
   if (sc?.hint) list.push(sc.hint);
   return list.join(" ").toLowerCase();
-}
+};
 const isOccupied = (sc) => !!sc?.asset?.path;
+const guessMimeByExt = (name = "") =>
+  /\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(extname(name)) ? "image/*" : "video/*";
 
 /* -------------------------------- comp ----------------------------------- */
 export default function ArrangeTab({
@@ -101,7 +88,7 @@ export default function ArrangeTab({
 
   const selectedScene = scenes[selectedIdx];
 
-  /* ------------------------- 로컬 파일 → 프로젝트에 저장 ------------------- */
+  /* ------------------------- 로컬 파일 → 프로젝트 저장 -------------------- */
   const persistFileToProject = useCallback(async (file) => {
     const ab = await file.arrayBuffer();
     const buffer = new Uint8Array(ab);
@@ -119,53 +106,30 @@ export default function ArrangeTab({
     };
   }, []);
 
-  /** 로컬 경로 문자열을 받아 프로젝트에 복사 저장 */
-  const persistPathToProject = useCallback(async (pathStr) => {
-    const name = basename(pathStr);
-    const bin = await window.api.readBinary?.(pathStr);
-    if (!bin) throw new Error("파일 읽기 실패");
+  /** 경로 문자열(or {path}) → 읽어서 프로젝트에 복사 저장 (readBinary → base64 디코드) */
+  const persistPathToProject = useCallback(async (pathStrOrObj) => {
+    const p =
+      typeof pathStrOrObj === "string" ? pathStrOrObj : pathStrOrObj?.path;
+    if (!p) throw new Error("invalid_path");
+    // 프로젝트 내부면 그대로 사용
+    if (/ContentWeaver|projects|assets/i.test(p)) {
+      const name = basename(p);
+      return { path: p, name, type: guessMimeByExt(name) };
+    }
+    // 외부 경로 → base64 수신 → 바이트로 변환 → 프로젝트 저장
+    const r = await window.api.readBinary?.(p);
+    if (!r?.ok || !r?.data) throw new Error(r?.message || "read_failed");
+    const b64 = r.data;
+    const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); // ← 중요
+    const name = basename(p) || `asset_${Date.now()}`;
     const res = await window.api.saveBufferToProject?.({
       category: "assets",
-      fileName: name || `asset_${Date.now()}`,
+      fileName: name,
       buffer: bin,
     });
-    if (!res?.ok || !res?.path)
-      throw new Error(res?.message || "프로젝트 저장 실패");
-    return {
-      path: res.path,
-      name,
-      type: guessMimeByExt(name),
-    };
+    if (!res?.ok || !res?.path) throw new Error(res?.message || "save_failed");
+    return { path: res.path, name, type: guessMimeByExt(name) };
   }, []);
-
-  /** 다양한 형태의 선택 payload 통합 처리 */
-  const normalizePicked = useCallback(
-    async (payload) => {
-      // 1) <input type="file" onChange> 이벤트
-      const f1 = payload?.target?.files?.[0];
-      if (f1) return persistFileToProject(f1);
-
-      // 2) File 객체 직접
-      const f2 = payload?.file instanceof File ? payload.file : payload;
-      if (f2 instanceof File) return persistFileToProject(f2);
-
-      // 3) 경로 문자열(or {path,name})
-      if (typeof payload === "string") return persistPathToProject(payload);
-      if (payload?.path && typeof payload.path === "string") {
-        if (/ContentWeaver|projects|assets/i.test(payload.path)) {
-          return {
-            path: payload.path,
-            name: payload.name || basename(payload.path),
-            type: payload.type || guessMimeByExt(payload.name || payload.path),
-          };
-        }
-        return persistPathToProject(payload.path);
-      }
-
-      return null;
-    },
-    [persistFileToProject, persistPathToProject]
-  );
 
   /* ------------------------------ 수동 교체 ------------------------------- */
   const patchScene = useCallback(
@@ -185,7 +149,23 @@ export default function ArrangeTab({
     [commitScenes]
   );
 
-  /** 버튼/파일선택/여러 구현 모두 수용 */
+  const normalizePicked = useCallback(
+    async (payload) => {
+      const f1 = payload?.target?.files?.[0];
+      if (f1) return persistFileToProject(f1);
+      const f2 = payload?.file instanceof File ? payload.file : payload;
+      if (f2 instanceof File) return persistFileToProject(f2);
+      if (
+        typeof payload === "string" ||
+        (payload?.path && typeof payload.path === "string")
+      ) {
+        return persistPathToProject(payload);
+      }
+      return null;
+    },
+    [persistFileToProject, persistPathToProject]
+  );
+
   const handlePickVideo = useCallback(
     async (payload) => {
       try {
@@ -203,7 +183,6 @@ export default function ArrangeTab({
     [normalizePicked, patchScene, selectedIdx]
   );
 
-  /* ----------------------------- 드래그&드롭 ------------------------------ */
   const onDropFile = useCallback(
     async (e) => {
       e.preventDefault();
@@ -228,14 +207,9 @@ export default function ArrangeTab({
     (async () => {
       try {
         const p = selectedScene?.asset?.path;
-        if (!p) {
-          setPreviewUrl(null);
-          return;
-        }
+        if (!p) return setPreviewUrl(null);
         const url = await window.api.videoPathToUrl(p);
-        if (cancelled) return;
-        setPreviewUrl(url);
-
+        if (!cancelled) setPreviewUrl(url);
         const v = previewVideoRef.current;
         if (v) {
           v.muted = true;
@@ -243,7 +217,7 @@ export default function ArrangeTab({
           if (v.readyState >= 2) play();
           else v.addEventListener("canplay", play, { once: true });
         }
-      } catch (e) {
+      } catch {
         if (!cancelled) setPreviewUrl(null);
       }
     })();
@@ -261,7 +235,7 @@ export default function ArrangeTab({
     allowOverwrite: false,
   });
 
-  // 최초 로드
+  // 최초 로드(Setup에서 저장한 키 사용: autoMatch.enabled / autoMatch.options)
   useEffect(() => {
     (async () => {
       try {
@@ -275,24 +249,19 @@ export default function ArrangeTab({
             window.api.getSetting?.("auto.sequential"),
             window.api.getSetting?.("auto.allowOverwrite"),
           ]);
-
         const enabled =
           enabledAM === true ||
           enabledAM === "true" ||
           enabledAM === 1 ||
           enabledAM === "1" ||
           !!enabledOld;
-
         let opts = {};
         try {
           opts =
             typeof optionsAM === "string"
               ? JSON.parse(optionsAM || "{}")
               : optionsAM || {};
-        } catch {
-          opts = {};
-        }
-
+        } catch {}
         setAutoOpt({
           enabled,
           fillEmpty:
@@ -313,7 +282,7 @@ export default function ArrangeTab({
     })();
   }, []);
 
-  // 설정 변경 실시간 반영
+  // 설정 변경 실시간 반영(있으면)
   useEffect(() => {
     const off = window.api.onSettingsChanged?.(async ({ key }) => {
       if (
@@ -332,9 +301,7 @@ export default function ArrangeTab({
               typeof optionsAM === "string"
                 ? JSON.parse(optionsAM || "{}")
                 : optionsAM || {};
-          } catch {
-            opts = {};
-          }
+          } catch {}
           const enabled =
             enabledAM === true ||
             enabledAM === "true" ||
@@ -363,7 +330,100 @@ export default function ArrangeTab({
     };
   }, []);
 
-  /* ------------------------------ 렌더 ------------------------------------ */
+  /* ----------------------- 순수 함수: 1건 배치 ----------------------------- */
+  function placeInto(draft, { filePath, fileName, mimeHint = "" }) {
+    if (!autoOpt.enabled) return draft;
+    const kind = mimeHint.startsWith("image") ? "image" : "video";
+    const kw = autoOpt.keywordMatch ? keywordFromFileName(fileName) : "";
+    const indices = draft.map((_, i) => i);
+    const order = autoOpt.sequential ? indices : indices;
+
+    // 1) 키워드 매칭
+    if (autoOpt.keywordMatch && kw) {
+      for (const i of order) {
+        const sc = draft[i];
+        const occupied = isOccupied(sc);
+        if (autoOpt.fillEmpty && occupied && !autoOpt.allowOverwrite) continue;
+        if (sceneTextBlob(sc).includes(kw.toLowerCase())) {
+          const next = draft.slice();
+          next[i] = {
+            ...sc,
+            fileName,
+            asset: { ...(sc.asset || {}), type: kind, path: filePath },
+          };
+          return next;
+        }
+      }
+    }
+    // 2) 첫 빈 칸(또는 덮어쓰기 허용 시 첫 장)
+    for (const i of order) {
+      const sc = draft[i];
+      const occupied = isOccupied(sc);
+      if (autoOpt.fillEmpty && occupied && !autoOpt.allowOverwrite) continue;
+      const next = draft.slice();
+      next[i] = {
+        ...sc,
+        fileName,
+        asset: { ...(sc.asset || {}), type: kind, path: filePath },
+      };
+      return next;
+    }
+    return draft; // 못 놓았으면 그대로
+  }
+
+  const placeOneAsset = useCallback(
+    (filePath, fileName, mimeHint = "") => {
+      commitScenes((prev) => placeInto(prev, { filePath, fileName, mimeHint }));
+    },
+    [commitScenes, autoOpt]
+  );
+
+  const placeManyAssets = useCallback(
+    (items) => {
+      if (!items?.length) return;
+      commitScenes((prev) => {
+        let next = prev;
+        for (const it of items) {
+          if (!it?.path) continue;
+          const name = it.fileName || basename(it.path);
+          next = placeInto(next, {
+            filePath: it.path,
+            fileName: name,
+            mimeHint: "",
+          });
+        }
+        return next;
+      });
+    },
+    [commitScenes, autoOpt]
+  );
+
+  // 놓친 파일 재배치: 자동 매칭이 켜지는 순간 큐를 한 번에 비움
+  useEffect(() => {
+    if (!autoOpt.enabled) return;
+    const q = window.__autoPlaceQueue;
+    if (Array.isArray(q) && q.length) {
+      const items = q.splice(0, q.length);
+      dlog("queue drained", items.length);
+      placeManyAssets(items);
+    }
+  }, [autoOpt.enabled, placeManyAssets]);
+
+  // 실시간: 새로 저장된 파일 이벤트 → 단건 배치
+  useEffect(() => {
+    const off = window.api.onFileDownloaded?.((payload) => {
+      if (!payload?.path) return;
+      const name = payload.fileName || basename(payload.path);
+      placeOneAsset(payload.path, name, "");
+    });
+    return () => {
+      try {
+        off && off();
+      } catch {}
+    };
+  }, [placeOneAsset]);
+
+  /* -------------------------------- 렌더 --------------------------------- */
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
       {/* 씬 목록 */}
@@ -391,11 +451,11 @@ export default function ArrangeTab({
             className="w-full aspect-video rounded-xl overflow-hidden bg-black flex items-center justify-center"
             title="여기에 파일을 드롭하여 배경 소스로 설정"
           >
-            {previewUrl ? (
+            {selectedScene?.asset?.path ? (
               <video
                 ref={previewVideoRef}
                 className="w-full h-full"
-                src={previewUrl}
+                src={previewUrl || ""}
                 controls
                 muted
                 autoPlay
