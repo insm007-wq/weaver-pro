@@ -1,9 +1,8 @@
 // src/components/assemble/AssembleEditor.jsx
 // -----------------------------------------------------------------------------
 // AssembleEditor (전체 수정본)
-// - ArrangeTab과 ReviewTab이 같은 씬 상태를 공유하도록 상위에서 보관
-// - ArrangeTab props 이름을 onChangeScenes / onChangeSelectedScene 으로 정렬
-//   (이전 setScenes / selectScene 사용 → 변경)
+// - ArrangeTab과 ReviewTab이 같은 씬 상태를 공유(상위 보관)
+// - 탭 전환 시 언마운트 금지: KeepAlivePane으로 모든 탭 감싸기
 // - 기존 UI/기능은 그대로 유지
 // -----------------------------------------------------------------------------
 
@@ -20,6 +19,7 @@ import ArrangeTab from "./tabs/ArrangeTab.jsx";
 import ReviewTab from "./tabs/ReviewTab.jsx";
 import SetupTab from "./tabs/SetupTab.jsx";
 import { parseSrtToScenes } from "../../utils/parseSrt";
+import KeepAlivePane from "../common/KeepAlivePane";
 
 function TabButton({ active, children, onClick }) {
   return (
@@ -43,6 +43,7 @@ export default function AssembleEditor() {
   // 고정 폭 카드 컨테이너
   const containerRef = useRef(null);
   const [fixedWidthPx, setFixedWidthPx] = useState(null);
+
   useLayoutEffect(() => {
     if (!fixedWidthPx && containerRef.current) {
       const px = Math.round(containerRef.current.getBoundingClientRect().width);
@@ -227,9 +228,9 @@ export default function AssembleEditor() {
         </TabButton>
       </div>
 
-      {/* 본문 */}
+      {/* 본문: ✅ 모든 탭을 KeepAlivePane으로 감싸 언마운트 방지 */}
       <div className="space-y-4">
-        {tab === "setup" && (
+        <KeepAlivePane active={tab === "setup"}>
           <SetupTab
             srtConnected={srtConnected}
             mp3Connected={mp3Connected}
@@ -240,35 +241,34 @@ export default function AssembleEditor() {
             autoOpts={autoOpts}
             setAutoOpts={setAutoOpts}
           />
-        )}
+        </KeepAlivePane>
 
-        {tab === "keywords" && (
+        <KeepAlivePane active={tab === "keywords"}>
           <KeywordsTab
             assets={assets}
             addAssets={addAssets}
             autoMatch={autoMatch}
           />
-        )}
+        </KeepAlivePane>
 
-        {tab === "arrange" && (
+        <KeepAlivePane active={tab === "arrange"}>
           <ArrangeTab
-            // ✅ 변경: ArrangeTab이 기대하는 prop 이름으로 전달
+            // ✅ ArrangeTab이 기대하는 prop 이름으로 전달
             scenes={scenes}
             onChangeScenes={setScenes}
             selectedSceneIdx={selectedSceneIdx}
             onChangeSelectedScene={setSelectedSceneIdx}
-            // (참고) assets는 ArrangeTab 내부에서 더 이상 필요하지 않으므로 전달하지 않음
           />
-        )}
+        </KeepAlivePane>
 
-        {tab === "review" && (
+        <KeepAlivePane active={tab === "review"}>
           <ReviewTab
             scenes={scenes}
             selectedSceneIdx={selectedSceneIdx}
             srtConnected={srtConnected}
             mp3Connected={mp3Connected}
           />
-        )}
+        </KeepAlivePane>
       </div>
     </div>
   );
