@@ -2,6 +2,8 @@
 // -----------------------------------------------------------------------------
 //   배치 & 타임라인 탭 (자동 배치/놓친 이벤트 복구 + 수동 교체 보강)
 //   - UI/레이아웃 변경 없음
+//   - ✅ TimelineView ↔ 비디오 시간 양방향 동기화(absoluteTime / onScrub)
+//   - ✅ 씬 종료 시 자동 다음 씬으로 이동 (마지막 씬은 정지)
 // -----------------------------------------------------------------------------
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SectionCard from "../parts/SectionCard";
@@ -30,7 +32,6 @@ function ensureSceneDefaults(sc) {
 const basename = (p = "") => String(p).split(/[\\/]/).pop();
 const stripExt = (n = "") => String(n).replace(/\.[^.]+$/, "");
 const extname = (n = "") => (/\.[^.]+$/.exec(n)?.[0] || "").toLowerCase();
-/** 파일명 → 키워드 첫 토큰(언더스코어/하이픈/스페이스 기준) */
 const keywordFromFileName = (name = "") =>
   (
     decodeURIComponent(stripExt(basename(name))).split(/[_\-\s]+/)[0] || ""
@@ -106,21 +107,18 @@ export default function ArrangeTab({
     };
   }, []);
 
-  /** 경로 문자열(or {path}) → 읽어서 프로젝트에 복사 저장 (readBinary → base64 디코드) */
   const persistPathToProject = useCallback(async (pathStrOrObj) => {
     const p =
       typeof pathStrOrObj === "string" ? pathStrOrObj : pathStrOrObj?.path;
     if (!p) throw new Error("invalid_path");
-    // 프로젝트 내부면 그대로 사용
     if (/ContentWeaver|projects|assets/i.test(p)) {
       const name = basename(p);
       return { path: p, name, type: guessMimeByExt(name) };
     }
-    // 외부 경로 → base64 수신 → 바이트로 변환 → 프로젝트 저장
     const r = await window.api.readBinary?.(p);
     if (!r?.ok || !r?.data) throw new Error(r?.message || "read_failed");
     const b64 = r.data;
-    const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); // ← 중요
+    const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
     const name = basename(p) || `asset_${Date.now()}`;
     const res = await window.api.saveBufferToProject?.({
       category: "assets",
@@ -199,7 +197,7 @@ export default function ArrangeTab({
     [persistFileToProject, patchScene, selectedIdx]
   );
 
-  /* ------------------------- 미리보기 URL + 오토플레이 --------------------- */
+  /* ------------------------- 미리보기 URL + 재생 --------------------------- */
   const [previewUrl, setPreviewUrl] = useState(null);
   const previewVideoRef = useRef(null);
   useEffect(() => {
@@ -226,6 +224,119 @@ export default function ArrangeTab({
     };
   }, [selectedScene?.asset?.path]);
 
+  /* ===================== ✅ 비디오 시간 ↔ 타임라인 동기화 ===================== */
+  const [absTime, setAbsTime] = useState(0); // 프로젝트 절대 시간
+  const advancingRef = useRef(false); // ★ 자동 넘김 중복 방지
+  const EPS = 0.05; // 50ms 여유
+
+  // ★ 공용: 특정 씬으로 이동
+  const goToScene = useCallback(
+    (nextIdx, { play = true } = {}) => {
+      setSelectedIdx(nextIdx);
+      const v = previewVideoRef.current;
+      advancingRef.current = false;
+      if (v) {
+        try {
+          v.currentTime = 0;
+        } catch {}
+        if (play) {
+          const p = v.play?.();
+          if (p && p.catch) p.catch(() => {});
+        }
+      }
+    },
+    [setSelectedIdx]
+  );
+
+  // 비디오 이벤트 → 절대시간 갱신 + 자동 다음 씬 이동
+  useEffect(() => {
+    const v = previewVideoRef.current;
+    if (!v) return;
+
+    const sync = () => {
+      const sc = scenes[selectedIdx];
+      if (!sc) return;
+      const start = sc.start || 0;
+      const end = sc.end || 0;
+      const local = v.currentTime || 0;
+      const dur = Math.max(0, end - start);
+
+      setAbsTime(start + local);
+
+      // ★ 씬 구간 끝 감지 → 다음 씬
+      if (!advancingRef.current) {
+        const reachSceneEnd = dur > 0 && local >= dur - EPS;
+        if (reachSceneEnd) {
+          advancingRef.current = true;
+          if (selectedIdx < scenes.length - 1) {
+            goToScene(selectedIdx + 1, { play: true });
+          } else {
+            // 마지막 씬: 멈춤
+            try {
+              v.pause();
+              v.currentTime = Math.max(0, dur - 0.02);
+            } catch {}
+          }
+        }
+      }
+    };
+
+    const onMetaOrSeek = () => {
+      advancingRef.current = false; // 새 구간/위치 진입 시 가드 해제
+      sync();
+    };
+
+    // ★ 영상 자체가 끝난 경우(클립 짧음 등)도 다음 씬으로
+    const onEnded = () => {
+      if (selectedIdx < scenes.length - 1) {
+        goToScene(selectedIdx + 1, { play: true });
+      }
+    };
+
+    v.addEventListener("timeupdate", sync);
+    v.addEventListener("loadedmetadata", onMetaOrSeek);
+    v.addEventListener("seeked", onMetaOrSeek);
+    v.addEventListener("ended", onEnded);
+
+    // 씬 전환 직후: 해당 구간 시작으로 맞추고 재생
+    try {
+      v.currentTime = 0;
+    } catch {}
+    onMetaOrSeek();
+
+    return () => {
+      v.removeEventListener("timeupdate", sync);
+      v.removeEventListener("loadedmetadata", onMetaOrSeek);
+      v.removeEventListener("seeked", onMetaOrSeek);
+      v.removeEventListener("ended", onEnded);
+    };
+  }, [previewUrl, selectedIdx, scenes, goToScene]);
+
+  // 타임라인 스크럽 → 비디오 이동 (씬 내부 오프셋)
+  const handleTimelineScrub = useCallback(
+    (offsetInScene, idx, absSec) => {
+      const v = previewVideoRef.current;
+      const sc = scenes[idx];
+      setSelectedIdx(idx);
+      advancingRef.current = false;
+      if (v && sc) {
+        const safe = Math.max(
+          0,
+          Math.min(offsetInScene, v.duration || offsetInScene)
+        );
+        try {
+          v.currentTime = safe;
+          v.play?.();
+        } catch {}
+        setAbsTime((sc.start || 0) + (v.currentTime || safe));
+      } else {
+        setAbsTime(absSec);
+      }
+    },
+    [scenes, setSelectedIdx]
+  );
+  /* ======================================================================== */
+
   /* ------------------------- 자동 배치 옵션/이벤트 ------------------------- */
   const [autoOpt, setAutoOpt] = useState({
     enabled: false,
@@ -235,7 +346,7 @@ export default function ArrangeTab({
     allowOverwrite: false,
   });
 
-  // 최초 로드(Setup에서 저장한 키 사용: autoMatch.enabled / autoMatch.options)
+  // 최초 로드
   useEffect(() => {
     (async () => {
       try {
@@ -282,7 +393,7 @@ export default function ArrangeTab({
     })();
   }, []);
 
-  // 설정 변경 실시간 반영(있으면)
+  // 설정 변경 실시간 반영
   useEffect(() => {
     const off = window.api.onSettingsChanged?.(async ({ key }) => {
       if (
@@ -330,7 +441,7 @@ export default function ArrangeTab({
     };
   }, []);
 
-  /* ----------------------- 순수 함수: 1건 배치 ----------------------------- */
+  /* ----------------------- 자동 배치 ----------------------------- */
   function placeInto(draft, { filePath, fileName, mimeHint = "" }) {
     if (!autoOpt.enabled) return draft;
     const kind = mimeHint.startsWith("image") ? "image" : "video";
@@ -338,7 +449,6 @@ export default function ArrangeTab({
     const indices = draft.map((_, i) => i);
     const order = autoOpt.sequential ? indices : indices;
 
-    // 1) 키워드 매칭
     if (autoOpt.keywordMatch && kw) {
       for (const i of order) {
         const sc = draft[i];
@@ -355,7 +465,6 @@ export default function ArrangeTab({
         }
       }
     }
-    // 2) 첫 빈 칸(또는 덮어쓰기 허용 시 첫 장)
     for (const i of order) {
       const sc = draft[i];
       const occupied = isOccupied(sc);
@@ -368,7 +477,7 @@ export default function ArrangeTab({
       };
       return next;
     }
-    return draft; // 못 놓았으면 그대로
+    return draft;
   }
 
   const placeOneAsset = useCallback(
@@ -398,7 +507,6 @@ export default function ArrangeTab({
     [commitScenes, autoOpt]
   );
 
-  // 놓친 파일 재배치: 자동 매칭이 켜지는 순간 큐를 한 번에 비움
   useEffect(() => {
     if (!autoOpt.enabled) return;
     const q = window.__autoPlaceQueue;
@@ -409,7 +517,6 @@ export default function ArrangeTab({
     }
   }, [autoOpt.enabled, placeManyAssets]);
 
-  // 실시간: 새로 저장된 파일 이벤트 → 단건 배치
   useEffect(() => {
     const off = window.api.onFileDownloaded?.((payload) => {
       if (!payload?.path) return;
@@ -442,6 +549,8 @@ export default function ArrangeTab({
           scenes={scenes}
           selectedIndex={selectedIdx}
           onSelect={(i) => setSelectedIdx(i)}
+          absoluteTime={absTime} // ✅ 비디오 → 타임라인
+          onScrub={handleTimelineScrub} // ✅ 타임라인 → 비디오
         />
 
         <SectionCard title="씬 미리보기" className="mt-3" bodyClass="relative">
@@ -459,8 +568,13 @@ export default function ArrangeTab({
                 controls
                 muted
                 autoPlay
-                loop
+                /* ❌ loop 제거: 무한 반복 방지 */
                 playsInline
+                onCanPlay={(e) => {
+                  try {
+                    e.currentTarget.play();
+                  } catch {}
+                }}
               />
             ) : (
               <div className="text-slate-500 text-sm">
