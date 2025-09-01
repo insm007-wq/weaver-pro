@@ -1,4 +1,15 @@
 // electron/ipc/stock.js
+// ============================================================================
+// 스톡 영상 검색 IPC
+// - 목적: 실패(네트워크/429/무결과) 시 "바로 건너뛰기" 하여 다음 작업을 진행
+// - 최적화:
+//   * 공급사/쿼리 단위 요청을 Promise.allSettled 로 병렬/안전 실행(에러는 무시)
+//   * 429 응답은 withRateLimit 에서 지수 백오프로 내부적으로 대기 → 호출부는 빈 결과로 간주
+//   * 결과 결합 시 중복 URL 제거, 해상도/용량 근접 정렬
+// - API: ipcMain.handle("stock:search", payload)
+//   반환: { ok, items, meta }  // meta는 통계용(호환성 위해 추가 필드)
+// ============================================================================
+
 const { ipcMain } = require("electron");
 const axios = require("axios");
 
@@ -9,6 +20,7 @@ const errlog = (...a) => console.warn("[stock:ERR]", ...a);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /* ── 프로바이더별 레이트리밋 상태 ─────────────────────────────────────────── */
+/** 각 프로바이더의 지수 백오프(429 대응) 상태 */
 const providerState = {
   pexels: { backoff: 0, nextAt: 0 },
   pixabay: { backoff: 0, nextAt: 0 },
@@ -16,31 +28,45 @@ const providerState = {
 const BASE_BACKOFF = 1200; // 시작 1.2s
 const MAX_BACKOFF = 60000; // 최대 60s
 
+/**
+ * 레이트리밋(429) 자동 처리 래퍼
+ * - 429면 Retry-After 또는 지수 백오프 후 "빈 결과(_rateLimited=true)"를 반환
+ * - 그 외 에러는 throw (호출부에서 allSettled로 받아 스킵)
+ */
 async function withRateLimit(provider, doRequest) {
   const st = providerState[provider];
   const now = Date.now();
-  if (now < st.nextAt) await sleep(st.nextAt - now);
+  if (now < st.nextAt) {
+    await sleep(st.nextAt - now);
+  }
 
   try {
     const res = await doRequest();
-    // 성공하면 백오프 해제
+    // 성공 → 백오프 해제
     st.backoff = 0;
     st.nextAt = Date.now();
     return res;
   } catch (e) {
     const status = e?.response?.status;
     if (status === 429) {
-      // Retry-After(초) 존중 + 지수백오프(+지터)
       const ra = parseInt(e?.response?.headers?.["retry-after"] || "", 10);
-      let wait = Number.isFinite(ra) ? ra * 1000 : st.backoff ? Math.min(MAX_BACKOFF, st.backoff * 2) : BASE_BACKOFF;
-      wait = Math.min(MAX_BACKOFF, Math.round(wait * (1 + Math.random() * 0.25)));
+      let wait = Number.isFinite(ra)
+        ? ra * 1000
+        : st.backoff
+        ? Math.min(MAX_BACKOFF, st.backoff * 2)
+        : BASE_BACKOFF;
+      // 지터 추가
+      wait = Math.min(
+        MAX_BACKOFF,
+        Math.round(wait * (1 + Math.random() * 0.25))
+      );
       st.backoff = wait;
       st.nextAt = Date.now() + wait;
       errlog(`${provider} 429 rate-limited. backoff(ms)= ${wait}`);
-      // 429는 '빈 결과'로 처리하여 상위 로직이 다른 키워드/다른 공급사로 진행하도록
+      // 호출부가 "스킵"으로 판단할 수 있게 플래그를 붙여 빈 결과처럼 반환
       return { _rateLimited: true, data: null };
     }
-    // 그 외는 상위에서 잡도록 로그만
+    // 그 외 에러는 상위(allSettled)에서 스킵 처리
     errlog(provider, e?.message || e);
     throw e;
   }
@@ -53,7 +79,10 @@ function closestRes(files, target) {
   return (
     files
       .filter((f) => f && f.url && f.width && f.height)
-      .map((f) => ({ ...f, _score: Math.abs(f.width - tw) + Math.abs(f.height - th) }))
+      .map((f) => ({
+        ...f,
+        _score: Math.abs((f.width || 0) - tw) + Math.abs((f.height || 0) - th),
+      }))
       .sort((a, b) => a._score - b._score)[0] || null
   );
 }
@@ -66,28 +95,53 @@ function withinBytes(size, minB, maxB) {
 function normTerms(q, arr) {
   const out = [];
   if (typeof q === "string" && q.trim()) out.push(q.trim());
-  if (Array.isArray(arr))
+  if (Array.isArray(arr)) {
     for (const t of arr) {
       const s = String(t || "").trim();
       if (s && !out.includes(s)) out.push(s);
     }
+  }
   return out;
 }
 
 /* ── Providers ─────────────────────────────────────────────────────────── */
-async function searchPexels({ apiKey, query, perPage, targetRes, minBytes, maxBytes }) {
+/** Pexels 영상 검색(빈 결과 또는 429 → 빈 배열로) */
+async function searchPexels({
+  apiKey,
+  query,
+  perPage,
+  targetRes,
+  minBytes,
+  maxBytes,
+}) {
   if (!apiKey) return [];
   const url = "https://api.pexels.com/videos/search";
-  const params = { query, per_page: Math.min(perPage || 6, 80), locale: "ko-KR" };
+  const params = {
+    query,
+    per_page: Math.min(perPage || 6, 80),
+    locale: "ko-KR",
+  };
 
-  const r = await withRateLimit("pexels", () => axios.get(url, { headers: { Authorization: apiKey }, params, timeout: 15000 }));
+  const r = await withRateLimit("pexels", () =>
+    axios.get(url, {
+      headers: { Authorization: apiKey },
+      params,
+      timeout: 15000,
+    })
+  );
   if (r?._rateLimited || !r?.data) return [];
 
   const out = [];
   for (const v of r.data?.videos || []) {
     const files = (v.video_files || [])
       .filter((f) => /^video\/mp4$/i.test(f.file_type || "video/mp4"))
-      .map((f) => ({ url: f.link, width: f.width || 0, height: f.height || 0, size: f.file_size || 0, quality: f.quality || "" }));
+      .map((f) => ({
+        url: f.link,
+        width: f.width || 0,
+        height: f.height || 0,
+        size: f.file_size || 0,
+        quality: f.quality || "",
+      }));
     const sized = files.filter((f) => withinBytes(f.size, minBytes, maxBytes));
     const best = closestRes(sized.length ? sized : files, targetRes);
     if (best?.url) {
@@ -107,12 +161,28 @@ async function searchPexels({ apiKey, query, perPage, targetRes, minBytes, maxBy
   return out;
 }
 
-async function searchPixabay({ apiKey, query, perPage, targetRes, minBytes, maxBytes }) {
+/** Pixabay 영상 검색(빈 결과 또는 429 → 빈 배열로) */
+async function searchPixabay({
+  apiKey,
+  query,
+  perPage,
+  targetRes,
+  minBytes,
+  maxBytes,
+}) {
   if (!apiKey) return [];
   const url = "https://pixabay.com/api/videos/";
-  const params = { key: apiKey, q: query, per_page: Math.min(perPage || 6, 200), video_type: "film", safesearch: "true" };
+  const params = {
+    key: apiKey,
+    q: query,
+    per_page: Math.min(perPage || 6, 200),
+    video_type: "film",
+    safesearch: "true",
+  };
 
-  const r = await withRateLimit("pixabay", () => axios.get(url, { params, timeout: 15000 }));
+  const r = await withRateLimit("pixabay", () =>
+    axios.get(url, { params, timeout: 15000 })
+  );
   if (r?._rateLimited || !r?.data) return [];
 
   const out = [];
@@ -120,9 +190,18 @@ async function searchPixabay({ apiKey, query, perPage, targetRes, minBytes, maxB
     const variants = [];
     for (const k of ["large", "medium", "small", "tiny"]) {
       const v = hit.videos?.[k];
-      if (v?.url) variants.push({ url: v.url, width: v.width || 0, height: v.height || 0, size: v.size || 0, label: k });
+      if (v?.url)
+        variants.push({
+          url: v.url,
+          width: v.width || 0,
+          height: v.height || 0,
+          size: v.size || 0,
+          label: k,
+        });
     }
-    const sized = variants.filter((v) => withinBytes(v.size, minBytes, maxBytes));
+    const sized = variants.filter((v) =>
+      withinBytes(v.size, minBytes, maxBytes)
+    );
     const best = closestRes(sized.length ? sized : variants, targetRes);
     if (best?.url) {
       const id = hit.id;
@@ -145,7 +224,16 @@ async function searchPixabay({ apiKey, query, perPage, targetRes, minBytes, maxB
   return out;
 }
 
-/* ── IPC ───────────────────────────────────────────────────────────────── */
+/* ── IPC 핸들러 ─────────────────────────────────────────────────────────── */
+/**
+ * stock:search
+ * payload:
+ *  - query, queries[], perPage, providers[], pexelsKey, pixabayKey,
+ *    targetRes{w,h}, minBytes, maxBytes, type="videos", strictKeyword=false
+ * 반환:
+ *  - { ok: true, items: [...], meta: {...통계} }
+ *  - 실패/에러는 최대한 "스킵"으로 처리하여 ok:true + items:[] 를 선호
+ */
 function registerStockIPC() {
   ipcMain.removeHandler?.("stock:search");
   ipcMain.handle("stock:search", async (_e, payload = {}) => {
@@ -164,27 +252,74 @@ function registerStockIPC() {
     } = payload || {};
 
     const qTerms = normTerms(query, queries);
-    if (!qTerms.length) return { ok: false, message: "query_required", items: [] };
-    if (type !== "videos") return { ok: false, message: "only_videos_supported", items: [] };
+    if (!qTerms.length)
+      return { ok: false, message: "query_required", items: [] };
+    if (type !== "videos")
+      return { ok: false, message: "only_videos_supported", items: [] };
+
+    // ── 통계(meta) ──
+    const meta = {
+      queries: qTerms.length,
+      providerCalls: 0,
+      providerErrors: 0,
+      rateLimitedSkips: 0,
+      emptyResults: 0,
+      usedProviders: providers.filter(Boolean),
+    };
 
     try {
       let results = [];
+
+      // 각 쿼리마다 프로바이더 검색을 "안전 병렬(allSettled)"로 실행
       for (const q of qTerms) {
+        const tasks = [];
+
         if (providers.includes("pexels") && pexelsKey) {
-          try {
-            const items = await searchPexels({ apiKey: pexelsKey, query: q, perPage, targetRes, minBytes, maxBytes });
-            results = results.concat(items.map((it) => ({ ...it, _q: q })));
-          } catch (_) {}
+          meta.providerCalls++;
+          tasks.push(
+            searchPexels({
+              apiKey: pexelsKey,
+              query: q,
+              perPage,
+              targetRes,
+              minBytes,
+              maxBytes,
+            })
+          );
         }
         if (providers.includes("pixabay") && pixabayKey) {
-          try {
-            const items = await searchPixabay({ apiKey: pixabayKey, query: q, perPage, targetRes, minBytes, maxBytes });
-            results = results.concat(items.map((it) => ({ ...it, _q: q })));
-          } catch (_) {}
+          meta.providerCalls++;
+          tasks.push(
+            searchPixabay({
+              apiKey: pixabayKey,
+              query: q,
+              perPage,
+              targetRes,
+              minBytes,
+              maxBytes,
+            })
+          );
+        }
+
+        if (!tasks.length) continue;
+
+        const settled = await Promise.allSettled(tasks);
+
+        for (const s of settled) {
+          if (s.status === "fulfilled") {
+            const arr = Array.isArray(s.value) ? s.value : [];
+            if (!arr.length) meta.emptyResults++;
+            // 수집
+            for (const it of arr) results.push({ ...it, _q: q });
+          } else {
+            // 호출 실패도 "스킵"으로 간주
+            meta.providerErrors++;
+            errlog("provider call failed:", s.reason?.message || s.reason);
+          }
         }
       }
 
-      // 중복 제거
+      // ── 중복 제거(쿼리/공급사 상관 없이 동일 URL 제거) ──
       const seen = new Set();
       const uniq = [];
       for (const r of results) {
@@ -194,17 +329,27 @@ function registerStockIPC() {
         uniq.push(r);
       }
 
-      // strict(가능 범위 내) 필터
+      // ── strict 키워드 필터(가능한 범위 내) ──
       let filtered = uniq;
       if (strictKeyword) {
         const needles = qTerms.map((s) => s.toLowerCase());
-        filtered = uniq.filter((it) => (it.provider === "pixabay" && it.tags?.length ? needles.some((t) => it.tags.some((tag) => tag.includes(t))) : true));
+        filtered = uniq.filter((it) => {
+          if (it.provider === "pixabay" && it.tags?.length) {
+            return needles.some((t) => it.tags.some((tag) => tag.includes(t)));
+          }
+          // Pexels는 태그가 거의 없으므로 필터 제외(스킵하면 너무 빈번히 0건)
+          return true;
+        });
       }
 
-      // 해상도/용량 근접 정렬
+      // ── 해상도/용량 근접 정렬 ──
       filtered.sort((a, b) => {
-        const aS = Math.abs((a.width || 0) - (targetRes.w || 0)) + Math.abs((a.height || 0) - (targetRes.h || 0));
-        const bS = Math.abs((b.width || 0) - (targetRes.w || 0)) + Math.abs((b.height || 0) - (targetRes.h || 0));
+        const aS =
+          Math.abs((a.width || 0) - (targetRes.w || 0)) +
+          Math.abs((a.height || 0) - (targetRes.h || 0));
+        const bS =
+          Math.abs((b.width || 0) - (targetRes.w || 0)) +
+          Math.abs((b.height || 0) - (targetRes.h || 0));
         if (aS !== bS) return aS - bS;
         const mid = minBytes && maxBytes ? (minBytes + maxBytes) / 2 : 0;
         const aD = mid ? Math.abs((a.size || 0) - mid) : 0;
@@ -212,13 +357,25 @@ function registerStockIPC() {
         return aD - bD;
       });
 
-      return { ok: true, items: filtered };
+      log("search done:", {
+        terms: qTerms.length,
+        results: filtered.length,
+        meta,
+      });
+
+      return { ok: true, items: filtered, meta };
     } catch (e) {
+      // 총체적 실패 시에도 "스킵" 취지로 ok:true + 빈 결과 반환 권장
       errlog("search fatal", e?.message || e);
-      return { ok: false, message: String(e?.message || e), items: [] };
+      return {
+        ok: true,
+        items: [],
+        meta: { ...meta, fatal: true, message: String(e?.message || e) },
+      };
     }
   });
 
   console.log("[ipc] stock.registerStockIPC: OK");
 }
+
 module.exports = { registerStockIPC };
