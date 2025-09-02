@@ -1,10 +1,11 @@
 // ============================================================================
 // electron/ipc/llm/providers/openai.js
 // 롱폼(>=25분) 대본도 안정적으로 생성되도록 보강한 버전
-// - 기능 목적: 30분 이상 대본이 18분으로 잘리는 문제 해결
-// - 방법: ① 출력 토큰 예산을 길이 기반으로 산정 ② 롱폼은 2단계(아웃라인→씬별 텍스트)로 분할 생성
-// - 주의: UI/IPC 인터페이스, 함수 시그니처는 기존과 동일 (callOpenAIGpt5Mini)
-// - 원칙: 사용자가 요청한 변경만 반영. 기존 로직은 그대로 유지하면서 롱폼 분기만 추가
+// - ① 출력 토큰 예산을 길이 기반 산정(안전 상한 클램프)
+// - ② 롱폼은 2단계(아웃라인→씬별 텍스트)로 분할 생성
+// - ③ referenceText도 롱폼 경로에 반영(요약 일부만 사용해 토큰 폭주 방지)
+// - 주의: UI/IPC 인터페이스, 함수 시그니처 동일 (callOpenAIGpt5Mini)
+// - 원칙: 사용자가 요청한 변경만 반영. 기존 로직은 유지하면서 롱폼 분기만 추가
 // ============================================================================
 
 const OpenAI = require("openai");
@@ -339,21 +340,46 @@ async function chatJsonOrFallbackFreeText(
 // ── 상수: 출력 토큰 예산/패스 수/경계값
 const KR_CHAR_TO_TOKENS = 1.0; // 한국어 대략 토큰≈문자
 const OUT_TOKENS_HEADROOM = 1200; // JSON 오버헤드 여유
-const MAX_OUT_TOKENS = 14000; // mini 계열에서 안정적으로 시도할 상한(필요시 조정)
+const MAX_OUT_TOKENS = 8000; // 출력 토큰 안전 상한(모델 한도 고려, 안정 클램프)
 const LONGFORM_MIN_MINUTES = 25; // 25분 이상이면 롱폼 경로
 const MAX_EXPAND_PASSES_LONG = 6; // 롱폼 확장/축약 최대 패스
 const MAX_EXPAND_PASSES_SHORT = 3; // 숏폼 패스
 const SCENE_TOKEN_BUDGET = 1300; // 씬별 텍스트 생성시 토큰 예산(안정)
 
-// 1단계: 아웃라인(JSON) — 씬 개수/각 duration 합계가 policy.secs와 거의 같도록 생성
-async function generateOutline({ client, model, topic, style, policy }) {
+/* 레퍼런스 텍스트 일부만 안전 추출(토큰 폭주 방지) */
+function safeExcerpt(s, limit = 1200) {
+  const t = normalizeForCount(s || "");
+  if (!t) return "";
+  if (Array.from(t).length <= limit) return t;
+  // 앞·뒤에서 조금씩 취해 요약 힌트 제공
+  const arr = Array.from(t);
+  const head = arr.slice(0, Math.floor(limit * 0.7)).join("");
+  const tail = arr.slice(-Math.floor(limit * 0.2)).join("");
+  return `${head}\n...\n${tail}`;
+}
+
+// 1단계: 아웃라인(JSON)
+async function generateOutline({
+  client,
+  model,
+  topic,
+  style,
+  policy,
+  referenceText,
+  isReference,
+}) {
   const targetScenes = policy.scenes; // UI의 maxScenes 사용
+  const refHint =
+    isReference && referenceText
+      ? `\n[레퍼런스(발췌)]\n${safeExcerpt(referenceText, 1200)}\n`
+      : "";
+
   const sys =
     'Return ONLY JSON like {"title":"...","scenes":[{"duration":N,"brief":"..."}]}';
   const user = [
     `주제: ${topic || "(미지정)"}`,
     `스타일: ${style || "(자유)"}`,
-    "",
+    refHint,
     "[요구사항]",
     `- 총 재생시간: ${policy.secs}s (씬 durations 합계가 ±2s 이내).`,
     `- 씬 개수: ${targetScenes}개(±0).`,
@@ -397,7 +423,7 @@ async function generateOutline({ client, model, topic, style, policy }) {
   return { title: String(parsed.title || topic || ""), scenes: parsed.scenes };
 }
 
-// 2단계: 씬별 텍스트 생성(JSON) — 각 duration에 맞춘 글자수 생성
+// 2단계: 씬별 텍스트 생성(JSON)
 async function generateSceneText({
   client,
   model,
@@ -405,13 +431,22 @@ async function generateSceneText({
   style,
   policy,
   scene,
+  referenceText,
+  isReference,
 }) {
   const { duration, brief } = scene;
   const { min, max, tgt } = policy.boundsForSec(duration);
+
+  const refHint =
+    isReference && referenceText
+      ? `\n[레퍼런스(발췌)]\n${safeExcerpt(referenceText, 800)}\n`
+      : "";
+
   const sys = 'Return ONLY JSON like {"text":"...","charCount":N}';
   const user = [
     `주제: ${topic || "(미지정)"}`,
     `스타일: ${style || "(자유)"}`,
+    refHint,
     LENGTH_FIRST_GUIDE,
     `- 이 씬의 duration=${duration}s, 분량: ${min}~${max}자(목표 ${tgt}자).`,
     "- 불릿/목록/마크다운/코드펜스 금지. 자연스러운 문단 2~3개.",
@@ -555,6 +590,7 @@ async function callOpenAIGpt5Mini(payload) {
     maxScenes,
     cpmMin,
     cpmMax,
+    referenceText, // 추가: 레퍼런스 텍스트(있으면 롱폼에도 반영)
   } = payload || {};
 
   const client = new OpenAI({ apiKey });
@@ -566,15 +602,12 @@ async function callOpenAIGpt5Mini(payload) {
   // 롱폼 분기: 25분 이상이면 2단계(아웃라인 → 씬별 텍스트) 경로로 안전 생성
   // ──────────────────────────────────────────────────────────────────────────
   const isLongForm = Number(duration) >= LONGFORM_MIN_MINUTES;
-  if (
-    (type === "auto" || type === "reference") &&
-    !customPrompt &&
-    isLongForm
-  ) {
+  const isReference = type === "reference";
+  if ((type === "auto" || isReference) && !customPrompt && isLongForm) {
     let usedModel = primary;
     let notice = null;
 
-    // 1) 아웃라인 (가벼운 출력 토큰으로 생성)
+    // 1) 아웃라인
     let outline;
     try {
       outline = await generateOutline({
@@ -583,6 +616,8 @@ async function callOpenAIGpt5Mini(payload) {
         topic,
         style,
         policy,
+        referenceText,
+        isReference,
       });
     } catch (e) {
       // 모델 이슈 시 폴백
@@ -597,6 +632,8 @@ async function callOpenAIGpt5Mini(payload) {
         topic,
         style,
         policy,
+        referenceText,
+        isReference,
       });
     }
 
@@ -610,6 +647,8 @@ async function callOpenAIGpt5Mini(payload) {
         style,
         policy,
         scene: s,
+        referenceText,
+        isReference,
       });
       scenes.push({
         id: s.id,
@@ -660,8 +699,6 @@ async function callOpenAIGpt5Mini(payload) {
   // ──────────────────────────────────────────────────────────────────────────
   // 기존(숏폼/중폼) 경로: 한 번에 JSON 생성 → 필요 시 보정
   // ──────────────────────────────────────────────────────────────────────────
-
-  // 프롬프트 선택
   const useCompiled = !!(compiledPrompt && String(compiledPrompt).trim());
   const userPrompt =
     useCompiled || customPrompt
@@ -670,7 +707,7 @@ async function callOpenAIGpt5Mini(payload) {
           topic,
           style,
           type,
-          referenceText: payload?.referenceText,
+          referenceText,
           policy,
         });
 
@@ -785,7 +822,7 @@ async function callOpenAIGpt5Mini(payload) {
     ),
   });
 
-  // 길이 정책 강제: 자동/레퍼런스만 (프롬프트 탭은 분량 보정은 건너뛰되 카운트는 이미 통일됨)
+  // 길이 정책 강제: 자동/레퍼런스만
   if ((type === "auto" || type === "reference") && !customPrompt) {
     let violated = violatesLengthPolicy(out, policy);
     debug("violates after parse:", violated);

@@ -9,7 +9,7 @@ export const PRESETS = {
     mode: "overlay", // overlay | banner | below | karaoke
     position: "bottom", // overlay일 때 top | bottom
     fontSize: 24,
-    lineClamp: 1, // 한 화면에 최대 줄 수
+    lineClamp: 2, // 한 화면에 최대 줄 수
     color: "#FFFFFF",
     bgColor: "#000000",
     bgOpacity: 0.25,

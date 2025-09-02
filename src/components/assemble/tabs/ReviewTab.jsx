@@ -1,4 +1,3 @@
-// src/components/assemble/tabs/ReviewTab.jsx
 import { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import SectionCard from "../parts/SectionCard";
 import SubtitlePreview from "../parts/SubtitlePreview";
@@ -8,7 +7,6 @@ import SubtitleControls, { PRESETS } from "../parts/SubtitleControls";
 /* ================= Fullscreen helper (컨테이너 기준) ================= */
 function useFullscreen() {
   const [isFs, setIsFs] = useState(false);
-
   const getFsEl = () =>
     document.fullscreenElement ||
     document.webkitFullscreenElement ||
@@ -50,6 +48,85 @@ function useFullscreen() {
   return { isFs, toggle, exit };
 }
 
+/* ===================== 유틸: 텍스트 분절 & 길이 ===================== */
+function normalizeForCount(s) {
+  let t = String(s ?? "");
+  try {
+    t = t.normalize("NFC");
+  } catch {}
+  t = t.replace(/\r\n/g, "\n").replace(/[\u200B-\u200D\uFEFF]/g, "");
+  return t;
+}
+function charCountKo(s) {
+  return Array.from(normalizeForCount(s)).length;
+}
+
+/** 문장 분절: 한국어/영어 마침표, 물음표, 느낌표, 줄바꿈, … 를 기준으로 안전 분절 */
+const SENTENCE_RE = /([^.!?…]+[.!?…]+|\S+(?:\s+|$))/g;
+
+/** 긴 문장을 2~3줄에 맞게 추가 쪼개기(문자수 기준) */
+function hardWrapByChars(text, maxChars = 38) {
+  const arr = [];
+  let t = normalizeForCount(text).trim();
+  while (t.length > maxChars) {
+    arr.push(t.slice(0, maxChars));
+    t = t.slice(maxChars);
+  }
+  if (t) arr.push(t);
+  return arr;
+}
+
+/** 한 씬을 문장 단위 cue 배열로 변환 (시간은 문자수 비례 배분 + 최소길이 보장) */
+function splitSceneToCues(scene, opts = {}) {
+  const start = Number(scene.start) || 0;
+  const end = Number(scene.end) || 0;
+  const dur = Math.max(0, end - start);
+  const text = String(scene.text || "").trim();
+  if (!dur || !text) return [];
+
+  const MIN_SEG_SEC = Number(opts.minSegSec ?? 0.6); // 한 문장 최소 0.6초
+  const MAX_LINE_CHARS = Number(opts.maxLineChars ?? 38); // 2줄 기준 대략 70~80자 → 조각당 35~40자
+
+  // 1) 1차: 문장 분절
+  let parts = [];
+  const m = text.match(SENTENCE_RE);
+  if (m && m.length) {
+    parts = m.map((s) => s.trim()).filter(Boolean);
+  } else {
+    parts = [text];
+  }
+
+  // 2) 너무 긴 문장은 하드랩으로 추가 분절
+  let refined = [];
+  for (const p of parts) {
+    if (charCountKo(p) > MAX_LINE_CHARS * 2) {
+      refined = refined.concat(hardWrapByChars(p, MAX_LINE_CHARS));
+    } else refined.push(p);
+  }
+  parts = refined.length ? refined : parts;
+
+  // 3) 문자수 비례로 길이 배분 (+최소 보장)
+  const counts = parts.map(charCountKo);
+  const sum = counts.reduce((a, b) => a + b, 0) || 1;
+  let alloc = counts.map((n) => Math.max(MIN_SEG_SEC, (dur * n) / sum));
+
+  // 4) 총합을 정확히 dur로 정규화
+  const total = alloc.reduce((a, b) => a + b, 0);
+  const scale = total ? dur / total : 1;
+  alloc = alloc.map((x) => x * scale);
+
+  // 5) 누적하여 start/end 생성
+  const cues = [];
+  let t = start;
+  for (let i = 0; i < parts.length; i++) {
+    const st = t;
+    const en = i === parts.length - 1 ? end : t + alloc[i];
+    cues.push({ start: st, end: en, text: parts[i] });
+    t = en;
+  }
+  return cues;
+}
+
 /* =============================== Component =============================== */
 export default function ReviewTab({
   scenes = [],
@@ -59,23 +136,28 @@ export default function ReviewTab({
 }) {
   const audioRef = useRef(null);
   const videoRef = useRef(null);
-  const previewRef = useRef(null); // 전체 화면 컨테이너
+  const previewRef = useRef(null);
   const fs = useFullscreen();
 
   const [styleOpt, setStyleOpt] = useState(PRESETS.ytCompact);
   const [mp3Url, setMp3Url] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
-  const [now, setNow] = useState(0);
-  const [playing, setPlaying] = useState(false); // 오디오 상태에 동기
 
-  // 레이아웃 기준 refs
+  const [now, setNow] = useState(0); // 실제 오디오 currentTime(초)
+  const [playing, setPlaying] = useState(false);
+
+  // 싱크/스케일
+  const [syncOffsetMs, setSyncOffsetMs] = useState(-400); // +면 자막 늦춤, -면 앞당김
+  const [audioDur, setAudioDur] = useState(0);
+  const [timeScale, setTimeScale] = useState(1);
+
+  // 레이아웃 refs
   const leftColRef = useRef(null);
   const leftBottomRef = useRef(null);
   const rightWrapRef = useRef(null);
   const rightBodyRef = useRef(null);
   const [rightInnerH, setRightInnerH] = useState(260);
 
-  // ===== 가시성/탭 이동 감지로 "떠나면 멈추고, 돌아와도 멈춤" 보장 =====
   const pauseBoth = () => {
     try {
       audioRef.current?.pause();
@@ -86,28 +168,20 @@ export default function ReviewTab({
   };
 
   useEffect(() => {
-    const onVis = () => {
-      if (document.hidden) pauseBoth(); // 떠날 때 멈춤
-      else pauseBoth(); // 돌아와도 자동재생 금지(멈춘 채 대기)
-    };
+    const onVis = () => pauseBoth();
     const onBlur = () => pauseBoth();
-
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("blur", onBlur);
-
     let io;
     if (previewRef.current) {
       io = new IntersectionObserver(
         ([ent]) => {
-          if (!ent || !ent.isIntersecting)
-            pauseBoth(); // 화면에서 사라지면 멈춤
-          else pauseBoth(); // 다시 보여져도 멈춤 유지
+          if (!ent?.isIntersecting) pauseBoth();
         },
         { threshold: 0.01 }
       );
       io.observe(previewRef.current);
     }
-
     return () => {
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("blur", onBlur);
@@ -116,7 +190,7 @@ export default function ReviewTab({
     };
   }, []);
 
-  // 오른쪽 리스트의 "실 사용 가능 높이"
+  // 오른쪽 리스트 높이 계산
   useLayoutEffect(() => {
     const calc = () => {
       if (!leftBottomRef.current || !rightBodyRef.current) return;
@@ -143,7 +217,7 @@ export default function ReviewTab({
     };
   }, []);
 
-  // ===== 씬 정제 =====
+  // 씬 정제(중복 제거 + 시작순 정렬)
   const uniqScenes = useMemo(() => {
     const seen = new Set();
     const out = [];
@@ -157,18 +231,16 @@ export default function ReviewTab({
       seen.add(key);
       out.push({ ...s, start, end, text });
     }
+    out.sort((a, b) => a.start - b.start);
     return out.length ? out : scenes;
   }, [scenes]);
 
-  const [activeIdx, setActiveIdx] = useState(
-    Number.isFinite(selectedSceneIdx) ? selectedSceneIdx : 0
-  );
-  const total = useMemo(
+  const plannedTotal = useMemo(
     () => (uniqScenes.length ? uniqScenes[uniqScenes.length - 1].end : 0),
     [uniqScenes]
   );
 
-  // MP3 로드
+  // MP3 로드 & 길이 확보
   useEffect(() => {
     (async () => {
       try {
@@ -182,21 +254,25 @@ export default function ReviewTab({
     })();
   }, [mp3Connected]);
 
-  // 오디오 이벤트 + tick (자동재생 제거!)
+  // 오디오 이벤트 + RAF로 now 갱신
   useEffect(() => {
     const a = audioRef.current;
     if (!a) return;
 
-    const onTime = () => setNow(a.currentTime || 0);
+    const onLoaded = () => {
+      const dur = Number(a.duration) || 0;
+      setAudioDur(dur);
+      if (plannedTotal > 0 && dur > 0) setTimeScale(dur / plannedTotal);
+      else setTimeScale(1);
+    };
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     const onEnded = () => {
-      setNow(total);
+      setNow(Number(a.duration) || 0);
       setPlaying(false);
     };
 
-    // 🔴 자동 재생을 시도하지 않는다 (돌아왔을 때 멈춘 채 대기)
-    a.addEventListener("timeupdate", onTime);
+    a.addEventListener("loadedmetadata", onLoaded);
     a.addEventListener("play", onPlay);
     a.addEventListener("pause", onPause);
     a.addEventListener("ended", onEnded);
@@ -209,27 +285,57 @@ export default function ReviewTab({
     raf = requestAnimationFrame(tick);
 
     return () => {
-      a.removeEventListener("timeupdate", onTime);
+      a.removeEventListener("loadedmetadata", onLoaded);
       a.removeEventListener("play", onPlay);
       a.removeEventListener("pause", onPause);
       a.removeEventListener("ended", onEnded);
       cancelAnimationFrame(raf);
     };
-  }, [mp3Url, total]);
+  }, [mp3Url, plannedTotal]);
 
-  // now → activeIdx
+  // 보정된 타임라인(오디오 길이에 맞춰 스케일)
+  const scenesForPlayback = useMemo(() => {
+    const scale = Number.isFinite(timeScale) && timeScale > 0 ? timeScale : 1;
+    return (uniqScenes || []).map((s) => ({
+      ...s,
+      start: s.start * scale,
+      end: s.end * scale,
+    }));
+  }, [uniqScenes, timeScale]);
+
+  // 🔥 문장 단위 cue 생성
+  const cuesForPlayback = useMemo(() => {
+    const arr = [];
+    for (const sc of scenesForPlayback) {
+      const cues = splitSceneToCues(sc, { minSegSec: 0.6, maxLineChars: 38 });
+      if (cues.length) arr.push(...cues);
+    }
+    return arr;
+  }, [scenesForPlayback]);
+
+  // now(+오프셋) → 활성 cue index
+  const [activeIdx, setActiveIdx] = useState(
+    Number.isFinite(selectedSceneIdx) ? selectedSceneIdx : 0
+  );
   useEffect(() => {
-    if (!uniqScenes.length) return setActiveIdx(0);
-    let idx = uniqScenes.findIndex((s) => now >= s.start && now < s.end);
-    if (idx < 0) idx = uniqScenes.length - 1;
+    if (!cuesForPlayback.length) return setActiveIdx(0);
+    const t = Math.max(0, now + syncOffsetMs / 1000);
+    let idx = cuesForPlayback.findIndex((s) => t >= s.start && t < s.end);
+    if (idx < 0) idx = cuesForPlayback.length - 1;
     setActiveIdx(idx);
-  }, [now, uniqScenes]);
+  }, [now, cuesForPlayback, syncOffsetMs]);
 
-  // activeIdx → 비디오 소스
+  // 활성 cue가 속한 씬의 에셋을 비디오에 세팅
   useEffect(() => {
     (async () => {
-      const sc = uniqScenes[activeIdx];
-      if (!sc) return setVideoUrl(null);
+      // cue -> scene 찾기용: 가장 가까운 scene 추정
+      const cue = cuesForPlayback[activeIdx];
+      if (!cue) return setVideoUrl(null);
+      // 해당 시간을 포함하는 scene
+      const sc =
+        scenesForPlayback.find(
+          (s) => cue.start >= s.start && cue.start < s.end
+        ) || scenesForPlayback[0];
       const p = sc?.asset?.url || sc?.asset?.path;
       if (!p) return setVideoUrl(null);
       let u = p;
@@ -242,9 +348,9 @@ export default function ReviewTab({
       }
       setVideoUrl(u || null);
     })();
-  }, [activeIdx, uniqScenes]);
+  }, [activeIdx, cuesForPlayback, scenesForPlayback]);
 
-  // 씬 변경 시 비디오 0초로 리셋하되, 재생은 "playing" 상태에 따라
+  // 씬 바뀌면 비디오 0초부터(재생 상태는 유지)
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -253,9 +359,9 @@ export default function ReviewTab({
       if (playing) v.play().catch(() => {});
       else v.pause();
     } catch {}
-  }, [activeIdx, videoUrl, playing]);
+  }, [videoUrl, playing]);
 
-  // 오디오 상태(playing)에 비디오 재생을 동기화
+  // 오디오 상태에 비디오 동기화
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -263,18 +369,28 @@ export default function ReviewTab({
     else v.pause();
   }, [playing]);
 
-  // 컨트롤
+  // 컨트롤(오프셋 반영)
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-  const seek = (sec) => {
+  const totalLogic = cuesForPlayback.length
+    ? cuesForPlayback[cuesForPlayback.length - 1].end
+    : 0;
+
+  const seek = (logicSec) => {
     const a = audioRef.current;
     if (!a) return;
-    const wasPlaying = !a.paused; // 이전 상태 기억
-    a.currentTime = clamp(sec, 0, total || 0);
+    const actual = clamp(
+      logicSec - syncOffsetMs / 1000,
+      0,
+      Number(a.duration) || audioDur || totalLogic || 0
+    );
+    const wasPlaying = !a.paused;
+    a.currentTime = actual;
     if (wasPlaying) a.play().catch(() => {});
     else a.pause();
   };
-  const step = (d) => seek((audioRef.current?.currentTime || 0) + d);
-  const jumpToScene = (i) => uniqScenes[i] && seek(uniqScenes[i].start + 0.01);
+  const step = (d) => seek(now + syncOffsetMs / 1000 + d);
+  const jumpToCue = (i) =>
+    cuesForPlayback[i] && seek(cuesForPlayback[i].start + 0.01);
   const onPlayPause = () => {
     const a = audioRef.current;
     if (!a) return;
@@ -290,27 +406,11 @@ export default function ReviewTab({
 
   const status = `자막: ${srtConnected ? "연결" : "미연결"} · 오디오: ${
     mp3Url ? "연결" : "미연결"
-  } · 소스 있는 씬 ${
-    uniqScenes.filter((s) => !!s?.asset?.path || !!s?.asset?.url).length
-  }/${uniqScenes.length}`;
+  } · 문장 ${cuesForPlayback.length}개`;
 
-  // 자막 오버레이(기존 프리셋 약간 키움 유지)
-  const overlayOpt = useMemo(() => {
-    const base = styleOpt || {};
-    const fs = Math.round((base.fontSize || 28) * 1.12);
-    const lh = base.lineHeight ? Math.round(base.lineHeight * 1.12) : undefined;
-    const padV = base.paddingV ? Math.round(base.paddingV * 1.05) : undefined;
-    const padH = base.paddingH ? Math.round(base.paddingH * 1.05) : undefined;
-    return {
-      ...base,
-      fontSize: fs,
-      ...(lh ? { lineHeight: lh } : {}),
-      ...(padV ? { paddingV: padV } : {}),
-      ...(padH ? { paddingH: padH } : {}),
-    };
-  }, [styleOpt]);
+  const overlayOpt = useMemo(() => ({ ...styleOpt }), [styleOpt]);
 
-  // 핫키: Space 토글, F 전체화면, Esc 종료
+  // 핫키
   useEffect(() => {
     const onKey = (e) => {
       const t = e.target;
@@ -328,10 +428,12 @@ export default function ReviewTab({
       }
       if (key === "f") fs.toggle(previewRef.current);
       if (e.key === "Escape") fs.exit();
+      if (key === "arrowleft") step(-1);
+      if (key === "arrowright") step(+1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [fs]);
+  }, [fs, now, syncOffsetMs]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -346,7 +448,7 @@ export default function ReviewTab({
             ref={previewRef}
             className="relative aspect-video w-full bg-black border border-slate-200 rounded-lg overflow-hidden"
             style={{ maxHeight: "56vh", cursor: "default" }}
-            onDoubleClick={() => fs.toggle(previewRef.current)} // 더블클릭 전체 화면
+            onDoubleClick={() => fs.toggle(previewRef.current)}
             title="더블클릭/F: 전체 화면 · Esc: 종료 · Space: 재생/일시정지"
           >
             {videoUrl ? (
@@ -359,7 +461,6 @@ export default function ReviewTab({
                 muted
                 loop
                 playsInline
-                // 🔴 자동재생 금지: 사용자가 재생 누를 때만 시작
                 autoPlay={false}
                 controls={false}
                 controlsList="nofullscreen"
@@ -370,13 +471,13 @@ export default function ReviewTab({
               </div>
             )}
 
-            {/* 자막 오버레이(컨테이너 FS에서도 함께 보임) */}
+            {/* cue 기준으로 교체(키 포함) */}
             <SubtitleOverlay
-              text={uniqScenes[activeIdx]?.text || ""}
+              key={activeIdx}
+              text={cuesForPlayback[activeIdx]?.text || ""}
               options={overlayOpt}
             />
 
-            {/* 중앙 오버레이 플레이 버튼: 멈춤 상태에서만 노출 */}
             {!playing && (
               <button
                 type="button"
@@ -389,7 +490,6 @@ export default function ReviewTab({
               </button>
             )}
 
-            {/* 우상단 전체 화면 토글 버튼 */}
             <button
               type="button"
               onClick={() => fs.toggle(previewRef.current)}
@@ -400,48 +500,98 @@ export default function ReviewTab({
             </button>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="text-xs text-slate-500">
-              상태: {playing ? "재생" : "대기"} · {fmt(now)} / {fmt(total)}
+          {/* 컨트롤 + 싱크/스케일 표시 */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-slate-500">
+                상태: {playing ? "재생" : "대기"} · {fmt(now)} /{" "}
+                {fmt(audioDur || totalLogic)}
+                {plannedTotal > 0 && (
+                  <span className="ml-2 text-[11px] text-slate-400">
+                    (보정 {timeScale.toFixed(3)}×)
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
+                  onClick={() => step(-5)}
+                  disabled={!mp3Url || !(audioDur || totalLogic)}
+                >
+                  {" "}
+                  -5s{" "}
+                </button>
+                <button
+                  className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
+                  onClick={onPlayPause}
+                  disabled={!mp3Url || !(audioDur || totalLogic)}
+                >
+                  {playing ? "일시정지" : "재생"}
+                </button>
+                <button
+                  className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
+                  onClick={() => step(+5)}
+                  disabled={!mp3Url || !(audioDur || totalLogic)}
+                >
+                  {" "}
+                  +5s{" "}
+                </button>
+                <button
+                  className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
+                  onClick={() => jumpToCue(Math.max(0, activeIdx - 1))}
+                  disabled={!mp3Url || !(audioDur || totalLogic)}
+                >
+                  이전 문장
+                </button>
+                <button
+                  className="h-9 px-3 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500"
+                  onClick={() =>
+                    jumpToCue(
+                      Math.min(cuesForPlayback.length - 1, activeIdx + 1)
+                    )
+                  }
+                  disabled={!mp3Url || !(audioDur || totalLogic)}
+                >
+                  다음 문장
+                </button>
+              </div>
             </div>
 
-            <div className="flex gap-2">
+            {/* 싱크 오프셋 */}
+            <div className="flex items-center gap-2">
+              <div className="text-xs text-slate-500 w-24">싱크 오프셋</div>
               <button
-                className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
-                onClick={() => step(-5)}
-                disabled={!mp3Url || !total}
+                className="h-8 px-2 rounded border border-slate-200 text-xs hover:bg-slate-50"
+                onClick={() => setSyncOffsetMs((v) => v - 100)}
               >
-                -5s
+                -100ms
               </button>
-              <button
-                className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
-                onClick={onPlayPause}
-                disabled={!mp3Url || !total}
-              >
-                {playing ? "일시정지" : "재생"}
-              </button>
-              <button
-                className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
-                onClick={() => step(+5)}
-                disabled={!mp3Url || !total}
-              >
-                +5s
-              </button>
-              <button
-                className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
-                onClick={() => jumpToScene(Math.max(0, activeIdx - 1))}
-                disabled={!mp3Url || !total}
-              >
-                이전 씬
-              </button>
-              <button
-                className="h-9 px-3 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500"
-                onClick={() =>
-                  jumpToScene(Math.min(uniqScenes.length - 1, activeIdx + 1))
+              <input
+                type="range"
+                min={-1500}
+                max={1500}
+                step={50}
+                value={syncOffsetMs}
+                onChange={(e) =>
+                  setSyncOffsetMs(parseInt(e.target.value || 0, 10))
                 }
-                disabled={!mp3Url || !total}
+                className="flex-1"
+              />
+              <button
+                className="h-8 px-2 rounded border border-slate-200 text-xs hover:bg-slate-50"
+                onClick={() => setSyncOffsetMs((v) => v + 100)}
               >
-                다음 씬
+                +100ms
+              </button>
+              <div className="w-16 text-right text-xs text-slate-600">
+                {syncOffsetMs}ms
+              </div>
+              <button
+                className="h-8 px-2 rounded border border-slate-200 text-xs hover:bg-slate-50"
+                onClick={() => setSyncOffsetMs(0)}
+                title="오프셋 초기화"
+              >
+                리셋
               </button>
             </div>
           </div>
@@ -449,13 +599,12 @@ export default function ReviewTab({
           <audio ref={audioRef} src={mp3Url || undefined} preload="auto" />
         </SectionCard>
 
-        {/* 왼쪽 '자막 설정' 카드 밑변 측정용 */}
         <div ref={leftBottomRef}>
           <SubtitleControls value={styleOpt} onChange={setStyleOpt} />
         </div>
       </div>
 
-      {/* ➡ 오른쪽: 자막 미리보기(왼쪽 밑변에 맞춤) */}
+      {/* ➡ 오른쪽: 자막 미리보기(문장 cue 기준) */}
       <div ref={rightWrapRef} className="lg:sticky lg:top-4 min-h-0">
         <SectionCard
           title="자막 미리보기"
@@ -465,9 +614,9 @@ export default function ReviewTab({
           <div ref={rightBodyRef} className="flex-1 min-h-0">
             <SubtitlePreview
               embedded
-              scenes={uniqScenes}
+              scenes={cuesForPlayback}
               activeIndex={activeIdx}
-              onJump={(i) => jumpToScene(i)}
+              onJump={(i) => jumpToCue(i)}
               maxHeight={rightInnerH}
             />
           </div>

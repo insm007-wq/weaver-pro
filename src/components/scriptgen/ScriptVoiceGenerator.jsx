@@ -103,6 +103,10 @@ function extractMaxScenesFromText(s) {
   return Math.max(1, v);
 }
 
+/* ========================= 기본 TTS 옵션 ========================= */
+const DEFAULT_TTS_ENGINE = "google";
+const DEFAULT_VOICE = (VOICES_BY_ENGINE[DEFAULT_TTS_ENGINE] || [])[0] || ""; // ko-KR-Wavenet-* 중 첫 번째
+
 /* ========================= 탭별 폼 ========================= */
 const makeDefaultForm = () => ({
   topic: "",
@@ -110,7 +114,8 @@ const makeDefaultForm = () => ({
   durationMin: 5,
   maxScenes: 10,
   llmMain: "openai-gpt5mini",
-  ttsEngine: "google",
+  ttsEngine: DEFAULT_TTS_ENGINE,
+  voiceName: DEFAULT_VOICE, // ✅ 기본 보이스 확실히 세팅
   speakingRate: 0.84,
   pitch: 0.2,
 });
@@ -312,27 +317,14 @@ export default function ScriptVoiceGenerator() {
         throw new Error("대본 생성 결과가 비어있습니다.");
       setDocs((prev) => ({ ...prev, [tab]: generatedDoc }));
 
-      // SRT
-      beginPhase("SRT");
-      setProgress({ current: 0, total: 0 });
-      const srtRes = await call("script/toSrt", { doc: generatedDoc });
-      if (srtRes?.srt) {
-        const srtBuf = new TextEncoder().encode(srtRes.srt).buffer;
-        await call("files/saveToProject", {
-          category: "subtitle",
-          fileName: "subtitle.srt",
-          buffer: srtBuf,
-        });
-      }
-
-      // TTS
+      // ======================= TTS (먼저 실행) =======================
       beginPhase("TTS");
       setProgress({ current: 0, total: generatedDoc.scenes.length });
       const ttsRes = await call("tts/synthesizeByScenes", {
         doc: generatedDoc,
         tts: {
           engine: f.ttsEngine,
-          voiceName: f.voiceName,
+          voiceName: f.voiceName || DEFAULT_VOICE, // ✅ 보이스 누락 대비
           speakingRate: Number(f.speakingRate),
           pitch: Number(f.pitch),
         },
@@ -362,6 +354,22 @@ export default function ScriptVoiceGenerator() {
           category: "audio",
           fileName: "narration.mp3",
           buffer: out.buffer,
+        });
+      }
+
+      // ======================= SRT (TTS 마크 사용) =======================
+      beginPhase("SRT");
+      setProgress({ current: 0, total: 0 });
+      const srtRes = await call("script/toSrt", {
+        doc: generatedDoc,
+        ttsMarks: ttsRes?.marks || null, // ★ 타임포인트 전달(없으면 백엔드가 폴백)
+      });
+      if (srtRes?.srt) {
+        const srtBuf = new TextEncoder().encode(srtRes.srt).buffer;
+        await call("files/saveToProject", {
+          category: "subtitle",
+          fileName: "subtitle.srt",
+          buffer: srtBuf,
         });
       }
 
