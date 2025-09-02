@@ -8,8 +8,8 @@ export const PRESETS = {
     name: "YouTube Compact",
     mode: "overlay", // overlay | banner | below | karaoke
     position: "bottom", // overlay일 때 top | bottom
-    fontSize: 20,
-    lineClamp: 2, // 한 화면에 최대 줄 수
+    fontSize: 24,
+    lineClamp: 1, // 한 화면에 최대 줄 수
     color: "#FFFFFF",
     bgColor: "#000000",
     bgOpacity: 0.25,
@@ -17,7 +17,7 @@ export const PRESETS = {
     maxWidthPct: 78, // 자막 최대 너비(%)
     vOffsetPct: 8, // 하단에서 띄우기(%)
     safeMarginPct: 5, // 좌우 세이프마진(%)
-    bgStyle: "pill", // pill | box | none
+    bgStyle: "box", // pill | box | none
   },
   lowerThird: {
     name: "Lower-Third",

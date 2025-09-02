@@ -111,9 +111,8 @@ const makeDefaultForm = () => ({
   maxScenes: 10,
   llmMain: "openai-gpt5mini",
   ttsEngine: "google",
-  voiceName: "ko-KR-Wavenet-A",
-  speakingRate: 1.0,
-  pitch: 0,
+  speakingRate: 0.84,
+  pitch: 0.2,
 });
 
 export default function ScriptVoiceGenerator() {
