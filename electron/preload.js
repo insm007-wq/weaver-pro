@@ -291,5 +291,19 @@ contextBridge.exposeInMainWorld("api", {
       if (handler) ipcRenderer.off("preview:progress", handler);
       else ipcRenderer.removeAllListeners("preview:progress");
     },
+
+    // (추가) 오디오 관련 IPC 브릿지
+    audio: {
+      /** MP3 길이(초) */
+      getDuration: (path) => ipcRenderer.invoke("audio/getDuration", { path }),
+
+      /** 병합은 렌더러에서 처리. 여기서는 timemap 저장만 수행 */
+      concatScenes: (payload) =>
+        ipcRenderer.invoke("audio/concatScenes", payload),
+
+      /** timemap만 명시적으로 저장하고 싶을 때 */
+      saveTimemap: (payload) =>
+        ipcRenderer.invoke("audio/saveTimemap", payload),
+    },
   },
 });

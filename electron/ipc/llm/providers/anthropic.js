@@ -64,7 +64,21 @@ const LENGTH_FIRST_GUIDE = [
   "- 길이 정책을 최우선으로 지키세요(문장 수 제한 없음).",
   "- 장면별 목표 글자수에 맞추되, 의미/논리/맥락은 풍부하게 유지하세요.",
   "- 중복을 피하고, 구체 예시/수치/근거를 활용해 자연스럽게 분량을 채우세요.",
-  "- 불릿/목록/마크다운/코드펜스 금지. 자연스러운 문단 2~3개.",
+  "- 불릿/목록/마크다운/코드펜스 금지.",
+].join("\n");
+
+/* ======================================================================
+   자막 최적화 가이드(씬 텍스트 생성/재작성/단일호출 공통 삽입)
+   - OpenAI 경로와 동일 컨셉: 1~2문장, 문장 경계 정렬, 파편 방지
+====================================================================== */
+const SUBTITLE_FLOW_GUIDE = [
+  "자막 최적화 규칙:",
+  "- 각 scene.text는 **짧은 1~2문장**으로 작성합니다(장면 길이에 맞춰 자연스럽게).",
+  "- **문장 경계**(마침표/물음표/느낌표/… 또는 한국어 종결형 ‘다/요/습니다.’)에서 끝내세요.",
+  "- **단어/음절 파편 금지**: 앞 장면 끝이 ‘했습니’이고 다음 장면이 ‘다’처럼 쪼개지지 않게, 한 문장은 하나의 장면에 완결되게 씁니다.",
+  "- **한국어 가독성**: 쉼표 남발 금지, 군더더기 제거, 숫자는 아라비아 숫자 사용, 괄호 최소화.",
+  "- 너무 긴 문장은 **두 문장으로 나누기**를 우선(문장 길이 한 문장당 대략 8~24자 선).",
+  "- 줄바꿈은 모델이 넣지 말고(\\n 금지), **문장부호로만** 경계를 드러내세요.",
 ].join("\n");
 
 /* ======================================================================
@@ -147,6 +161,7 @@ function buildPolicyUserPrompt({ topic, style, type, referenceText, policy }) {
     `- 모든 scene.duration 합계는 총 재생시간(${policy.secs}s)과 거의 같아야 함(±2s).`,
     "- 각 씬은 scene.duration × 300자(최소치)를 반드시 충족해야 합니다.",
     LENGTH_FIRST_GUIDE,
+    SUBTITLE_FLOW_GUIDE, // ✅ 자막 최적화 규칙 주입
     '반드시 {"title":"...","scenes":[{"text":"...","duration":number,"charCount":number}]} JSON만 반환.',
   ]
     .filter(Boolean)
@@ -225,7 +240,7 @@ async function claudeJson(apiKey, body) {
 async function generateOutline({ apiKey, topic, style, policy }) {
   const approxScenes = Math.max(28, Math.min(60, Math.round(policy.secs / 40)));
   const sys = [
-    "You are a professional Korean long‑form script outliner.",
+    "You are a professional Korean long-form script outliner.",
     'Return ONLY JSON like {"title":"...","scenes":[{"duration":N,"beats":["..."]}]}.',
   ].join(" ");
   const user = [
@@ -236,6 +251,7 @@ async function generateOutline({ apiKey, topic, style, policy }) {
     `장면 수: 약 ${approxScenes} (최소 28, 최대 60)`,
     "각 장면 duration은 20~75초.",
     "beats에는 그 장면에서 다룰 핵심 소주제 2~4개.",
+    "- 다음 단계에서 각 씬은 **1~2문장**으로 완결되도록 작성할 예정이니, 주제 전환이 문장 경계에서 자연스럽도록 구성하세요.",
   ].join("\n");
 
   const raw = await claudeJson(apiKey, {
@@ -263,6 +279,7 @@ async function generateOutline({ apiKey, topic, style, policy }) {
 /* ======================================================================
    (B) 아웃라인 → 씬 텍스트 생성
    - 각 씬을 별도 호출(동시 4개)로 생성해 길이 정책 준수
+   - ✅ 자막 최적화 가이드 강제 삽입 (1~2문장, 문장경계, 파편금지)
 ====================================================================== */
 async function generateScenesFromOutline({
   apiKey,
@@ -283,12 +300,13 @@ async function generateScenesFromOutline({
     const user = [
       `주제: ${topic || "(미지정)"}`,
       `스타일: ${style || "(자유)"}`,
+      SUBTITLE_FLOW_GUIDE, // ✅
       `씬 #${idx + 1} (duration=${sec}s)`,
       base?.beats?.length ? `소주제: ${base.beats.join(" / ")}` : "",
       "",
       `분량 규칙: 공백 포함 ${min}~${max}자 (목표 ${tgt}자).`,
       "장면당 최대 1450자(TTS 안전 한도).",
-      "목차/불릿/마크다운 금지, 자연스러운 문단 2~3개",
+      "목차/불릿/마크다운/코드펜스 금지, **짧은 1~2문장으로** 작성.",
       '반환 예: {"text":"...","charCount":123}',
     ]
       .filter(Boolean)
@@ -319,7 +337,8 @@ async function generateScenesFromOutline({
 }
 
 /* ======================================================================
-   per‑scene 재작성 헬퍼 (기존 보정 루틴 재사용)
+   per-scene 재작성 헬퍼 (기존 보정 루틴 재사용)
+   - ✅ 자막 최적화 가이드 추가
 ====================================================================== */
 async function rewriteSceneOnce({ apiKey, sc, bounds, topic, style, budget }) {
   const baseText = String(sc.text || "");
@@ -335,7 +354,8 @@ async function rewriteSceneOnce({ apiKey, sc, bounds, topic, style, budget }) {
     `공백 포함 ${targetMin}~${targetMax}자(목표 ${targetTgt}자) 분량으로 재작성하세요.`,
     `- 최소 ${targetMin}자 미만은 허용하지 않습니다.`,
     `- 장면당 최대 ${targetMax}자`,
-    "목차/불릿/마크다운 금지, 자연스러운 문단 2~3개.",
+    "목차/불릿/마크다운 금지, **짧은 1~2문장으로** 작성.",
+    SUBTITLE_FLOW_GUIDE, // ✅
     `주제: ${topic || "(생략)"}`,
     `스타일: ${style || "(자유)"}`,
     '반환 JSON 예: {"text":"...","charCount":123}',
@@ -497,15 +517,22 @@ async function callAnthropic({
     }
   }
 
-  // ── ② 기본(단일 호출) 경로 — 기존 동작 유지
+  // ── ② 기본(단일 호출) 경로 — 기존 동작 유지 + 자막 최적화 가이드 주입
   const sys = [
-    "You are a professional Korean scriptwriter for YouTube long‑form.",
+    "You are a professional Korean scriptwriter for YouTube long-form.",
     "Return ONLY JSON.",
   ].join("\n");
 
+  const policyPrompt = buildPolicyUserPrompt({
+    topic,
+    style,
+    type,
+    referenceText,
+    policy,
+  });
   const user = useCompiled
-    ? compiled
-    : buildPolicyUserPrompt({ topic, style, type, referenceText, policy });
+    ? [compiled, "\n\n", SUBTITLE_FLOW_GUIDE].join("")
+    : policyPrompt;
 
   const body = {
     model: DEFAULT_ANTHROPIC_MODEL,
@@ -592,7 +619,7 @@ async function callAnthropic({
         }
       } catch {}
 
-      // (b) 씬별 확장/축약 — 최대 3패스
+      // (b) 씬별 확장/축약 — 최대 3패스 (자막 최적화는 rewriteSceneOnce에 반영됨)
       let pass = 0;
       while (violatesLengthPolicy(parsedOut, policy) && pass < 3) {
         parsedOut = await expandOrCondenseScenes({

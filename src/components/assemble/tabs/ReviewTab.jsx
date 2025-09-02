@@ -1,3 +1,4 @@
+// src/tabs/ReviewTab.jsx
 import { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import SectionCard from "../parts/SectionCard";
 import SubtitlePreview from "../parts/SubtitlePreview";
@@ -60,11 +61,7 @@ function normalizeForCount(s) {
 function charCountKo(s) {
   return Array.from(normalizeForCount(s)).length;
 }
-
-/** 문장 분절: 한국어/영어 마침표, 물음표, 느낌표, 줄바꿈, … 를 기준으로 안전 분절 */
 const SENTENCE_RE = /([^.!?…]+[.!?…]+|\S+(?:\s+|$))/g;
-
-/** 긴 문장을 2~3줄에 맞게 추가 쪼개기(문자수 기준) */
 function hardWrapByChars(text, maxChars = 38) {
   const arr = [];
   let t = normalizeForCount(text).trim();
@@ -75,8 +72,6 @@ function hardWrapByChars(text, maxChars = 38) {
   if (t) arr.push(t);
   return arr;
 }
-
-/** 한 씬을 문장 단위 cue 배열로 변환 (시간은 문자수 비례 배분 + 최소길이 보장) */
 function splitSceneToCues(scene, opts = {}) {
   const start = Number(scene.start) || 0;
   const end = Number(scene.end) || 0;
@@ -84,10 +79,9 @@ function splitSceneToCues(scene, opts = {}) {
   const text = String(scene.text || "").trim();
   if (!dur || !text) return [];
 
-  const MIN_SEG_SEC = Number(opts.minSegSec ?? 0.6); // 한 문장 최소 0.6초
-  const MAX_LINE_CHARS = Number(opts.maxLineChars ?? 38); // 2줄 기준 대략 70~80자 → 조각당 35~40자
+  const MIN_SEG_SEC = Number(opts.minSegSec ?? 0.6);
+  const MAX_LINE_CHARS = Number(opts.maxLineChars ?? 38);
 
-  // 1) 1차: 문장 분절
   let parts = [];
   const m = text.match(SENTENCE_RE);
   if (m && m.length) {
@@ -96,7 +90,6 @@ function splitSceneToCues(scene, opts = {}) {
     parts = [text];
   }
 
-  // 2) 너무 긴 문장은 하드랩으로 추가 분절
   let refined = [];
   for (const p of parts) {
     if (charCountKo(p) > MAX_LINE_CHARS * 2) {
@@ -105,17 +98,14 @@ function splitSceneToCues(scene, opts = {}) {
   }
   parts = refined.length ? refined : parts;
 
-  // 3) 문자수 비례로 길이 배분 (+최소 보장)
   const counts = parts.map(charCountKo);
   const sum = counts.reduce((a, b) => a + b, 0) || 1;
   let alloc = counts.map((n) => Math.max(MIN_SEG_SEC, (dur * n) / sum));
 
-  // 4) 총합을 정확히 dur로 정규화
   const total = alloc.reduce((a, b) => a + b, 0);
   const scale = total ? dur / total : 1;
   alloc = alloc.map((x) => x * scale);
 
-  // 5) 누적하여 start/end 생성
   const cues = [];
   let t = start;
   for (let i = 0; i < parts.length; i++) {
@@ -143,11 +133,11 @@ export default function ReviewTab({
   const [mp3Url, setMp3Url] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
 
-  const [now, setNow] = useState(0); // 실제 오디오 currentTime(초)
+  const [now, setNow] = useState(0);
   const [playing, setPlaying] = useState(false);
 
   // 싱크/스케일
-  const [syncOffsetMs, setSyncOffsetMs] = useState(-400); // +면 자막 늦춤, -면 앞당김
+  const [syncOffsetMs, setSyncOffsetMs] = useState(0); // 기본 0ms
   const [audioDur, setAudioDur] = useState(0);
   const [timeScale, setTimeScale] = useState(1);
 
@@ -303,7 +293,7 @@ export default function ReviewTab({
     }));
   }, [uniqScenes, timeScale]);
 
-  // 🔥 문장 단위 cue 생성
+  // cue 생성
   const cuesForPlayback = useMemo(() => {
     const arr = [];
     for (const sc of scenesForPlayback) {
@@ -313,25 +303,35 @@ export default function ReviewTab({
     return arr;
   }, [scenesForPlayback]);
 
-  // now(+오프셋) → 활성 cue index
+  // now(+오프셋) → 활성 cue index (EPS 허용)
   const [activeIdx, setActiveIdx] = useState(
     Number.isFinite(selectedSceneIdx) ? selectedSceneIdx : 0
   );
   useEffect(() => {
     if (!cuesForPlayback.length) return setActiveIdx(0);
+    const EPS = 0.08; // 80ms 관용치
     const t = Math.max(0, now + syncOffsetMs / 1000);
-    let idx = cuesForPlayback.findIndex((s) => t >= s.start && t < s.end);
-    if (idx < 0) idx = cuesForPlayback.length - 1;
-    setActiveIdx(idx);
+
+    // 1) 범위 내 검색(EPS 포함)
+    let idx = cuesForPlayback.findIndex(
+      (s) => t >= s.start - EPS && t < s.end + EPS
+    );
+    if (idx >= 0) return setActiveIdx(idx);
+
+    // 2) 얕은 갭을 직전 cue로 처리
+    let last = -1;
+    for (let i = 0; i < cuesForPlayback.length; i++) {
+      if (t >= cuesForPlayback[i].start - EPS) last = i;
+      else break;
+    }
+    setActiveIdx(last >= 0 ? last : 0);
   }, [now, cuesForPlayback, syncOffsetMs]);
 
-  // 활성 cue가 속한 씬의 에셋을 비디오에 세팅
+  // 활성 cue가 속한 씬 비디오 세팅
   useEffect(() => {
     (async () => {
-      // cue -> scene 찾기용: 가장 가까운 scene 추정
       const cue = cuesForPlayback[activeIdx];
       if (!cue) return setVideoUrl(null);
-      // 해당 시간을 포함하는 scene
       const sc =
         scenesForPlayback.find(
           (s) => cue.start >= s.start && cue.start < s.end
@@ -350,7 +350,7 @@ export default function ReviewTab({
     })();
   }, [activeIdx, cuesForPlayback, scenesForPlayback]);
 
-  // 씬 바뀌면 비디오 0초부터(재생 상태는 유지)
+  // 씬 바뀌면 비디오 0초부터
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
@@ -369,7 +369,7 @@ export default function ReviewTab({
     else v.pause();
   }, [playing]);
 
-  // 컨트롤(오프셋 반영)
+  // 컨트롤
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   const totalLogic = cuesForPlayback.length
     ? cuesForPlayback[cuesForPlayback.length - 1].end

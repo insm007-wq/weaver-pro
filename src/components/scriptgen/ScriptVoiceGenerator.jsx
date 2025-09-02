@@ -24,6 +24,59 @@ function safeCharCount(s) {
   return Array.from(t).length;
 }
 
+/** ========================= 문장 분절/타임맵 유틸 ========================= */
+const SENTENCE_RE = /([^.!?…]+[.!?…]+|\S+(?:\s+|$))/g;
+function splitSentences(text) {
+  const t = String(text || "").trim();
+  const m = t.match(SENTENCE_RE);
+  return m ? m.map((s) => s.trim()).filter(Boolean) : t ? [t] : [];
+}
+function buildTimemapFromDurations(doc, durations) {
+  const MIN_SEG_SEC = 0.6;
+  const scenes = doc?.scenes || [];
+  const out = {
+    version: 1,
+    source: "measured-file-duration",
+    totalDuration: 0,
+    scenes: [],
+  };
+  let acc = 0;
+  for (let i = 0; i < scenes.length; i++) {
+    const s = scenes[i] || {};
+    const text = String(s.text || "");
+    const dur = Math.max(0, Number(durations[i] || 0));
+    const parts = splitSentences(text);
+    const counts = parts.map((x) => Array.from(String(x)).length);
+    const sum = counts.reduce((a, b) => a + b, 0) || 1;
+    let alloc = counts.map((n) => Math.max(MIN_SEG_SEC, (dur * n) / sum));
+    const total = alloc.reduce((a, b) => a + b, 0);
+    const scale = total ? dur / total : 1;
+    alloc = alloc.map((x) => x * scale);
+
+    const cues = [];
+    let t = 0;
+    for (let j = 0; j < parts.length; j++) {
+      const st = t;
+      const en = j === parts.length - 1 ? dur : t + alloc[j];
+      cues.push({ idx: j, start: st, end: en, text: parts[j] });
+      t = en;
+    }
+
+    out.scenes.push({
+      idx: i,
+      id: s.id ?? `sc${i + 1}`,
+      start: acc,
+      end: acc + dur,
+      duration: dur,
+      text,
+      cues,
+    });
+    acc += dur;
+  }
+  out.totalDuration = acc;
+  return out;
+}
+
 /** ========================= 글자수 규칙 ========================= */
 const CHAR_BUDGETS = {
   auto: { perMinMin: 300, perMinMax: 400 },
@@ -105,7 +158,7 @@ function extractMaxScenesFromText(s) {
 
 /* ========================= 기본 TTS 옵션 ========================= */
 const DEFAULT_TTS_ENGINE = "google";
-const DEFAULT_VOICE = (VOICES_BY_ENGINE[DEFAULT_TTS_ENGINE] || [])[0] || ""; // ko-KR-Wavenet-* 중 첫 번째
+const DEFAULT_VOICE = (VOICES_BY_ENGINE[DEFAULT_TTS_ENGINE] || [])[0] || "";
 
 /* ========================= 탭별 폼 ========================= */
 const makeDefaultForm = () => ({
@@ -115,7 +168,7 @@ const makeDefaultForm = () => ({
   maxScenes: 10,
   llmMain: "openai-gpt5mini",
   ttsEngine: DEFAULT_TTS_ENGINE,
-  voiceName: DEFAULT_VOICE, // ✅ 기본 보이스 확실히 세팅
+  voiceName: DEFAULT_VOICE,
   speakingRate: 0.84,
   pitch: 0.2,
 });
@@ -317,32 +370,38 @@ export default function ScriptVoiceGenerator() {
         throw new Error("대본 생성 결과가 비어있습니다.");
       setDocs((prev) => ({ ...prev, [tab]: generatedDoc }));
 
-      // ======================= TTS (먼저 실행) =======================
+      // ======================= TTS =======================
       beginPhase("TTS");
       setProgress({ current: 0, total: generatedDoc.scenes.length });
       const ttsRes = await call("tts/synthesizeByScenes", {
         doc: generatedDoc,
         tts: {
           engine: f.ttsEngine,
-          voiceName: f.voiceName || DEFAULT_VOICE, // ✅ 보이스 누락 대비
+          voiceName: f.voiceName || DEFAULT_VOICE,
           speakingRate: Number(f.speakingRate),
           pitch: Number(f.pitch),
         },
       });
 
-      let merged = [];
-      if (ttsRes?.parts?.length) {
-        for (let i = 0; i < ttsRes.parts.length; i++) {
-          const p = ttsRes.parts[i];
-          const arr = base64ToArrayBuffer(p.base64);
-          merged.push(new Uint8Array(arr));
-          await call("files/saveToProject", {
-            category: "audio/parts",
-            fileName: p.fileName,
-            buffer: arr,
-          });
-          setProgress({ current: i + 1, total: ttsRes.parts.length });
-        }
+      // 조각 저장 + 경로 수집
+      const merged = [];
+      const chunkPaths = [];
+      for (let i = 0; i < (ttsRes?.parts?.length || 0); i++) {
+        const p = ttsRes.parts[i];
+        const arr = base64ToArrayBuffer(p.base64);
+        merged.push(new Uint8Array(arr));
+        const savePart = await call("files/saveToProject", {
+          category: "audio/parts",
+          fileName: p.fileName,
+          buffer: arr,
+        });
+        if (savePart?.ok && savePart?.path) chunkPaths.push(savePart.path);
+        setProgress({ current: i + 1, total: ttsRes.parts.length });
+      }
+
+      // 최종 MP3 저장
+      let outMp3Path = null;
+      if (merged.length) {
         const totalLen = merged.reduce((s, u) => s + u.byteLength, 0);
         const out = new Uint8Array(totalLen);
         let off = 0;
@@ -350,19 +409,51 @@ export default function ScriptVoiceGenerator() {
           out.set(u, off);
           off += u.byteLength;
         }
-        await call("files/saveToProject", {
+        const saveRes = await call("files/saveToProject", {
           category: "audio",
           fileName: "narration.mp3",
           buffer: out.buffer,
         });
+        if (!saveRes?.ok || !saveRes?.path) {
+          throw new Error(
+            "MP3 저장 실패: files/saveToProject 응답이 없습니다."
+          );
+        }
+        outMp3Path = saveRes.path;
+
+        // 전역 설정에 경로 저장(리뷰/프리뷰 등에서 사용)
+        await window.api?.setSetting?.({ key: "paths.mp3", value: outMp3Path });
+
+        // 존재/길이 프리플라이트
+        const ex = await call("files:exists", outMp3Path);
+        if (!ex?.exists) throw new Error("MP3 경로 없음: " + outMp3Path);
+        try {
+          await call("audio/getDuration", { path: outMp3Path });
+        } catch (e) {
+          console.warn("[warn] audio/getDuration preflight failed:", e);
+        }
       }
 
-      // ======================= SRT (TTS 마크 사용) =======================
+      // ▲ 조각 실측 길이 → timemap 생성(SSML 마크보다 신뢰도 높음)
+      let measuredTimemap = null;
+      if (
+        chunkPaths.length &&
+        chunkPaths.length === (generatedDoc.scenes?.length || 0)
+      ) {
+        const durations = [];
+        for (const p of chunkPaths) {
+          durations.push(await call("audio/getDuration", { path: p }));
+        }
+        measuredTimemap = buildTimemapFromDurations(generatedDoc, durations);
+      }
+
+      // ======================= SRT =======================
       beginPhase("SRT");
       setProgress({ current: 0, total: 0 });
       const srtRes = await call("script/toSrt", {
         doc: generatedDoc,
-        ttsMarks: ttsRes?.marks || null, // ★ 타임포인트 전달(없으면 백엔드가 폴백)
+        ttsMarks: ttsRes?.marks || null,
+        mp3Path: outMp3Path || undefined, // 백엔드가 timemap/길이 참고 가능
       });
       if (srtRes?.srt) {
         const srtBuf = new TextEncoder().encode(srtRes.srt).buffer;
@@ -373,15 +464,23 @@ export default function ScriptVoiceGenerator() {
         });
       }
 
-      // MERGE
+      // ======================= MERGE/마무리 =======================
       beginPhase("MERGE");
       setProgress({ current: 0, total: 0 });
-      await call("audio/concatScenes", {});
 
-      // 완료
+      // timemap을 최종 MP3 옆에 저장 (실측 > SSML 마크)
+      if (outMp3Path && (measuredTimemap || ttsRes?.timemap)) {
+        await call("audio/concatScenes", {
+          outPath: outMp3Path,
+          timemap: measuredTimemap || ttsRes.timemap,
+        });
+      } else {
+        await call("audio/concatScenes", {}); // 호환 유지
+      }
+
       if (phaseTimerRef.current) clearInterval(phaseTimerRef.current);
       setPhase("완료");
-      setProgress({ current: 1, total: 1 }); // 100%
+      setProgress({ current: 1, total: 1 });
       setStatus("done");
     } catch (e) {
       if (phaseTimerRef.current) clearInterval(phaseTimerRef.current);
@@ -615,21 +714,14 @@ export default function ScriptVoiceGenerator() {
   );
 }
 
-/* ========================= ETA 계산기 =========================
-   - 결정형(progress.total>0): 실측 속도. 남은 수가 0이면 숫자 숨김.
-   - 비결정형: 휴리스틱. 0 이하이면 null(문구로 대체).
-*/
+/* ========================= ETA 계산기 ========================= */
 function estimateEtaSec({ phase, progress, elapsed, plan }) {
   const { current, total } = progress || {};
-
-  // 결정형
   if (total > 0 && current > 0) {
-    const per = elapsed / current; // sec per unit
+    const per = elapsed / current;
     const eta = Math.round(per * (total - current));
-    return eta > 0 ? eta : null; // 0초는 표기하지 않음
+    return eta > 0 ? eta : null;
   }
-
-  // 비결정형
   if (phase === "SCRIPT") {
     const expect = Math.round(
       (plan?.durationMin || 0) * 5 + (plan?.maxScenes || 0) * 1
@@ -648,6 +740,5 @@ function estimateEtaSec({ phase, progress, elapsed, plan }) {
     return eta > 0 ? eta : null;
   }
   if (phase === "완료") return 0;
-
   return null;
 }
