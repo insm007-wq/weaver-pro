@@ -3,10 +3,10 @@
 // AssembleEditor (전체 수정본)
 // - ArrangeTab과 ReviewTab이 같은 씬 상태를 공유(상위 보관)
 // - 탭 전환 시 언마운트 금지: KeepAlivePane으로 모든 탭 감싸기
-// - 기존 UI/기능은 그대로 유지
+// - 자동배치: autoMatchEngine(runAutoMatch)로 단일 진실원 사용 + stats 노출
 // -----------------------------------------------------------------------------
 
-import { useMemo, useState, useRef, useLayoutEffect, useEffect } from "react";
+import { useMemo, useState, useRef, useLayoutEffect, useEffect, useCallback } from "react";
 import KeywordsTab from "./tabs/KeywordsTab.jsx";
 import ArrangeTab from "./tabs/ArrangeTab.jsx";
 import ReviewTab from "./tabs/ReviewTab.jsx";
@@ -14,9 +14,10 @@ import SetupTab from "./tabs/SetupTab.jsx";
 import { parseSrtToScenes } from "../../utils/parseSrt";
 import KeepAlivePane from "../common/KeepAlivePane";
 
-// ▼ 분리한 유틸 1,2,3 사용
+// ▼ 분리한 유틸
 import { getSetting, readTextAny, getMp3DurationSafe } from "../../utils/ipcSafe";
-import { autoAssignAssets } from "../../utils/assetAutoMatch";
+// ⬇️ autoAssignAssets → runAutoMatch로 교체
+import { runAutoMatch } from "../../utils/autoMatchEngine";
 import { clampSelectedIndex } from "../../utils/sceneIndex";
 
 function TabButton({ active, children, onClick }) {
@@ -44,6 +45,7 @@ export default function AssembleEditor() {
       if (px > 0) setFixedWidthPx(px);
     }
   }, [fixedWidthPx]);
+
   const containerStyle = fixedWidthPx
     ? {
         width: `${fixedWidthPx}px`,
@@ -67,18 +69,28 @@ export default function AssembleEditor() {
     byKeywords: true,
     byOrder: true,
     overwrite: false,
+    // runAutoMatch가 DEFAULT_OPTS로 나머지를 채워줌(allowReuseIfShortfall 등)
   });
+
+  const [autoStats, setAutoStats] = useState(null); // ← 자동배치 통계/사유
+  useEffect(() => {
+    // 디버깅 편의: 콘솔/윈도우에서 바로 확인 가능
+    window.__autoStats = autoStats;
+  }, [autoStats]);
 
   const [srtConnected, setSrtConnected] = useState(false);
   const [mp3Connected, setMp3Connected] = useState(false);
   const [audioDur, setAudioDur] = useState(0);
 
-  const totalDur = useMemo(() => (scenes.length ? scenes[scenes.length - 1].end - scenes[0].start : 0), [scenes]);
+  const totalDur = useMemo(
+    () => (scenes.length ? (Number(scenes[scenes.length - 1].end) || 0) - (Number(scenes[0].start) || 0) : 0),
+    [scenes]
+  );
 
   const selectScene = (i) => setSelectedSceneIdx(i);
   const addAssets = (items) => setAssets((prev) => [...prev, ...items]);
 
-  // 씬 배열 변경 시 선택 인덱스 안전화 → 분리 유틸 사용
+  // 씬 배열 변경 시 선택 인덱스 안전화
   useEffect(() => {
     setSelectedSceneIdx((old) => clampSelectedIndex(scenes, old));
   }, [scenes]);
@@ -90,51 +102,78 @@ export default function AssembleEditor() {
 
   // ===== SRT 로드 & 파싱 =====
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const srtPath = await getSetting("paths.srt");
         if (!srtPath) return;
         const raw = await readTextAny(srtPath);
+        if (cancelled) return;
         const parsed = parseSrtToScenes(raw || "");
-        if (parsed.length) {
+        if (!cancelled && parsed.length) {
           setScenes(parsed);
           setSelectedSceneIdx(0);
           setSrtConnected(true);
           console.log("[assemble] SRT scenes:", parsed.length);
         }
       } catch (e) {
-        console.warn("SRT 로드/파싱 실패:", e);
+        if (!cancelled) console.warn("SRT 로드/파싱 실패:", e);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [srtConnected]); // 셋업에서 연결되면 true로 들어오므로 재파싱
 
   // ===== MP3 길이 조회 =====
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const mp3Path = await getSetting("paths.mp3");
         if (!mp3Path) return;
         const dur = await getMp3DurationSafe(mp3Path);
-        if (dur) {
+        if (!cancelled && dur) {
           setAudioDur(Number(dur));
           setMp3Connected(true);
           console.log("[assemble] MP3 duration:", dur);
         }
       } catch (e) {
-        console.warn("MP3 길이 조회 실패:", e);
+        if (!cancelled) console.warn("MP3 길이 조회 실패:", e);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [mp3Connected]);
 
   // ===== 에셋 자동 배치 =====
-  const prevAssetsCountRef = useRef(0);
+  // 단일 엔진(runAutoMatch) 사용. 결과 scenes + stats 동시 관리.
+  const runAutoAssign = useCallback(() => {
+    if (!autoMatch) return;
+    setScenes((prev) => {
+      const { scenes: next, stats } = runAutoMatch({ scenes: prev, assets, opts: autoOpts });
+      setAutoStats(stats);
+      return next;
+    });
+  }, [assets, autoMatch, autoOpts]);
+
+  // 자산/토글/옵션 변경 시 자동배치 시도
+  useEffect(() => {
+    runAutoAssign();
+  }, [runAutoAssign]);
+
+  // 씬 수가 바뀌면(SRT 재파싱 등) 한 번 더 시도
   useEffect(() => {
     if (!autoMatch) return;
-    if (assets.length <= prevAssetsCountRef.current) return;
-    prevAssetsCountRef.current = assets.length;
-
-    setScenes((prev) => autoAssignAssets(prev, assets, autoOpts));
-  }, [assets, autoMatch, autoOpts]);
+    setScenes((prev) => {
+      const { scenes: next, stats } = runAutoMatch({ scenes: prev, assets, opts: autoOpts });
+      setAutoStats(stats);
+      return next;
+    });
+    // scenes 자체를 의존성으로 넣으면 setScenes로 루프가 날 수 있어 길이만 본다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scenes.length, autoMatch, assets, autoOpts]);
 
   return (
     <div ref={containerRef} className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-md" style={containerStyle}>

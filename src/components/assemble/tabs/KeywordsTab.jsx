@@ -3,11 +3,13 @@
 // 키워드 추출 + 스톡 영상 다운로드 (키워드 칩 + 다운로드/패스 요약)
 // - 기능 동일(엄격검색→완화 1회, 파일명 규칙 동일)
 // - 새 유틸 사용: ipcSafe, pLimit, naming, extractKeywords
+// - UX 향상: 추출 시간 표시, 완료 배지/하이라이트, 진행바 강화
+// - 🔧 변경점: 다운로드 완료한 에셋을 addAssets로 상위에 올려 자동배치가 돌도록 함
 // ----------------------------------------------------------------------------
 import { useEffect, useMemo, useReducer, useRef, useState, useCallback } from "react";
 import SectionCard from "../parts/SectionCard";
 
-// 유틸들 (반드시 .js 확장자 포함!)
+// 유틸들
 import { extractKeywords as fallbackExtract } from "../../../utils/extractKeywords";
 import { getSetting, getSecret, readTextAny, stockSearch, saveUrlToProject, aiExtractKeywords } from "../../../utils/ipcSafe";
 import pLimit from "../../../utils/pLimit";
@@ -80,8 +82,20 @@ function progReducer(state, action) {
   }
 }
 
+/* ---------------------- 작은 헬퍼들 ---------------------- */
+function formatMs(ms) {
+  if (!ms || ms < 0) return "-";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(1)}s`;
+  const m = Math.floor(s / 60);
+  const ss = Math.round(s % 60);
+  return `${m}m ${ss}s`;
+}
+
 /* =============================== 컴포넌트 =============================== */
-export default function KeywordsTab() {
+export default function KeywordsTab({ addAssets }) {
+  // 🔸 addAssets를 상위에서 받음
   // 상태
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -100,11 +114,17 @@ export default function KeywordsTab() {
   const [hasPexelsKey, setHasPexelsKey] = useState(false);
   const [hasPixabayKey, setHasPixabayKey] = useState(false);
 
+  // 진행/시간
   const [progress, dispatchProg] = useReducer(progReducer, progInit);
   const savedRef = useRef(0);
   useEffect(() => {
     savedRef.current = progress.saved;
   }, [progress.saved]);
+
+  const [extractMs, setExtractMs] = useState(0); // ⏱️ 키워드 추출 소요
+  const runStartRef = useRef(0);
+  const [runMs, setRunMs] = useState(0); // ⏱️ 전체 실행 소요
+  const [doneFlash, setDoneFlash] = useState(false); // ✅ 완료 배지 하이라이트
 
   const chosenRes = useMemo(() => RES_PRESETS.find((r) => r.id === resPreset) || RES_PRESETS[2], [resPreset]);
   const seqRef = useRef({}); // 키워드별 파일명 시퀀스
@@ -140,15 +160,20 @@ export default function KeywordsTab() {
     async (topK = 60) => {
       const text = await readCleanSrt();
       if (!text) return [];
+      const t0 = performance.now();
       try {
         const apiKey = await getSecret("openaiKey");
         if (apiKey) {
           setMsg("AI가 키워드를 추출 중…");
           const r = await aiExtractKeywords({ apiKey, text, topK, language: "ko" });
+          const t1 = performance.now();
+          setExtractMs(t1 - t0);
           if (r?.ok && Array.isArray(r.keywords) && r.keywords.length) return r.keywords;
         }
       } catch {}
       const local = fallbackExtract(text, { topK, minLen: 2 });
+      const t1 = performance.now();
+      setExtractMs(t1 - t0);
       return Array.isArray(local) ? local : [];
     },
     [readCleanSrt]
@@ -160,6 +185,7 @@ export default function KeywordsTab() {
 
     try {
       setBusy(true);
+      runStartRef.current = performance.now();
 
       // 1) 키워드 없으면 자동 추출
       if (!Array.isArray(baseKeywords) || baseKeywords.length === 0) {
@@ -208,21 +234,21 @@ export default function KeywordsTab() {
         limit(async () => {
           dispatchProg({ type: "status", k, status: "검색 중" });
 
-          // 엄격 → 완화 1회
-          let r = await stockSearch({ queries: [k], ...SEARCH_OPTS_BASE, strictKeyword: true });
+          // 단일 호출(완화 검색 1회만)
+          const r = await stockSearch({
+            queries: [k],
+            ...SEARCH_OPTS_BASE,
+            strictKeyword: false,
+          });
           if (!r?.ok) {
             dispatchProg({ type: "status", k, status: "검색 오류" });
             dispatchProg({ type: "skip", k, n: perKeyword, reason: "searchError" });
             return;
           }
           if (!Array.isArray(r.items) || r.items.length === 0) {
-            dispatchProg({ type: "status", k, status: "재검색(완화)" });
-            r = await stockSearch({ queries: [k], ...SEARCH_OPTS_BASE, strictKeyword: false });
-            if (!r?.ok) {
-              dispatchProg({ type: "status", k, status: "검색 오류" });
-              dispatchProg({ type: "skip", k, n: perKeyword, reason: "searchError" });
-              return;
-            }
+            dispatchProg({ type: "status", k, status: "결과 없음" });
+            dispatchProg({ type: "skip", k, n: perKeyword, reason: "noResult" });
+            return;
           }
 
           if (!Array.isArray(r.items) || r.items.length === 0) {
@@ -272,7 +298,22 @@ export default function KeywordsTab() {
 
       await Promise.allSettled(tasks);
 
-      // (옵션) 자동 배치 훅
+      // 🔸 프론트 자동배치용: newlySaved → 에셋 모델로 변환 후 상위로 전달
+      const toAsset = (x, idx) => ({
+        id: x.assetId || x.path || `dl_${Date.now()}_${idx}`, // 반드시 id 보장
+        type: "video",
+        path: x.path,
+        thumbUrl: x.thumbUrl || "", // 있으면 채우고, 없으면 빈 값
+        durationSec: x.durationSec ?? 0, // 알 수 없으면 0
+        tags: [x.keyword].filter(Boolean), // 키워드 1개라도 반드시 태그로
+      });
+      if (Array.isArray(newlySaved) && newlySaved.length && typeof addAssets === "function") {
+        try {
+          addAssets(newlySaved.map(toAsset));
+        } catch {}
+      }
+
+      // (옵션) 백엔드 자동 배치 훅
       if (typeof window.api?.autoPlace === "function") {
         try {
           await window.api.autoPlace(newlySaved);
@@ -285,7 +326,11 @@ export default function KeywordsTab() {
       setMsg("오류: " + (e?.message || e));
       alert("다운로드 중 오류: " + (e?.message || e));
     } finally {
+      setRunMs(performance.now() - runStartRef.current);
       setBusy(false);
+      // 완료 배지 하이라이트
+      setDoneFlash(true);
+      setTimeout(() => setDoneFlash(false), 2200);
     }
   }, [
     keywords,
@@ -299,6 +344,7 @@ export default function KeywordsTab() {
     usePexels,
     usePixabay,
     concurrency,
+    addAssets, // 🔸 의존성 추가
   ]);
 
   /* ---------------------- 요약/표시 데이터 ---------------------- */
@@ -308,33 +354,13 @@ export default function KeywordsTab() {
     return Math.round((done / progress.total) * 100);
   }, [progress.saved, progress.skipped, progress.total]);
 
-  const skipBits = useMemo(() => {
-    const s = progress.skipsBy || {};
-    const bits = [];
-    if (s.noResult) bits.push(`결과없음 ${s.noResult}`);
-    if (s.searchError) bits.push(`검색오류 ${s.searchError}`);
-    if (s.saveError) bits.push(`저장오류 ${s.saveError}`);
-    if (s.other) bits.push(`기타 ${s.other}`);
-    return bits;
-  }, [progress.skipsBy]);
-
   const keywordDisplay = useMemo(() => {
     const fromProgress = Object.keys(progress.rows || {});
     if (fromProgress.length) return fromProgress;
     return keywords.slice(0, maxKeywordsToUse);
   }, [progress.rows, keywords, maxKeywordsToUse]);
 
-  const chipClass = useCallback(
-    (k) => {
-      const st = progress.rows?.[k]?.status;
-      if (!st) return "bg-slate-100 text-slate-700";
-      if (st.includes("완료") || st.includes("저장")) return "bg-emerald-100 text-emerald-700 border border-emerald-200";
-      if (st.includes("결과 없음")) return "bg-slate-100 text-slate-500 border border-slate-200";
-      if (st.includes("검색 오류")) return "bg-rose-100 text-rose-700 border border-rose-200";
-      return "bg-indigo-50 text-indigo-700 border border-indigo-100";
-    },
-    [progress.rows]
-  );
+  const isDone = progress.total > 0 && progress.saved + progress.skipped >= progress.total;
 
   const estimatedDownloads = Math.min(keywords.length, maxKeywordsToUse) * perKeyword;
 
@@ -343,7 +369,15 @@ export default function KeywordsTab() {
     <div className="w-full max-w-screen-xl mx-auto px-4">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch [&>*]:min-w-0">
         {/* 옵션 */}
-        <SectionCard className="h-full" title="다운로드 옵션" right={<span className="text-xs text-slate-500">필터 & 제공사</span>}>
+        <SectionCard
+          className="h-full"
+          title="다운로드 옵션"
+          right={
+            <span className="text-xs text-slate-500">
+              필터 & 제공사 · <span className="text-slate-400">추출 {formatMs(extractMs)}</span>
+            </span>
+          }
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="text-xs text-slate-700 flex flex-col gap-1 min-w-0">
               해상도
@@ -479,7 +513,25 @@ export default function KeywordsTab() {
         </SectionCard>
 
         {/* 진행/키워드 표시 */}
-        <SectionCard className="h-full" title="진행 상황" right={<span className="text-xs text-slate-400">실시간</span>}>
+        <SectionCard
+          className="h-full"
+          title="진행 상황"
+          right={
+            <span className="text-xs text-slate-400">
+              {isDone ? (
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 ${
+                    doneFlash ? "animate-pulse" : ""
+                  }`}
+                >
+                  ✅ 완료 100% · 총 {formatMs(runMs)}
+                </span>
+              ) : (
+                "실시간"
+              )}
+            </span>
+          }
+        >
           <div className="h-full flex flex-col">
             {/* 요약 */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-slate-700 mb-2 shrink-0">
@@ -506,16 +558,25 @@ export default function KeywordsTab() {
               <span className="text-slate-500">
                 총 {progress.total || 0} · {pct}%
               </span>
+              {/* ⏱️ 추출 시간/전체 시간 */}
+              {extractMs > 0 && <span className="text-slate-400">추출 {formatMs(extractMs)}</span>}
+              {runMs > 0 && <span className="text-slate-400">전체 {formatMs(runMs)}</span>}
             </div>
 
-            {/* 진행바 */}
-            <div className="h-1.5 w-full rounded bg-slate-100 overflow-hidden mb-3 shrink-0">
+            {/* 진행바 (얇게) */}
+            <div
+              className={`relative h-1.5 w-full rounded ${
+                isDone ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-slate-100"
+              } overflow-hidden mb-3 shrink-0 transition-colors`}
+            >
               <div className="h-1.5 bg-emerald-500 transition-[width] duration-300" style={{ width: `${pct}%` }} />
             </div>
 
             {/* 키워드 칩 */}
             <div className="mb-2 text-xs text-slate-600 shrink-0">키워드 {keywordDisplay.length}개</div>
-            <div className="flex-1 min-h-0">
+
+            {/* 키워드 영역: 아래 섹션까지 꽉 채우고 스크롤 */}
+            <div className="flex-1 min-h-[240px]">
               <div className="h-full w-full rounded-lg border bg-white p-2 overflow-auto">
                 {keywordDisplay.length ? (
                   <div className="flex flex-wrap gap-2">
