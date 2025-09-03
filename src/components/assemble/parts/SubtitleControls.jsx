@@ -1,274 +1,253 @@
 // src/components/assemble/parts/SubtitleControls.jsx
-import { useCallback } from "react";
-import SectionCard from "./SectionCard";
+import React from "react";
 
-/** 시청자 친화 프리셋 */
+/** 프리셋 */
 export const PRESETS = {
   ytCompact: {
-    name: "YouTube Compact",
-    mode: "overlay", // overlay | banner | below | karaoke
-    position: "bottom", // overlay일 때 top | bottom
-    fontSize: 24,
-    lineClamp: 2, // 한 화면에 최대 줄 수
-    color: "#FFFFFF",
+    label: "YouTube Compact",
+    fontSizePx: 24,
+    rows: 2,
+    widthPct: 95,
+    textColor: "#ffffff",
     bgColor: "#000000",
-    bgOpacity: 0.25,
-    outline: true, // 얇은 외곽선(검은 테두리)
-    maxWidthPct: 78, // 자막 최대 너비(%)
-    vOffsetPct: 8, // 하단에서 띄우기(%)
-    safeMarginPct: 5, // 좌우 세이프마진(%)
-    bgStyle: "box", // pill | box | none
+    bgAlpha: 0.45,
+    outlineOn: true,
+    boxStyle: "box", // box | pill | none
+    safeMarginPct: 5,
+    vAlign: "bottom", // top | middle | bottom
+    vOffsetPct: 8,
   },
   lowerThird: {
-    name: "Lower-Third",
-    mode: "overlay",
-    position: "bottom",
-    fontSize: 22,
-    lineClamp: 2,
-    color: "#FFFFFF",
+    label: "Lower-Third",
+    fontSizePx: 26,
+    rows: 2,
+    widthPct: 80,
+    textColor: "#ffffff",
     bgColor: "#000000",
-    bgOpacity: 0.45,
-    outline: false,
-    maxWidthPct: 70,
+    bgAlpha: 0.5,
+    outlineOn: true,
+    boxStyle: "box",
+    safeMarginPct: 5,
+    vAlign: "bottom",
     vOffsetPct: 14,
-    safeMarginPct: 6,
-    bgStyle: "box",
   },
   cinematic: {
-    name: "Cinematic",
-    mode: "overlay",
-    position: "bottom",
-    fontSize: 28,
-    lineClamp: 1,
-    color: "#F8E29A",
+    label: "Cinematic",
+    fontSizePx: 28,
+    rows: 2,
+    widthPct: 70,
+    textColor: "#ffffff",
     bgColor: "#000000",
-    bgOpacity: 0.0,
-    outline: true,
-    maxWidthPct: 66,
-    vOffsetPct: 10,
-    safeMarginPct: 8,
-    bgStyle: "none",
+    bgAlpha: 0.4,
+    outlineOn: false,
+    boxStyle: "pill",
+    safeMarginPct: 6,
+    vAlign: "middle",
+    vOffsetPct: 0,
   },
 };
 
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
 export default function SubtitleControls({ value, onChange }) {
   const v = { ...PRESETS.ytCompact, ...(value || {}) };
-  const apply = (patch) => onChange?.({ ...v, ...patch });
+  const set = (patch) => onChange?.({ ...v, ...patch });
 
-  const usePreset = useCallback((k) => apply({ ...PRESETS[k], preset: k }), []);
-
-  const label = (t) => <div className="text-xs text-slate-500 mb-1">{t}</div>;
-  const row = "flex flex-wrap items-center gap-2";
-  const btn = (active) =>
-    `h-8 px-3 rounded-lg text-xs border ${
-      active
-        ? "bg-blue-600 text-white border-blue-600"
-        : "border-slate-200 hover:bg-slate-50"
-    }`;
+  // 현재 라벨과 동일한 프리셋을 찾아 기본값 리셋
+  const resetToCurrentPreset = () => {
+    const entry = Object.values(PRESETS).find((p) => p.label === v.label);
+    onChange?.(entry || PRESETS.ytCompact);
+  };
 
   return (
-    <SectionCard title="자막 설정">
-      {/* 프리셋 */}
-      {label("프리셋")}
-      <div className={row}>
+    <div className="rounded-xl border border-slate-200 bg-white">
+      <div className="px-4 py-3 border-b border-slate-200 font-medium flex items-center justify-between">
+        <span>자막 설정</span>
         <button
-          className={btn(v.preset === "ytCompact")}
-          onClick={() => usePreset("ytCompact")}
+          type="button"
+          className="h-8 px-3 rounded-lg border border-slate-200 text-xs hover:bg-slate-50"
+          onClick={resetToCurrentPreset}
+          title="현재 프리셋의 기본값으로 초기화"
         >
-          YouTube Compact
-        </button>
-        <button
-          className={btn(v.preset === "lowerThird")}
-          onClick={() => usePreset("lowerThird")}
-        >
-          Lower-Third
-        </button>
-        <button
-          className={btn(v.preset === "cinematic")}
-          onClick={() => usePreset("cinematic")}
-        >
-          Cinematic
+          기본값
         </button>
       </div>
 
-      {/* 표시 방식 */}
-      <div className="mt-3">
-        {label("표시 방식")}
-        <div className={row}>
-          <button
-            className={btn(v.mode === "overlay")}
-            onClick={() => apply({ mode: "overlay", preset: "custom" })}
-          >
-            오버레이
-          </button>
-          <button
-            className={btn(v.mode === "banner")}
-            onClick={() => apply({ mode: "banner", preset: "custom" })}
-          >
-            배너
-          </button>
-          <button
-            className={btn(v.mode === "below")}
-            onClick={() => apply({ mode: "below", preset: "custom" })}
-          >
-            플레이어 아래
-          </button>
-          <button
-            className={btn(v.mode === "karaoke")}
-            onClick={() => apply({ mode: "karaoke", preset: "custom" })}
-          >
-            가라오케
-          </button>
-        </div>
-      </div>
-
-      {/* 크기/줄수/폭 */}
-      <div className="mt-3 grid grid-cols-3 gap-3">
+      <div className="p-4 space-y-3 text-sm">
+        {/* 프리셋 */}
         <div>
-          {label("폰트(px)")}
-          <input
-            type="number"
-            min={12}
-            max={48}
-            value={v.fontSize}
-            onChange={(e) =>
-              apply({ fontSize: Number(e.target.value || 0), preset: "custom" })
-            }
-            className="w-full h-9 rounded-lg border border-slate-200 px-2 text-sm"
-          />
-        </div>
-        <div>
-          {label("줄 수")}
-          <input
-            type="number"
-            min={1}
-            max={4}
-            value={v.lineClamp}
-            onChange={(e) =>
-              apply({
-                lineClamp: Number(e.target.value || 2),
-                preset: "custom",
-              })
-            }
-            className="w-full h-9 rounded-lg border border-slate-200 px-2 text-sm"
-          />
-        </div>
-        <div>
-          {label("가로폭(%)")}
-          <input
-            type="range"
-            min={40}
-            max={95}
-            value={v.maxWidthPct}
-            onChange={(e) =>
-              apply({ maxWidthPct: Number(e.target.value), preset: "custom" })
-            }
-            className="w-full"
-          />
-          <div className="text-[11px] text-slate-500 mt-1">
-            {v.maxWidthPct}%
+          <div className="text-xs text-slate-500 mb-1">프리셋</div>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(PRESETS).map(([k, p]) => (
+              <button
+                key={k}
+                type="button"
+                className={`h-8 px-3 rounded-lg border text-xs ${
+                  v.label === p.label ? "bg-blue-600 text-white border-blue-600" : "border-slate-200 hover:bg-slate-50"
+                }`}
+                onClick={() => onChange?.({ ...p })}
+              >
+                {p.label}
+              </button>
+            ))}
           </div>
         </div>
-      </div>
 
-      {/* 색/배경/외곽선 */}
-      <div className="mt-3 grid grid-cols-3 gap-3">
-        <div>
-          {label("글자색")}
-          <input
-            type="color"
-            value={v.color}
-            onChange={(e) => apply({ color: e.target.value, preset: "custom" })}
-            className="h-9 w-full rounded-lg border border-slate-200"
-          />
+        {/* 위치 */}
+        <div className="flex items-center justify-between">
+          <div className="text-xs text-slate-500">위치</div>
+          <div className="inline-flex rounded-lg bg-slate-100 p-1 text-xs">
+            {["top", "middle", "bottom"].map((pos) => (
+              <button
+                key={pos}
+                type="button"
+                className={`px-3 py-1 rounded-md ${v.vAlign === pos ? "bg-white shadow border border-slate-200" : "hover:bg-white/60"}`}
+                onClick={() => set({ vAlign: pos })}
+              >
+                {pos === "top" ? "상단" : pos === "middle" ? "가운데" : "하단"}
+              </button>
+            ))}
+          </div>
         </div>
-        <div>
-          {label("배경색")}
-          <input
-            type="color"
-            value={v.bgColor}
-            onChange={(e) =>
-              apply({ bgColor: e.target.value, preset: "custom" })
-            }
-            className="h-9 w-full rounded-lg border border-slate-200"
-          />
-        </div>
-        <div>
-          {label("배경 투명도")}
+
+        {/* 세로 오프셋(%) */}
+        <div className="flex items-center gap-2">
+          <div className="text-xs text-slate-500 w-28">세로 오프셋(%)</div>
           <input
             type="range"
             min={0}
-            max={100}
-            value={Math.round((v.bgOpacity ?? 0) * 100)}
-            onChange={(e) =>
-              apply({
-                bgOpacity: Number(e.target.value) / 100,
-                preset: "custom",
-              })
-            }
-            className="w-full"
+            max={40}
+            step={1}
+            value={Number(v.vOffsetPct ?? 8)}
+            onChange={(e) => set({ vOffsetPct: parseInt(e.target.value || 0, 10) })}
+            className="flex-1"
           />
-          <div className="text-[11px] text-slate-500 mt-1">
-            {Math.round((v.bgOpacity ?? 0) * 100)}%
-          </div>
+          <div className="w-10 text-right text-xs text-slate-600">{Number(v.vOffsetPct ?? 8)}%</div>
         </div>
-      </div>
 
-      {/* 위치/세이프마진/배경형태 */}
-      <div className="mt-3 grid grid-cols-3 gap-3">
-        <div>
-          {label("세로 오프셋(%)")}
+        {/* 세이프 마진(%) */}
+        <div className="flex items-center gap-2">
+          <div className="text-xs text-slate-500 w-28">세이프 마진(%)</div>
           <input
             type="range"
             min={0}
-            max={20}
-            value={v.vOffsetPct}
-            onChange={(e) =>
-              apply({ vOffsetPct: Number(e.target.value), preset: "custom" })
-            }
-            className="w-full"
+            max={12}
+            step={1}
+            value={Number(v.safeMarginPct ?? 5)}
+            onChange={(e) => set({ safeMarginPct: parseInt(e.target.value || 0, 10) })}
+            className="flex-1"
           />
-          <div className="text-[11px] text-slate-500 mt-1">{v.vOffsetPct}%</div>
+          <div className="w-10 text-right text-xs text-slate-600">{Number(v.safeMarginPct ?? 5)}%</div>
         </div>
-        <div>
-          {label("세이프 마진(%)")}
-          <input
-            type="range"
-            min={0}
-            max={10}
-            value={v.safeMarginPct}
-            onChange={(e) =>
-              apply({ safeMarginPct: Number(e.target.value), preset: "custom" })
-            }
-            className="w-full"
-          />
-          <div className="text-[11px] text-slate-500 mt-1">
-            {v.safeMarginPct}%
+
+        {/* 폰트/줄수/가로폭 */}
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <div className="text-xs text-slate-500 mb-1">폰트(px)</div>
+            <input
+              type="number"
+              className="w-full h-9 rounded-lg border border-slate-200 px-2"
+              value={v.fontSizePx}
+              min={12}
+              max={72}
+              onChange={(e) => set({ fontSizePx: clamp(parseInt(e.target.value || 0, 10), 12, 72) })}
+            />
+          </div>
+          <div>
+            <div className="text-xs text-slate-500 mb-1">줄 수</div>
+            <input
+              type="number"
+              className="w-full h-9 rounded-lg border border-slate-200 px-2"
+              value={v.rows}
+              min={1}
+              max={4}
+              onChange={(e) => set({ rows: clamp(parseInt(e.target.value || 0, 10), 1, 4) })}
+            />
+          </div>
+          <div>
+            <div className="text-xs text-slate-500 mb-1">가로폭(%)</div>
+            <input
+              type="range"
+              className="w-full"
+              min={40}
+              max={100}
+              step={1}
+              value={v.widthPct}
+              onChange={(e) => set({ widthPct: clamp(parseInt(e.target.value || 0, 10), 40, 100) })}
+            />
           </div>
         </div>
-        <div>
-          {label("외곽선/배경형태")}
-          <div className="flex gap-2">
-            <button
-              className={btn(v.outline)}
-              onClick={() => apply({ outline: !v.outline, preset: "custom" })}
-            >
-              {v.outline ? "외곽선 On" : "외곽선 Off"}
-            </button>
+
+        {/* 색상/투명도 */}
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <div className="text-xs text-slate-500 mb-1">글자색</div>
+            <input
+              type="color"
+              className="w-full h-9 rounded-lg border border-slate-200"
+              value={v.textColor}
+              onChange={(e) => set({ textColor: e.target.value })}
+            />
+          </div>
+          <div>
+            <div className="text-xs text-slate-500 mb-1">배경색</div>
+            <input
+              type="color"
+              className="w-full h-9 rounded-lg border border-slate-200"
+              value={v.bgColor}
+              onChange={(e) => set({ bgColor: e.target.value })}
+            />
+          </div>
+          <div>
+            <div className="text-xs text-slate-500 mb-1">배경 투명도</div>
+            <input
+              type="range"
+              className="w-full"
+              min={0}
+              max={1}
+              step={0.05}
+              value={Number(v.bgAlpha)}
+              onChange={(e) => set({ bgAlpha: Number(e.target.value) })}
+            />
+          </div>
+        </div>
+
+        {/* 외곽선/배경형태 */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <div className="text-xs text-slate-500 mb-1">외곽선</div>
+            <div className="inline-flex rounded-lg bg-slate-100 p-1 text-xs">
+              {[
+                { label: "On", val: true },
+                { label: "Off", val: false },
+              ].map((o) => (
+                <button
+                  key={String(o.val)}
+                  type="button"
+                  className={`px-3 py-1 rounded-md ${
+                    v.outlineOn === o.val ? "bg-white shadow border border-slate-200" : "hover:bg-white/60"
+                  }`}
+                  onClick={() => set({ outlineOn: o.val })}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-500 mb-1">배경형태</div>
             <select
-              value={v.bgStyle}
-              onChange={(e) =>
-                apply({ bgStyle: e.target.value, preset: "custom" })
-              }
-              className="h-8 rounded-lg border border-slate-200 text-xs px-2"
+              className="w-full h-9 rounded-lg border border-slate-200 px-2"
+              value={v.boxStyle}
+              onChange={(e) => set({ boxStyle: e.target.value })}
             >
-              <option value="pill">Pill</option>
               <option value="box">Box</option>
+              <option value="pill">Pill</option>
               <option value="none">None</option>
             </select>
           </div>
         </div>
       </div>
-    </SectionCard>
+    </div>
   );
 }

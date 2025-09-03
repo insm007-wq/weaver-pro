@@ -1,4 +1,4 @@
-// src/tabs/ReviewTab.jsx
+// src/components/assemble/tabs/ReviewTab.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import SectionCard from "../parts/SectionCard";
 import SubtitlePreview from "../parts/SubtitlePreview";
@@ -8,6 +8,75 @@ import useFullscreen from "../../../hooks/useFullscreen";
 import useAutoHeight from "../../../hooks/useAutoHeight";
 import { splitSceneToCues } from "../../../utils/subtitle";
 import { fmtMmSs } from "../../../utils/time";
+
+/* ---------- style helpers: 위치/색상/형태/폰트 옵션을 실제 오버레이에 반영 ---------- */
+const hexToRgba = (hex = "#000000", alpha = 0.45) => {
+  const m = String(hex).replace("#", "");
+  const n =
+    m.length === 3
+      ? m
+          .split("")
+          .map((c) => c + c)
+          .join("")
+      : m;
+  const r = parseInt(n.slice(0, 2), 16) || 0;
+  const g = parseInt(n.slice(2, 4), 16) || 0;
+  const b = parseInt(n.slice(4, 6), 16) || 0;
+  const a = Math.min(1, Math.max(0, Number(alpha)));
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+};
+
+const getSubtitleAnchorStyle = (opt = {}) => {
+  const safe = Math.max(0, Number(opt.safeMarginPct ?? opt.safeMargin ?? 5));
+  const vAlign = opt.vAlign || "bottom"; // 'top' | 'middle' | 'bottom'
+  const yPct = Math.max(0, Number(opt.vOffsetPct ?? opt.verticalOffsetPct ?? opt.vOffset ?? 8));
+  const style = { position: "absolute", left: `${safe}%`, right: `${safe}%` };
+  if (vAlign === "top") return { ...style, top: `calc(${safe}% + ${yPct}%)` };
+  if (vAlign === "middle") return { ...style, top: `calc(50% + ${yPct}%)`, transform: "translateY(-50%)" };
+  return { ...style, bottom: `calc(${safe}% + ${yPct}%)` }; // default bottom
+};
+
+const getSubtitleBoxStyle = (opt = {}) => {
+  const widthPct = Math.min(100, Math.max(40, Number(opt.widthPct ?? 95)));
+  const txtColor = opt.textColor ?? "#ffffff";
+  const bgHex = opt.bgColor ?? "#000000";
+  const bgAlpha = Number(opt.bgAlpha ?? 0.45);
+  const outline = opt.outlineOn ?? true ? "0 1px 2px rgba(0,0,0,.9)" : "none";
+
+  const base = {
+    maxWidth: `${widthPct}%`,
+    color: txtColor,
+    textShadow: outline,
+    fontSize: `${Number(opt.fontSizePx ?? 24)}px`,
+    lineHeight: 1.35,
+    display: "-webkit-box",
+    WebkitLineClamp: Number(opt.rows ?? 2),
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+  };
+
+  // 배경형태
+  if (String(opt.boxStyle) === "none") {
+    return {
+      ...base,
+      backgroundColor: "transparent",
+      backdropFilter: "none",
+    };
+  }
+  return {
+    ...base,
+    backgroundColor: hexToRgba(bgHex, isNaN(bgAlpha) ? 0.45 : bgAlpha),
+    backdropFilter: "blur(6px)",
+  };
+};
+
+const getSubtitleShapeClass = (opt = {}) => {
+  const box = String(opt.boxStyle || "box");
+  if (box === "pill") return "rounded-full shadow-lg";
+  if (box === "none") return ""; // no rounded/shadow
+  return "rounded-2xl shadow-lg";
+};
+/* ------------------------------------------------------------------------ */
 
 export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnected = false, mp3Connected = false }) {
   const audioRef = useRef(null);
@@ -23,19 +92,16 @@ export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnec
   const [rightInnerH, setRightInnerH] = useState(260);
   useAutoHeight({ leftBottomRef, rightBodyRef, rightWrapRef, onChange: setRightInnerH });
 
+  // 자막 스타일(프리셋 + 사용자 변경 값)
   const [styleOpt, setStyleOpt] = useState(PRESETS.ytCompact);
   const [mp3Url, setMp3Url] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
 
+  // 진행/재생 상태
   const [now, setNow] = useState(0);
   const [playing, setPlaying] = useState(false);
 
-  // 싱크/스케일
-  const [syncOffsetMs, setSyncOffsetMs] = useState(0);
-  const [audioDur, setAudioDur] = useState(0);
-  const [timeScale, setTimeScale] = useState(1);
-
-  // 미리보기 영역에서 벗어나면 자동 정지 (탭 전환/윈도우 포커스 아웃 포함)
+  // 미리보기 영역에서 벗어나면 자동 정지
   useEffect(() => {
     const pauseBoth = () => {
       try {
@@ -85,9 +151,7 @@ export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnec
     return out.length ? out : scenes;
   }, [scenes]);
 
-  const plannedTotal = useMemo(() => (uniqScenes.length ? uniqScenes[uniqScenes.length - 1].end : 0), [uniqScenes]);
-
-  // MP3 로드 & 길이 확보
+  // MP3 로드
   useEffect(() => {
     (async () => {
       try {
@@ -101,17 +165,11 @@ export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnec
     })();
   }, [mp3Connected]);
 
-  // 오디오 이벤트 + RAF(재생 중에만)로 now 갱신 → CPU 절약
+  // 오디오 이벤트 + RAF(재생 중에만 now 갱신)
   useEffect(() => {
     const a = audioRef.current;
     if (!a) return;
 
-    const onLoaded = () => {
-      const dur = Number(a.duration) || 0;
-      setAudioDur(dur);
-      if (plannedTotal > 0 && dur > 0) setTimeScale(dur / plannedTotal);
-      else setTimeScale(1);
-    };
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     const onEnded = () => {
@@ -119,7 +177,6 @@ export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnec
       setPlaying(false);
     };
 
-    a.addEventListener("loadedmetadata", onLoaded);
     a.addEventListener("play", onPlay);
     a.addEventListener("pause", onPause);
     a.addEventListener("ended", onEnded);
@@ -132,40 +189,29 @@ export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnec
     raf = requestAnimationFrame(tick);
 
     return () => {
-      a.removeEventListener("loadedmetadata", onLoaded);
       a.removeEventListener("play", onPlay);
       a.removeEventListener("pause", onPause);
       a.removeEventListener("ended", onEnded);
       cancelAnimationFrame(raf);
     };
-  }, [mp3Url, plannedTotal]);
+  }, [mp3Url]);
 
-  // 보정된 타임라인(오디오 길이에 맞춰 스케일)
-  const scenesForPlayback = useMemo(() => {
-    const scale = Number.isFinite(timeScale) && timeScale > 0 ? timeScale : 1;
-    return (uniqScenes || []).map((s) => ({
-      ...s,
-      start: s.start * scale,
-      end: s.end * scale,
-    }));
-  }, [uniqScenes, timeScale]);
-
-  // cue 생성
+  // cue 생성 (원본 타임라인 기준)
   const cuesForPlayback = useMemo(() => {
     const arr = [];
-    for (const sc of scenesForPlayback) {
+    for (const sc of uniqScenes) {
       const cues = splitSceneToCues(sc, { minSegSec: 0.6, maxLineChars: 38 });
       if (cues.length) arr.push(...cues);
     }
     return arr;
-  }, [scenesForPlayback]);
+  }, [uniqScenes]);
 
-  // now(+오프셋) → 활성 cue index
+  // now → 활성 cue index
   const [activeIdx, setActiveIdx] = useState(Number.isFinite(selectedSceneIdx) ? selectedSceneIdx : 0);
   useEffect(() => {
     if (!cuesForPlayback.length) return setActiveIdx(0);
-    const EPS = 0.08; // 80ms
-    const t = Math.max(0, now + syncOffsetMs / 1000);
+    const EPS = 0.08;
+    const t = Math.max(0, now);
     let idx = cuesForPlayback.findIndex((s) => t >= s.start - EPS && t < s.end + EPS);
     if (idx >= 0) return setActiveIdx(idx);
     let last = -1;
@@ -174,14 +220,14 @@ export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnec
       else break;
     }
     setActiveIdx(last >= 0 ? last : 0);
-  }, [now, cuesForPlayback, syncOffsetMs]);
+  }, [now, cuesForPlayback]);
 
   // 활성 cue가 속한 씬의 비디오 URL
   useEffect(() => {
     (async () => {
       const cue = cuesForPlayback[activeIdx];
       if (!cue) return setVideoUrl(null);
-      const sc = scenesForPlayback.find((s) => cue.start >= s.start && cue.start < s.end) || scenesForPlayback[0];
+      const sc = uniqScenes.find((s) => cue.start >= s.start && cue.start < s.end) || uniqScenes[0];
       const p = sc?.asset?.url || sc?.asset?.path;
       if (!p) return setVideoUrl(null);
       let u = p;
@@ -194,7 +240,7 @@ export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnec
       }
       setVideoUrl(u || null);
     })();
-  }, [activeIdx, cuesForPlayback, scenesForPlayback]);
+  }, [activeIdx, cuesForPlayback, uniqScenes]);
 
   // 씬 바뀌면 비디오 0초부터, 오디오 상태 따라 동기화
   useEffect(() => {
@@ -208,19 +254,19 @@ export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnec
   }, [videoUrl, playing]);
 
   // 컨트롤
-  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   const totalLogic = cuesForPlayback.length ? cuesForPlayback[cuesForPlayback.length - 1].end : 0;
 
   const seek = (logicSec) => {
     const a = audioRef.current;
     if (!a) return;
-    const actual = clamp(logicSec - syncOffsetMs / 1000, 0, Number(a.duration) || audioDur || totalLogic || 0);
+    const dur = Number(a.duration) || totalLogic || 0;
+    const clamped = Math.min(Math.max(0, logicSec), dur);
     const wasPlaying = !a.paused;
-    a.currentTime = actual;
+    a.currentTime = clamped;
     if (wasPlaying) a.play().catch(() => {});
     else a.pause();
   };
-  const step = (d) => seek(now + syncOffsetMs / 1000 + d);
+  const step = (d) => seek(now + d);
   const jumpToCue = (i) => cuesForPlayback[i] && seek(cuesForPlayback[i].start + 0.01);
   const onPlayPause = () => {
     const a = audioRef.current;
@@ -250,7 +296,7 @@ export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnec
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [fs, now, syncOffsetMs]);
+  }, [fs, now]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -282,23 +328,16 @@ export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnec
               <div className="w-full h-full flex items-center justify-center text-slate-500">(에셋이 없으면) 배경 에셋을 추가하세요</div>
             )}
 
-            {/* 세련된 자막 오버레이 (Safe Area + 줄바꿈 + 오버플로 방지) */}
-            <div
-              className="
-                pointer-events-none absolute inset-x-4 sm:inset-x-8 bottom-4 sm:bottom-6
-                flex justify-center
-              "
-            >
+            {/* 자막 오버레이 (위치/마진/폭/색상/형태/폰트 옵션 반영) */}
+            <div className="pointer-events-none flex justify-center" style={getSubtitleAnchorStyle(styleOpt)}>
               <div
-                className="
-                  max-w-[92%] sm:max-w-[82%] md:max-w-[76%]
+                className={`
                   px-4 sm:px-5 py-2.5 sm:py-3
-                  rounded-2xl bg-black/45 backdrop-blur-sm text-white text-center shadow-lg
-                  leading-snug
-                  text-[clamp(14px,2.1vw,22px)]
+                  text-center leading-snug
                   [word-break:keep-all] [overflow-wrap:anywhere]
-                "
-                style={{ lineHeight: 1.35 }}
+                  ${getSubtitleShapeClass(styleOpt)}
+                `}
+                style={getSubtitleBoxStyle(styleOpt)}
               >
                 {currentText}
               </div>
@@ -309,11 +348,7 @@ export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnec
               <button
                 type="button"
                 onClick={onPlayPause}
-                className="
-                  absolute inset-0 m-auto h-16 w-16 md:h-18 md:w-18 rounded-full
-                  bg-white/20 hover:bg-white/30 text-white
-                  grid place-items-center backdrop-blur-sm
-                "
+                className="absolute inset-0 m-auto h-16 w-16 md:h-18 md:w-18 rounded-full bg-white/20 hover:bg-white/30 text-white grid place-items-center backdrop-blur-sm"
                 aria-label="재생"
                 title="재생 (Space)"
               >
@@ -332,83 +367,47 @@ export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnec
             </button>
           </div>
 
-          {/* 컨트롤 + 싱크/스케일 표시 */}
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div className="text-xs text-slate-500">
-                상태: {playing ? "재생" : "대기"} · {fmtMmSs(now)} / {fmtMmSs(audioDur || totalLogic)}
-                {plannedTotal > 0 && <span className="ml-2 text-[11px] text-slate-400">(보정 {timeScale.toFixed(3)}×)</span>}
-              </div>
-              <div className="flex gap-2">
-                <button
-                  className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
-                  onClick={() => step(-5)}
-                  disabled={!mp3Url || !(audioDur || totalLogic)}
-                >
-                  -5s
-                </button>
-                <button
-                  className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
-                  onClick={onPlayPause}
-                  disabled={!mp3Url || !(audioDur || totalLogic)}
-                >
-                  {playing ? "일시정지" : "재생"}
-                </button>
-                <button
-                  className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
-                  onClick={() => step(+5)}
-                  disabled={!mp3Url || !(audioDur || totalLogic)}
-                >
-                  +5s
-                </button>
-                <button
-                  className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
-                  onClick={() => jumpToCue(Math.max(0, activeIdx - 1))}
-                  disabled={!mp3Url || !(audioDur || totalLogic)}
-                >
-                  이전 문장
-                </button>
-                <button
-                  className="h-9 px-3 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500"
-                  onClick={() => jumpToCue(Math.min(cuesForPlayback.length - 1, activeIdx + 1))}
-                  disabled={!mp3Url || !(audioDur || totalLogic)}
-                >
-                  다음 문장
-                </button>
-              </div>
+          {/* 컨트롤 */}
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-slate-500">
+              상태: {playing ? "재생" : "대기"} · {fmtMmSs(now)} /{" "}
+              {fmtMmSs((audioRef.current && audioRef.current.duration) || totalLogic || 0)}
             </div>
-
-            {/* 싱크 오프셋 */}
-            <div className="flex items-center gap-2">
-              <div className="text-xs text-slate-500 w-24">싱크 오프셋</div>
+            <div className="flex gap-2">
               <button
-                className="h-8 px-2 rounded border border-slate-200 text-xs hover:bg-slate-50"
-                onClick={() => setSyncOffsetMs((v) => v - 100)}
+                className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
+                onClick={() => step(-5)}
+                disabled={!mp3Url || !(audioRef.current?.duration || totalLogic)}
               >
-                -100ms
+                -5s
               </button>
-              <input
-                type="range"
-                min={-1500}
-                max={1500}
-                step={50}
-                value={syncOffsetMs}
-                onChange={(e) => setSyncOffsetMs(parseInt(e.target.value || 0, 10))}
-                className="flex-1"
-              />
               <button
-                className="h-8 px-2 rounded border border-slate-200 text-xs hover:bg-slate-50"
-                onClick={() => setSyncOffsetMs((v) => v + 100)}
+                className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
+                onClick={onPlayPause}
+                disabled={!mp3Url || !(audioRef.current?.duration || totalLogic)}
               >
-                +100ms
+                {playing ? "일시정지" : "재생"}
               </button>
-              <div className="w-16 text-right text-xs text-slate-600">{syncOffsetMs}ms</div>
               <button
-                className="h-8 px-2 rounded border border-slate-200 text-xs hover:bg-slate-50"
-                onClick={() => setSyncOffsetMs(0)}
-                title="오프셋 초기화"
+                className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
+                onClick={() => step(+5)}
+                disabled={!mp3Url || !(audioRef.current?.duration || totalLogic)}
               >
-                리셋
+                +5s
+              </button>
+              <button
+                className="h-9 px-3 rounded-lg border border-slate-200 text-sm hover:bg-slate-50"
+                onClick={() => jumpToCue(Math.max(0, activeIdx - 1))}
+                disabled={!mp3Url || !(audioRef.current?.duration || totalLogic)}
+              >
+                이전 문장
+              </button>
+              <button
+                className="h-9 px-3 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500"
+                onClick={() => jumpToCue(Math.min(cuesForPlayback.length - 1, activeIdx + 1))}
+                disabled={!mp3Url || !(audioRef.current?.duration || totalLogic)}
+              >
+                다음 문장
               </button>
             </div>
           </div>
