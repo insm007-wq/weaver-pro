@@ -4,110 +4,26 @@ import { Card, TabButton, Th, Td } from "./parts/SmallUI";
 import { ProgressBar, IndeterminateBar } from "./parts/ProgressBar";
 import AutoTab from "./tabs/AutoTab";
 import RefTab from "./tabs/RefTab";
-import {
-  VOICES_BY_ENGINE,
-  DEFAULT_GENERATE_PROMPT,
-  DEFAULT_REFERENCE_PROMPT,
-} from "./constants";
-import { secToTime } from "./utils/time";
-import { base64ToArrayBuffer } from "./utils/buffer";
+import { VOICES_BY_ENGINE, DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT } from "./constants";
+
 import ScriptPromptTab from "./tabs/ScriptPromptTab";
 import ReferencePromptTab from "./tabs/ReferencePromptTab";
 
-/* ========================= 공백 포함 글자수(정규화) ========================= */
-function safeCharCount(s) {
-  let t = String(s ?? "");
-  try {
-    t = t.normalize("NFC");
-  } catch {}
-  t = t.replace(/\r\n/g, "\n").replace(/[\u200B-\u200D\uFEFF]/g, "");
-  return Array.from(t).length;
-}
+// ▶ 새로 분리된 유틸들
+import { safeCharCount } from "../../utils/safeChars";
+import { computeCharBudget } from "../../utils/charBudget";
+import { compilePromptRaw, compileRefPrompt } from "../../utils/prompts";
+import { extractDurationMinFromText, extractMaxScenesFromText } from "../../utils/extract";
+import { secToTime } from "../../utils/time";
+import { base64ToArrayBuffer } from "../../utils/buffer";
+import { estimateEtaSec } from "../../utils/eta";
+import { ipcCall as call } from "../../utils/ipc";
 
-/** ========================= 글자수 규칙 ========================= */
-const CHAR_BUDGETS = {
-  auto: { perMinMin: 300, perMinMax: 400 },
-  perSceneFallback: { min: 500, max: 900 },
-};
-
-function computeCharBudget({ tab, durationMin, maxScenes }) {
-  const duration = Number(durationMin) || 0;
-  const scenes = Math.max(1, Number(maxScenes) || 1);
-  const totalSeconds = duration * 60;
-
-  if (tab === "auto") {
-    const { perMinMin, perMinMax } = CHAR_BUDGETS.auto;
-    const minCharacters = Math.max(0, Math.round(duration * perMinMin));
-    const maxCharacters = Math.max(
-      minCharacters,
-      Math.round(duration * perMinMax)
-    );
-    const avgCharactersPerScene = Math.max(
-      1,
-      Math.round((minCharacters + maxCharacters) / 2 / scenes)
-    );
-    return {
-      totalSeconds,
-      minCharacters,
-      maxCharacters,
-      avgCharactersPerScene,
-      cpmMin: perMinMin,
-      cpmMax: perMinMax,
-    };
-  }
-
-  const { min, max } = CHAR_BUDGETS.perSceneFallback;
-  const minCharacters = scenes * min;
-  const maxCharacters = scenes * max;
-  const avgCharactersPerScene = Math.max(
-    1,
-    Math.round((minCharacters + maxCharacters) / 2 / scenes)
-  );
-  return { totalSeconds, minCharacters, maxCharacters, avgCharactersPerScene };
-}
-
-/** 프롬프트 유틸 */
-function compilePromptRaw(tpl) {
-  return String(tpl ?? "");
-}
-function compileRefPrompt(tpl, { referenceText, duration, topic, maxScenes }) {
-  let s = String(tpl ?? "");
-  const dict = {
-    referenceText: referenceText ?? "",
-    duration: duration ?? "",
-    topic: topic ?? "",
-    maxScenes: maxScenes ?? "",
-  };
-  for (const [k, v] of Object.entries(dict))
-    s = s.replaceAll(`{${k}}`, String(v));
-  return s;
-}
-
-/* ========================= 분량/씬수 추출 ========================= */
-function extractDurationMinFromText(s) {
-  const t = String(s || "");
-  const m1 = t.match(/(\d+(?:\.\d+)?)\s*분/);
-  const m2 = t.match(/(\d+(?:\.\d+)?)\s*(?:minutes?|mins?)/i);
-  const v = m1 ? parseFloat(m1[1]) : m2 ? parseFloat(m2[1]) : NaN;
-  if (!Number.isFinite(v)) return null;
-  return Math.max(1, Math.round(v));
-}
-function extractMaxScenesFromText(s) {
-  const t = String(s || "");
-  const m =
-    t.match(/최대\s*장면\s*수\s*[:=]?\s*(\d+)/) ||
-    t.match(/최대\s*장면수\s*[:=]?\s*(\d+)/) ||
-    t.match(/max\s*scenes?\s*[:=]?\s*(\d+)/i);
-  const v = m ? parseInt(m[1], 10) : NaN;
-  if (!Number.isFinite(v)) return null;
-  return Math.max(1, v);
-}
-
-/* ========================= 기본 TTS 옵션 ========================= */
+/** ========================= 기본 TTS 옵션 ========================= */
 const DEFAULT_TTS_ENGINE = "google";
 const DEFAULT_VOICE = (VOICES_BY_ENGINE[DEFAULT_TTS_ENGINE] || [])[0] || ""; // ko-KR-Wavenet-* 중 첫 번째
 
-/* ========================= 탭별 폼 ========================= */
+/** 폼 초기값 팩토리 (탭별 독립 상태) */
 const makeDefaultForm = () => ({
   topic: "",
   style: "",
@@ -115,12 +31,13 @@ const makeDefaultForm = () => ({
   maxScenes: 10,
   llmMain: "openai-gpt5mini",
   ttsEngine: DEFAULT_TTS_ENGINE,
-  voiceName: DEFAULT_VOICE, // ✅ 기본 보이스 확실히 세팅
+  voiceName: DEFAULT_VOICE,
   speakingRate: 0.84,
   pitch: 0.2,
 });
 
 export default function ScriptVoiceGenerator() {
+  /* ========================= 상태: 탭/폼/문서 ========================= */
   const [activeTab, setActiveTab] = useState("auto");
   const [forms, setForms] = useState({
     auto: makeDefaultForm(),
@@ -129,13 +46,10 @@ export default function ScriptVoiceGenerator() {
     "prompt-ref": makeDefaultForm(),
   });
   const form = forms[activeTab];
-  const onChangeFor = (tab) => (key, v) =>
-    setForms((prev) => ({ ...prev, [tab]: { ...prev[tab], [key]: v } }));
+  const onChangeFor = (tab) => (key, v) => setForms((prev) => ({ ...prev, [tab]: { ...prev[tab], [key]: v } }));
 
-  const voices = useMemo(
-    () => VOICES_BY_ENGINE[form.ttsEngine] || [],
-    [form.ttsEngine]
-  );
+  // 탭에서 필요로 하는 보이스 목록
+  const voices = useMemo(() => VOICES_BY_ENGINE[form.ttsEngine] || [], [form.ttsEngine]);
 
   // 입력/문서
   const [refText, setRefText] = useState("");
@@ -148,7 +62,7 @@ export default function ScriptVoiceGenerator() {
   });
   const currentDoc = docs[activeTab] || null;
 
-  // 템플릿
+  /* ========================= 템플릿 로드/저장 ========================= */
   const [genPrompt, setGenPrompt] = useState(DEFAULT_GENERATE_PROMPT);
   const [refPrompt, setRefPrompt] = useState(DEFAULT_REFERENCE_PROMPT);
   const [promptSavedAt, setPromptSavedAt] = useState(null);
@@ -187,34 +101,16 @@ export default function ScriptVoiceGenerator() {
     if (type === "reference") setRefPrompt(DEFAULT_REFERENCE_PROMPT);
   };
 
-  // 진행/ETA
-  const [status, setStatus] = useState("idle");
-  const [phase, setPhase] = useState("");
+  /* ========================= 진행/ETA/오류 ========================= */
+  const [status, setStatus] = useState("idle"); // idle|running|done|error
+  const [phase, setPhase] = useState(""); // SCRIPT|TTS|SRT|MERGE|완료
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [phaseElapsedSec, setPhaseElapsedSec] = useState(0);
   const phaseTimerRef = useRef(null);
   const [plan, setPlan] = useState({ durationMin: 0, maxScenes: 0 });
-
-  const beginPhase = (name) => {
-    setPhase(name);
-    if (phaseTimerRef.current) clearInterval(phaseTimerRef.current);
-    const start = Date.now();
-    setPhaseElapsedSec(0);
-    phaseTimerRef.current = setInterval(() => {
-      const s = Math.floor((Date.now() - start) / 1000);
-      setPhaseElapsedSec(s);
-    }, 1000);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (phaseTimerRef.current) clearInterval(phaseTimerRef.current);
-    };
-  }, []);
-
   const [error, setError] = useState("");
 
-  // 폭 고정
+  // (UI 너비 고정용) 첫 렌더의 실제 width를 기억
   const containerRef = useRef(null);
   const [fixedWidthPx, setFixedWidthPx] = useState(null);
   useLayoutEffect(() => {
@@ -224,14 +120,22 @@ export default function ScriptVoiceGenerator() {
     }
   }, [fixedWidthPx]);
 
-  // IPC
-  const call = (channel, payload) => window.api.invoke(channel, payload);
+  /** 단계 시작 시 타이머 초기화 */
+  const beginPhase = (name) => {
+    setPhase(name);
+    if (phaseTimerRef.current) clearInterval(phaseTimerRef.current);
+    const start = Date.now();
+    setPhaseElapsedSec(0);
+    phaseTimerRef.current = setInterval(() => {
+      setPhaseElapsedSec(Math.floor((Date.now() - start) / 1000));
+    }, 1000);
+  };
+  useEffect(() => () => phaseTimerRef.current && clearInterval(phaseTimerRef.current), []);
 
-  // 실행
+  /* ========================= 실행 ========================= */
   const runGenerate = async (tab) => {
     const f = forms[tab];
-    const normalized =
-      tab === "prompt-gen" ? "auto" : tab === "prompt-ref" ? "ref" : tab;
+    const normalized = tab === "prompt-gen" ? "auto" : tab === "prompt-ref" ? "ref" : tab;
 
     setStatus("running");
     setError("");
@@ -239,6 +143,7 @@ export default function ScriptVoiceGenerator() {
     beginPhase("SCRIPT");
 
     try {
+      // 1) 입력 파라미터 정제
       let duration = Number(f.durationMin);
       let maxScenes = Number(f.maxScenes);
       const topic = String(f.topic || "");
@@ -259,14 +164,7 @@ export default function ScriptVoiceGenerator() {
 
       setPlan({ durationMin: duration, maxScenes });
 
-      const {
-        totalSeconds,
-        minCharacters,
-        maxCharacters,
-        avgCharactersPerScene,
-        cpmMin,
-        cpmMax,
-      } = computeCharBudget({
+      const { totalSeconds, minCharacters, maxCharacters, avgCharactersPerScene, cpmMin, cpmMax } = computeCharBudget({
         tab: normalized,
         durationMin: duration,
         maxScenes,
@@ -311,26 +209,26 @@ export default function ScriptVoiceGenerator() {
               referenceText: tab === "prompt-ref" ? promptRefText : refText,
             };
 
-      // SCRIPT
+      // 2) SCRIPT 생성
       const generatedDoc = await call("llm/generateScript", invokePayload);
-      if (!generatedDoc?.scenes?.length)
-        throw new Error("대본 생성 결과가 비어있습니다.");
+      if (!generatedDoc?.scenes?.length) throw new Error("대본 생성 결과가 비어있습니다.");
       setDocs((prev) => ({ ...prev, [tab]: generatedDoc }));
 
-      // ======================= TTS (먼저 실행) =======================
+      // 3) TTS (씬별)
       beginPhase("TTS");
       setProgress({ current: 0, total: generatedDoc.scenes.length });
       const ttsRes = await call("tts/synthesizeByScenes", {
         doc: generatedDoc,
         tts: {
           engine: f.ttsEngine,
-          voiceName: f.voiceName || DEFAULT_VOICE, // ✅ 보이스 누락 대비
+          voiceName: f.voiceName || DEFAULT_VOICE,
           speakingRate: Number(f.speakingRate),
           pitch: Number(f.pitch),
         },
       });
 
-      let merged = [];
+      // 조각 저장 후 메모리에서 이어붙이기(현재 기능 유지)
+      const merged = [];
       if (ttsRes?.parts?.length) {
         for (let i = 0; i < ttsRes.parts.length; i++) {
           const p = ttsRes.parts[i];
@@ -357,12 +255,12 @@ export default function ScriptVoiceGenerator() {
         });
       }
 
-      // ======================= SRT (TTS 마크 사용) =======================
+      // 4) SRT (TTS 마크 사용)
       beginPhase("SRT");
       setProgress({ current: 0, total: 0 });
       const srtRes = await call("script/toSrt", {
         doc: generatedDoc,
-        ttsMarks: ttsRes?.marks || null, // ★ 타임포인트 전달(없으면 백엔드가 폴백)
+        ttsMarks: ttsRes?.marks || null, // 타임포인트 전달(없으면 백엔드 폴백)
       });
       if (srtRes?.srt) {
         const srtBuf = new TextEncoder().encode(srtRes.srt).buffer;
@@ -373,7 +271,7 @@ export default function ScriptVoiceGenerator() {
         });
       }
 
-      // MERGE
+      // 5) MERGE (렌더러 처리 스텁 유지)
       beginPhase("MERGE");
       setProgress({ current: 0, total: 0 });
       await call("audio/concatScenes", {});
@@ -381,27 +279,22 @@ export default function ScriptVoiceGenerator() {
       // 완료
       if (phaseTimerRef.current) clearInterval(phaseTimerRef.current);
       setPhase("완료");
-      setProgress({ current: 1, total: 1 }); // 100%
+      setProgress({ current: 1, total: 1 });
       setStatus("done");
     } catch (e) {
       if (phaseTimerRef.current) clearInterval(phaseTimerRef.current);
       setStatus("error");
-      const msg =
-        e?.response?.data?.error?.message ||
-        e?.message ||
-        "오류가 발생했습니다.";
+      const msg = e?.response?.data?.error?.message || e?.message || "오류가 발생했습니다.";
       setError(msg);
     }
   };
 
-  // 실행 가능
+  /* ========================= 실행 가능 여부 ========================= */
   const canRun =
     (activeTab === "auto" && (forms.auto.topic || "").trim().length > 0) ||
     (activeTab === "ref" && (refText || "").trim().length > 0) ||
     (activeTab === "prompt-gen" && (genPrompt || "").trim().length > 0) ||
-    (activeTab === "prompt-ref" &&
-      (refPrompt || "").trim().length > 0 &&
-      (promptRefText || "").trim().length > 0);
+    (activeTab === "prompt-ref" && (refPrompt || "").trim().length > 0 && (promptRefText || "").trim().length > 0);
 
   // ETA
   const etaSec = estimateEtaSec({
@@ -411,7 +304,7 @@ export default function ScriptVoiceGenerator() {
     plan,
   });
 
-  // 렌더
+  /* ========================= 렌더 ========================= */
   return (
     <div
       ref={containerRef}
@@ -433,18 +326,14 @@ export default function ScriptVoiceGenerator() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold">대본 &amp; 음성 생성</h1>
-          <span className="text-xs text-slate-500">
-            SRT 자막 + MP3 내레이션을 한 번에
-          </span>
+          <span className="text-xs text-slate-500">SRT 자막 + MP3 내레이션을 한 번에</span>
         </div>
         <button
           type="button"
           onClick={() => runGenerate(activeTab)}
           disabled={!canRun || status === "running"}
           className={`px-4 py-2 rounded-lg text-sm text-white transition ${
-            status === "running"
-              ? "bg-slate-400 cursor-not-allowed"
-              : "bg-blue-600 hover:bg-blue-500"
+            status === "running" ? "bg-slate-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-500"
           }`}
         >
           실행
@@ -464,38 +353,17 @@ export default function ScriptVoiceGenerator() {
               status={status}
             />
           ) : (
-            <IndeterminateBar
-              etaSec={etaSec}
-              phase={phase}
-              elapsedSec={phaseElapsedSec}
-              status={status}
-            />
+            <IndeterminateBar etaSec={etaSec} phase={phase} elapsedSec={phaseElapsedSec} status={status} />
           )}
         </div>
       )}
 
       {/* 탭 바 */}
       <div className="mb-4 flex gap-2 border-b border-slate-200">
-        <TabButton
-          active={activeTab === "auto"}
-          onClick={() => setActiveTab("auto")}
-          label="자동 생성"
-        />
-        <TabButton
-          active={activeTab === "ref"}
-          onClick={() => setActiveTab("ref")}
-          label="레퍼런스 기반"
-        />
-        <TabButton
-          active={activeTab === "prompt-gen"}
-          onClick={() => setActiveTab("prompt-gen")}
-          label="대본 프롬프트"
-        />
-        <TabButton
-          active={activeTab === "prompt-ref"}
-          onClick={() => setActiveTab("prompt-ref")}
-          label="레퍼런스 프롬프트"
-        />
+        <TabButton active={activeTab === "auto"} onClick={() => setActiveTab("auto")} label="자동 생성" />
+        <TabButton active={activeTab === "ref"} onClick={() => setActiveTab("ref")} label="레퍼런스 기반" />
+        <TabButton active={activeTab === "prompt-gen"} onClick={() => setActiveTab("prompt-gen")} label="대본 프롬프트" />
+        <TabButton active={activeTab === "prompt-ref"} onClick={() => setActiveTab("prompt-ref")} label="레퍼런스 프롬프트" />
       </div>
 
       {/* 본문 */}
@@ -562,15 +430,11 @@ export default function ScriptVoiceGenerator() {
         </Card>
       )}
 
-      {/* 결과 */}
+      {/* 결과 테이블 */}
       <Card className="mt-5">
         <div className="flex items-center justify-between mb-3">
           <div className="text-sm font-semibold">씬 미리보기</div>
-          <div className="text-xs text-slate-500">
-            {currentDoc?.scenes?.length
-              ? `${currentDoc.scenes.length}개 씬`
-              : "대본 없음"}
-          </div>
+          <div className="text-xs text-slate-500">{currentDoc?.scenes?.length ? `${currentDoc.scenes.length}개 씬` : "대본 없음"}</div>
         </div>
 
         <div className="border border-slate-200 rounded-lg overflow-hidden">
@@ -605,49 +469,8 @@ export default function ScriptVoiceGenerator() {
           </table>
         </div>
 
-        {error && (
-          <div className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
-            {error}
-          </div>
-        )}
+        {error && <div className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</div>}
       </Card>
     </div>
   );
-}
-
-/* ========================= ETA 계산기 =========================
-   - 결정형(progress.total>0): 실측 속도. 남은 수가 0이면 숫자 숨김.
-   - 비결정형: 휴리스틱. 0 이하이면 null(문구로 대체).
-*/
-function estimateEtaSec({ phase, progress, elapsed, plan }) {
-  const { current, total } = progress || {};
-
-  // 결정형
-  if (total > 0 && current > 0) {
-    const per = elapsed / current; // sec per unit
-    const eta = Math.round(per * (total - current));
-    return eta > 0 ? eta : null; // 0초는 표기하지 않음
-  }
-
-  // 비결정형
-  if (phase === "SCRIPT") {
-    const expect = Math.round(
-      (plan?.durationMin || 0) * 5 + (plan?.maxScenes || 0) * 1
-    );
-    const eta = expect - elapsed;
-    return eta > 0 ? eta : null;
-  }
-  if (phase === "SRT") {
-    const expect = Math.min(15, Math.round(1 + (plan?.maxScenes || 0) * 0.2));
-    const eta = expect - elapsed;
-    return eta > 0 ? eta : null;
-  }
-  if (phase === "MERGE") {
-    const expect = 3;
-    const eta = expect - elapsed;
-    return eta > 0 ? eta : null;
-  }
-  if (phase === "완료") return 0;
-
-  return null;
 }
