@@ -8,7 +8,12 @@
 //   * 재사용 허용/제한(모자랄 때만, 연속중복 방지, 재사용 최대횟수)
 //   * "왜 못 채웠는지" reasons 리포트
 //   * 여기만 고치면 자동배치 전체 동작이 바뀜(유지보수 포인트 1곳)
+//  autoMatchEngine 로 변경 현재 사용 안함
 // ============================================================================
+
+// autoMatchEngine 로 변경 현재 사용 안함
+// autoMatchEngine 로 변경 현재 사용 안함
+// autoMatchEngine 로 변경 현재 사용 안함
 
 /** 기본 옵션 (필요에 따라 여기만 수정) */
 export const DEFAULT_OPTS = {
@@ -168,7 +173,7 @@ export function runAutoMatch(input) {
         // 연속 중복 방지
         const prevAssetId = i > 0 ? next[i - 1]?.assetId : null;
         if (isConsecutiveDuplicate(prevAssetId, best.id, opts)) {
-          // 연속이라면 "차선책" 시도: 스코어 순 2등을 찾아본다
+          // 연속이라면 "차선책" 시도
           let second = null;
           let secondScore = -Infinity;
           for (const a of pool) {
@@ -186,7 +191,7 @@ export function runAutoMatch(input) {
             byStrategy.keyword += 1;
             continue;
           }
-          // 차선책도 없으면 일단 best 사용(옵션 끄면 바로 사용됨)
+          // 대안 없으면 best 사용
         }
 
         sc.assetId = best.id;
@@ -196,7 +201,7 @@ export function runAutoMatch(input) {
         continue;
       }
 
-      // 키워드 매칭 실패 → 이유 기록(순서 보충 단계에서 채워질 수도 있음)
+      // 키워드 매칭 실패 → 이유 기록
       pushReason(reasons, i, sc, "no_keyword_match", "최소 스코어 미만 또는 후보 스코어 0");
     }
   }
@@ -230,7 +235,7 @@ export function runAutoMatch(input) {
             byStrategy.order += 1;
             continue;
           }
-          // 대안이 없으면 일단 배정(옵션 끄면 바로 배정됨)
+          // 대안이 없으면 일단 배정
         }
         sc.assetId = candidate.id;
         usedSet.add(candidate.id);
@@ -240,18 +245,16 @@ export function runAutoMatch(input) {
 
       // 풀이 다 떨어짐 → 재사용 허용이면 재사용
       if (opts.allowReuseIfShortfall && assets.length) {
-        // 재사용 가능한 후보를 찾자
         let reused = null;
         for (const a of assets) {
           if (!canReuse(a.id, reuseCount, opts)) continue;
           const prevAssetId = i > 0 ? next[i - 1]?.assetId : null;
-          if (isConsecutiveDuplicate(prevAssetId, a.id, opts)) continue; // 연속 중복 회피
+          if (isConsecutiveDuplicate(prevAssetId, a.id, opts)) continue;
 
           reused = a;
           break;
         }
 
-        // 연속 중복 때문에 못 찾았으면 연속 허용하고라도 하나 선택(최후의 수단)
         if (!reused) {
           for (const a of assets) {
             if (!canReuse(a.id, reuseCount, opts)) continue;
@@ -273,12 +276,9 @@ export function runAutoMatch(input) {
     }
   }
 
-  // 미배치 씬 수
   const remaining = next.filter((s) => !s.assetId).length;
 
-  // 디버그 로그
   if (opts.debug) {
-    // eslint-disable-next-line no-console
     console.log("[autoMatch] result:", {
       filled: next.length - remaining,
       remaining,
