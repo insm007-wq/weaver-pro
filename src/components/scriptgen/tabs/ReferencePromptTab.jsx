@@ -29,6 +29,7 @@ export default function ReferencePromptTab({
   savedAt, // 저장 시각(부모)
   onSave,
   onReset,
+  disabled = false, // 로딩 상태 비활성화
 }) {
   // 프리셋 메타
   const [presets, setPresets] = useState([]);
@@ -330,10 +331,13 @@ export default function ReferencePromptTab({
           </div>
         </div>
         <textarea
-          className="w-full h-48 text-sm rounded-lg border border-slate-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 overflow-auto resize-none whitespace-pre-wrap"
+          className={`w-full h-48 text-sm rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 overflow-auto resize-none whitespace-pre-wrap transition-all duration-200 ${
+            disabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'
+          }`}
           placeholder="여기에 분석할 레퍼런스 대본을 붙여넣으세요"
           value={refText}
           onChange={(e) => setRefText(e.target.value)}
+          disabled={disabled}
         />
       </div>
 
@@ -346,9 +350,12 @@ export default function ReferencePromptTab({
           </div>
         </div>
         <textarea
-          className="w-full h-72 text-sm rounded-lg border border-slate-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 overflow-auto resize-none whitespace-pre-wrap"
+          className={`w-full h-72 text-sm rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 overflow-auto resize-none whitespace-pre-wrap transition-all duration-200 ${
+            disabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'
+          }`}
           value={template}
           onChange={(e) => setTemplate(e.target.value)}
+          disabled={disabled}
         />
       </div>
 

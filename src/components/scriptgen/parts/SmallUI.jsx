@@ -31,32 +31,42 @@ export function FormGrid({ children }) {
   );
 }
 
-export function TextField({ label, value, onChange, placeholder }) {
+export function TextField({ label, value, onChange, placeholder, disabled = false }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-neutral-700 mb-2">
+      <label className={`block text-sm font-medium mb-2 transition-colors duration-200 ${
+        disabled ? 'text-neutral-400' : 'text-neutral-700'
+      }`}>
         {label}
       </label>
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="input-field"
+        disabled={disabled}
+        className={`input-field transition-all duration-200 ${
+          disabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''
+        }`}
       />
     </div>
   );
 }
 
-export function SelectField({ label, value, options, onChange }) {
+export function SelectField({ label, value, options, onChange, disabled = false }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-neutral-700 mb-2">
+      <label className={`block text-sm font-medium mb-2 transition-colors duration-200 ${
+        disabled ? 'text-neutral-400' : 'text-neutral-700'
+      }`}>
         {label}
       </label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="input-field"
+        disabled={disabled}
+        className={`input-field transition-all duration-200 ${
+          disabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''
+        }`}
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>

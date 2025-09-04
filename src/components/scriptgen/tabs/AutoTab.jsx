@@ -18,7 +18,8 @@ function toInt(v, d = 0) {
 export default function AutoTab({
   form,
   onChange,
-  voices /* onRun (미사용) */,
+  voices,
+  disabled = false /* 로딩 상태에서 비활성화 */,
 }) {
   // 표시용 정규화 (옵션 값 보정)
   const norm = useMemo(
@@ -40,12 +41,14 @@ export default function AutoTab({
           value={form.topic}
           onChange={(v) => onChange("topic", v)}
           placeholder="예) 2025 AI 트렌드 요약"
+          disabled={disabled}
         />
         <TextField
           label="스타일"
           value={form.style}
           onChange={(v) => onChange("style", v)}
           placeholder="예) 전문가, 쉽고 차분하게"
+          disabled={disabled}
         />
 
         <SelectField
@@ -53,6 +56,7 @@ export default function AutoTab({
           value={norm.durationMin}
           options={DUR_OPTIONS.map((v) => ({ label: `${v}`, value: v }))}
           onChange={(v) => onChange("durationMin", Number(v))}
+          disabled={disabled}
         />
 
         <SelectField
@@ -60,6 +64,7 @@ export default function AutoTab({
           value={norm.maxScenes}
           options={MAX_SCENE_OPTIONS.map((v) => ({ label: `${v}`, value: v }))}
           onChange={(v) => onChange("maxScenes", Number(v))}
+          disabled={disabled}
         />
 
         <SelectField
@@ -67,10 +72,11 @@ export default function AutoTab({
           value={form.llmMain}
           options={LLM_OPTIONS}
           onChange={(v) => onChange("llmMain", v)}
+          disabled={disabled}
         />
       </FormGrid>
 
-      <TtsPanel form={form} onChange={onChange} voices={voices} />
+      <TtsPanel form={form} onChange={onChange} voices={voices} disabled={disabled} />
     </Card>
   );
 }

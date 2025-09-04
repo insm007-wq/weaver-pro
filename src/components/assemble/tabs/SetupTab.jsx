@@ -9,6 +9,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import SectionCard from "../parts/SectionCard";
+import { setSetting } from "../../../utils/ipcSafe";
 
 /* -------------------------------------------------------------------------- */
 /* 작은 컴포넌트들                                                             */
@@ -109,11 +110,14 @@ const DEFAULT_AUTO_OPTS = {
 
 const norm = (p) => (p ? String(p).replace(/\\/g, "/").toLowerCase() : "");
 
-/** 안전 저장 헬퍼 */
-const saveSetting = (key, value) =>
-  window.api
-    .setSetting?.({ key, value })
-    .catch((e) => console.warn("[SetupTab] setSetting error:", e));
+/** 안전 저장 헬퍼 - 일관된 설정 저장을 위해 ipcSafe 사용 */
+const saveSetting = async (key, value) => {
+  try {
+    await setSetting({ key, value });
+  } catch (e) {
+    console.warn("[SetupTab] setSetting error:", e);
+  }
+};
 
 /** 경로 존재 확인 */
 async function checkExists(p) {
@@ -144,68 +148,42 @@ export default function SetupTab({
   const [mp3Path, setMp3Path] = useState(null);
   const [showFullSrt, setShowFullSrt] = useState(false);
   const [showFullMp3, setShowFullMp3] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   /* ----------------------------- 초기 복원 ----------------------------- */
   useEffect(() => {
     (async () => {
       try {
-        // paths
-        const [srtSaved, mp3Saved] = await Promise.all([
-          window.api.getSetting?.("paths.srt"),
-          window.api.getSetting?.("paths.mp3"),
-        ]);
-
-        // 존재 확인
-        const [srtOk, mp3Ok] = await Promise.all([
-          srtSaved ? checkExists(srtSaved) : Promise.resolve(false),
-          mp3Saved ? checkExists(mp3Saved) : Promise.resolve(false),
-        ]);
-
-        console.log("[SetupTab] restore", { srtSaved, srtOk, mp3Saved, mp3Ok });
-
-        if (srtOk) {
-          setSrtPath(srtSaved);
-          setSrtConnected?.(true);
-        } else {
-          setSrtPath(null);
-          setSrtConnected?.(false);
-          if (srtSaved) await saveSetting("paths.srt", ""); // 깨끗이 정리
+        // 컴포넌트 마운트 시 강제 경로 초기화
+        console.log('[SetupTab] Component mounted, clearing paths...');
+        await saveSetting("paths.srt", "");
+        await saveSetting("paths.mp3", "");
+        console.log('[SetupTab] Paths cleared from settings');
+        
+        // 초기화된 상태로 UI 설정 (AssembleEditor에게 즉시 알림)
+        setSrtPath(null);
+        setMp3Path(null);
+        
+        // 중요: connected 상태를 false로 설정하여 AssembleEditor에 초기화 신호 전송
+        if (typeof setSrtConnected === 'function') {
+          setSrtConnected(false);
+          console.log('[SetupTab] SRT connection set to false');
         }
-
-        if (mp3Ok) {
-          setMp3Path(mp3Saved);
-          setMp3Connected?.(true);
-        } else {
-          setMp3Path(null);
-          setMp3Connected?.(false);
-          if (mp3Saved) await saveSetting("paths.mp3", "");
+        if (typeof setMp3Connected === 'function') {
+          setMp3Connected(false);
+          console.log('[SetupTab] MP3 connection set to false');
         }
+        
+        // 추가로 자동 매칭도 초기화
+        if (typeof setAutoMatch === 'function') setAutoMatch(false);
+        if (typeof setAutoOpts === 'function') setAutoOpts(DEFAULT_AUTO_OPTS);
+        await saveSetting("autoMatch.enabled", false);
+        await saveSetting("autoMatch.options", JSON.stringify(DEFAULT_AUTO_OPTS));
+        
+        console.log('[SetupTab] All settings cleared and UI updated');
 
-        // auto-match
-        const [am, ao] = await Promise.all([
-          window.api.getSetting?.("autoMatch.enabled"),
-          window.api.getSetting?.("autoMatch.options"),
-        ]);
-
-        if (typeof setAutoMatch === "function") {
-          const on = am === true || am === "true" || am === 1 || am === "1";
-          setAutoMatch(on);
-        }
-        if (typeof setAutoOpts === "function") {
-          let parsed = {};
-          try {
-            parsed = typeof ao === "string" ? JSON.parse(ao || "{}") : ao || {};
-          } catch {
-            parsed = {};
-          }
-          setAutoOpts((s) => ({
-            ...DEFAULT_AUTO_OPTS,
-            ...(s || {}),
-            ...parsed,
-          }));
-        }
       } catch (e) {
-        console.warn("[SetupTab] 초기 설정 복원 실패:", e);
+        console.warn("[SetupTab] 초기 설정 초기화 실패:", e);
       }
     })();
   }, [setMp3Connected, setSrtConnected, setAutoMatch, setAutoOpts]);
@@ -219,6 +197,48 @@ export default function SetupTab({
     }, 300);
     return () => clearTimeout(t);
   }, [autoMatch, autoOpts]);
+
+  /* ------------------- 초기화 핸들러 ------------------- */
+  const handleClearSetup = useCallback(async () => {
+    try {
+      setClearing(true);
+      console.log('[SetupTab] Manual clear requested...');
+      
+      // 직접 설정 초기화 (IPC 대신)
+      await saveSetting("paths.srt", "");
+      await saveSetting("paths.mp3", "");
+      await saveSetting("autoMatch.enabled", false);
+      await saveSetting("autoMatch.options", JSON.stringify(DEFAULT_AUTO_OPTS));
+      
+      // UI 상태 초기화 (AssembleEditor에게 즉시 알림)
+      setSrtPath(null);
+      setMp3Path(null);
+      setShowFullSrt(false);
+      setShowFullMp3(false);
+      
+      // 중요: connected 상태를 false로 설정하여 AssembleEditor에 초기화 신호 전송
+      if (typeof setSrtConnected === 'function') {
+        setSrtConnected(false);
+        console.log('[SetupTab] Manual clear - SRT connection set to false');
+      }
+      if (typeof setMp3Connected === 'function') {
+        setMp3Connected(false);
+        console.log('[SetupTab] Manual clear - MP3 connection set to false');
+      }
+      
+      // 자동 매칭도 초기화
+      if (typeof setAutoMatch === 'function') setAutoMatch(false);
+      if (typeof setAutoOpts === 'function') setAutoOpts(DEFAULT_AUTO_OPTS);
+      
+      alert('영상 구성 설정이 초기화되었습니다.');
+      console.log('[SetupTab] Manual clear completed successfully');
+    } catch (error) {
+      alert('초기화 중 오류가 발생했습니다.');
+      console.error('[SetupTab] Manual clear error:', error);
+    } finally {
+      setClearing(false);
+    }
+  }, [setSrtConnected, setMp3Connected, setAutoMatch, setAutoOpts]);
 
   /* ------------------- 선택 핸들러 (SRT / MP3) ------------------- */
   const handlePickSrt = useCallback(async () => {
@@ -317,7 +337,23 @@ export default function SetupTab({
       {/* 자막 / 오디오 연결 */}
       <SectionCard
         title="자막 / 오디오 연결"
-        right={<span className="text-xs text-slate-500">프로젝트 준비</span>}
+        right={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleClearSetup}
+              disabled={clearing}
+              className={`px-3 py-1 text-xs rounded border transition ${
+                clearing
+                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                  : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
+              }`}
+              title="SRT, MP3 파일 연결을 초기화합니다"
+            >
+              {clearing ? '초기화 중...' : '초기화'}
+            </button>
+            <span className="text-xs text-slate-500">프로젝트 준비</span>
+          </div>
+        }
       >
         <div className="flex flex-col gap-3">
           <div className="flex flex-col sm:flex-row gap-3">

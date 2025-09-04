@@ -10,6 +10,7 @@ export default function RefTab({
   voices,
   refText,
   setRefText,
+  disabled = false,
 }) {
   const refCounts = useMemo(() => {
     const t = refText || "";
@@ -24,30 +25,35 @@ export default function RefTab({
           value={form.topic}
           onChange={(v) => onChange("topic", v)}
           placeholder="예) 세종시 주거 정보 가이드"
+          disabled={disabled}
         />
         <TextField
           label="스타일"
           value={form.style}
           onChange={(v) => onChange("style", v)}
           placeholder="예) 다큐멘터리, 차분한 톤"
+          disabled={disabled}
         />
         <SelectField
           label="길이(분)"
           value={form.durationMin}
           options={DUR_OPTIONS.map((v) => ({ label: `${v}`, value: v }))}
           onChange={(v) => onChange("durationMin", Number(v))}
+          disabled={disabled}
         />
         <SelectField
           label="최대 장면 수"
           value={form.maxScenes}
           options={MAX_SCENE_OPTIONS.map((v) => ({ label: `${v}`, value: v }))}
           onChange={(v) => onChange("maxScenes", Number(v))}
+          disabled={disabled}
         />
         <SelectField
           label="LLM (대본)"
           value={form.llmMain}
           options={LLM_OPTIONS}
           onChange={(v) => onChange("llmMain", v)}
+          disabled={disabled}
         />
       </FormGrid>
 
@@ -61,14 +67,17 @@ export default function RefTab({
           </span>
         </div>
         <textarea
-          className="w-full h-40 text-sm rounded-lg border border-slate-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          className={`w-full h-40 text-sm rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all duration-200 ${
+            disabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'
+          }`}
           placeholder="레퍼런스 대본을 붙여넣으면, 스타일·구조를 분석해 새로운 대본을 생성합니다."
           value={refText}
           onChange={(e) => setRefText(e.target.value)}
+          disabled={disabled}
         />
       </div>
 
-      <TtsPanel form={form} onChange={onChange} voices={voices} />
+      <TtsPanel form={form} onChange={onChange} voices={voices} disabled={disabled} />
     </Card>
   );
 }

@@ -135,8 +135,20 @@ export default function AssembleEditor() {
     let cancelled = false;
     (async () => {
       try {
+        // mp3Connected가 false로 명시적으로 설정된 경우 로드하지 않음 (초기화된 상태)
+        if (mp3Connected === false) {
+          console.log("[assemble] MP3 connection cleared, skipping load");
+          setAudioDur(0);
+          return;
+        }
+        
         const mp3Path = await getSetting("paths.mp3");
-        if (!mp3Path) return;
+        if (!mp3Path) {
+          console.log("[assemble] No MP3 path found");
+          setAudioDur(0);
+          return;
+        }
+        
         const dur = await getMp3DurationSafe(mp3Path);
         if (!cancelled && dur) {
           setAudioDur(Number(dur));

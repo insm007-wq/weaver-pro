@@ -1,7 +1,7 @@
 // src/ScriptVoiceGenerator.jsx
 import { useMemo, useRef, useState, useLayoutEffect, useEffect } from "react";
 import { Card, TabButton, Th, Td } from "./parts/SmallUI";
-import { ProgressBar, IndeterminateBar } from "./parts/ProgressBar";
+import { CompactProgressBar, CompactIndeterminateBar } from "./parts/CompactProgressBar";
 import AutoTab from "./tabs/AutoTab";
 import RefTab from "./tabs/RefTab";
 import { VOICES_BY_ENGINE, DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT } from "./constants";
@@ -105,7 +105,49 @@ export default function ScriptVoiceGenerator() {
   const [status, setStatus] = useState("idle"); // idle|running|done|error
   const [phase, setPhase] = useState(""); // SCRIPT|TTS|SRT|MERGE|완료
   const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [detailedProgress, setDetailedProgress] = useState({
+    phase: 'idle',
+    overallPercent: 0,
+    phasePercent: 0,
+    currentStep: '',
+    totalSteps: 0,
+    completedSteps: 0
+  });
   const [phaseElapsedSec, setPhaseElapsedSec] = useState(0);
+  
+  // 취소 기능
+  const [abortController, setAbortController] = useState(null);
+
+  // Phase weights for accurate overall progress calculation
+  const PHASE_WEIGHTS = {
+    SCRIPT: 20,  // 20% - Script generation
+    TTS: 60,     // 60% - Text-to-speech (most time consuming)
+    SRT: 15,     // 15% - Subtitle generation
+    MERGE: 5     // 5% - Audio merging
+  };
+
+  const PHASE_ORDER = ['SCRIPT', 'TTS', 'SRT', 'MERGE'];
+
+  // Calculate overall progress based on phase weights
+  const calculateOverallProgress = (currentPhase, phaseProgress = 0) => {
+    if (!currentPhase || currentPhase === 'idle') return 0;
+    if (currentPhase === '완료') return 100;
+    
+    let totalProgress = 0;
+    const phaseIndex = PHASE_ORDER.indexOf(currentPhase);
+    
+    // Add completed phases
+    for (let i = 0; i < phaseIndex; i++) {
+      totalProgress += PHASE_WEIGHTS[PHASE_ORDER[i]];
+    }
+    
+    // Add current phase progress
+    if (phaseIndex >= 0) {
+      totalProgress += (PHASE_WEIGHTS[currentPhase] * phaseProgress / 100);
+    }
+    
+    return Math.min(100, Math.max(0, totalProgress));
+  };
   const phaseTimerRef = useRef(null);
   const [plan, setPlan] = useState({ durationMin: 0, maxScenes: 0 });
   const [error, setError] = useState("");
@@ -120,8 +162,8 @@ export default function ScriptVoiceGenerator() {
     }
   }, [fixedWidthPx]);
 
-  /** 단계 시작 시 타이머 초기화 */
-  const beginPhase = (name) => {
+  /** 단계 시작 시 타이머 초기화 및 상세 진행률 업데이트 */
+  const beginPhase = (name, stepDescription = '') => {
     setPhase(name);
     if (phaseTimerRef.current) clearInterval(phaseTimerRef.current);
     const start = Date.now();
@@ -129,14 +171,63 @@ export default function ScriptVoiceGenerator() {
     phaseTimerRef.current = setInterval(() => {
       setPhaseElapsedSec(Math.floor((Date.now() - start) / 1000));
     }, 1000);
+    
+    // Update detailed progress
+    setDetailedProgress(prev => ({
+      ...prev,
+      phase: name,
+      currentStep: stepDescription,
+      phasePercent: 0,
+      overallPercent: calculateOverallProgress(name, 0)
+    }));
+  };
+
+  /** 현재 단계의 진행률 업데이트 */
+  const updatePhaseProgress = (current, total, stepDescription = '') => {
+    const phasePercent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
+    const overallPercent = calculateOverallProgress(phase, phasePercent);
+    
+    setProgress({ current, total });
+    setDetailedProgress(prev => ({
+      ...prev,
+      phasePercent,
+      overallPercent,
+      currentStep: stepDescription || prev.currentStep,
+      completedSteps: current,
+      totalSteps: total
+    }));
   };
   useEffect(() => () => phaseTimerRef.current && clearInterval(phaseTimerRef.current), []);
+
+  /* ========================= 취소 기능 ========================= */
+  const cancelGeneration = () => {
+    if (abortController) {
+      abortController.abort();
+      setAbortController(null);
+    }
+    if (phaseTimerRef.current) clearInterval(phaseTimerRef.current);
+    setStatus("idle");
+    setPhase("");
+    setProgress({ current: 0, total: 0 });
+    setDetailedProgress({
+      phase: 'idle',
+      overallPercent: 0,
+      phasePercent: 0,
+      currentStep: '',
+      totalSteps: 0,
+      completedSteps: 0
+    });
+  };
 
   /* ========================= 실행 ========================= */
   const runGenerate = async (tab) => {
     const f = forms[tab];
     const normalized = tab === "prompt-gen" ? "auto" : tab === "prompt-ref" ? "ref" : tab;
 
+    // 새로운 abort controller 생성
+    const controller = new AbortController();
+    setAbortController(controller);
+    
     setStatus("running");
     setError("");
     setProgress({ current: 0, total: 0 });
@@ -215,13 +306,15 @@ export default function ScriptVoiceGenerator() {
             };
 
       // 2) SCRIPT 생성
+      beginPhase("SCRIPT", "대본 생성 중...");
       const generatedDoc = await call("llm/generateScript", invokePayload);
       if (!generatedDoc?.scenes?.length) throw new Error("대본 생성 결과가 비어있습니다.");
       setDocs((prev) => ({ ...prev, [tab]: generatedDoc }));
+      updatePhaseProgress(1, 1, `대본 생성 완료 (${generatedDoc.scenes.length}개 장면)`);
 
       // 3) TTS (씬별)
-      beginPhase("TTS");
-      setProgress({ current: 0, total: generatedDoc.scenes.length });
+      beginPhase("TTS", "음성 합성 준비 중...");
+      updatePhaseProgress(0, generatedDoc.scenes.length, "음성 합성 시작");
       const ttsRes = await call("tts/synthesizeByScenes", {
         doc: generatedDoc,
         tts: {
@@ -244,7 +337,7 @@ export default function ScriptVoiceGenerator() {
             fileName: p.fileName,
             buffer: arr,
           });
-          setProgress({ current: i + 1, total: ttsRes.parts.length });
+          updatePhaseProgress(i + 1, ttsRes.parts.length, `음성 파일 처리 중 (${i + 1}/${ttsRes.parts.length})`);
         }
         const totalLen = merged.reduce((s, u) => s + u.byteLength, 0);
         const out = new Uint8Array(totalLen);
@@ -261,12 +354,13 @@ export default function ScriptVoiceGenerator() {
       }
 
       // 4) SRT (TTS 마크 사용)
-      beginPhase("SRT");
-      setProgress({ current: 0, total: 0 });
+      beginPhase("SRT", "자막 파일 생성 중...");
+      updatePhaseProgress(0, 1, "자막 타임스탬프 계산 중");
       const srtRes = await call("script/toSrt", {
         doc: generatedDoc,
         ttsMarks: ttsRes?.marks || null, // 타임포인트 전달(없으면 백엔드 폴백)
       });
+      updatePhaseProgress(1, 1, "자막 파일 생성 완료");
       if (srtRes?.srt) {
         const srtBuf = new TextEncoder().encode(srtRes.srt).buffer;
         await call("files/saveToProject", {
@@ -277,20 +371,48 @@ export default function ScriptVoiceGenerator() {
       }
 
       // 5) MERGE (렌더러 처리 스텁 유지)
-      beginPhase("MERGE");
-      setProgress({ current: 0, total: 0 });
+      beginPhase("MERGE", "최종 병합 처리 중...");
+      updatePhaseProgress(0, 1, "오디오 파일 병합 중");
       await call("audio/concatScenes", {});
+      updatePhaseProgress(1, 1, "병합 완료");
 
       // 완료
       if (phaseTimerRef.current) clearInterval(phaseTimerRef.current);
       setPhase("완료");
+      setDetailedProgress(prev => ({
+        ...prev,
+        phase: '완료',
+        overallPercent: 100,
+        phasePercent: 100,
+        currentStep: '모든 작업 완료',
+        completedSteps: 1,
+        totalSteps: 1
+      }));
       setProgress({ current: 1, total: 1 });
       setStatus("done");
     } catch (e) {
       if (phaseTimerRef.current) clearInterval(phaseTimerRef.current);
-      setStatus("error");
-      const msg = e?.response?.data?.error?.message || e?.message || "오류가 발생했습니다.";
-      setError(msg);
+      setAbortController(null);
+      
+      // 취소된 경우와 오류 구분
+      if (e.name === 'AbortError' || controller.signal.aborted) {
+        setStatus("idle");
+        setError("");
+        setPhase("");
+        setProgress({ current: 0, total: 0 });
+        setDetailedProgress({
+          phase: 'idle',
+          overallPercent: 0,
+          phasePercent: 0,
+          currentStep: '',
+          totalSteps: 0,
+          completedSteps: 0
+        });
+      } else {
+        setStatus("error");
+        const msg = e?.response?.data?.error?.message || e?.message || "오류가 발생했습니다.";
+        setError(msg);
+      }
     }
   };
 
@@ -301,7 +423,10 @@ export default function ScriptVoiceGenerator() {
     (activeTab === "prompt-gen" && (genPrompt || "").trim().length > 0) ||
     (activeTab === "prompt-ref" && (refPrompt || "").trim().length > 0 && (promptRefText || "").trim().length > 0);
 
-  // ETA
+  // 로딩 중 비활성화 여부
+  const isLoading = status === "running";
+
+  // ETA - 기존 방식으로 복원
   const etaSec = estimateEtaSec({
     phase,
     progress,
@@ -337,28 +462,43 @@ export default function ScriptVoiceGenerator() {
           type="button"
           onClick={() => runGenerate(activeTab)}
           disabled={!canRun || status === "running"}
-          className={`px-4 py-2 rounded-lg text-sm text-white transition ${
-            status === "running" ? "bg-slate-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-500"
+          className={`px-6 py-2.5 rounded-lg text-sm font-medium text-white transition-all duration-200 ${
+            status === "running" 
+              ? "bg-slate-400 cursor-not-allowed" 
+              : "bg-blue-600 hover:bg-blue-500 hover:shadow-lg hover:scale-105"
           }`}
         >
-          실행
+          {status === "running" ? (
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              실행 중...
+            </div>
+          ) : (
+            "실행"
+          )}
         </button>
       </div>
 
-      {/* 진행 바 */}
+      {/* 진행 바 - 컴팩트 버전 */}
       {status !== "idle" && (
         <div className="mb-4">
           {progress.total > 0 ? (
-            <ProgressBar
-              current={progress.current}
-              total={progress.total}
-              etaSec={etaSec}
+            <CompactProgressBar
               phase={phase}
-              elapsedSec={phaseElapsedSec}
+              detailedProgress={detailedProgress}
               status={status}
+              elapsedSec={phaseElapsedSec}
+              etaSec={etaSec}
+              onCancel={status === "running" ? cancelGeneration : null}
             />
           ) : (
-            <IndeterminateBar etaSec={etaSec} phase={phase} elapsedSec={phaseElapsedSec} status={status} />
+            <CompactIndeterminateBar
+              phase={phase}
+              detailedProgress={detailedProgress}
+              status={status}
+              elapsedSec={phaseElapsedSec}
+              onCancel={status === "running" ? cancelGeneration : null}
+            />
           )}
         </div>
       )}
@@ -378,6 +518,7 @@ export default function ScriptVoiceGenerator() {
           onChange={onChangeFor("auto")}
           voices={VOICES_BY_ENGINE[forms.auto.ttsEngine] || []}
           onRun={() => runGenerate("auto")}
+          disabled={isLoading}
         />
       )}
       {activeTab === "ref" && (
@@ -401,6 +542,7 @@ export default function ScriptVoiceGenerator() {
           voices={VOICES_BY_ENGINE[forms.ref.ttsEngine] || []}
           refText={refText}
           setRefText={setRefText}
+          disabled={isLoading}
         />
       )}
       {activeTab === "prompt-gen" && (
@@ -414,6 +556,7 @@ export default function ScriptVoiceGenerator() {
             form={forms["prompt-gen"]}
             onChange={onChangeFor("prompt-gen")}
             voices={VOICES_BY_ENGINE[forms["prompt-gen"].ttsEngine] || []}
+            disabled={isLoading}
           />
         </Card>
       )}
@@ -431,6 +574,7 @@ export default function ScriptVoiceGenerator() {
             refText={promptRefText}
             setRefText={setPromptRefText}
             onRun={() => runGenerate("prompt-ref")}
+            disabled={isLoading}
           />
         </Card>
       )}

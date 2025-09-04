@@ -26,6 +26,7 @@ export default function ScriptPromptTab({
   savedAt, // 선택
   onSave, // 선택
   onReset, // 선택
+  disabled = false, // 로딩 상태 비활성화
 }) {
   // 프리셋 메타
   const [presets, setPresets] = useState([]);
@@ -306,9 +307,12 @@ export default function ScriptPromptTab({
           <div className="text-sm font-semibold">대본 프롬프트</div>
         </div>
         <textarea
-          className="w-full h-72 text-sm rounded-lg border border-slate-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 overflow-auto resize-none whitespace-pre-wrap"
+          className={`w-full h-72 text-sm rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 overflow-auto resize-none whitespace-pre-wrap transition-all duration-200 ${
+            disabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'
+          }`}
           value={template}
           onChange={(e) => setTemplate(e.target.value)}
+          disabled={disabled}
         />
       </div>
 

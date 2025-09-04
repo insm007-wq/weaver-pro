@@ -130,6 +130,23 @@ if (!gotLock) {
     safeRequire("ipc/script", () => require("./ipc/script"));
     safeRequire("ipc/tts", () => require("./ipc/tts"));
     safeRequire("ipc/audio", () => require("./ipc/audio"));
+    
+    console.log('[main] All basic IPC modules loaded, starting startup-cleanup...');
+    
+    // 시작 시 정리 모듈
+    console.log('[main] Loading startup-cleanup module...');
+    const startupCleanup = safeRequire("ipc/startup-cleanup", () => require("./ipc/startup-cleanup"));
+    console.log('[main] Startup-cleanup module loaded:', !!startupCleanup);
+    
+    await tryRegister("startup-cleanup", startupCleanup, "register");
+    
+    // 자동 시작 정리 실행 (즉시 실행)
+    if (startupCleanup?.initOnReady) {
+      console.log('[main] Running startup cleanup immediately...');
+      startupCleanup.initOnReady();
+    } else {
+      console.log('[main] ERROR: initOnReady not found in startup-cleanup module');
+    }
 
     // ✅ 초안 내보내기(프리뷰) IPC 등록
     // - 채널: preview:compose / preview:cancel / (send) preview:progress
