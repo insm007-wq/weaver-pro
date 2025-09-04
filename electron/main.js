@@ -44,8 +44,7 @@ async function tryRegister(label, mod, fnName = "register") {
  * 메인 윈도우 (utils/window 없을 때 폴백 제공)
  * ============================================================================= */
 function createWindowFallback() {
-  const VITE_DEV_SERVER_URL =
-    process.env.VITE_DEV_SERVER_URL || "http://localhost:5173";
+  const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || "http://localhost:5173";
 
   const win = new BrowserWindow({
     width: 1280,
@@ -62,17 +61,13 @@ function createWindowFallback() {
   });
 
   // 렌더러 콘솔 로그 브릿지
-  win.webContents.on("console-message", (_e, level, msg) =>
-    console.log("[renderer]", level, msg)
-  );
+  win.webContents.on("console-message", (_e, level, msg) => console.log("[renderer]", level, msg));
 
   if (isDev) {
     win.loadURL(VITE_DEV_SERVER_URL).catch((e) => console.error("loadURL:", e));
     // win.webContents.openDevTools({ mode: "detach" });
   } else {
-    win
-      .loadFile(path.join(__dirname, "../dist/index.html"))
-      .catch((e) => console.error("loadFile:", e));
+    win.loadFile(path.join(__dirname, "../dist/index.html")).catch((e) => console.error("loadFile:", e));
   }
 
   win.once("ready-to-show", () => win.show());
@@ -81,8 +76,7 @@ function createWindowFallback() {
 
 /* utils/window가 있으면 사용, 없으면 폴백 */
 const winUtil = safeRequire("utils/window", () => require("./utils/window"));
-const createMainWindow =
-  (winUtil && winUtil.createMainWindow) || createWindowFallback;
+const createMainWindow = (winUtil && winUtil.createMainWindow) || createWindowFallback;
 
 /* =============================================================================
  * 싱글 인스턴스
@@ -108,9 +102,7 @@ if (!gotLock) {
      * ✅ IPC 등록 (항상 창 생성 전에!)
      * -------------------------------------------------------------------- */
     // 파일 선택/저장 등
-    const pickers = safeRequire("ipc/file-pickers", () =>
-      require("./ipc/file-pickers")
-    );
+    const pickers = safeRequire("ipc/file-pickers", () => require("./ipc/file-pickers"));
     await tryRegister("file-pickers", pickers, "registerFilePickers");
 
     // 프로젝트 파일/스트리밍 저장
@@ -124,9 +116,7 @@ if (!gotLock) {
     await tryRegister("stock", stock, "registerStockIPC");
 
     // AI 키워드/용어 번역 (ai:extractKeywords / ai:translateTerms 모두 이 모듈)
-    const aiKeywords = safeRequire("ipc/ai-keywords", () =>
-      require("./ipc/ai-keywords")
-    );
+    const aiKeywords = safeRequire("ipc/ai-keywords", () => require("./ipc/ai-keywords"));
     await tryRegister("ai-keywords", aiKeywords, "registerAIKeywords");
 
     // 헬스/설정/기타
@@ -145,9 +135,9 @@ if (!gotLock) {
     const preview = safeRequire("ipc/preview", () => require("./ipc/preview"));
     await tryRegister("preview", preview, "register");
 
-    /* ⚠️ 중복/혼동 방지: ai-terms 별도 모듈은 사용하지 않습니다.
-       (ai:translateTerms 핸들러는 ai-keywords 안에서 등록됩니다) */
-    // safeRequire("ipc/ai-terms", () => require("./ipc/ai-terms"));
+    // ✅ Canva IPC 등록
+    const canvaIpc = safeRequire("ipc/canva", () => require("./ipc/canva"));
+    await tryRegister("canva", canvaIpc, "register");
 
     /* -----------------------------------------------------------------------
      * 메인 윈도우
@@ -159,16 +149,11 @@ if (!gotLock) {
      * -------------------------------------------------------------------- */
     if (isDev) {
       app.on("web-contents-created", (_e, contents) => {
-        contents.on(
-          "did-fail-load",
-          (_ev, code, desc, validatedURL, isMainFrame) => {
-            if (isMainFrame) {
-              console.log(
-                `[debug] did-fail-load(${code}:${desc}) ${validatedURL}`
-              );
-            }
+        contents.on("did-fail-load", (_ev, code, desc, validatedURL, isMainFrame) => {
+          if (isMainFrame) {
+            console.log(`[debug] did-fail-load(${code}:${desc}) ${validatedURL}`);
           }
-        );
+        });
       });
     }
   });

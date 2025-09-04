@@ -18,9 +18,7 @@ console.log("[preload] loaded");
 
 /** 문자열/객체 혼용 인자 안전 처리 (예: cancel("job_123") 또는 { jobId:"job_123" }) */
 function asPayloadJobId(jobIdOrPayload) {
-  return typeof jobIdOrPayload === "string"
-    ? { jobId: jobIdOrPayload }
-    : jobIdOrPayload || {};
+  return typeof jobIdOrPayload === "string" ? { jobId: jobIdOrPayload } : jobIdOrPayload || {};
 }
 
 /** ipcRenderer.on 래퍼: 핸들러 예외 방어 + unsubscribe 반환 */
@@ -52,6 +50,71 @@ function onceChannel(channel, handler) {
 }
 
 /* ----------------------------------------------------------------------------
+ * ✨ 이벤트 버스 on/once/off (handler 매핑 유지 → 정확히 off 가능)
+ * --------------------------------------------------------------------------*/
+const __handlerMap = new Map(); // event -> Map<origHandler, wrapped>
+function busOn(event, handler) {
+  if (typeof handler !== "function") return;
+  let m = __handlerMap.get(event);
+  if (!m) {
+    m = new Map();
+    __handlerMap.set(event, m);
+  }
+  if (m.has(handler)) return; // 중복 방지
+  const wrapped = (_e, payload) => {
+    try {
+      handler(payload);
+    } catch (err) {
+      console.warn(`[preload] bus "${event}" handler error:`, err);
+    }
+  };
+  m.set(handler, wrapped);
+  ipcRenderer.on(event, wrapped);
+}
+function busOnce(event, handler) {
+  if (typeof handler !== "function") return;
+  const wrapped = (_e, payload) => {
+    try {
+      handler(payload);
+    } catch (err) {
+      console.warn(`[preload] bus "${event}" once handler error:`, err);
+    } finally {
+      busOff(event, handler);
+    }
+  };
+  let m = __handlerMap.get(event);
+  if (!m) {
+    m = new Map();
+    __handlerMap.set(event, m);
+  }
+  m.set(handler, wrapped);
+  ipcRenderer.on(event, wrapped);
+}
+function busOff(event, handler) {
+  const m = __handlerMap.get(event);
+  if (!m) {
+    // fallback
+    if (handler) ipcRenderer.removeListener(event, handler);
+    else ipcRenderer.removeAllListeners(event);
+    return;
+  }
+  if (handler) {
+    const wrapped = m.get(handler);
+    if (wrapped) {
+      ipcRenderer.removeListener(event, wrapped);
+      m.delete(handler);
+    }
+    if (!m.size) __handlerMap.delete(event);
+  } else {
+    // 모든 핸들러 제거
+    for (const wrapped of m.values()) {
+      ipcRenderer.removeListener(event, wrapped);
+    }
+    __handlerMap.delete(event);
+  }
+}
+
+/* ----------------------------------------------------------------------------
  * blob: URL 캐시 (video 재생용) — 동일 경로 재호출 시 재사용, 필요 시 해제 가능
  * --------------------------------------------------------------------------*/
 const blobUrlCache = new Map();
@@ -60,11 +123,7 @@ const blobUrlCache = new Map();
  * - 같은 경로는 캐시된 blob URL 재사용
  * - { cache:false }로 캐시 무시 가능
  */
-async function pathToBlobUrlViaIPC(
-  p,
-  mimeFallback = "application/octet-stream",
-  opts = {}
-) {
+async function pathToBlobUrlViaIPC(p, mimeFallback = "application/octet-stream", opts = {}) {
   if (!p) return null;
   const { cache = true } = opts;
   const key = String(p).replace(/^file:\/\//, "");
@@ -145,6 +204,17 @@ contextBridge.exposeInMainWorld("api", {
   },
 
   // ========================================================================
+  // ✨ 이벤트 버스 (CanvaTab 등에서 사용)
+  // ========================================================================
+  // 사용법:
+  //   const onProg = (p)=>{...}; window.api.on('canva:progress', onProg)
+  //   window.api.off('canva:progress', onProg)
+  //   window.api.once('foo', (p)=>{...})
+  on: (event, handler) => busOn(event, handler), // ✨ ADD
+  once: (event, handler) => busOnce(event, handler), // ✨ ADD
+  off: (event, handler) => busOff(event, handler), // ✨ ADD
+
+  // ========================================================================
   // 시스템/헬스
   // ========================================================================
   healthCheck: () => ipcRenderer.invoke("health:check"),
@@ -163,41 +233,29 @@ contextBridge.exposeInMainWorld("api", {
   // ========================================================================
   // 프로젝트 루트 (날짜 폴더)
   // ========================================================================
-  selectDatedProjectRoot: () =>
-    ipcRenderer.invoke("files/selectDatedProjectRoot"),
+  selectDatedProjectRoot: () => ipcRenderer.invoke("files/selectDatedProjectRoot"),
   getProjectRoot: () => ipcRenderer.invoke("files/getProjectRoot"),
 
   // ========================================================================
   // 파일 유틸
   // ========================================================================
   checkPathExists: (p) => ipcRenderer.invoke("files:exists", p),
-  nextAvailableName: (opts) =>
-    ipcRenderer.invoke("files:nextAvailableName", opts),
+  nextAvailableName: (opts) => ipcRenderer.invoke("files:nextAvailableName", opts),
   todayStr: () => ipcRenderer.invoke("files:todayStr"),
-  mkDirRecursive: (dirPath) =>
-    ipcRenderer.invoke("fs:mkDirRecursive", { dirPath }),
+  mkDirRecursive: (dirPath) => ipcRenderer.invoke("fs:mkDirRecursive", { dirPath }),
 
   // ========================================================================
   // 파일 선택/저장
   // ========================================================================
-  selectSrt: () =>
-    ipcRenderer
-      .invoke("files/select", { type: "srt" })
-      .catch(() => ipcRenderer.invoke("pickers:selectSrt")),
-  selectMp3: () =>
-    ipcRenderer
-      .invoke("files/select", { type: "mp3" })
-      .catch(() => ipcRenderer.invoke("pickers:selectMp3")),
+  selectSrt: () => ipcRenderer.invoke("files/select", { type: "srt" }).catch(() => ipcRenderer.invoke("pickers:selectSrt")),
+  selectMp3: () => ipcRenderer.invoke("files/select", { type: "mp3" }).catch(() => ipcRenderer.invoke("pickers:selectMp3")),
 
   saveUrlToFile: (payload) => ipcRenderer.invoke("file:save-url", payload),
-  saveUrlToProject: (payload) =>
-    ipcRenderer.invoke("files/saveUrlToProject", payload),
-  saveBufferToProject: ({ category, fileName, buffer }) =>
-    ipcRenderer.invoke("files/saveToProject", { category, fileName, buffer }),
+  saveUrlToProject: (payload) => ipcRenderer.invoke("files/saveUrlToProject", payload),
+  saveBufferToProject: ({ category, fileName, buffer }) => ipcRenderer.invoke("files/saveToProject", { category, fileName, buffer }),
 
   readText: (fileOrOpts) => {
-    const payload =
-      typeof fileOrOpts === "string" ? { path: fileOrOpts } : fileOrOpts || {};
+    const payload = typeof fileOrOpts === "string" ? { path: fileOrOpts } : fileOrOpts || {};
     return ipcRenderer.invoke("files/readText", payload);
   },
   readTextFile: (p) => ipcRenderer.invoke("files/readText", { path: p }),
@@ -215,12 +273,9 @@ contextBridge.exposeInMainWorld("api", {
   // ========================================================================
   // LLM/분석/번역
   // ========================================================================
-  generateScript: (payload) =>
-    ipcRenderer.invoke("llm/generateScript", payload),
-  aiExtractKeywords: (payload) =>
-    ipcRenderer.invoke("ai:extractKeywords", payload),
-  aiTranslateTerms: (payload) =>
-    ipcRenderer.invoke("ai:translateTerms", payload),
+  generateScript: (payload) => ipcRenderer.invoke("llm/generateScript", payload),
+  aiExtractKeywords: (payload) => ipcRenderer.invoke("ai:extractKeywords", payload),
+  aiTranslateTerms: (payload) => ipcRenderer.invoke("ai:translateTerms", payload),
   imagefxAnalyze: (payload) => ipcRenderer.invoke("imagefx:analyze", payload),
 
   // ========================================================================
@@ -232,19 +287,15 @@ contextBridge.exposeInMainWorld("api", {
   // 스크립트/오디오/TTS
   // ========================================================================
   scriptToSrt: (payload) => ipcRenderer.invoke("script/toSrt", payload),
-  ttsSynthesizeByScenes: (payload) =>
-    ipcRenderer.invoke("tts/synthesizeByScenes", payload),
+  ttsSynthesizeByScenes: (payload) => ipcRenderer.invoke("tts/synthesizeByScenes", payload),
   getMp3Duration: (path) => ipcRenderer.invoke("audio/getDuration", { path }),
-  audioConcatScenes: (payload) =>
-    ipcRenderer.invoke("audio/concatScenes", payload),
+  audioConcatScenes: (payload) => ipcRenderer.invoke("audio/concatScenes", payload),
 
   // ========================================================================
   // 이미지 생성
   // ========================================================================
-  generateThumbnails: (payload) =>
-    ipcRenderer.invoke("replicate:generate", payload),
-  generateThumbnailsGoogleImagen3: (payload) =>
-    ipcRenderer.invoke("generateThumbnailsGoogleImagen3", payload),
+  generateThumbnails: (payload) => ipcRenderer.invoke("replicate:generate", payload),
+  generateThumbnailsGoogleImagen3: (payload) => ipcRenderer.invoke("generateThumbnailsGoogleImagen3", payload),
 
   // ========================================================================
   // 테스트 채널들
@@ -269,8 +320,7 @@ contextBridge.exposeInMainWorld("api", {
     compose: (payload) => ipcRenderer.invoke("preview:compose", payload),
 
     /** preview.cancel("job_xxx" | {jobId}) */
-    cancel: (jobIdOrPayload) =>
-      ipcRenderer.invoke("preview:cancel", asPayloadJobId(jobIdOrPayload)),
+    cancel: (jobIdOrPayload) => ipcRenderer.invoke("preview:cancel", asPayloadJobId(jobIdOrPayload)),
 
     /** 진행률 수신 subscribe → unsubscribe 반환 */
     onProgress: (handler) => {
@@ -291,5 +341,16 @@ contextBridge.exposeInMainWorld("api", {
       if (handler) ipcRenderer.off("preview:progress", handler);
       else ipcRenderer.removeAllListeners("preview:progress");
     },
+  },
+
+  // ========================================================================
+  // ✨ Canva
+  // ========================================================================
+  canva: {
+    login: () => ipcRenderer.invoke("canva:login"), // ✨ ADD
+    getSession: () => ipcRenderer.invoke("canva:getSession"), // ✨ ADD
+    logout: () => ipcRenderer.invoke("canva:logout"), // ✨ ADD
+    autoRun: (payload) => ipcRenderer.invoke("canva:autoRun", payload), // ✨ ADD
+    stop: () => ipcRenderer.invoke("canva:stop"), // ✨ ADD
   },
 });
