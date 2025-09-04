@@ -1,12 +1,11 @@
 // src/pages/ThumbnailGenerator.jsx
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { HiLightBulb } from "react-icons/hi";
+import { DEFAULT_TEMPLATE as IMPORTED_DEFAULT_TEMPLATE } from "./scriptgen/constants";
 
 function TipCard({ children, className = "" }) {
   return (
-    <div
-      className={`mt-2 flex items-start gap-3 rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 ${className}`}
-    >
+    <div className={`mt-2 flex items-start gap-3 rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 ${className}`}>
       <div className="mt-0.5 shrink-0">
         <HiLightBulb className="h-4 w-4 text-warning-500" />
       </div>
@@ -17,26 +16,9 @@ function TipCard({ children, className = "" }) {
 
 function Spinner({ size = 16 }) {
   return (
-    <svg
-      className="animate-spin"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-    >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-        fill="none"
-      />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-      />
+    <svg className="animate-spin" width={size} height={size} viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
     </svg>
   );
 }
@@ -44,8 +26,17 @@ function Spinner({ size = 16 }) {
 /** 업로드 정책 */
 const MAX_UPLOAD_MB = 10; // 10MB로 제한
 
-/** 프롬프트 템플릿 */
-const DEFAULT_TEMPLATE = ``;
+/** 프롬프트 템플릿 기본값 */
+const DEFAULT_TEMPLATE = IMPORTED_DEFAULT_TEMPLATE;
+
+/** 생성 엔진 옵션들 */
+const GENERATION_ENGINES = [
+  { value: "replicate", label: "Replicate" },
+  { value: "imagen3", label: "Google ImageFX (Imagen 3)" },
+  { value: "dalle3", label: "DALL-E 3" },
+  { value: "midjourney", label: "Midjourney" },
+  { value: "stable-diffusion", label: "Stable Diffusion" },
+];
 
 export default function ThumbnailGenerator() {
   const fileInputRef = useRef(null);
@@ -57,6 +48,9 @@ export default function ThumbnailGenerator() {
   /** 공통 상태 */
   const [provider, setProvider] = useState("replicate"); // 'replicate' | 'imagen3'
   const [metaTemplate, setMetaTemplate] = useState(DEFAULT_TEMPLATE);
+  const [originalTemplate, setOriginalTemplate] = useState(DEFAULT_TEMPLATE);
+  const [isTemplateModified, setIsTemplateModified] = useState(false);
+  const [toast, setToast] = useState(null);
 
   /** Replicate 전용 */
   const [prompt, setPrompt] = useState(""); // ⬅️ Replicate일 때만 사용
@@ -107,6 +101,33 @@ export default function ThumbnailGenerator() {
     };
   }, []);
 
+  /** 템플릿 수정 감지 */
+  useEffect(() => {
+    setIsTemplateModified(metaTemplate !== originalTemplate);
+  }, [metaTemplate, originalTemplate]);
+
+  /** Toast 자동 숨김 */
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 1600);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  /** 템플릿 초기화 함수 */
+  const resetTemplate = () => {
+    setMetaTemplate(DEFAULT_TEMPLATE);
+    setOriginalTemplate(DEFAULT_TEMPLATE);
+    setIsTemplateModified(false);
+  };
+
+  /** 템플릿 저장 함수 */
+  const saveTemplate = () => {
+    setOriginalTemplate(metaTemplate);
+    setIsTemplateModified(false);
+    setToast({ type: "success", text: "템플릿이 저장되었습니다!" });
+    // 여기에 실제 저장 로직 추가 가능 (예: localStorage, 서버 저장 등)
+  };
+
   /** 참고 이미지 분석 (메인 프로세스 Anthropic IPC) */
   const analyzeReference = async (file) => {
     if (!file || !window?.api?.imagefxAnalyze) return;
@@ -121,8 +142,7 @@ export default function ThumbnailGenerator() {
         filePath,
         // Replicate 모드에서는 장면 설명도 같이 넘겨 보조,
         // Imagen 모드에선 템플릿 기반이므로 description은 없어도 됨
-        description:
-          provider === "replicate" ? prompt.trim() || undefined : undefined,
+        description: provider === "replicate" ? prompt.trim() || undefined : undefined,
       });
       if (!res?.ok) throw new Error(res?.message || "analysis_failed");
 
@@ -177,19 +197,13 @@ export default function ThumbnailGenerator() {
     if (provider === "imagen3") {
       // ✅ ImageFX(Imagen3): 장면 설명란 사용 X, 템플릿만 사용
       // {content}는 비워두고 {referenceAnalysis}만 주입 가능
-      const core = (metaTemplate || "")
-        .replaceAll("{content}", "")
-        .replaceAll("{referenceAnalysis}", referenceAnalysis)
-        .trim();
+      const core = (metaTemplate || "").replaceAll("{content}", "").replaceAll("{referenceAnalysis}", referenceAnalysis).trim();
       return core;
     }
 
     // ✅ Replicate: 장면 설명 + 공통 키워드 + 모드
     const base = (prompt || "").trim();
-    let core = (metaTemplate || "")
-      .replaceAll("{content}", base)
-      .replaceAll("{referenceAnalysis}", referenceAnalysis)
-      .trim();
+    let core = (metaTemplate || "").replaceAll("{content}", base).replaceAll("{referenceAnalysis}", referenceAnalysis).trim();
 
     if (!core) core = base;
 
@@ -212,12 +226,7 @@ export default function ThumbnailGenerator() {
   /** 생성 버튼 핸들러 */
   const onGenerate = async () => {
     // 각 프로바이더별 필수 필드 가드
-    if (
-      provider === "replicate" &&
-      !prompt.trim() &&
-      !fxEn.trim() &&
-      !metaTemplate.trim()
-    ) {
+    if (provider === "replicate" && !prompt.trim() && !fxEn.trim() && !metaTemplate.trim()) {
       return alert("장면 설명 또는 템플릿/분석 결과 중 하나는 필요합니다.");
     }
     if (provider === "imagen3" && !metaTemplate.trim()) {
@@ -228,14 +237,10 @@ export default function ThumbnailGenerator() {
     const hasReplicate = !!window?.api?.generateThumbnails;
     const hasImagen3 = !!window?.api?.generateThumbnailsGoogleImagen3;
     if (provider === "replicate" && !hasReplicate) {
-      return alert(
-        "Replicate IPC(generateThumbnails)가 없습니다. preload/main 설정을 확인하세요."
-      );
+      return alert("Replicate IPC(generateThumbnails)가 없습니다. preload/main 설정을 확인하세요.");
     }
     if (provider === "imagen3" && !hasImagen3) {
-      return alert(
-        "Google Imagen3 IPC(generateThumbnailsGoogleImagen3)가 없습니다. preload/main 설정을 확인하세요."
-      );
+      return alert("Google Imagen3 IPC(generateThumbnailsGoogleImagen3)가 없습니다. preload/main 설정을 확인하세요.");
     }
 
     setLoading(true);
@@ -266,11 +271,7 @@ export default function ThumbnailGenerator() {
       }
 
       if (!res?.ok) {
-        throw new Error(
-          typeof res?.message === "string"
-            ? res.message
-            : JSON.stringify(res?.message)
-        );
+        throw new Error(typeof res?.message === "string" ? res.message : JSON.stringify(res?.message));
       }
 
       const urls = Array.isArray(res.images) ? res.images : [];
@@ -303,76 +304,81 @@ export default function ThumbnailGenerator() {
             }
       }
     >
+      {/* Toast 알림 */}
+      <div aria-live="polite" className="pointer-events-none fixed right-6 top-6 z-50">
+        {toast && (
+          <div
+            className={`pointer-events-auto px-4 py-3 rounded-lg shadow-large text-white font-medium animate-slide-up ${
+              toast.type === "success" ? "bg-success-600" : "bg-error-600"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {toast.type === "success" ? "✅" : "❌"}
+              {toast.text}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold text-neutral-900 flex items-center gap-2">
           <span>🎯</span> 썸네일 생성기
         </h1>
-        <span className="text-xs text-neutral-600 font-medium">
-          PNG, JPG, JPEG · 최대 {MAX_UPLOAD_MB}MB (WEBP 불가)
-        </span>
+        <span className="text-xs text-neutral-600 font-medium">PNG, JPG, JPEG · 최대 {MAX_UPLOAD_MB}MB (WEBP 불가)</span>
       </div>
 
       {/* 프로바이더 선택 */}
       <div className="mb-6">
         <label className="font-semibold text-neutral-900 mb-2 block">생성 엔진</label>
 
-        {/* ✅ 고정폭 + 2열 그리드 */}
-        <div className="w-full max-w-[520px]">
-          <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-gray-300">
-            <button
-              type="button"
-              onClick={() => setProvider("replicate")}
-              className={`h-10 w-full text-sm font-medium transition
-                    ${
-                      provider === "replicate"
-                        ? "bg-gray-900 text-white"
-                        : "bg-white text-gray-700 hover:bg-gray-50"
-                    }`}
-              aria-pressed={provider === "replicate"}
-            >
-              Replicate
-            </button>
+        <select
+          className="w-full max-w-[520px] border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          value={provider}
+          onChange={(e) => setProvider(e.target.value)}
+        >
+          {GENERATION_ENGINES.map((engine) => (
+            <option key={engine.value} value={engine.value}>
+              {engine.label}
+            </option>
+          ))}
+        </select>
 
-            <button
-              type="button"
-              onClick={() => setProvider("imagen3")}
-              className={`h-10 w-full text-sm font-medium transition
-                    ${
-                      provider === "imagen3"
-                        ? "bg-gray-900 text-white"
-                        : "bg-white text-gray-700 hover:bg-gray-50"
-                    }`}
-              aria-pressed={provider === "imagen3"}
-            >
-              Google ImageFX (Imagen 3)
-            </button>
-          </div>
-        </div>
-
-        <p className="text-xs text-gray-500 mt-2">
-          Replicate는 장면 설명 + 템플릿, ImageFX는 템플릿 중심으로 생성합니다.
-        </p>
+        <p className="text-xs text-gray-500 mt-2">Replicate는 장면 설명 + 템플릿, ImageFX는 템플릿 중심으로 생성합니다.</p>
       </div>
 
       {/* 프롬프트 템플릿 (공통) */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">
           <label className="font-semibold">썸네일 생성 프롬프트 템플릿</label>
-          <button
-            onClick={() => setMetaTemplate(DEFAULT_TEMPLATE)}
-            className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
-            title="기본 템플릿으로 되돌리기"
-          >
-            기본값으로 초기화
-          </button>
+          <div className="flex items-center gap-2">
+            {/* 초기화 버튼 */}
+            <button
+              onClick={resetTemplate}
+              className="text-xs px-3 py-1 rounded border border-red-300 text-red-600 hover:bg-red-50 flex items-center gap-1"
+              title="기본 템플릿으로 초기화"
+            >
+              초기화
+            </button>
+
+            {/* 저장 버튼 - 템플릿이 수정된 경우에만 활성화 */}
+            <button
+              onClick={saveTemplate}
+              disabled={!isTemplateModified}
+              className={`text-xs px-3 py-1 rounded border flex items-center gap-1 transition ${
+                isTemplateModified ? "border-blue-300 text-blue-600 hover:bg-blue-50" : "border-gray-300 text-gray-400 cursor-not-allowed"
+              }`}
+              title={isTemplateModified ? "템플릿 저장" : "변경사항 없음"}
+            >
+              저장
+            </button>
+          </div>
         </div>
+
         <p className="text-xs text-gray-500 mb-2">
           <code className="bg-gray-100 px-1 rounded">{`{content}`}</code>,{" "}
-          <code className="bg-gray-100 px-1 rounded">{`{referenceAnalysis}`}</code>{" "}
-          변수를 사용할 수 있어요. ImageFX 모드에서는{" "}
-          <code className="bg-gray-100 px-1 rounded">{`{content}`}</code>가
-          비워질 수 있습니다.
+          <code className="bg-gray-100 px-1 rounded">{`{referenceAnalysis}`}</code> 변수를 사용할 수 있어요. 초기화 버튼을 누르면 기본
+          Imagen-3 프롬프트 템플릿이 로드됩니다.
         </p>
         <textarea
           rows={6}
@@ -412,9 +418,7 @@ export default function ThumbnailGenerator() {
               <span className="inline-flex items-center rounded-md bg-white/80 px-2 py-0.5 text-[12px] font-medium text-gray-700 ring-1 ring-gray-200">
                 배경(공항/사무실)
               </span>
-              <span className="ml-1">
-                을 구체적으로 적을수록 결과가 좋아집니다.
-              </span>
+              <span className="ml-1">을 구체적으로 적을수록 결과가 좋아집니다.</span>
             </span>
           </TipCard>
         </div>
@@ -422,9 +426,7 @@ export default function ThumbnailGenerator() {
 
       {/* 참고 이미지 업로드 (분석 보조) — 두 모드 공통 사용 가능 */}
       <div className="mb-6">
-        <label className="font-semibold mb-2 block">
-          참고 이미지 (선택사항)
-        </label>
+        <label className="font-semibold mb-2 block">참고 이미지 (선택사항)</label>
         <div
           onDragOver={(e) => {
             e.preventDefault();
@@ -433,24 +435,16 @@ export default function ThumbnailGenerator() {
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
           className={`border-2 border-dashed rounded-xl p-6 text-center transition cursor-pointer ${
-            dragOver
-              ? "border-blue-400 bg-blue-50/30"
-              : "border-gray-300 hover:border-blue-400"
+            dragOver ? "border-blue-400 bg-blue-50/30" : "border-gray-300 hover:border-blue-400"
           }`}
           onClick={onPickFile}
         >
           {imagePreview ? (
             <div className="flex items-center gap-4">
-              <img
-                src={imagePreview}
-                alt="preview"
-                className="w-28 h-28 object-cover rounded-lg border"
-              />
+              <img src={imagePreview} alt="preview" className="w-28 h-28 object-cover rounded-lg border" />
               <div className="text-left">
                 <p className="text-sm font-medium">{imageFile?.name}</p>
-                <p className="text-xs text-gray-500">
-                  {(imageFile?.size / 1024 / 1024).toFixed(2)}MB
-                </p>
+                <p className="text-xs text-gray-500">{(imageFile?.size / 1024 / 1024).toFixed(2)}MB</p>
                 <div className="flex gap-2 mt-2">
                   <button
                     onClick={(e) => {
@@ -487,9 +481,7 @@ export default function ThumbnailGenerator() {
             <div className="text-gray-500">
               <div className="text-2xl mb-2">⬆️</div>
               <p className="text-sm">클릭하거나 드래그하여 업로드</p>
-              <p className="text-xs mt-1">
-                PNG, JPG, JPEG (최대 {MAX_UPLOAD_MB}MB, WEBP 불가)
-              </p>
+              <p className="text-xs mt-1">PNG, JPG, JPEG (최대 {MAX_UPLOAD_MB}MB, WEBP 불가)</p>
             </div>
           )}
 
@@ -504,42 +496,24 @@ export default function ThumbnailGenerator() {
 
         {(fxLoading || fxErr || fxEn || fxKo) && (
           <div className="mt-4 rounded-lg border bg-gray-50 p-3">
-            {fxErr && (
-              <div className="text-sm text-rose-600 mb-2">에러: {fxErr}</div>
-            )}
-            {fxLoading && !fxErr && (
-              <div className="text-sm text-gray-600">이미지 분석 중…</div>
-            )}
+            {fxErr && <div className="text-sm text-rose-600 mb-2">에러: {fxErr}</div>}
+            {fxLoading && !fxErr && <div className="text-sm text-gray-600">이미지 분석 중…</div>}
             {fxEn && (
               <>
-                <div className="text-[13px] font-medium mb-1">
-                  English Prompt
-                </div>
-                <textarea
-                  className="w-full h-28 border rounded p-2 text-xs"
-                  readOnly
-                  value={fxEn}
-                />
+                <div className="text-[13px] font-medium mb-1">English Prompt</div>
+                <textarea className="w-full h-28 border rounded p-2 text-xs" readOnly value={fxEn} />
               </>
             )}
             {fxKo && (
               <>
-                <div className="text-[13px] font-medium mt-3 mb-1">
-                  한국어 번역
-                </div>
-                <textarea
-                  className="w-full h-28 border rounded p-2 text-xs"
-                  readOnly
-                  value={fxKo}
-                />
+                <div className="text-[13px] font-medium mt-3 mb-1">한국어 번역</div>
+                <textarea className="w-full h-28 border rounded p-2 text-xs" readOnly value={fxKo} />
               </>
             )}
           </div>
         )}
 
-        <TipCard className="bg-white/70">
-          참고 이미지 분석을 템플릿에 주입하면 일관성이 좋아집니다.
-        </TipCard>
+        <TipCard className="bg-white/70">참고 이미지 분석을 템플릿에 주입하면 일관성이 좋아집니다.</TipCard>
       </div>
 
       {/* 옵션들 */}
@@ -547,11 +521,7 @@ export default function ThumbnailGenerator() {
         {/* 공통: 생성 개수 */}
         <div>
           <label className="font-semibold mb-2 block">생성 개수</label>
-          <select
-            className="w-full border rounded-lg p-2 text-sm"
-            value={count}
-            onChange={(e) => setCount(Number(e.target.value))}
-          >
+          <select className="w-full border rounded-lg p-2 text-sm" value={count} onChange={(e) => setCount(Number(e.target.value))}>
             {[1, 2, 3, 4].map((n) => (
               <option key={n} value={n}>
                 {n}개
@@ -564,25 +534,15 @@ export default function ThumbnailGenerator() {
         {provider === "replicate" ? (
           <div>
             <label className="font-semibold mb-2 block">생성 모드</label>
-            <select
-              className="w-full border rounded-lg p-2 text-sm"
-              value={mode}
-              onChange={(e) => setMode(e.target.value)}
-            >
+            <select className="w-full border rounded-lg p-2 text-sm" value={mode} onChange={(e) => setMode(e.target.value)}>
               <option value="dramatic">극적 & 자극적 모드</option>
               <option value="calm">차분 & 자연스러운 모드</option>
             </select>
           </div>
         ) : (
           <div>
-            <label className="font-semibold mb-2 block">
-              가로세로 비율 (ImageFX)
-            </label>
-            <select
-              className="w-full border rounded-lg p-2 text-sm"
-              value={aspectRatio}
-              onChange={(e) => setAspectRatio(e.target.value)}
-            >
+            <label className="font-semibold mb-2 block">가로세로 비율 (ImageFX)</label>
+            <select className="w-full border rounded-lg p-2 text-sm" value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)}>
               {["1:1", "3:4", "4:3", "9:16", "16:9"].map((r) => (
                 <option key={r} value={r}>
                   {r}
@@ -610,24 +570,16 @@ export default function ThumbnailGenerator() {
             <h2 className="text-lg font-semibold">생성 완료!</h2>
             {tookMs != null && (
               <span className="text-sm text-gray-500">
-                {(tookMs / 1000).toFixed(1)}초 만에 {results.length}개의
-                썸네일이 생성되었습니다.
+                {(tookMs / 1000).toFixed(1)}초 만에 {results.length}개의 썸네일이 생성되었습니다.
               </span>
             )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {results.map((r, i) => (
-              <div
-                key={i}
-                className="rounded-xl border bg-white overflow-hidden shadow-sm"
-              >
+              <div key={i} className="rounded-xl border bg-white overflow-hidden shadow-sm">
                 <div className="bg-black/5">
-                  <img
-                    src={r.url}
-                    alt={`thumb-${i + 1}`}
-                    className="w-full object-cover"
-                  />
+                  <img src={r.url} alt={`thumb-${i + 1}`} className="w-full object-cover" />
                 </div>
                 <div className="p-3 flex items-center justify-between">
                   <div className="text-sm font-medium">썸네일 #{i + 1}</div>
@@ -646,12 +598,7 @@ export default function ThumbnailGenerator() {
                     >
                       다운로드
                     </button>
-                    <a
-                      href={r.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
-                    >
+                    <a href={r.url} target="_blank" rel="noreferrer" className="text-xs px-2 py-1 rounded border hover:bg-gray-50">
                       새 창에서 보기
                     </a>
                   </div>
@@ -661,12 +608,8 @@ export default function ThumbnailGenerator() {
           </div>
 
           <div className="mt-6">
-            <div className="text-sm font-semibold mb-2">
-              🧩 생성에 사용된 프롬프트
-            </div>
-            <pre className="text-xs leading-6 text-gray-700 bg-gray-50 border rounded-lg p-3 whitespace-pre-wrap">
-              {usedPrompt}
-            </pre>
+            <div className="text-sm font-semibold mb-2">🧩 생성에 사용된 프롬프트</div>
+            <pre className="text-xs leading-6 text-gray-700 bg-gray-50 border rounded-lg p-3 whitespace-pre-wrap">{usedPrompt}</pre>
           </div>
         </div>
       )}

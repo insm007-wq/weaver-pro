@@ -122,6 +122,7 @@ if (!gotLock) {
     // 헬스/설정/기타
     safeRequire("ipc/tests", () => require("./ipc/tests"));
     safeRequire("ipc/replicate", () => require("./ipc/replicate"));
+    safeRequire("ipc/imagen3", () => require("./ipc/imagen3"));
     safeRequire("ipc/settings", () => require("./ipc/settings"));
     safeRequire("ipc/health", () => require("./ipc/health"));
     safeRequire("ipc/image-analyzer", () => require("./ipc/image-analyzer"));

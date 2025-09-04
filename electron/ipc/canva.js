@@ -58,64 +58,225 @@ function emitAll(event, payload) {
   }
 }
 
-// 간단한 자동 다운로드 (리스트 기반)
-async function simpleAutoDownload(browserWindow, keyword, targetCount) {
+// 고도화된 캔바 자동 다운로드 (강화된 DOM 셀렉터)
+async function advancedCanvaDownload(browserWindow, keyword, targetCount) {
   try {
-    // 간단한 DOM 자동화 스크립트
+    // 고도화된 DOM 자동화 스크립트
     const result = await browserWindow.webContents.executeJavaScript(`
       (async function() {
         const wait = (ms) => new Promise(r => setTimeout(r, ms));
+        const waitForElement = async (selector, timeout = 10000) => {
+          const startTime = Date.now();
+          while (Date.now() - startTime < timeout) {
+            const element = document.querySelector(selector);
+            if (element) return element;
+            await wait(100);
+          }
+          return null;
+        };
+        
+        const waitForNetworkIdle = async () => {
+          return new Promise(resolve => {
+            let timeout;
+            const resetTimeout = () => {
+              clearTimeout(timeout);
+              timeout = setTimeout(resolve, 1000); // 1초간 네트워크 활동 없으면 완료
+            };
+            
+            // 초기 타이머 설정
+            resetTimeout();
+            
+            // 네트워크 요청 감지
+            const originalFetch = window.fetch;
+            window.fetch = function(...args) {
+              resetTimeout();
+              return originalFetch.apply(this, args);
+            };
+            
+            // 10초 후 강제 완료
+            setTimeout(resolve, 10000);
+          });
+        };
+        
         let downloadCount = 0;
         const maxDownloads = ${targetCount};
         
-        console.log('[Canva] Starting simple auto-download for:', '${keyword}');
+        console.log('[Canva] Starting advanced auto-download for:', '${keyword}');
         
-        // 페이지 로딩 완료 대기
-        await wait(2000);
+        // 페이지 로딩 완료 대기 (네트워크 idle까지)
+        await waitForNetworkIdle();
+        console.log('[Canva] Network idle detected, starting template search');
         
-        // 스크롤을 통해 더 많은 콘텐츠 로드
-        for (let i = 0; i < 2; i++) {
+        // 스크롤하여 더 많은 템플릿 로드
+        for (let scroll = 0; scroll < 3; scroll++) {
           window.scrollTo(0, document.body.scrollHeight);
-          await wait(1000);
+          await wait(1500);
+          console.log('[Canva] Scroll', scroll + 1, '- Loading more templates');
         }
         
-        // 비디오 템플릿 카드들 찾기 (간단한 셀렉터)
-        const templates = document.querySelectorAll('[data-testid*="template"], .template-card, [role="button"]:has(video)');
-        console.log('[Canva] Found templates:', templates.length);
+        // 고도화된 템플릿 셀렉터 (캔바 UI 패턴 기반)
+        const templateSelectors = [
+          // 2024 캔바 UI 패턴
+          '[data-testid="design-card"]',
+          '[data-testid="template-card"]', 
+          '[data-qa-id*="template"]',
+          '.design-card',
+          '.template-card',
+          // 비디오 특화 셀렉터
+          '[data-testid*="video"] [role="button"]',
+          'article[data-testid*="design"]',
+          'div[role="button"]:has(video)',
+          // 백업 셀렉터
+          'a[href*="/design/"]',
+          '.search-result-item'
+        ];
         
-        // 첫 N개 템플릿에서 다운로드 시도
+        let templates = [];
+        for (const selector of templateSelectors) {
+          templates = Array.from(document.querySelectorAll(selector));
+          console.log('[Canva] Selector', selector, 'found:', templates.length);
+          if (templates.length >= maxDownloads) break;
+        }
+        
+        console.log('[Canva] Total templates found:', templates.length);
+        
+        // 템플릿별 다운로드 시도
         for (let i = 0; i < Math.min(templates.length, maxDownloads); i++) {
           try {
             const template = templates[i];
             
-            // 템플릿 클릭
-            template.click();
+            // 템플릿이 보이는 위치로 스크롤
+            template.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            await wait(500);
+            
+            // 템플릿 클릭 (더 안전한 클릭)
+            const clickEvent = new MouseEvent('click', {
+              bubbles: true,
+              cancelable: true,
+              view: window
+            });
+            template.dispatchEvent(clickEvent);
+            
             console.log('[Canva] Clicked template', i + 1);
-            await wait(3000); // 상세 페이지 로딩 대기
             
-            // 다운로드 버튼 찾기 (간단한 셀렉터)
-            const downloadBtn = document.querySelector('button[aria-label*="다운로드"], button[aria-label*="Download"], [data-testid*="download-button"]');
+            // 에디터 페이지 로딩 완료 대기
+            await waitForNetworkIdle();
             
-            if (downloadBtn) {
-              downloadBtn.click();
-              console.log('[Canva] Clicked download button', i + 1);
-              downloadCount++;
-              await wait(2000);
+            // 고도화된 다운로드/공유 버튼 찾기
+            const shareDownloadSelectors = [
+              // Share 버튼 먼저 찾기
+              'button[data-testid="share-button"]',
+              'button[aria-label*="Share"]',
+              'button[aria-label*="공유"]',
+              '[data-testid*="share"]',
+              // 직접 다운로드 버튼
+              'button[data-testid="download-button"]',
+              'button[aria-label*="Download"]', 
+              'button[aria-label*="다운로드"]',
+              '[data-testid*="download"]',
+              // 메뉴에서 찾기
+              'button:has-text("Download")',
+              'button:has-text("다운로드")'
+            ];
+            
+            let shareBtn = null;
+            for (const selector of shareDownloadSelectors) {
+              shareBtn = document.querySelector(selector);
+              if (shareBtn) {
+                console.log('[Canva] Found button with selector:', selector);
+                break;
+              }
             }
             
-            // 뒤로 가기
-            window.history.back();
+            if (shareBtn) {
+              shareBtn.click();
+              console.log('[Canva] Clicked share/download button');
+              await wait(2000);
+              
+              // Share 패널이 열렸다면 Download 옵션 찾기
+              const downloadOptions = [
+                'button[aria-label*="Download"]',
+                'button[aria-label*="다운로드"]', 
+                'div[data-testid*="download"] button',
+                'a:has-text("Download")',
+                'a:has-text("다운로드")'
+              ];
+              
+              for (const selector of downloadOptions) {
+                const downloadBtn = document.querySelector(selector);
+                if (downloadBtn) {
+                  downloadBtn.click();
+                  console.log('[Canva] Clicked download option');
+                  await wait(1500);
+                  
+                  // MP4/비디오 형식 선택
+                  const mp4Options = [
+                    'button:has-text("MP4")',
+                    '[data-testid*="mp4"]',
+                    'button[aria-label*="MP4"]'
+                  ];
+                  
+                  for (const selector of mp4Options) {
+                    const mp4Btn = document.querySelector(selector);
+                    if (mp4Btn) {
+                      mp4Btn.click();
+                      console.log('[Canva] Selected MP4 format');
+                      await wait(1000);
+                      break;
+                    }
+                  }
+                  
+                  // 최종 다운로드 버튼 클릭
+                  const finalDownloadBtns = [
+                    'button[data-testid*="download-confirm"]',
+                    'button:has-text("Download")',
+                    'button:has-text("다운로드")',
+                    '.download-panel button[type="submit"]'
+                  ];
+                  
+                  for (const selector of finalDownloadBtns) {
+                    const finalBtn = document.querySelector(selector);
+                    if (finalBtn) {
+                      finalBtn.click();
+                      console.log('[Canva] Started final download');
+                      downloadCount++;
+                      break;
+                    }
+                  }
+                  break;
+                }
+              }
+            } else {
+              console.log('[Canva] Share/Download button not found');
+            }
+            
+            // 뒤로 가기 (더 안전한 방법)
             await wait(2000);
+            if (window.history.length > 1) {
+              window.history.back();
+            } else {
+              // 브라우저 뒤로가기가 안되면 검색 페이지로 직접 이동
+              window.location.href = 'https://www.canva.com/templates/search/${encodeURIComponent(keyword)}';
+            }
+            await wait(3000);
             
           } catch (e) {
-            console.warn('[Canva] Template click error:', e);
-            // 에러 시 뒤로 가기 시도
-            try { window.history.back(); } catch {}
-            await wait(1000);
+            console.warn('[Canva] Template', i + 1, 'error:', e);
+            // 에러 시 안전한 복구
+            try {
+              if (window.history.length > 1) {
+                window.history.back();
+              } else {
+                window.location.href = 'https://www.canva.com/templates/search/${encodeURIComponent(keyword)}';
+              }
+            } catch (recoverError) {
+              console.warn('[Canva] Recovery failed:', recoverError);
+            }
+            await wait(2000);
           }
         }
         
-        console.log('[Canva] Download completed:', downloadCount, '/', maxDownloads);
+        console.log('[Canva] Advanced download completed:', downloadCount, '/', maxDownloads);
         return downloadCount;
         
       })();
@@ -123,7 +284,7 @@ async function simpleAutoDownload(browserWindow, keyword, targetCount) {
 
     return result || 0;
   } catch (error) {
-    console.warn(`[canva] Simple auto-download error for ${keyword}:`, error?.message || error);
+    console.warn(`[canva] Advanced auto-download error for ${keyword}:`, error?.message || error);
     return 0;
   }
 }
@@ -236,6 +397,129 @@ function createOrFocusWindow() {
   return win;
 }
 
+// 고도화된 Google OAuth 자동 로그인
+async function enhancedGoogleLogin(browserWindow) {
+  try {
+    console.log('[canva] Starting enhanced Google OAuth automation');
+    
+    const result = await browserWindow.webContents.executeJavaScript(`
+      (async function() {
+        const wait = (ms) => new Promise(r => setTimeout(r, ms));
+        const waitForElement = async (selector, timeout = 15000) => {
+          const startTime = Date.now();
+          while (Date.now() - startTime < timeout) {
+            const element = document.querySelector(selector);
+            if (element && element.offsetParent !== null) return element;
+            await wait(200);
+          }
+          return null;
+        };
+        
+        console.log('[OAuth] Starting Google login automation');
+        
+        // 1. Google 로그인 버튼 찾기 (여러 패턴)
+        const googleLoginSelectors = [
+          'button[data-qa-id*="google"]',
+          'button[aria-label*="Google"]',
+          'button:has-text("Google")',
+          '[data-testid*="google"] button',
+          '.google-login-button',
+          'button[class*="google"]',
+          'a[href*="google"][href*="oauth"]'
+        ];
+        
+        let googleBtn = null;
+        for (const selector of googleLoginSelectors) {
+          googleBtn = document.querySelector(selector);
+          if (googleBtn) {
+            console.log('[OAuth] Found Google button with:', selector);
+            break;
+          }
+        }
+        
+        if (!googleBtn) {
+          console.log('[OAuth] Google login button not found');
+          return { success: false, reason: 'google_button_not_found' };
+        }
+        
+        // Google 버튼 클릭
+        googleBtn.click();
+        console.log('[OAuth] Clicked Google login button');
+        await wait(3000);
+        
+        // 2. Google 계정 선택 (이미 로그인된 경우)
+        await wait(2000);
+        const accountSelectors = [
+          '[data-email]',
+          '[data-identifier]', 
+          'div[role="button"]:has([data-email])',
+          '.account-card',
+          '[jsname="bPKPid"]' // Google 계정 카드
+        ];
+        
+        for (const selector of accountSelectors) {
+          const accounts = document.querySelectorAll(selector);
+          if (accounts.length > 0) {
+            console.log('[OAuth] Found', accounts.length, 'Google accounts');
+            // 첫 번째 계정 선택
+            accounts[0].click();
+            console.log('[OAuth] Selected first Google account');
+            await wait(3000);
+            break;
+          }
+        }
+        
+        // 3. 이메일/비밀번호 입력이 필요한 경우 자동 감지
+        const emailInput = await waitForElement('input[type="email"], input[id*="email"], input[name*="email"]');
+        const hasEmailField = !!emailInput;
+        
+        if (hasEmailField) {
+          console.log('[OAuth] Manual login required - email field detected');
+          return { success: false, reason: 'manual_login_required', hasEmailField: true };
+        }
+        
+        // 4. 권한 승인 자동화
+        await wait(2000);
+        const approveSelectors = [
+          'button[id="submit_approve_access"]',
+          'button:has-text("Allow")',
+          'button:has-text("허용")',
+          'button[data-qa-id*="approve"]',
+          '#submit_approve_access'
+        ];
+        
+        for (const selector of approveSelectors) {
+          const approveBtn = document.querySelector(selector);
+          if (approveBtn) {
+            approveBtn.click();
+            console.log('[OAuth] Clicked approve button');
+            await wait(3000);
+            break;
+          }
+        }
+        
+        // 5. 로그인 성공 확인 (Canva 메인 페이지로 돌아왔는지)
+        await wait(5000);
+        const isCanvaMain = window.location.href.includes('canva.com') && 
+                           !window.location.href.includes('login');
+        
+        if (isCanvaMain) {
+          console.log('[OAuth] Login success - returned to Canva main');
+          return { success: true, redirected: true };
+        }
+        
+        return { success: false, reason: 'login_incomplete' };
+        
+      })();
+    `);
+    
+    return result;
+  } catch (error) {
+    console.warn('[canva] Enhanced Google login error:', error?.message || error);
+    return { success: false, reason: 'automation_error', error: error?.message };
+  }
+}
+
 // 간단 세션 헬스체크: Canva 도메인 쿠키 유무 확인(대체용)
 async function hasCanvaCookie() {
   try {
@@ -290,13 +574,25 @@ function register() {
     }
   });
 
-  // 자동화 시작(간단한 리스트 기반 다운로드)
+  // 자동화 시작(스마트 80개 타겟 달성 로직)
   ipcMain.handle("canva:autoRun", async (_evt, payload = {}) => {
     if (running) return { ok: false, message: "이미 실행 중입니다." };
     const keywords = Array.isArray(payload.keywords) ? payload.keywords : [];
     if (!keywords.length) return { ok: false, message: "키워드가 없습니다." };
 
-    const perKeyword = Math.max(1, Math.min(10, payload.perKeyword || 1));
+    // 스마트 80개 타겟 달성 로직
+    const targetTotal = payload.targetTotal || 80;
+    const keywordCount = keywords.length;
+    const basePerKeyword = Math.floor(targetTotal / keywordCount);
+    const remainder = targetTotal % keywordCount;
+    
+    // 키워드별 할당량 계산 (나머지는 앞 키워드들에 1개씩 추가)
+    const keywordQuotas = keywords.map((_, index) => 
+      basePerKeyword + (index < remainder ? 1 : 0)
+    );
+    
+    console.log(`[canva] Smart target distribution: ${targetTotal} total across ${keywordCount} keywords`);
+    console.log(`[canva] Quotas:`, keywordQuotas.map((q, i) => `${keywords[i]}:${q}`).join(', '));
 
     const w = createOrFocusWindow();
     const ses = w.webContents.session;
@@ -309,18 +605,26 @@ function register() {
 
     running = true;
     stopRequested = false;
+    
+    // 전체 진행률 추적
+    let totalCompleted = 0;
+    let totalFailed = 0;
 
     try {
       for (let keywordIndex = 0; keywordIndex < keywords.length; keywordIndex++) {
         if (stopRequested) break;
         
         const k = keywords[keywordIndex];
+        const quota = keywordQuotas[keywordIndex];
         
-        // 진행 메시지: X/Y 형태
+        // 진행 메시지: 스마트 80개 타겟 추적
         emitAll("canva:progress", { 
           keyword: k, 
           phase: "search", 
-          message: `${keywordIndex + 1}/${keywords.length} - ${k} 검색중` 
+          message: `${totalCompleted}/${targetTotal} - ${k} 검색중 (목표: ${quota}개)`,
+          total: targetTotal,
+          saved: totalCompleted,
+          failed: totalFailed
         });
 
         // 마지막 키워드 기록(다운로드 네이밍 용)
@@ -333,29 +637,57 @@ function register() {
         // 페이지 로딩 대기
         await new Promise((r) => setTimeout(r, 3000));
 
-        // 간단한 자동 다운로드 실행
+        // 고급 자동 다운로드 실행 (할당된 quota만큼)
         emitAll("canva:progress", { 
           keyword: k, 
           phase: "pick", 
-          message: `${keywordIndex + 1}/${keywords.length} - ${k} 다운로드중` 
+          message: `${totalCompleted}/${targetTotal} - ${k} 다운로드중 (목표: ${quota}개)`,
+          total: targetTotal,
+          saved: totalCompleted,
+          failed: totalFailed
         });
         
         try {
-          const downloadCount = await simpleAutoDownload(w, k, perKeyword);
+          const downloadCount = await advancedCanvaDownload(w, k, quota);
+          totalCompleted += downloadCount;
+          
           emitAll("canva:progress", { 
             keyword: k, 
             phase: "pick", 
-            message: `${keywordIndex + 1}/${keywords.length} - ${downloadCount}개 완료`,
-            pickedDelta: downloadCount 
+            message: `${totalCompleted}/${targetTotal} - ${k} ${downloadCount}개 완료`,
+            pickedDelta: downloadCount,
+            total: targetTotal,
+            saved: totalCompleted,
+            failed: totalFailed
           });
+          
+          // 80개 달성 시 조기 완료
+          if (totalCompleted >= targetTotal) {
+            console.log(`[canva] Target ${targetTotal} achieved! Stopping early.`);
+            emitAll("canva:progress", { 
+              keyword: null, 
+              phase: "done", 
+              message: `🎉 목표 달성! ${totalCompleted}/${targetTotal} 완료`,
+              total: targetTotal,
+              saved: totalCompleted,
+              failed: totalFailed
+            });
+            break;
+          }
+          
         } catch (downloadError) {
           console.warn(`[canva] Download failed for ${k}:`, downloadError?.message || downloadError);
+          totalFailed += quota;
+          
           emitAll("canva:progress", { 
             keyword: k, 
             phase: "pick", 
-            message: `${keywordIndex + 1}/${keywords.length} - ${k} 실패`,
-            skipDelta: perKeyword,
-            reason: "downloadError"
+            message: `${totalCompleted}/${targetTotal} - ${k} 실패`,
+            skipDelta: quota,
+            reason: "downloadError",
+            total: targetTotal,
+            saved: totalCompleted,
+            failed: totalFailed
           });
         }
 
@@ -363,8 +695,24 @@ function register() {
         await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1000));
       }
 
-      emitAll("canva:progress", { keyword: null, phase: "done", message: "모든 다운로드 완료" });
-      return { ok: true };
+      // 최종 완료 메시지
+      if (totalCompleted < targetTotal) {
+        emitAll("canva:progress", { 
+          keyword: null, 
+          phase: "done", 
+          message: `다운로드 완료: ${totalCompleted}/${targetTotal}`,
+          total: targetTotal,
+          saved: totalCompleted,
+          failed: totalFailed
+        });
+      }
+      
+      return { 
+        ok: true, 
+        completed: totalCompleted,
+        failed: totalFailed,
+        target: targetTotal
+      };
     } catch (e) {
       console.warn("[canva:autoRun] error:", e?.message || e);
       return { ok: false, message: e?.message || String(e) };

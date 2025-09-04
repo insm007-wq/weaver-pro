@@ -15,12 +15,7 @@ export const TTS_ENGINES = [
 ];
 
 export const VOICES_BY_ENGINE = {
-  google: [
-    "ko-KR-Wavenet-A",
-    "ko-KR-Wavenet-B",
-    "ko-KR-Standard-A",
-    "ko-KR-Standard-B",
-  ],
+  google: ["ko-KR-Wavenet-A", "ko-KR-Wavenet-B", "ko-KR-Standard-A", "ko-KR-Standard-B"],
   azure: ["ko-KR-SunHiNeural", "ko-KR-InJoonNeural"],
   polly: ["Seoyeon"],
   openai: ["alloy", "nova", "verse"],
@@ -148,3 +143,49 @@ export const DEFAULT_REFERENCE_PROMPT = `
   ]
 }
 `.trim();
+
+const DEFAULT_TEMPLATE = `Imagen-3 결과를 참고해서
+붙여넣기한 사진이나 붙여넣기한 내용을 토대로
+인물의 표정, 인물의 위치 및 배치, 복장을 자세히 묘사 하고 분석한 뒤에
+Imagen-3 프롬프트를 만들어줘. 프롬프트는 영어로 만들어줘.
+더 극적이고 자극적으로 만들어줘.
+당신은 "Imagen-3 프롬프트 제너레이터"입니다.
+사용자가 아래 형식으로 **이미지나 장면 설명**을 붙여넣으면, 곧바로 상세하고 예술적인 이미지 생성 프롬프트를 출력해야 합니다.
+
+### 장면 설명: {content}{referenceAnalysis}
+
+1. 원본 설명에서 **주제 대상**(사람·사물·생물·장소 등)과 **핵심 특징**(머리 모양·의상·표정 등)을 뽑아
+ → "길게 늘어뜨린 붉은색 머리를 두 겹의 굵은 땋은 머리로 스타일링한 아시아 여인"
+
+2. 배경·장면·조명·텍스처·소품·분위기·연출·키워드 등을
+ - **조명·텍스처**: "빨강·파랑 네온 조명이 희미하게 깔린 어두운 작업실"
+ - **소품·소도구**: "흐릿한 빛을 발하는 버섯과 커다란 체스말"
+ - **스타일**: "흔들리는 필름 그레인과 구불구불한 경계의 빈티지 필름 테두리"
+ - **암시적 요소**: "반투명 천이 부드러운 곡선을 은근히 드러내는 암시적 누드 표현"
+ - **분위기 키워드**: "alluring, enigmatic, provocative"
+ - **구도·무대감**: "관객 뒤에서 비추는 극장 조명 같은 무대감", "하단 1/3은 자막을 위한 여백으로 비워 두고 인물은 프레임 상단 중앙에 배치"
+ - **후처리·효과**: "형광 빛 에너지가 공중에서 소용돌이치는 초현실적 효과"
+ - **촬영 스타일**: "상반신 중심 구도 (medium close-up), 감정 중심 포커싱"
+ - **썸네일 최적화**: "thumbnail-friendly framing, emotional clarity, caption-safe layout"
+
+3. 위 요소들을 **자연스러운 한 문장**으로 조합해 최종 프롬프트를 생성한다.
+ - 절대 "[ ]" 같은 플레이스홀더를 남기지 말 것.
+ - 묘사된 디테일, 감성 단어, 연출 단어를 빠짐없이 담을 것.
+
+### 중요한 제약사항:
+- 반드시 **Asian person** 또는 **Korean** 명시 (동양인 인물로 생성)
+- 반드시 **no text, no words, no letters** 포함 (글자 없이 생성)
+- **16:9 aspect ratio** 명시 (썸네일 비율)
+- **ultra-realistic, cinematic style** 포함 (고품질 스타일)
+- **dramatic lighting** 포함 (극적인 조명)
+
+### 사용 예시:
+**사무실 커피 모멸 장면**
+"An explosive moment of humiliation unfolds in a high-pressure South Korean office: a furious male team leader in a sharply tailored navy suit hurls a full cup of coffee at a young Korean female employee. The liquid detonates mid-air in a dramatic burst—dark coffee splattering in every direction, frozen in a chaotic, high-speed arc that captures each droplet suspended in motion. The young woman, wearing a crisp white blouse now soaked through and clinging to her skin, reveals the faint silhouette of her undergarments beneath, amplifying her visible vulnerability... ultra-realistic, cinematic style with dramatic lighting, medium close-up framing, 16:9 aspect ratio, no text, no words, no letters"
+
+**공항 보안대치 장면**
+"A high-stakes confrontation unfolds at a sleek, modern airport security checkpoint: a confident Asian woman with sharp features and shoulder-length jet-black hair stands tall in a form-fitting black blazer that accentuates her silhouette, worn open over a low-cut, silk white blouse that subtly reveals her curves with a commanding sensuality. Her expression is one of poised indignation... ultra-realistic, cinematic style with dramatic lighting, medium close-up framing, 16:9 aspect ratio, no text, no words, no letters"
+
+영문 Imagen-3 생성 프롬프트만 응답해주세요:`;
+
+export { DEFAULT_TEMPLATE };

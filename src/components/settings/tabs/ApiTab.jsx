@@ -8,10 +8,9 @@ export default function ApiTab() {
   const [pexelsKey, setPexelsKey] = useState("");
   const [pixabayKey, setPixabayKey] = useState("");
 
-  const [minimaxGroupId, setMinimaxGroupId] = useState("");
-  const [minimaxKey, setMinimaxKey] = useState("");
 
   const [googleTtsKey, setGoogleTtsKey] = useState("");
+  const [imagen3ServiceAccount, setImagen3ServiceAccount] = useState("");
 
   const [status, setStatus] = useState({
     openai: null,
@@ -19,8 +18,8 @@ export default function ApiTab() {
     replicate: null,
     pexels: null,
     pixabay: null,
-    minimax: null,
     googleTts: null,
+    imagen3: null,
   });
   const [loading, setLoading] = useState({
     openai: false,
@@ -28,39 +27,30 @@ export default function ApiTab() {
     replicate: false,
     pexels: false,
     pixabay: false,
-    minimax: false,
     googleTts: false,
+    imagen3: false,
   });
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
     (async () => {
-      const [ok, ak, rk, gidSecret, gidOldSetting, mk, gk, pxk, pbk] = await Promise.all([
+      const [ok, ak, rk, gk, pxk, pbk, i3] = await Promise.all([
         window.api.getSecret("openaiKey"),
         window.api.getSecret("anthropicKey"),
         window.api.getSecret("replicateKey"),
-        window.api.getSecret("minimaxGroupId"),
-        window.api.getSetting("miniMaxGroupId"),
-        window.api.getSecret("minimaxKey"),
         window.api.getSecret("googleTtsApiKey"),
         window.api.getSecret("pexelsApiKey"),
         window.api.getSecret("pixabayApiKey"),
+        window.api.getSecret("imagen3ServiceAccount"),
       ]);
-
-      if (!gidSecret && gidOldSetting) {
-        try {
-          await window.api.setSecret({ key: "minimaxGroupId", value: String(gidOldSetting || "").trim() });
-        } catch {}
-      }
 
       setOpenaiKey(ok || "");
       setAnthropicKey(ak || "");
       setReplicateKey(rk || "");
-      setMinimaxGroupId((gidSecret || gidOldSetting || "").trim());
-      setMinimaxKey(mk || "");
       setGoogleTtsKey(gk || "");
       setPexelsKey(pxk || "");
       setPixabayKey(pbk || "");
+      setImagen3ServiceAccount(i3 || "");
     })();
   }, []);
 
@@ -100,18 +90,15 @@ export default function ApiTab() {
     setSaved("pixabay");
     setToast({ type: "success", text: "Pixabay 키 저장 완료" });
   };
-  const saveMiniMax = async () => {
-    await Promise.all([
-      window.api.setSecret({ key: "minimaxGroupId", value: (minimaxGroupId || "").trim() }),
-      window.api.setSecret({ key: "minimaxKey", value: (minimaxKey || "").trim() }),
-    ]);
-    setSaved("minimax");
-    setToast({ type: "success", text: "MiniMax 설정 저장 완료" });
-  };
   const saveGoogleTts = async () => {
     await window.api.setSecret({ key: "googleTtsApiKey", value: (googleTtsKey || "").trim() });
     setSaved("googleTts");
     setToast({ type: "success", text: "Google TTS 키 저장 완료" });
+  };
+  const saveImagen3 = async () => {
+    await window.api.setSecret({ key: "imagen3ServiceAccount", value: (imagen3ServiceAccount || "").trim() });
+    setSaved("imagen3");
+    setToast({ type: "success", text: "Imagen3 서비스 계정 저장 완료" });
   };
 
   /* ---------------- 테스트: 성공 시 Connected ---------------- */
@@ -213,20 +200,6 @@ export default function ApiTab() {
     }
   };
 
-  const handleTestMiniMax = async () => {
-    setBusy("minimax", true);
-    setStat("minimax", false, "");
-    try {
-      const res = await window.api.testMiniMax?.({ key: (minimaxKey || "").trim(), groupId: (minimaxGroupId || "").trim() });
-      res?.ok ? setStat("minimax", true, "연결 성공") : setStat("minimax", false, `실패: ${stringifyErr(res?.message)}`);
-      setToast({ type: res?.ok ? "success" : "error", text: res?.ok ? "MiniMax 연결 성공" : "MiniMax 실패" });
-    } catch (e) {
-      setStat("minimax", false, `오류: ${e?.message || e}`);
-      setToast({ type: "error", text: "MiniMax 오류" });
-    } finally {
-      setBusy("minimax", false);
-    }
-  };
 
   const handleTestGoogleTts = async () => {
     setBusy("googleTts", true);
@@ -240,6 +213,26 @@ export default function ApiTab() {
       setToast({ type: "error", text: "Google TTS 오류" });
     } finally {
       setBusy("googleTts", false);
+    }
+  };
+
+  const handleTestImagen3 = async () => {
+    if (!imagen3ServiceAccount?.trim()) {
+      setToast({ type: "error", text: "Imagen3 서비스 계정 JSON을 입력하세요." });
+      setStat("imagen3", false, "서비스 계정 미입력");
+      return;
+    }
+    setBusy("imagen3", true);
+    setStat("imagen3", false, "");
+    try {
+      const res = await window.api.testImagen3?.(imagen3ServiceAccount.trim());
+      res?.ok ? setStat("imagen3", true, "연결 성공") : setStat("imagen3", false, `실패: ${stringifyErr(res?.message)}`);
+      setToast({ type: res?.ok ? "success" : "error", text: res?.ok ? "Imagen3 연결 성공" : "Imagen3 실패" });
+    } catch (e) {
+      setStat("imagen3", false, `오류: ${e?.message || e}`);
+      setToast({ type: "error", text: "Imagen3 오류" });
+    } finally {
+      setBusy("imagen3", false);
     }
   };
 
@@ -324,29 +317,6 @@ export default function ApiTab() {
         />
       </Section>
 
-      {/* MiniMax */}
-      <Section title="🧩 MiniMax API" status={status.minimax} loading={loading.minimax} onTest={handleTestMiniMax} onSave={saveMiniMax}>
-        <div className="flex gap-2 w-full">
-          <input
-            type="text"
-            value={minimaxGroupId}
-            onChange={(e) => setMinimaxGroupId(e.target.value)}
-            placeholder="Group ID (예: 1940...)"
-            className="input-field flex-1"
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <input
-            type="password"
-            value={minimaxKey}
-            onChange={(e) => setMinimaxKey(e.target.value)}
-            placeholder="MiniMax Secret Key"
-            className="input-field flex-1"
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </div>
-      </Section>
 
       {/* Google TTS */}
       <Section title="🗣️ Google Cloud Text-to-Speech" status={status.googleTts} loading={loading.googleTts} onTest={handleTestGoogleTts} onSave={saveGoogleTts}>
@@ -359,6 +329,44 @@ export default function ApiTab() {
           autoComplete="off"
           spellCheck={false}
         />
+      </Section>
+
+      {/* Google Imagen3 */}
+      <Section title="🎨 Google Imagen3" status={status.imagen3} loading={loading.imagen3} onTest={handleTestImagen3} onSave={saveImagen3}>
+        <div className="w-full">
+          <textarea
+            value={imagen3ServiceAccount}
+            onChange={(e) => setImagen3ServiceAccount(e.target.value)}
+            placeholder="Google Cloud 서비스 계정 JSON (전체 내용)"
+            className="input-field w-full h-32 font-mono text-sm resize-y"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              onClick={() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                input.onchange = (e) => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => setImagen3ServiceAccount(e.target.result);
+                    reader.readAsText(file);
+                  }
+                };
+                input.click();
+              }}
+              className="btn-ghost text-sm"
+            >
+              📁 JSON 파일 선택
+            </button>
+            <span className="text-xs text-neutral-500">
+              다운로드한 서비스 계정 JSON 파일의 내용을 붙여넣거나 파일을 선택하세요
+            </span>
+          </div>
+        </div>
       </Section>
     </div>
   );

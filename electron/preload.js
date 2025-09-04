@@ -305,6 +305,7 @@ contextBridge.exposeInMainWorld("api", {
   testAnthropic: (apiKey) => ipcRenderer.invoke("anthropic:test", apiKey),
   testMiniMax: (payload) => ipcRenderer.invoke("minimax:test", payload),
   testGoogleTTS: (apiKey) => ipcRenderer.invoke("testGoogleTTS", apiKey),
+  testGoogleImageFX: (apiKey) => ipcRenderer.invoke("googleImageFx:test", apiKey),
   testPexels: (key) => ipcRenderer.invoke("pexels:test", key),
   testPixabay: (key) => ipcRenderer.invoke("pixabay:test", key),
 
