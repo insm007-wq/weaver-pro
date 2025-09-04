@@ -60,54 +60,56 @@ export default function Sidebar({ onSelectMenu }) {
   return (
     <aside
       className={`${
-        isCollapsed ? "w-20" : "w-72"
-      } bg-white text-slate-800 flex flex-col justify-between shadow-xl border-r border-slate-200 transition-all duration-300`}
+        isCollapsed ? "w-20" : "w-80"
+      } nav-sidebar flex flex-col justify-between transition-all duration-300`}
     >
       <div>
         {/* Toggle */}
         <div className="flex justify-end p-4">
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="text-sm bg-slate-100 rounded px-2 py-1 hover:bg-slate-200 transition"
+            className="btn-ghost text-lg w-8 h-8 !p-0"
           >
-            {isCollapsed ? "➡️" : "⬅️"}
+            {isCollapsed ? "→" : "←"}
           </button>
         </div>
 
         {/* Logo */}
-        <div className="flex items-center gap-3 px-6 mb-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-cyan-400 flex items-center justify-center text-white text-xl shadow">
+        <div className="flex items-center gap-4 px-6 mb-6">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center text-white text-2xl shadow-medium">
             🎥
           </div>
           {!isCollapsed && (
-            <div>
-              <div className="text-base font-bold">Content Weaver Pro</div>
-              <div className="text-xs text-slate-500">AI 영상 제작 솔루션</div>
+            <div className="animate-fade-in">
+              <div className="text-lg font-bold text-neutral-900">Content Weaver Pro</div>
+              <div className="text-sm text-neutral-500">AI 영상 제작 솔루션</div>
             </div>
           )}
         </div>
 
         {/* Global Menu */}
         <nav className="px-4 py-2">
-          <ul className="space-y-2">
+          <ul className="space-y-1">
             {globalMenu.map((item) => (
               <li
                 key={item.key}
                 onClick={() => handleMenuClick(item.key)}
-                className="group relative flex items-center gap-3 text-sm font-medium text-slate-700 hover:bg-blue-50 px-3 py-2 rounded transition-all cursor-pointer"
+                className="menu-item group"
               >
-                <span className="text-lg">{item.icon}</span>
+                <div className="w-5 h-5 flex items-center justify-center text-base">
+                  {item.icon}
+                </div>
                 {!isCollapsed ? (
-                  <div>
-                    <div className="text-slate-800">{item.label}</div>
-                    <div className="text-xs text-slate-500 ml-1">
+                  <div className="flex-1 animate-fade-in">
+                    <div className="font-semibold text-neutral-900">{item.label}</div>
+                    <div className="text-xs text-neutral-600 mt-0.5">
                       {item.desc}
                     </div>
                   </div>
                 ) : (
-                  <span className="absolute left-16 bg-white text-xs shadow px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap z-10">
+                  <div className="tooltip left-full ml-2 top-1/2 -translate-y-1/2">
                     {item.label}
-                  </span>
+                  </div>
                 )}
               </li>
             ))}
@@ -116,32 +118,34 @@ export default function Sidebar({ onSelectMenu }) {
 
         {/* Divider */}
         {!isCollapsed && (
-          <div className="px-6 py-1 text-xs text-slate-400 border-b border-slate-200">
+          <div className="mx-6 my-4 px-0 py-2 text-xs font-medium text-neutral-400 border-b border-neutral-200">
             프로젝트 작업 영역
           </div>
         )}
 
         {/* Project Menu */}
         <nav className="px-4 py-2">
-          <ul className="space-y-2">
+          <ul className="space-y-1">
             {projectMenu.map((item) => (
               <li
                 key={item.key}
                 onClick={() => handleMenuClick(item.key)}
-                className="group relative flex items-center gap-3 text-sm font-medium text-slate-700 hover:bg-blue-50 px-3 py-2 rounded transition-all cursor-pointer"
+                className="menu-item group"
               >
-                <span className="text-lg">{item.icon}</span>
+                <div className="w-5 h-5 flex items-center justify-center text-base">
+                  {item.icon}
+                </div>
                 {!isCollapsed ? (
-                  <div>
-                    <div className="text-slate-800">{item.label}</div>
-                    <div className="text-xs text-slate-500 ml-1">
+                  <div className="flex-1 animate-fade-in">
+                    <div className="font-semibold text-neutral-900">{item.label}</div>
+                    <div className="text-xs text-neutral-600 mt-0.5">
                       {item.desc}
                     </div>
                   </div>
                 ) : (
-                  <span className="absolute left-16 bg-white text-xs shadow px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap z-10">
+                  <div className="tooltip left-full ml-2 top-1/2 -translate-y-1/2">
                     {item.label}
-                  </span>
+                  </div>
                 )}
               </li>
             ))}
@@ -151,9 +155,9 @@ export default function Sidebar({ onSelectMenu }) {
 
       {/* Footer */}
       {!isCollapsed && (
-        <div className="text-xs text-slate-400 p-4 border-t border-slate-200">
-          <div>Version 1.0.0</div>
-          <div className="text-[10px] mt-1">© 2025 Content Weaver</div>
+        <div className="text-xs text-neutral-400 p-6 border-t border-neutral-200 bg-neutral-25/50">
+          <div className="font-medium">Version 1.0.0</div>
+          <div className="text-[10px] mt-1 opacity-75">© 2025 Content Weaver</div>
         </div>
       )}
     </aside>

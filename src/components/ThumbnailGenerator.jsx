@@ -5,12 +5,12 @@ import { HiLightBulb } from "react-icons/hi";
 function TipCard({ children, className = "" }) {
   return (
     <div
-      className={`mt-2 flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 ${className}`}
+      className={`mt-2 flex items-start gap-3 rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 ${className}`}
     >
       <div className="mt-0.5 shrink-0">
-        <HiLightBulb className="h-4 w-4 text-amber-500" />
+        <HiLightBulb className="h-4 w-4 text-warning-500" />
       </div>
-      <div className="text-[13px] leading-6 text-gray-600">{children}</div>
+      <div className="text-[13px] leading-6 text-neutral-700">{children}</div>
     </div>
   );
 }
@@ -305,17 +305,17 @@ export default function ThumbnailGenerator() {
     >
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold flex items-center gap-2">
+        <h1 className="text-xl font-bold text-neutral-900 flex items-center gap-2">
           <span>🎯</span> 썸네일 생성기
         </h1>
-        <span className="text-xs text-gray-500">
+        <span className="text-xs text-neutral-600 font-medium">
           PNG, JPG, JPEG · 최대 {MAX_UPLOAD_MB}MB (WEBP 불가)
         </span>
       </div>
 
       {/* 프로바이더 선택 */}
       <div className="mb-6">
-        <label className="font-semibold mb-2 block">생성 엔진</label>
+        <label className="font-semibold text-neutral-900 mb-2 block">생성 엔진</label>
 
         {/* ✅ 고정폭 + 2열 그리드 */}
         <div className="w-full max-w-[520px]">

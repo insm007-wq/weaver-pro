@@ -246,10 +246,15 @@ export default function ApiTab() {
   return (
     <div className="space-y-6 relative">
       {/* Toast */}
-      <div aria-live="polite" className="pointer-events-none fixed right-4 top-4 z-50">
+      <div aria-live="polite" className="pointer-events-none fixed right-6 top-6 z-50">
         {toast && (
-          <div className={`pointer-events-auto px-4 py-2 rounded-lg shadow-lg text-white ${toast.type === "success" ? "bg-green-600" : "bg-red-600"}`}>
-            {toast.text}
+          <div className={`pointer-events-auto px-4 py-3 rounded-lg shadow-large text-white font-medium animate-slide-up ${
+            toast.type === "success" ? "bg-success-600" : "bg-error-600"
+          }`}>
+            <div className="flex items-center gap-2">
+              {toast.type === "success" ? "✅" : "❌"}
+              {toast.text}
+            </div>
           </div>
         )}
       </div>
@@ -258,7 +263,7 @@ export default function ApiTab() {
       <Section title="🧠 OpenAI API Key" status={status.openai} loading={loading.openai} onTest={handleTestOpenAI} onSave={saveOpenAI}>
         <input
           type="password"
-          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className="input-field"
           value={openaiKey}
           onChange={(e) => setOpenaiKey(e.target.value)}
           placeholder="OpenAI API Key (sk-...)"
@@ -271,7 +276,7 @@ export default function ApiTab() {
       <Section title="🤖 Anthropic API Key" status={status.anthropic} loading={loading.anthropic} onTest={handleTestAnthropic} onSave={saveAnthropic}>
         <input
           type="password"
-          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className="input-field"
           value={anthropicKey}
           onChange={(e) => setAnthropicKey(e.target.value)}
           placeholder="Anthropic API Key"
@@ -284,7 +289,7 @@ export default function ApiTab() {
       <Section title="🔁 Replicate API Token" status={status.replicate} loading={loading.replicate} onTest={handleTestReplicate} onSave={saveReplicate}>
         <input
           type="password"
-          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className="input-field"
           value={replicateKey}
           onChange={(e) => setReplicateKey(e.target.value)}
           placeholder="API Token"
@@ -300,7 +305,7 @@ export default function ApiTab() {
           value={pexelsKey}
           onChange={(e) => setPexelsKey(e.target.value)}
           placeholder="Pexels API Key"
-          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className="input-field"
           autoComplete="off"
           spellCheck={false}
         />
@@ -313,7 +318,7 @@ export default function ApiTab() {
           value={pixabayKey}
           onChange={(e) => setPixabayKey(e.target.value)}
           placeholder="Pixabay API Key"
-          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className="input-field"
           autoComplete="off"
           spellCheck={false}
         />
@@ -327,7 +332,7 @@ export default function ApiTab() {
             value={minimaxGroupId}
             onChange={(e) => setMinimaxGroupId(e.target.value)}
             placeholder="Group ID (예: 1940...)"
-            className="w-1/2 px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="input-field flex-1"
             autoComplete="off"
             spellCheck={false}
           />
@@ -336,7 +341,7 @@ export default function ApiTab() {
             value={minimaxKey}
             onChange={(e) => setMinimaxKey(e.target.value)}
             placeholder="MiniMax Secret Key"
-            className="w-1/2 px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            className="input-field flex-1"
             autoComplete="off"
             spellCheck={false}
           />
@@ -350,7 +355,7 @@ export default function ApiTab() {
           value={googleTtsKey}
           onChange={(e) => setGoogleTtsKey(e.target.value)}
           placeholder="Google Cloud API Key (Text-to-Speech)"
-          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className="input-field"
           autoComplete="off"
           spellCheck={false}
         />
@@ -363,48 +368,85 @@ export default function ApiTab() {
 
 function Section({ title, status, loading, onTest, onSave, children }) {
   const borderClass = useMemo(() => {
-    if (!status) return "border-gray-200"; // Not tested
-    if (status.ok === true) return "border-green-300"; // Connected
-    if (status.ok === false) return "border-red-300"; // Failed
-    return "border-gray-200"; // Saved (ok === null)
+    if (!status) return "border-neutral-200"; // Not tested
+    if (status.ok === true) return "border-success-300 shadow-medium"; // Connected
+    if (status.ok === false) return "border-error-300"; // Failed
+    return "border-neutral-200"; // Saved (ok === null)
   }, [status]);
 
   return (
-    <div className={`p-4 rounded-xl border ${borderClass} bg-white`}>
-      <div className="flex items-center justify-between mb-2">
-        <label className="font-medium text-sm">{title}</label>
-        <StatusBadge status={status} />
+    <div className={`card ${borderClass}`}>
+      <div className="card-header">
+        <div className="flex items-center justify-between">
+          <label className="font-semibold text-base text-neutral-900">
+            {title}
+          </label>
+          <StatusBadge status={status} />
+        </div>
       </div>
 
-      <div className="flex items-center gap-2 w-full">{children}</div>
+      <div className="card-body">
+        <div className="flex items-center gap-3 w-full mb-4">{children}</div>
 
-      <div className="mt-3 flex items-center gap-3">
-        <button onClick={onSave} className="text-sm px-3 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">
-          저장
-        </button>
-        <button
-          onClick={onTest}
-          disabled={loading}
-          className="text-sm px-3 py-2 bg-gray-900 text-white rounded-lg hover:bg-black disabled:opacity-60 flex items-center gap-2"
-        >
-          {loading && <Spinner />}
-          {loading ? "테스트 중..." : "테스트"}
-        </button>
-        {status?.ts && <span className="text-xs text-gray-500">마지막 확인: {new Date(status.ts).toLocaleTimeString()}</span>}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={onSave} className="btn-secondary">
+              💾 저장
+            </button>
+            <button
+              onClick={onTest}
+              disabled={loading}
+              className="btn-primary"
+            >
+              {loading && <div className="loading-spinner mr-2" />}
+              {loading ? "테스트 중..." : "🧪 테스트"}
+            </button>
+          </div>
+          
+          {status?.ts && (
+            <span className="text-xs text-neutral-400">
+              마지막 확인: {new Date(status.ts).toLocaleTimeString()}
+            </span>
+          )}
+        </div>
+
+        {status?.msg && (
+          <div className={`mt-4 p-3 rounded-lg text-sm font-medium ${
+            status.ok === false 
+              ? "bg-error-50 text-error-700" 
+              : status.ok === true 
+                ? "bg-success-50 text-success-700" 
+                : "bg-neutral-50 text-neutral-700"
+          }`}>
+            {status.msg}
+          </div>
+        )}
       </div>
-
-      {status?.msg && (
-        <p className={`text-xs mt-2 ${status.ok === false ? "text-red-600" : status.ok === true ? "text-green-600" : "text-gray-600"}`}>{status.msg}</p>
-      )}
     </div>
   );
 }
 
 function StatusBadge({ status }) {
-  if (!status) return <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700 border border-gray-200">Not tested</span>;
-  if (status.ok === true) return <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800 border border-green-200">✅ Connected</span>;
-  if (status.ok === false) return <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700 border border-red-200">❌ Failed</span>;
-  return <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700 border border-gray-200">Saved</span>;
+  if (!status) return (
+    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-neutral-100 text-neutral-600 border border-neutral-200">
+      ⏳ 미테스트
+    </span>
+  );
+  if (status.ok === true) return (
+    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-success-100 text-success-700 border border-success-200">
+      ✅ 연결됨
+    </span>
+  );
+  if (status.ok === false) return (
+    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-error-100 text-error-700 border border-error-200">
+      ❌ 실패
+    </span>
+  );
+  return (
+    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-primary-100 text-primary-700 border border-primary-200">
+      💾 저장됨
+    </span>
+  );
 }
 
 function Spinner() {

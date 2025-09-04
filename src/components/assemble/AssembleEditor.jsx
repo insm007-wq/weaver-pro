@@ -26,8 +26,12 @@ function TabButton({ active, children, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`h-9 px-3 rounded-lg text-sm border transition
-        ${active ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"}`}
+      className={`h-9 px-3 rounded-lg text-sm font-medium border transition-all duration-200
+        ${
+          active
+            ? "bg-primary-600 text-white border-primary-600 shadow-soft"
+            : "bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50 hover:border-neutral-400"
+        }`}
       aria-pressed={active}
     >
       {children}
@@ -180,10 +184,10 @@ export default function AssembleEditor() {
     <div ref={containerRef} className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-md" style={containerStyle}>
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <span>✨</span> 영상 구성
+        <h1 className="text-xl font-bold text-neutral-900 flex items-center gap-2">
+          <span></span> 영상 구성
         </h1>
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-neutral-600 font-medium">
           총 길이 {totalDur.toFixed(1)}s{audioDur ? ` · 오디오 ${audioDur.toFixed(1)}s` : ""} · 씬 {scenes.length}개
         </div>
       </div>

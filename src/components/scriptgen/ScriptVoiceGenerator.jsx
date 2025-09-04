@@ -325,8 +325,8 @@ export default function ScriptVoiceGenerator() {
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold">대본 &amp; 음성 생성</h1>
-          <span className="text-xs text-slate-500">SRT 자막 + MP3 내레이션을 한 번에</span>
+          <h1 className="text-xl font-semibold text-neutral-900">대본 &amp; 음성 생성</h1>
+          <span className="text-xs text-neutral-600">SRT 자막 + MP3 내레이션을 한 번에</span>
         </div>
         <button
           type="button"
@@ -433,13 +433,13 @@ export default function ScriptVoiceGenerator() {
       {/* 결과 테이블 */}
       <Card className="mt-5">
         <div className="flex items-center justify-between mb-3">
-          <div className="text-sm font-semibold">씬 미리보기</div>
-          <div className="text-xs text-slate-500">{currentDoc?.scenes?.length ? `${currentDoc.scenes.length}개 씬` : "대본 없음"}</div>
+          <div className="text-sm font-semibold text-neutral-900">씬 미리보기</div>
+          <div className="text-xs text-neutral-600">{currentDoc?.scenes?.length ? `${currentDoc.scenes.length}개 씬` : "대본 없음"}</div>
         </div>
 
-        <div className="border border-slate-200 rounded-lg overflow-hidden">
+        <div className="border border-neutral-200 rounded-lg overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500">
+            <thead className="bg-neutral-50 text-neutral-700">
               <tr>
                 <Th>#</Th>
                 <Th>시작–끝</Th>
@@ -455,12 +455,12 @@ export default function ScriptVoiceGenerator() {
                     {secToTime(sc.start)}–{secToTime(sc.end)}
                   </Td>
                   <Td className="text-center">{safeCharCount(sc.text)}</Td>
-                  <Td className="text-slate-700">{sc.text}</Td>
+                  <Td className="text-neutral-800">{sc.text}</Td>
                 </tr>
               ))}
               {!currentDoc?.scenes?.length && (
                 <tr>
-                  <td colSpan={4} className="text-center py-10 text-slate-400">
+                  <td colSpan={4} className="text-center py-10 text-neutral-500">
                     대본을 생성하거나 SRT를 불러오면 씬 목록이 표시됩니다.
                   </td>
                 </tr>

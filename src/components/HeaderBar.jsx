@@ -4,17 +4,17 @@ import { FaWifi, FaBan } from "react-icons/fa6"; // ✅ fa6에서 지원되는 �
 function Dot({ state }) {
   const cls =
     state === "ok"
-      ? "bg-emerald-500"
+      ? "status-online"
       : state === "fail"
-      ? "bg-rose-500"
-      : "bg-gray-400";
-  return <span className={`inline-block w-2.5 h-2.5 rounded-full ${cls}`} />;
+      ? "status-offline"
+      : "status-pending";
+  return <span className={`status-dot ${cls}`} />;
 }
 
 function Spinner() {
   return (
     <svg
-      className="animate-spin h-4 w-4 text-white"
+      className="loading-spinner"
       xmlns="http://www.w3.org/2000/svg"
       fill="none"
       viewBox="0 0 24 24"
@@ -72,32 +72,32 @@ export default function HeaderBar({ onOpenSettings }) {
 
   const Item = ({ name, r }) => (
     <div
-      className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md hover:bg-gray-100 cursor-default"
+      className="group relative flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-white border border-neutral-200 hover:border-primary-300 hover:bg-primary-25 cursor-default transition-all duration-200"
       title={r ? `${name}: ${r.state} (${String(r.detail)})` : `${name}: -`}
       onDoubleClick={onOpenSettings}
     >
       <Dot state={r?.state} />
-      <span className="text-gray-700">{name}</span>
+      <span className="text-neutral-700 font-medium">{name}</span>
     </div>
   );
 
   return (
-    <header className="h-12 flex items-center justify-end px-4 border-b bg-white">
-      <div className="flex items-center gap-2">
+    <header className="nav-header h-14 flex items-center justify-end px-6">
+      <div className="flex items-center gap-3">
         {/* 네트워크 상태 */}
         <div
-          className="relative flex items-center gap-1.5 text-xs px-2 py-1 rounded-md hover:bg-gray-100 cursor-default"
+          className="group relative flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-white border border-neutral-200 hover:border-primary-300 hover:bg-primary-25 cursor-default transition-all duration-200"
           title={isOnline ? "온라인" : "오프라인"}
         >
           {isOnline ? (
-            <FaWifi className="text-emerald-500" />
+            <FaWifi className="text-success-500" />
           ) : (
             <>
-              <FaWifi className="text-rose-500" />
-              <FaBan className="absolute text-rose-600" />
+              <FaWifi className="text-error-500" />
+              <FaBan className="absolute text-error-600" />
             </>
           )}
-          <span className="text-gray-700">
+          <span className="text-neutral-700 font-medium">
             {isOnline ? "Online" : "Offline"}
           </span>
         </div>
@@ -111,14 +111,14 @@ export default function HeaderBar({ onOpenSettings }) {
         <button
           onClick={refresh}
           disabled={loading}
-          className="flex items-center justify-center text-xs px-2 py-1 rounded bg-gray-900 text-white hover:bg-black disabled:opacity-60"
+          className="btn-primary min-w-[80px]"
           title="새로고침"
         >
           {loading ? <Spinner /> : "Refresh"}
         </button>
         <button
           onClick={onOpenSettings}
-          className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50"
+          className="btn-secondary"
           title="전역 설정"
         >
           Settings

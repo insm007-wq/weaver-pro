@@ -36,7 +36,7 @@ export default function SettingsPage() {
   return (
     <div
       ref={containerRef}
-      className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-md"
+      className="max-w-5xl mx-auto p-8 animate-fade-in"
       style={
         fixedWidthPx
           ? {
@@ -50,51 +50,71 @@ export default function SettingsPage() {
           : { scrollbarGutter: "stable both-edges" }
       }
     >
-      {/* 헤더 (카드 내부, 썸네일 생성기와 동일한 톤) */}
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <span>⚙️</span> 전역 설정
+      {/* 헤더 */}
+      <div className="card card-header mb-6">
+        <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-3">
+          <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-lg flex items-center justify-center text-white">
+            ⚙️
+          </div>
+          전역 설정
         </h1>
+        <p className="text-neutral-500 mt-2">애플리케이션 전반의 설정을 관리합니다</p>
       </div>
 
-      {/* 탭 바 */}
-      <div className="border-b border-gray-200 mb-4">
-        <div className="flex gap-2">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-all duration-200 flex items-center gap-1
-                ${
-                  activeTab === tab.key
-                    ? "bg-white border border-b-0 border-gray-300 text-gray-900 shadow-sm"
-                    : "text-gray-400 hover:text-gray-700"
-                }`}
-            >
-              <span>{tab.icon}</span> {tab.name}
-            </button>
-          ))}
+      {/* 메인 카드 */}
+      <div className="card">
+        {/* 탭 바 */}
+        <div className="card-header">
+          <div className="flex gap-1 overflow-x-auto">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-4 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex items-center gap-2 whitespace-nowrap
+                  ${
+                    activeTab === tab.key
+                      ? "bg-primary-100 text-primary-700 shadow-soft border border-primary-200"
+                      : "text-neutral-600 hover:text-neutral-800 hover:bg-neutral-50"
+                  }`}
+              >
+                <span className="text-base">{tab.icon}</span> 
+                {tab.name}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* 내용 패널 (카드 내부 스크롤) */}
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="p-6 h-[560px] overflow-y-auto text-sm">
-          <Suspense
-            fallback={<div className="text-gray-500">불러오는 중…</div>}
-          >
-            <ActiveComp />
-          </Suspense>
+        {/* 내용 패널 */}
+        <div className="card-body">
+          <div className="h-[580px] overflow-y-auto pr-2 -mr-2">
+            <Suspense
+              fallback={
+                <div className="flex items-center justify-center h-40 text-neutral-500">
+                  <div className="flex items-center gap-3">
+                    <div className="loading-spinner"></div>
+                    불러오는 중...
+                  </div>
+                </div>
+              }
+            >
+              <ActiveComp />
+            </Suspense>
+          </div>
         </div>
 
         {/* 푸터 */}
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-100 bg-white">
-          <button className="text-sm bg-gray-100 text-gray-700 rounded-lg px-4 py-2 hover:bg-gray-200">
-            취소
-          </button>
-          <button className="text-sm bg-purple-600 text-white rounded-lg px-4 py-2 hover:bg-purple-500">
-            저장
-          </button>
+        <div className="flex justify-between items-center px-6 py-4 border-t border-neutral-200 bg-neutral-25/50">
+          <div className="text-sm text-neutral-500">
+            변경사항은 자동으로 저장됩니다
+          </div>
+          <div className="flex gap-3">
+            <button className="btn-ghost">
+              초기화
+            </button>
+            <button className="btn-primary">
+              저장
+            </button>
+          </div>
         </div>
       </div>
     </div>

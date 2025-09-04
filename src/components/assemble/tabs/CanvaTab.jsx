@@ -392,8 +392,8 @@ export default function CanvaTab({ addAssets }) {
           className="h-full"
           title="캔바 자동 다운로드"
           right={
-            <span className="text-xs text-slate-500">
-              캔바 로그인 · <span className="text-slate-400">추출 {formatMs(extractMs)}</span>
+            <span className="text-xs text-neutral-600">
+              캔바 로그인 · <span className="text-neutral-500">추출 {formatMs(extractMs)}</span>
             </span>
           }
         >
@@ -409,7 +409,7 @@ export default function CanvaTab({ addAssets }) {
               </span>
             )}
             {canvaMsg && (
-              <span className="text-[12px] text-slate-500" aria-live="polite">
+              <span className="text-[12px] text-neutral-600" aria-live="polite">
                 {canvaMsg}
               </span>
             )}
@@ -418,7 +418,7 @@ export default function CanvaTab({ addAssets }) {
           <div className="flex flex-wrap gap-2 mb-3">
             <button
               onClick={handleCanvaLogin}
-              className="h-9 px-3 rounded-lg bg-indigo-600 text-white text-sm hover:bg-indigo-500 disabled:opacity-60"
+              className="btn-primary h-9"
               disabled={canvaBusy}
               title="Canva 계정에 로그인합니다."
             >
@@ -426,7 +426,7 @@ export default function CanvaTab({ addAssets }) {
             </button>
             <button
               onClick={handleCanvaLogout}
-              className="h-9 px-3 rounded-lg bg-slate-700 text-white text-sm hover:bg-slate-600 disabled:opacity-60"
+              className="btn-secondary h-9"
               disabled={canvaBusy || !canvaAuthed}
               title="현재 Canva 세션을 종료합니다."
             >
@@ -436,12 +436,12 @@ export default function CanvaTab({ addAssets }) {
 
           {/* 옵션들 */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="text-xs text-slate-700 flex flex-col gap-1 min-w-0">
+            <label className="text-xs text-neutral-700 flex flex-col gap-1 min-w-0">
               해상도
               <select
                 value={resPreset}
                 onChange={(e) => setResPreset(e.target.value)}
-                className="h-9 px-3 rounded-lg border border-slate-200 text-sm bg-white w-full"
+                className="h-9 px-3 rounded-lg border border-neutral-200 text-sm bg-white text-neutral-900 w-full"
                 disabled={busy}
               >
                 {RES_PRESETS.map((r) => (
@@ -452,7 +452,7 @@ export default function CanvaTab({ addAssets }) {
               </select>
             </label>
 
-            <label className="text-xs text-slate-700 flex flex-col gap-1 min-w-0">
+            <label className="text-xs text-neutral-700 flex flex-col gap-1 min-w-0">
               키워드당 개수
               <input
                 type="number"
@@ -460,12 +460,12 @@ export default function CanvaTab({ addAssets }) {
                 max={6}
                 value={perKeyword}
                 onChange={(e) => setPerKeyword(Math.max(1, Math.min(6, +e.target.value || 1)))}
-                className="h-9 px-3 rounded-lg border border-slate-200 text-sm w-full"
+                className="h-9 px-3 rounded-lg border border-neutral-200 text-sm text-neutral-900 bg-white w-full"
                 disabled={busy}
               />
             </label>
 
-            <label className="text-xs text-slate-700 flex flex-col gap-1 min-w-0">
+            <label className="text-xs text-neutral-700 flex flex-col gap-1 min-w-0">
               최소 용량 (MB)
               <input
                 type="number"
@@ -473,12 +473,12 @@ export default function CanvaTab({ addAssets }) {
                 max={500}
                 value={minMB}
                 onChange={(e) => setMinMB(Math.max(0, +e.target.value || 0))}
-                className="h-9 px-3 rounded-lg border border-slate-200 text-sm w-full"
+                className="h-9 px-3 rounded-lg border border-neutral-200 text-sm text-neutral-900 bg-white w-full"
                 disabled={busy}
               />
             </label>
 
-            <label className="text-xs text-slate-700 flex flex-col gap-1 min-w-0">
+            <label className="text-xs text-neutral-700 flex flex-col gap-1 min-w-0">
               최대 용량 (MB)
               <input
                 type="number"
@@ -486,12 +486,12 @@ export default function CanvaTab({ addAssets }) {
                 max={2000}
                 value={maxMB}
                 onChange={(e) => setMaxMB(Math.max(0, +e.target.value || 0))}
-                className="h-9 px-3 rounded-lg border border-slate-200 text-sm w-full"
+                className="h-9 px-3 rounded-lg border border-neutral-200 text-sm text-neutral-900 bg-white w-full"
                 disabled={busy}
               />
             </label>
 
-            <label className="text-xs text-slate-700 flex flex-col gap-1 min-w-0">
+            <label className="text-xs text-neutral-700 flex flex-col gap-1 min-w-0">
               동시 다운로드
               <input
                 type="number"
@@ -499,12 +499,12 @@ export default function CanvaTab({ addAssets }) {
                 max={6}
                 value={concurrency}
                 onChange={(e) => setConcurrency(Math.max(1, Math.min(6, +e.target.value || 1)))}
-                className="h-9 px-3 rounded-lg border border-slate-200 text-sm w-full"
+                className="h-9 px-3 rounded-lg border border-neutral-200 text-sm text-neutral-900 bg-white w-full"
                 disabled={busy}
               />
             </label>
 
-            <label className="text-xs text-slate-700 flex flex-col gap-1 min-w-0">
+            <label className="text-xs text-neutral-700 flex flex-col gap-1 min-w-0">
               상위 키워드만 사용
               <input
                 type="number"
@@ -512,10 +512,10 @@ export default function CanvaTab({ addAssets }) {
                 max={300}
                 value={maxKeywordsToUse}
                 onChange={(e) => setMaxKeywordsToUse(Math.max(1, Math.min(300, +e.target.value || 30)))}
-                className="h-9 px-3 rounded-lg border border-slate-200 text-sm w-full"
+                className="h-9 px-3 rounded-lg border border-neutral-200 text-sm text-neutral-900 bg-white w-full"
                 disabled={busy}
               />
-              <span className="text-[11px] text-slate-400 break-words">긴 대본일 때 과도한 호출을 방지합니다.</span>
+              <span className="text-[11px] text-neutral-500 break-words">긴 대본일 때 과도한 호출을 방지합니다.</span>
             </label>
           </div>
 
@@ -537,10 +537,10 @@ export default function CanvaTab({ addAssets }) {
             >
               중지
             </button>
-            {msg && <div className="text-[12px] text-slate-600">{msg}</div>}
+            {msg && <div className="text-[12px] text-neutral-700">{msg}</div>}
           </div>
 
-          <div className="mt-2 text-[12px] text-slate-500">
+          <div className="mt-2 text-[12px] text-neutral-600">
             예상 다운로드: <b>{estimatedDownloads}</b>개
           </div>
         </SectionCard>
@@ -550,7 +550,7 @@ export default function CanvaTab({ addAssets }) {
           className="h-full"
           title="진행 상황"
           right={
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-neutral-500">
               {isDone ? (
                 <span
                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 ${
@@ -567,14 +567,14 @@ export default function CanvaTab({ addAssets }) {
         >
           <div className="h-full flex flex-col">
             {/* 요약 */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-slate-700 mb-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-neutral-700 mb-2 shrink-0">
               <span>
                 다운로드 <b>{progress.saved}</b>개
               </span>
               <span>
                 패스 <b>{progress.skipped}</b>개
                 {Object.values(progress.skipsBy || {}).some(Boolean) ? (
-                  <span className="text-slate-500">
+                  <span className="text-neutral-500">
                     {" "}
                     (
                     {Object.entries(progress.skipsBy)
@@ -588,24 +588,24 @@ export default function CanvaTab({ addAssets }) {
                   </span>
                 ) : null}
               </span>
-              <span className="text-slate-500">
+              <span className="text-neutral-500">
                 총 {progress.total || 0} · {pct}%
               </span>
-              {extractMs > 0 && <span className="text-slate-400">추출 {formatMs(extractMs)}</span>}
-              {runMs > 0 && <span className="text-slate-400">전체 {formatMs(runMs)}</span>}
+              {extractMs > 0 && <span className="text-neutral-500">추출 {formatMs(extractMs)}</span>}
+              {runMs > 0 && <span className="text-neutral-500">전체 {formatMs(runMs)}</span>}
             </div>
 
             {/* 진행바 */}
             <div
               className={`relative h-1.5 w-full rounded ${
-                isDone ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-slate-100"
+                isDone ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-neutral-100"
               } overflow-hidden mb-3 shrink-0 transition-colors`}
             >
               <div className="h-1.5 bg-emerald-500 transition-[width] duration-300" style={{ width: `${pct}%` }} />
             </div>
 
             {/* 키워드 칩 */}
-            <div className="mb-2 text-xs text-slate-600 shrink-0">키워드 {keywordDisplay.length}개</div>
+            <div className="mb-2 text-xs text-neutral-700 shrink-0">키워드 {keywordDisplay.length}개</div>
 
             {/* 키워드 영역 */}
             <div className="flex-1 min-h-[240px]">
@@ -614,10 +614,10 @@ export default function CanvaTab({ addAssets }) {
                   <div className="flex flex-wrap gap-2">
                     {keywordDisplay.map((k) => {
                       const st = progress.rows?.[k]?.status;
-                      let klass = "bg-slate-100 text-slate-700";
+                      let klass = "bg-neutral-100 text-neutral-700";
                       if (st) {
                         if (st.includes("완료") || st.includes("저장")) klass = "bg-emerald-100 text-emerald-700 border border-emerald-200";
-                        else if (st.includes("결과 없음")) klass = "bg-slate-100 text-slate-500 border border-slate-200";
+                        else if (st.includes("결과 없음")) klass = "bg-neutral-100 text-neutral-500 border border-neutral-200";
                         else if (st.includes("검색") || st.includes("다운로드") || st.includes("저장 중"))
                           klass = "bg-indigo-50 text-indigo-700 border border-indigo-100";
                       }
@@ -629,7 +629,7 @@ export default function CanvaTab({ addAssets }) {
                     })}
                   </div>
                 ) : (
-                  <div className="p-3 text-[12px] text-slate-500">아직 실행된 작업이 없습니다.</div>
+                  <div className="p-3 text-[12px] text-neutral-600">아직 실행된 작업이 없습니다.</div>
                 )}
               </div>
             </div>

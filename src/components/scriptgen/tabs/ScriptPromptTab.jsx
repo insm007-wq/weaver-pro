@@ -198,12 +198,12 @@ export default function ScriptPromptTab({
           <span className="inline-flex h-6 w-6 items-center justify-center rounded bg-slate-100">
             📝
           </span>
-          <div className="text-sm font-semibold">프롬프트 관리</div>
-          <span className="ml-1 text-xs text-slate-500">{countTotal}개</span>
+          <div className="text-sm font-semibold text-neutral-900">프롬프트 관리</div>
+          <span className="ml-1 text-xs text-neutral-600">{countTotal}개</span>
         </div>
         <div className="flex items-center gap-2">
           <select
-            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+            className="h-9 rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900"
             value={currentId}
             onChange={(e) => handleSelect(e.target.value)}
           >
@@ -218,7 +218,7 @@ export default function ScriptPromptTab({
           <button
             type="button"
             onClick={() => setCreating((v) => !v)}
-            className="h-9 rounded-lg bg-blue-600 px-3 text-sm text-white hover:bg-blue-500"
+            className="btn-primary h-9"
           >
             + 새 프롬프트
           </button>
@@ -227,10 +227,10 @@ export default function ScriptPromptTab({
             type="button"
             onClick={handleDelete}
             disabled={currentId === "default"}
-            className={`h-9 rounded-lg px-3 text-sm ${
+            className={`h-9 rounded-lg px-3 text-sm font-medium transition-all duration-200 ${
               currentId === "default"
-                ? "bg-rose-100 text-rose-300 cursor-not-allowed"
-                : "bg-rose-50 text-rose-600 hover:bg-rose-100"
+                ? "bg-error-100 text-error-300 cursor-not-allowed"
+                : "bg-error-50 text-error-600 hover:bg-error-100 border border-error-200"
             }`}
           >
             삭제
@@ -241,12 +241,12 @@ export default function ScriptPromptTab({
       {/* 새 프롬프트 입력 박스 */}
       {creating && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <label className="block text-xs font-medium text-slate-600 mb-1">
+          <label className="block text-sm font-medium text-neutral-700 mb-2">
             프롬프트 이름
           </label>
           <input
             autoFocus
-            className="w-full h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+            className="input-field h-11"
             placeholder="새 프롬프트 이름을 입력하세요"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}

@@ -64,13 +64,17 @@ export default function App() {
   }, []);
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f5f7fa] text-gray-800">
+    <div className="flex min-h-screen flex-col bg-neutral-25">
       <Suspense fallback={<Spinner label="Loading header..." />}>
         <HeaderBar onOpenSettings={handleOpenSettings} />
       </Suspense>
 
       <div className="flex flex-1">
-        <main className="flex-1 p-10 overflow-auto">
+        <Suspense fallback={<Spinner />}>
+          <Sidebar onSelectMenu={handleSelectMenu} />
+        </Suspense>
+        
+        <main className="flex-1 p-8 overflow-auto">
           <Suspense fallback={<Spinner />}>
             {/* 프로젝트 필요 시 초기화 페이지만 예외 처리 */}
             {!projectName && !canOpenWithoutProject ? (
@@ -79,14 +83,35 @@ export default function App() {
               <>
                 <KeepAlivePane active={currentPage === null}>
                   {/* 기본 대시(초기 상태) */}
-                  <div className="bg-white shadow-xl rounded-xl p-8 w-full max-w-2xl">
-                    <h1 className="text-2xl font-bold mb-4">
-                      {projectName || "Content Weaver Pro"}
-                    </h1>
-                    <div className="bg-gray-100 p-4 rounded">
-                      <p className="text-sm text-gray-700">
-                        시작하려면 오른쪽 사이드바에서 메뉴를 선택하세요.
+                  <div className="card max-w-3xl animate-fade-in">
+                    <div className="card-header">
+                      <h1 className="text-3xl font-bold text-neutral-900 flex items-center gap-4">
+                        <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-xl flex items-center justify-center text-white text-xl">
+                          🎥
+                        </div>
+                        {projectName || "Content Weaver Pro"}
+                      </h1>
+                      <p className="text-neutral-500 mt-2">
+                        AI 기반 영상 제작 솔루션에 오신 것을 환영합니다
                       </p>
+                    </div>
+                    
+                    <div className="card-body">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-4 bg-primary-50 rounded-lg border border-primary-200">
+                          <h3 className="font-semibold text-primary-900 mb-2">🎯 빠른 시작</h3>
+                          <p className="text-sm text-primary-700">
+                            왼쪽 사이드바에서 원하는 기능을 선택하여 시작하세요.
+                          </p>
+                        </div>
+                        
+                        <div className="p-4 bg-secondary-50 rounded-lg border border-secondary-200">
+                          <h3 className="font-semibold text-secondary-900 mb-2">⚡ 새로운 기능</h3>
+                          <p className="text-sm text-secondary-700">
+                            최신 AI 모델과 향상된 사용자 경험을 체험해보세요.
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </KeepAlivePane>
@@ -123,9 +148,6 @@ export default function App() {
           </Suspense>
         </main>
 
-        <Suspense fallback={<Spinner label="Loading sidebar..." />}>
-          <Sidebar onSelectMenu={handleSelectMenu} />
-        </Suspense>
       </div>
     </div>
   );
