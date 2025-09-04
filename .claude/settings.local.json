@@ -56,7 +56,8 @@
       "Bash(git push:*)",
       "Read(/D:\\project\\weaver-pro\\src\\components\\assemble\\parts/**)",
       "Read(/D:\\project\\weaver-pro\\src/**)",
-      "Read(/D:\\project\\weaver-pro/**)"
+      "Read(/D:\\project\\weaver-pro/**)",
+      "Read(/D:\\project\\weaver-pro\\electron/**)"
     ],
     "deny": [],
     "ask": []

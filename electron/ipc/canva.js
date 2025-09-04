@@ -58,6 +58,148 @@ function emitAll(event, payload) {
   }
 }
 
+// Phase 2: DOM 자동 클릭 핵심 로직
+async function autoClickDownloads(browserWindow, keyword, targetCount) {
+  let downloadCount = 0;
+  let retryCount = 0;
+  const maxRetries = 3;
+
+  while (downloadCount < targetCount && retryCount < maxRetries) {
+    try {
+      // DOM 자동화 스크립트 주입 및 실행
+      const result = await browserWindow.webContents.executeJavaScript(`
+        (async function() {
+          const wait = (ms) => new Promise(r => setTimeout(r, ms));
+          let clickCount = 0;
+          const maxClicks = ${targetCount - downloadCount};
+          
+          // 캔바 비디오 셀렉터들 (여러 버전 대응)
+          const videoSelectors = [
+            'div[data-testid="template-card"] video',
+            'div[role="button"] video',
+            '.template-card video',
+            '[data-testid="video-template"] video',
+            'article video',
+            '.template-grid-item video'
+          ];
+          
+          // 다운로드 버튼 셀렉터들
+          const downloadSelectors = [
+            'button[aria-label*="download"]',
+            'button[aria-label*="Download"]',
+            'button[data-testid*="download"]',
+            'button:has([aria-label*="download"])',
+            'button[title*="download"]',
+            'button[title*="Download"]'
+          ];
+          
+          // 먼저 페이지가 로드될 때까지 대기
+          await wait(2000);
+          
+          // 스크롤을 통해 더 많은 콘텐츠 로드
+          for (let i = 0; i < 3; i++) {
+            window.scrollTo(0, document.body.scrollHeight);
+            await wait(1500);
+          }
+          
+          // 비디오 요소들 찾기
+          let videos = [];
+          for (const selector of videoSelectors) {
+            videos = document.querySelectorAll(selector);
+            if (videos.length > 0) break;
+          }
+          
+          console.log('Found videos:', videos.length);
+          
+          // 비디오들을 클릭하여 상세 페이지로 진입 후 다운로드
+          for (let i = 0; i < Math.min(videos.length, maxClicks); i++) {
+            try {
+              const video = videos[i];
+              
+              // 비디오 클릭 (상세 페이지로 이동)
+              const videoContainer = video.closest('[role="button"]') || 
+                                   video.closest('.template-card') || 
+                                   video.closest('[data-testid="template-card"]') ||
+                                   video.parentElement;
+              
+              if (videoContainer && videoContainer.click) {
+                videoContainer.click();
+                console.log('Clicked video', i + 1);
+                await wait(3000); // 상세 페이지 로딩 대기
+                
+                // 다운로드 버튼 찾기 및 클릭
+                let downloadBtn = null;
+                for (const selector of downloadSelectors) {
+                  downloadBtn = document.querySelector(selector);
+                  if (downloadBtn) break;
+                }
+                
+                if (downloadBtn && downloadBtn.click) {
+                  downloadBtn.click();
+                  console.log('Clicked download button for video', i + 1);
+                  clickCount++;
+                  await wait(2000);
+                  
+                  // 뒤로 가기 또는 닫기
+                  const backBtn = document.querySelector('button[aria-label*="back"]') ||
+                                 document.querySelector('button[data-testid*="back"]') ||
+                                 document.querySelector('.close-button');
+                  
+                  if (backBtn && backBtn.click) {
+                    backBtn.click();
+                  } else {
+                    window.history.back();
+                  }
+                  await wait(2000);
+                } else {
+                  console.log('Download button not found for video', i + 1);
+                  window.history.back();
+                  await wait(1500);
+                }
+              }
+              
+              // 서버 부하 방지를 위한 랜덤 딜레이
+              await wait(1000 + Math.random() * 2000);
+              
+            } catch (e) {
+              console.warn('Video click error:', e);
+              continue;
+            }
+          }
+          
+          return clickCount;
+        })();
+      `);
+
+      downloadCount += result || 0;
+      console.log(`[canva] ${keyword}: Downloaded ${downloadCount}/${targetCount}`);
+      
+      if (downloadCount >= targetCount) {
+        break;
+      }
+      
+      // 추가 다운로드가 필요하면 페이지 새로고침 후 재시도
+      if (downloadCount < targetCount) {
+        await new Promise(r => setTimeout(r, 2000));
+        await browserWindow.reload();
+        await new Promise(r => setTimeout(r, 3000));
+      }
+      
+    } catch (error) {
+      console.warn(`[canva] Auto-click error for ${keyword}:`, error?.message || error);
+      retryCount++;
+      
+      if (retryCount < maxRetries) {
+        await new Promise(r => setTimeout(r, 5000));
+        await browserWindow.reload();
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
+  }
+  
+  return downloadCount;
+}
+
 function createOrFocusWindow() {
   if (win && !win.isDestroyed()) {
     win.show();
@@ -220,13 +362,14 @@ function register() {
     }
   });
 
-  // 자동화 시작(Phase 1: 검색 페이지 순차 열기 + 다운로드 가로채기)
+  // 자동화 시작(Phase 2: 검색 페이지 순차 열기 + DOM 자동 클릭 + 다운로드 가로채기)
   ipcMain.handle("canva:autoRun", async (_evt, payload = {}) => {
     if (running) return { ok: false, message: "이미 실행 중입니다." };
     const keywords = Array.isArray(payload.keywords) ? payload.keywords : [];
     if (!keywords.length) return { ok: false, message: "키워드가 없습니다." };
 
-    const perKeyword = Math.max(1, Math.min(6, payload.perKeyword || 1));
+    const perKeyword = Math.max(1, Math.min(20, payload.perKeyword || 1)); // 확장: 최대 20개
+    const autoClick = payload.autoClick !== false; // 기본값 true
 
     const w = createOrFocusWindow();
     const ses = w.webContents.session;
@@ -254,16 +397,39 @@ function register() {
         const url = SEARCH_BASE + encodeURIComponent(k);
         await w.loadURL(url);
 
-        // (선택) 약간 대기 → 사용자가 내려받기 클릭 (Phase 1: 수동 클릭)
-        await new Promise((r) => setTimeout(r, 1500));
+        // 페이지 로딩 대기
+        await new Promise((r) => setTimeout(r, 3000));
 
-        // perKeyword > 1인 경우, 사용자가 여러 개 클릭하도록 대기시간을 조금 더 줌
-        if (perKeyword > 1) {
-          await new Promise((r) => setTimeout(r, 1200 * Math.min(perKeyword, 3)));
+        if (autoClick) {
+          // Phase 2: DOM 자동 클릭 실행
+          emitAll("canva:progress", { keyword: k, phase: "pick", message: "auto-clicking" });
+          
+          try {
+            const downloadCount = await autoClickDownloads(w, k, perKeyword);
+            emitAll("canva:progress", { 
+              keyword: k, 
+              phase: "pick", 
+              message: `clicked-${downloadCount}`,
+              pickedDelta: downloadCount 
+            });
+          } catch (clickError) {
+            console.warn(`[canva] Auto-click failed for ${k}:`, clickError?.message || clickError);
+            emitAll("canva:progress", { 
+              keyword: k, 
+              phase: "pick", 
+              message: "auto-click-failed" 
+            });
+          }
+        } else {
+          // Phase 1 호환: 수동 클릭
+          if (perKeyword > 1) {
+            await new Promise((r) => setTimeout(r, 1200 * Math.min(perKeyword, 3)));
+          }
+          emitAll("canva:progress", { keyword: k, phase: "pick", message: "waiting-user" });
         }
 
-        emitAll("canva:progress", { keyword: k, phase: "pick", message: "waiting-user" });
-        // 실제 자동 클릭은 Phase 2에서 DOM 스크립트 셀렉터 확정 후 주입 예정
+        // 키워드 간 간격 (서버 부하 방지)
+        await new Promise((r) => setTimeout(r, 1000 + Math.random() * 2000));
       }
 
       emitAll("canva:progress", { keyword: null, phase: "done", message: "queue-finished" });
