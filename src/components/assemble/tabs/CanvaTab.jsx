@@ -105,10 +105,8 @@ export default function CanvaTab({ addAssets }) {
   const [concurrency, setConcurrency] = useState(3);
   const [maxKeywordsToUse, setMaxKeywordsToUse] = useState(30);
   
-  // 대량 다운로드 설정
-  const [bulkMode, setBulkMode] = useState(false);
-  const [targetTotal, setTargetTotal] = useState(80);
-  const [autoClick, setAutoClick] = useState(true);
+  // 자동 다운로드 설정 (단순화)
+  const [totalDownloads, setTotalDownloads] = useState(0);
 
   // 진행/시간
   const [progress, dispatchProg] = useReducer(progReducer, progInit);
@@ -320,24 +318,12 @@ export default function CanvaTab({ addAssets }) {
         setMsg(`키워드 ${extracted.length}개 추출됨 · 자동 다운로드 시작`);
       }
 
-      // 2) 실행 키워드 집합/진행 초기화
-      let runKeywords, finalPerKeyword;
+      // 2) 실행 키워드 집합/진행 초기화 (단순화)
+      const runKeywords = baseKeywords.slice(0, Math.max(1, Math.min(maxKeywordsToUse, baseKeywords.length)));
+      const totalEstimated = runKeywords.length * perKeyword;
       
-      if (bulkMode) {
-        // 대량 모드: targetTotal에 맞춰 키워드와 개수 자동 계산
-        const availableKeywords = Math.min(baseKeywords.length, maxKeywordsToUse);
-        finalPerKeyword = Math.ceil(targetTotal / availableKeywords);
-        finalPerKeyword = Math.min(20, Math.max(1, finalPerKeyword)); // 1-20 제한
-        
-        runKeywords = baseKeywords.slice(0, availableKeywords);
-        setMsg(`대량 모드: 키워드 ${availableKeywords}개 × ${finalPerKeyword}개 = 목표 ${availableKeywords * finalPerKeyword}개`);
-      } else {
-        // 일반 모드
-        runKeywords = baseKeywords.slice(0, Math.max(1, Math.min(maxKeywordsToUse, baseKeywords.length)));
-        finalPerKeyword = perKeyword;
-      }
-      
-      dispatchProg({ type: "init", keywords: runKeywords, perKeyword: finalPerKeyword });
+      setMsg(`키워드 ${runKeywords.length}개에서 총 ${totalEstimated}개 영상 다운로드 시작`);
+      dispatchProg({ type: "init", keywords: runKeywords, perKeyword });
 
       // 3) 캔바 자동화 호출
       const api = window?.api?.canva;
@@ -348,12 +334,11 @@ export default function CanvaTab({ addAssets }) {
 
       const payload = {
         keywords: runKeywords,
-        perKeyword: Math.max(1, Math.min(20, finalPerKeyword)), // 확장된 범위
+        perKeyword: Math.max(1, Math.min(10, perKeyword)), // 간단한 범위
         targetRes: { w: chosenRes.w, h: chosenRes.h },
         minBytes: Math.max(0, Math.floor(minMB * MB)),
         maxBytes: Math.max(0, Math.floor(maxMB * MB)),
         concurrency: Math.max(1, Math.min(6, concurrency)),
-        autoClick, // Phase 2 기능
         // 선호 파일명 규칙: 키워드_번호_해상도 (예: 홍콩_01_1920x1080.mp4)
         fileNamePattern: "{keyword}_{seq}_{w}x{h}",
         category: "videos",
@@ -403,12 +388,7 @@ export default function CanvaTab({ addAssets }) {
   const keywordDisplay = useMemo(() => Object.keys(progress.rows || {}), [progress.rows]);
   const isDone = progress.total > 0 && progress.saved + progress.skipped >= progress.total;
   
-  const estimatedDownloads = useMemo(() => {
-    if (bulkMode) {
-      return targetTotal;
-    }
-    return Math.min(keywords.length || maxKeywordsToUse, maxKeywordsToUse) * perKeyword;
-  }, [bulkMode, targetTotal, keywords.length, maxKeywordsToUse, perKeyword]);
+  const estimatedDownloads = Math.min(keywords.length || maxKeywordsToUse, maxKeywordsToUse) * perKeyword;
 
   /* ---------------------------- UI ---------------------------- */
   return (
@@ -461,51 +441,6 @@ export default function CanvaTab({ addAssets }) {
             </button>
           </div>
 
-          {/* 대량 다운로드 모드 토글 */}
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-center gap-3 mb-2">
-              <input
-                type="checkbox"
-                id="bulkMode"
-                checked={bulkMode}
-                onChange={(e) => setBulkMode(e.target.checked)}
-                className="w-4 h-4 text-blue-600"
-              />
-              <label htmlFor="bulkMode" className="font-medium text-blue-900">
-                대량 다운로드 모드 (80개 이상)
-              </label>
-            </div>
-            
-            {bulkMode && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                <label className="text-xs text-neutral-700 flex flex-col gap-1 min-w-0">
-                  목표 총 개수
-                  <input
-                    type="number"
-                    min={10}
-                    max={500}
-                    value={targetTotal}
-                    onChange={(e) => setTargetTotal(Math.max(10, Math.min(500, +e.target.value || 80)))}
-                    className="h-9 px-3 rounded-lg border border-neutral-200 text-sm text-neutral-900 bg-white w-full"
-                    disabled={busy}
-                  />
-                </label>
-                
-                <label className="text-xs text-neutral-700 flex flex-col gap-1 min-w-0">
-                  자동 클릭
-                  <select
-                    value={autoClick ? "true" : "false"}
-                    onChange={(e) => setAutoClick(e.target.value === "true")}
-                    className="h-9 px-3 rounded-lg border border-neutral-200 text-sm bg-white text-neutral-900 w-full"
-                    disabled={busy}
-                  >
-                    <option value="true">완전 자동 (Phase 2)</option>
-                    <option value="false">수동 클릭 (Phase 1)</option>
-                  </select>
-                </label>
-              </div>
-            )}
-          </div>
 
           {/* 옵션들 */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -530,15 +465,12 @@ export default function CanvaTab({ addAssets }) {
               <input
                 type="number"
                 min={1}
-                max={bulkMode ? 20 : 6}
+                max={10}
                 value={perKeyword}
-                onChange={(e) => setPerKeyword(Math.max(1, Math.min(bulkMode ? 20 : 6, +e.target.value || 1)))}
+                onChange={(e) => setPerKeyword(Math.max(1, Math.min(10, +e.target.value || 1)))}
                 className="h-9 px-3 rounded-lg border border-neutral-200 text-sm text-neutral-900 bg-white w-full"
-                disabled={busy || bulkMode}
+                disabled={busy}
               />
-              {bulkMode && (
-                <span className="text-[11px] text-blue-600">대량 모드에서는 목표 개수로 자동 계산됩니다</span>
-              )}
             </label>
 
             <label className="text-xs text-neutral-700 flex flex-col gap-1 min-w-0">
@@ -601,12 +533,9 @@ export default function CanvaTab({ addAssets }) {
               onClick={handleRun}
               className="h-9 px-3 rounded-lg bg-emerald-600 text-white text-sm hover:bg-emerald-500 disabled:opacity-60"
               disabled={busy}
-              title={bulkMode ? `목표 ${targetTotal}개 대량 다운로드` : "(키워드가 없으면 SRT에서 자동 추출 후 실행)"}
+              title="키워드가 없으면 SRT에서 자동 추출 후 캔바에서 영상 다운로드"
             >
-              {busy 
-                ? (bulkMode ? `${autoClick ? "자동" : "수동"} 대량 다운로드 실행 중…` : "자동 다운로드 실행 중…")
-                : (bulkMode ? `${targetTotal}개 대량 다운로드 시작` : "캔바 자동 다운로드 시작")
-              }
+              {busy ? "캔바 자동 다운로드 실행 중…" : "캔바 자동 다운로드 시작"}
             </button>
             <button
               onClick={handleStop}
@@ -647,31 +576,22 @@ export default function CanvaTab({ addAssets }) {
           <div className="h-full flex flex-col">
             {/* 요약 */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-neutral-700 mb-2 shrink-0">
-              <span>
-                다운로드 <b>{progress.saved}</b>개
+              <span className="text-lg font-semibold text-emerald-600">
+                {progress.saved}/{progress.total || 0}
               </span>
               <span>
-                패스 <b>{progress.skipped}</b>개
-                {Object.values(progress.skipsBy || {}).some(Boolean) ? (
-                  <span className="text-neutral-500">
-                    {" "}
-                    (
-                    {Object.entries(progress.skipsBy)
-                      .filter(([_, v]) => v)
-                      .map(([k, v]) => {
-                        const m = { noResult: "결과없음", searchError: "검색오류", saveError: "저장오류", other: "기타" };
-                        return `${m[k]} ${v}`;
-                      })
-                      .join(", ")}
-                    )
-                  </span>
-                ) : null}
+                다운로드 완료 <b>{progress.saved}</b>개
               </span>
+              {progress.skipped > 0 && (
+                <span>
+                  패스 <b>{progress.skipped}</b>개
+                </span>
+              )}
               <span className="text-neutral-500">
-                총 {progress.total || 0} · {pct}%
+                {pct}% 완료
               </span>
               {extractMs > 0 && <span className="text-neutral-500">추출 {formatMs(extractMs)}</span>}
-              {runMs > 0 && <span className="text-neutral-500">전체 {formatMs(runMs)}</span>}
+              {runMs > 0 && <span className="text-neutral-500">소요 {formatMs(runMs)}</span>}
             </div>
 
             {/* 진행바 */}
