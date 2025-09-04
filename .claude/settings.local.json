@@ -85,7 +85,21 @@
       "Read(/D:\\project\\weaver-pro\\electron\\ipc/**)",
       "Read(/D:\\project\\weaver-pro\\electron/**)",
       "Read(/D:\\project\\weaver-pro\\electron/**)",
-      "Read(/D:\\project\\weaver-pro/**)"
+      "Read(/D:\\project\\weaver-pro/**)",
+      "Read(/D:\\project\\weaver-pro\\src\\components\\assemble\\tabs/**)",
+      "Read(/D:\\project\\weaver-pro\\src\\components\\assemble\\tabs/**)",
+      "Read(/D:\\project\\weaver-pro\\src\\components\\assemble\\tabs/**)",
+      "Read(/D:\\project\\weaver-pro\\electron/**)",
+      "Read(/D:\\project\\weaver-pro\\electron/**)",
+      "Read(/D:\\project\\weaver-pro\\electron\\ipc/**)",
+      "Read(/D:\\project\\weaver-pro\\src/**)",
+      "Read(/D:\\project\\weaver-pro\\src/**)",
+      "Read(/D:\\project\\weaver-pro\\src/**)",
+      "Read(/D:\\project\\weaver-pro\\src/**)",
+      "Read(/D:\\project\\weaver-pro\\src/**)",
+      "Read(/D:\\project\\weaver-pro\\src/**)",
+      "Read(/D:\\project\\weaver-pro\\src/**)",
+      "Read(/D:\\project\\weaver-pro\\src\\components/**)"
     ],
     "deny": [],
     "ask": []

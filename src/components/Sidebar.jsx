@@ -1,23 +1,34 @@
 import { useState } from "react";
+import { 
+  FaFolderOpen, 
+  FaImage, 
+  FaGear,
+  FaFileLines,
+  FaWandMagicSparkles,
+  FaRocket,
+  FaVideo,
+  FaTrophy,
+  FaScrewdriverWrench
+} from "react-icons/fa6";
 
 export default function Sidebar({ onSelectMenu }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const globalMenu = [
     {
-      icon: "🗂️",
+      icon: <FaFolderOpen className="w-4 h-4 text-blue-500" />,
       label: "프로젝트 관리",
       desc: "새 프로젝트 생성 및 관리",
       key: "project",
     },
     {
-      icon: "🖼️",
+      icon: <FaImage className="w-4 h-4 text-emerald-500" />,
       label: "AI 썸네일 생성기",
       desc: "독립형 썸네일 제작 유틸리티",
       key: "thumbnail",
     },
     {
-      icon: "⚙️",
+      icon: <FaGear className="w-4 h-4 text-orange-500" />,
       label: "전역 설정",
       desc: "API 및 계정 설정",
       key: "settings",
@@ -25,28 +36,38 @@ export default function Sidebar({ onSelectMenu }) {
   ];
 
   const projectMenu = [
-    { icon: "📜", label: "대본", desc: "대본 및 음성 생성", key: "script" },
+    { 
+      icon: <FaFileLines className="w-4 h-4 text-indigo-500" />, 
+      label: "대본", 
+      desc: "대본 및 음성 생성", 
+      key: "script" 
+    },
     {
-      icon: "✨",
+      icon: <FaWandMagicSparkles className="w-4 h-4 text-purple-500" />,
       label: "영상 구성",
       desc: "AI 전략 설정 및 타임라인 생성",
       key: "assemble",
     },
     {
-      icon: "🚀",
+      icon: <FaRocket className="w-4 h-4 text-pink-500" />,
       label: "초안 내보내기",
       desc: "Draft 영상 렌더링",
       key: "draft",
     },
     {
-      icon: "🎬",
+      icon: <FaVideo className="w-4 h-4 text-red-500" />,
       label: "편집 및 다듬기",
       desc: "세부 편집 및 교체",
       key: "refine",
     },
-    { icon: "🏆", label: "최종 완성", desc: "최종 영상 출력", key: "finalize" },
+    { 
+      icon: <FaTrophy className="w-4 h-4 text-yellow-500" />, 
+      label: "최종 완성", 
+      desc: "최종 영상 출력", 
+      key: "finalize" 
+    },
     {
-      icon: "🔧",
+      icon: <FaScrewdriverWrench className="w-4 h-4 text-slate-500" />,
       label: "프로젝트 설정",
       desc: "프롬프트 및 모델 설정",
       key: "projectSettings",
@@ -96,7 +117,7 @@ export default function Sidebar({ onSelectMenu }) {
                 onClick={() => handleMenuClick(item.key)}
                 className="menu-item group"
               >
-                <div className="w-5 h-5 flex items-center justify-center text-base">
+                <div className="w-5 h-5 flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
                   {item.icon}
                 </div>
                 {!isCollapsed ? (
@@ -132,7 +153,7 @@ export default function Sidebar({ onSelectMenu }) {
                 onClick={() => handleMenuClick(item.key)}
                 className="menu-item group"
               >
-                <div className="w-5 h-5 flex items-center justify-center text-base">
+                <div className="w-5 h-5 flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
                   {item.icon}
                 </div>
                 {!isCollapsed ? (

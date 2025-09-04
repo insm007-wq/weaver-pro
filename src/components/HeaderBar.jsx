@@ -105,7 +105,6 @@ export default function HeaderBar({ onOpenSettings }) {
         {/* API 상태 */}
         <Item name="Anthropic" r={data?.anthropic} />
         <Item name="Replicate" r={data?.replicate} />
-        <Item name="MiniMax" r={data?.minimax} />
 
         {/* 버튼 */}
         <button

@@ -172,7 +172,12 @@ export default function ScriptVoiceGenerator() {
 
       const compiledPrompt =
         tab === "prompt-gen"
-          ? compilePromptRaw(genPrompt)
+          ? compilePromptRaw(genPrompt, {
+              topic,
+              style,
+              duration,
+              maxScenes,
+            })
           : tab === "prompt-ref"
           ? compileRefPrompt(refPrompt, {
               referenceText: promptRefText,
