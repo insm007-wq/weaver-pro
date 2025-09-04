@@ -51,7 +51,12 @@
       "Read(/D:\\project\\weaver-pro\\src\\components\\assemble\\tabs/**)",
       "Read(/D:\\project\\weaver-pro\\src\\components\\assemble\\tabs/**)",
       "Bash(git checkout:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Read(/D:\\project\\weaver-pro\\src\\components\\assemble\\parts/**)",
+      "Read(/D:\\project\\weaver-pro\\src/**)",
+      "Read(/D:\\project\\weaver-pro/**)"
     ],
     "deny": [],
     "ask": []

@@ -17,7 +17,27 @@
   body {
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     background: theme('colors.neutral.25');
-    color: theme('colors.neutral.900');
+    color: theme('colors.neutral.900') !important;
+  }
+  
+  /* 모든 요소에 기본 텍스트 색상 강제 적용 */
+  * {
+    color: inherit;
+  }
+  
+  /* div, span 등 기본 요소들에 텍스트 색상 보장 */
+  div, span, p, h1, h2, h3, h4, h5, h6, 
+  button, label, input, textarea, select {
+    color: #0f172a !important;
+  }
+  
+  /* 강제 텍스트 색상 적용 클래스 */
+  .force-text-dark {
+    color: #0f172a !important;
+  }
+  
+  .force-text-dark * {
+    color: #0f172a !important;
   }
   
   /* 폼 요소 기본 스타일 강화 */

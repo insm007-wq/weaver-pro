@@ -385,7 +385,7 @@ export default function CanvaTab({ addAssets }) {
 
   /* ---------------------------- UI ---------------------------- */
   return (
-    <div className="w-full max-w-screen-xl mx-auto px-4">
+    <div className="w-full max-w-screen-xl mx-auto px-4 force-text-dark">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch [&>*]:min-w-0">
         {/* 옵션 */}
         <SectionCard
