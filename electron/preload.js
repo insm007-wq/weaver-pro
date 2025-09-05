@@ -210,9 +210,9 @@ contextBridge.exposeInMainWorld("api", {
   //   const onProg = (p)=>{...}; window.api.on('canva:progress', onProg)
   //   window.api.off('canva:progress', onProg)
   //   window.api.once('foo', (p)=>{...})
-  on: (event, handler) => busOn(event, handler), // ✨ ADD
-  once: (event, handler) => busOnce(event, handler), // ✨ ADD
-  off: (event, handler) => busOff(event, handler), // ✨ ADD
+  on: (event, handler) => busOn(event, handler),
+  once: (event, handler) => busOnce(event, handler),
+  off: (event, handler) => busOff(event, handler),
 
   // ========================================================================
   // 시스템/헬스
@@ -345,13 +345,44 @@ contextBridge.exposeInMainWorld("api", {
   },
 
   // ========================================================================
-  // ✨ Canva
+  // ✨ Canva (기존 + B안 canva-browse 확장)
   // ========================================================================
   canva: {
-    login: () => ipcRenderer.invoke("canva:login"), // ✨ ADD
-    getSession: () => ipcRenderer.invoke("canva:getSession"), // ✨ ADD
-    logout: () => ipcRenderer.invoke("canva:logout"), // ✨ ADD
-    autoRun: (payload) => ipcRenderer.invoke("canva:autoRun", payload), // ✨ ADD
-    stop: () => ipcRenderer.invoke("canva:stop"), // ✨ ADD
+    // ---- 기존(canva IPC) 유지 ----
+    login: () => ipcRenderer.invoke("canva:login"),
+    getSession: () => ipcRenderer.invoke("canva:getSession"),
+    logout: () => ipcRenderer.invoke("canva:logout"),
+    autoRun: (payload) => ipcRenderer.invoke("canva:autoRun", payload),
+    stop: () => ipcRenderer.invoke("canva:stop"),
+
+    // ---- ✅ NEW: B안(Playwright 직접 실행: ipc/canva-browse) ----
+    openBrowser: (opts) => ipcRenderer.invoke("canva:openBrowser", opts),
+    bulkDownload: (keywords, options) => ipcRenderer.invoke("canva:bulkDownload", { keywords, options }),
+
+    // 진행/완료 이벤트 래퍼(버스 기반 사용도 가능)
+    onProgress: (handler) => {
+      if (typeof handler !== "function") return () => {};
+      const wrapped = (_e, payload) => {
+        try {
+          handler(payload);
+        } catch (e) {
+          console.warn("[preload] canva:progress handler error:", e);
+        }
+      };
+      ipcRenderer.on("canva:progress", wrapped);
+      return () => ipcRenderer.removeListener("canva:progress", wrapped);
+    },
+    onDownloaded: (handler) => {
+      if (typeof handler !== "function") return () => {};
+      const wrapped = (_e, payload) => {
+        try {
+          handler(payload);
+        } catch (e) {
+          console.warn("[preload] canva:downloaded handler error:", e);
+        }
+      };
+      ipcRenderer.on("canva:downloaded", wrapped);
+      return () => ipcRenderer.removeListener("canva:downloaded", wrapped);
+    },
   },
 });

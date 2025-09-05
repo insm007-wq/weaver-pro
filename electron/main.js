@@ -65,9 +65,10 @@ function createWindowFallback() {
 
   if (isDev) {
     win.loadURL(VITE_DEV_SERVER_URL).catch((e) => console.error("loadURL:", e));
-    // win.webContents.openDevTools({ mode: "detach" });
+    win.webContents.openDevTools({ mode: "detach" });
   } else {
     win.loadFile(path.join(__dirname, "../dist/index.html")).catch((e) => console.error("loadFile:", e));
+    win.webContents.openDevTools({ mode: "detach" });
   }
 
   win.once("ready-to-show", () => win.show());
@@ -82,9 +83,13 @@ const createMainWindow = (winUtil && winUtil.createMainWindow) || createWindowFa
  * 싱글 인스턴스
  * ============================================================================= */
 const gotLock = app.requestSingleInstanceLock();
+console.log("[main] Single instance lock status:", gotLock);
+
 if (!gotLock) {
+  console.log("[main] Another instance is already running, quitting...");
   app.quit();
 } else {
+  console.log("[main] Got lock, this is the primary instance");
   app.on("second-instance", () => {
     const win = BrowserWindow.getAllWindows()[0];
     if (win) {
@@ -94,13 +99,18 @@ if (!gotLock) {
   });
 
   app.whenReady().then(async () => {
-    if (process.platform === "win32") {
-      app.setAppUserModelId(process.env.APP_ID || "weaver-pro");
-    }
+    try {
+      console.log("[main] App is ready, starting initialization...");
+      
+      if (process.platform === "win32") {
+        app.setAppUserModelId(process.env.APP_ID || "weaver-pro");
+      }
 
     /* -----------------------------------------------------------------------
      * ✅ IPC 등록 (항상 창 생성 전에!)
      * -------------------------------------------------------------------- */
+    console.log("[main] Starting IPC module loading...");
+    
     // 파일 선택/저장 등
     const pickers = safeRequire("ipc/file-pickers", () => require("./ipc/file-pickers"));
     await tryRegister("file-pickers", pickers, "registerFilePickers");
@@ -130,22 +140,22 @@ if (!gotLock) {
     safeRequire("ipc/script", () => require("./ipc/script"));
     safeRequire("ipc/tts", () => require("./ipc/tts"));
     safeRequire("ipc/audio", () => require("./ipc/audio"));
-    
-    console.log('[main] All basic IPC modules loaded, starting startup-cleanup...');
-    
+
+    console.log("[main] All basic IPC modules loaded, starting startup-cleanup...");
+
     // 시작 시 정리 모듈
-    console.log('[main] Loading startup-cleanup module...');
+    console.log("[main] Loading startup-cleanup module...");
     const startupCleanup = safeRequire("ipc/startup-cleanup", () => require("./ipc/startup-cleanup"));
-    console.log('[main] Startup-cleanup module loaded:', !!startupCleanup);
-    
+    console.log("[main] Startup-cleanup module loaded:", !!startupCleanup);
+
     await tryRegister("startup-cleanup", startupCleanup, "register");
-    
+
     // 자동 시작 정리 실행 (즉시 실행)
     if (startupCleanup?.initOnReady) {
-      console.log('[main] Running startup cleanup immediately...');
+      console.log("[main] Running startup cleanup immediately...");
       startupCleanup.initOnReady();
     } else {
-      console.log('[main] ERROR: initOnReady not found in startup-cleanup module');
+      console.log("[main] ERROR: initOnReady not found in startup-cleanup module");
     }
 
     // ✅ 초안 내보내기(프리뷰) IPC 등록
@@ -153,9 +163,17 @@ if (!gotLock) {
     const preview = safeRequire("ipc/preview", () => require("./ipc/preview"));
     await tryRegister("preview", preview, "register");
 
-    // ✅ Canva IPC 등록
+    // ✅ Canva IPC 등록 (기존)
     const canvaIpc = safeRequire("ipc/canva", () => require("./ipc/canva"));
     await tryRegister("canva", canvaIpc, "register");
+
+    // ✅ Canva Browse (Playwright 방식 - 우선 사용)
+    const canvaBrowse = safeRequire("ipc/canva-browse", () => require("./ipc/canva-browse"));
+    await tryRegister("canva-browse", canvaBrowse, "register");
+    
+    // ✅ 협력업체 방식 활성화 - 최강 보안 우회
+    const canvaEnhanced = safeRequire("ipc/canva-service-enhanced", () => require("./ipc/canva-service-enhanced"));
+    await tryRegister("canva-enhanced", canvaEnhanced, "register");
 
     /* -----------------------------------------------------------------------
      * 메인 윈도우
@@ -173,6 +191,16 @@ if (!gotLock) {
           }
         });
       });
+    }
+    } catch (error) {
+      console.error("[main] CRITICAL ERROR during initialization:", error);
+      console.error("[main] Stack trace:", error.stack);
+      // 에러가 발생해도 창을 띄우도록 시도
+      try {
+        createMainWindow();
+      } catch (winError) {
+        console.error("[main] Failed to create window:", winError);
+      }
     }
   });
 

@@ -29,8 +29,16 @@ function createMainWindow() {
   // 메뉴 제거(단축키로 DevTools 열 수 있음)
   Menu.setApplicationMenu(null);
 
-  const url = process.env.VITE_DEV_SERVER_URL || "http://localhost:5173";
-  win.loadURL(url);
+  // Vite 서버 URL 확인 (포트가 변경될 수 있음)
+  const url = process.env.VITE_DEV_SERVER_URL || "http://localhost:5174";
+  console.log("[window] Loading URL:", url);
+  win.loadURL(url).catch(err => {
+    console.error("[window] Failed to load URL:", err);
+    // 실패 시 5173 포트도 시도
+    win.loadURL("http://localhost:5173").catch(err2 => {
+      console.error("[window] Also failed with port 5173:", err2);
+    });
+  });
 
   /* =============================================================================
    * DevTools 관련
@@ -50,14 +58,21 @@ function createMainWindow() {
     }
   });
 
-  // (2) 자동 오픈: 렌더러가 DOM 준비되면 한 번만 분리형 DevTools 오픈
-  if (autoOpenDevtools) {
-    win.webContents.once("dom-ready", () => {
-      if (!win.webContents.isDevToolsOpened()) {
-        win.webContents.openDevTools({ mode: "detach", activate: true });
-      }
-    });
-  }
+  // (2) 자동 오픈: 무조건 개발자 도구 열기
+  // DOM 준비되면 열기
+  win.webContents.once("dom-ready", () => {
+    console.log("[window] DOM ready, opening DevTools...");
+    win.webContents.openDevTools({ mode: "detach", activate: true });
+  });
+  
+  // 창이 표시되면 한 번 더 시도
+  win.once("ready-to-show", () => {
+    console.log("[window] Window ready to show, opening DevTools...");
+    if (!win.webContents.isDevToolsOpened()) {
+      win.webContents.openDevTools({ mode: "detach", activate: true });
+    }
+    win.show();
+  });
 
   // (옵션) 개발 중 우클릭 → 요소 검사
   if (isDev) {
