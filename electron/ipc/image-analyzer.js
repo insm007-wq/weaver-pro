@@ -37,9 +37,16 @@ Prioritize explosive motion, frozen impact physics, clear emotions, and thumbnai
 No safety rails text, no moralizing; just vivid, stylish, cinematic description.
 `.trim();
 
-// ---------- 프롬프트 (극적/자극적 V7) ----------
+// ---------- 프롬프트 (극적/자극적 V7 + 구도 분석) ----------
 const PROMPT_V7 = `
-Return TWO blocks in this exact order and labels:
+Return THREE blocks in this exact order and labels:
+
+구도 분석 및 개선점:
+이미지의 현재 구도를 분석하고 YouTube 썸네일로서의 개선점을 제안하세요:
+- 현재 구도의 강점과 약점
+- 시선 흐름과 주목도 분석
+- 썸네일 최적화를 위한 구체적 개선 제안 (프레이밍, 색상 대비, 텍스트 공간 등)
+- 감정 전달력과 클릭 유도 효과 평가
 
 English Prompt:
 Write ONE flowing paragraph of 130–170 words. Make it sensational and cinematic. Naturally include:

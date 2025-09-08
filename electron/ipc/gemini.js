@@ -1,5 +1,7 @@
 // electron/ipc/gemini.js
 const { ipcMain } = require("electron");
+const RetryHandler = require("../services/retryHandler");
+const { getThumbnailCache } = require("../services/thumbnailCache");
 
 ipcMain.handle("generateThumbnailsGemini", async (_e, payload = {}) => {
   const {
@@ -24,9 +26,28 @@ ipcMain.handle("generateThumbnailsGemini", async (_e, payload = {}) => {
     const numOutputs = Math.max(1, Math.min(4, Number(count) || 1)); // 1~4 클램프
     console.log(`[gemini] Starting thumbnail generation for ${numOutputs} images`);
 
+    // 캐시 체크
+    const cache = getThumbnailCache();
+    const cacheSettings = { 
+      provider: 'gemini',
+      count: numOutputs, 
+      aspectRatio,
+      quality: payload.quality 
+    };
+    
+    const cached = await cache.get(promptText, cacheSettings);
+    if (cached) {
+      console.log('[gemini] Returning cached result');
+      return { ok: true, images: cached, fromCache: true };
+    }
+
+    // 재시도 핸들러 생성
+    const retryHandler = new RetryHandler(3, 1000);
+
     // --- Google Generative AI (Gemini) API 호출 ---
     // Imagen 생성을 위한 프롬프트를 먼저 Gemini로 최적화
-    const optimizeResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    const optimizeResponse = await retryHandler.execute(async () => {
+      return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${encodeURIComponent(apiKey)}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -52,6 +73,7 @@ Output only the optimized English prompt:`
         }]
       }),
     });
+    }, { operationName: 'Gemini API Call' });
 
     if (!optimizeResponse.ok) {
       const errorData = await optimizeResponse.json().catch(() => ({}));
@@ -95,6 +117,9 @@ Output only the optimized English prompt:`
       images.push(placeholderUrl);
     }
 
+    // 결과 캐싱
+    await cache.set(promptText, cacheSettings, images);
+    
     return { 
       ok: true, 
       images,

@@ -18,6 +18,8 @@ import {
   MessageBarBody,
   Badge,
   Divider,
+  Dropdown,
+  Option,
 } from "@fluentui/react-components";
 import {
   SaveRegular,
@@ -26,6 +28,7 @@ import {
   InfoRegular,
   CheckmarkCircleRegular,
   DismissCircleRegular,
+  SettingsRegular,
 } from "@fluentui/react-icons";
 import { DEFAULT_TEMPLATE } from "../../scriptgen/constants";
 
@@ -162,6 +165,8 @@ function ThumbnailTab() {
   // 상태
   const [template, setTemplate] = useState("");
   const [originalTemplate, setOriginalTemplate] = useState("");
+  const [defaultEngine, setDefaultEngine] = useState("replicate");
+  const [originalEngine, setOriginalEngine] = useState("replicate");
   const [isModified, setIsModified] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -174,8 +179,8 @@ function ThumbnailTab() {
 
   // 수정 감지
   useEffect(() => {
-    setIsModified(template !== originalTemplate);
-  }, [template, originalTemplate]);
+    setIsModified(template !== originalTemplate || defaultEngine !== originalEngine);
+  }, [template, originalTemplate, defaultEngine, originalEngine]);
 
   // 메시지 자동 숨김
   useEffect(() => {
@@ -189,9 +194,15 @@ function ThumbnailTab() {
     setLoading(true);
     try {
       const savedTemplate = await window.api.getSetting("thumbnailPromptTemplate");
+      const savedEngine = await window.api.getSetting("thumbnailDefaultEngine");
+      
       const templateToUse = savedTemplate || DEFAULT_TEMPLATE;
+      const engineToUse = savedEngine || "replicate";
+      
       setTemplate(templateToUse);
       setOriginalTemplate(templateToUse);
+      setDefaultEngine(engineToUse);
+      setOriginalEngine(engineToUse);
     } catch (error) {
       console.error("템플릿 로드 실패:", error);
       setMessage({ 
@@ -200,6 +211,8 @@ function ThumbnailTab() {
       });
       setTemplate(DEFAULT_TEMPLATE);
       setOriginalTemplate(DEFAULT_TEMPLATE);
+      setDefaultEngine("replicate");
+      setOriginalEngine("replicate");
     } finally {
       setLoading(false);
     }
@@ -221,13 +234,18 @@ function ThumbnailTab() {
         key: "thumbnailPromptTemplate", 
         value: template.trim()
       });
+      await window.api.setSetting({ 
+        key: "thumbnailDefaultEngine", 
+        value: defaultEngine
+      });
       setOriginalTemplate(template.trim());
-      setMessage({ type: "success", text: "템플릿이 성공적으로 저장되었습니다!" });
+      setOriginalEngine(defaultEngine);
+      setMessage({ type: "success", text: "설정이 성공적으로 저장되었습니다!" });
     } catch (error) {
-      console.error("템플릿 저장 실패:", error);
+      console.error("설정 저장 실패:", error);
       setMessage({ 
         type: "error", 
-        text: `템플릿 저장에 실패했습니다: ${error?.message || "알 수 없는 오류"}` 
+        text: `설정 저장에 실패했습니다: ${error?.message || "알 수 없는 오류"}` 
       });
     } finally {
       setSaveLoading(false);
@@ -284,6 +302,27 @@ function ThumbnailTab() {
       {/* 메인 설정 카드 */}
       <Card className={styles.settingsCard}>
         <div className={styles.templateSection}>
+          {/* 기본 생성 엔진 설정 */}
+          <Field style={{ marginBottom: tokens.spacingVerticalL }}>
+            <Label weight="semibold" size="large">
+              <SettingsRegular style={{ marginRight: tokens.spacingHorizontalXS }} />
+              기본 생성 엔진
+            </Label>
+            <Dropdown
+              value={defaultEngine}
+              onOptionSelect={(_, data) => setDefaultEngine(data.optionValue)}
+              style={{ marginTop: tokens.spacingVerticalS }}
+            >
+              <Option value="replicate">Replicate (고품질)</Option>
+              <Option value="gemini">Google Gemini (AI 대화형)</Option>
+            </Dropdown>
+            <Caption1 style={{ marginTop: tokens.spacingVerticalXS, color: tokens.colorNeutralForeground3 }}>
+              썸네일 생성 시 기본으로 사용할 AI 엔진을 선택합니다.
+            </Caption1>
+          </Field>
+
+          <Divider style={{ marginBottom: tokens.spacingVerticalL }} />
+
           {/* 템플릿 편집 */}
           <Field>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tokens.spacingVerticalS }}>

@@ -72,7 +72,7 @@ const useStyles = makeStyles({
     ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke2),
     ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalL),
   },
-  
+
   tabContent: {
     flex: 1,
     ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalL),
@@ -142,11 +142,7 @@ export default function SettingsPage({ onBack }) {
       {/* 본문 카드 */}
       <Card className={styles.mainCard}>
         <div className={styles.tabListWrap}>
-          <TabList 
-            selectedValue={selectedTab} 
-            onTabSelect={(_, d) => setSelectedTab(d.value)} 
-            size="medium"
-          >
+          <TabList selectedValue={selectedTab} onTabSelect={(_, d) => setSelectedTab(d.value)} size="medium">
             {tabs.map((t) => (
               <Tab key={t.key} value={t.key} icon={t.icon}>
                 {t.name}
@@ -157,12 +153,8 @@ export default function SettingsPage({ onBack }) {
 
         <div className={styles.tabContent}>
           <div className={styles.sectionLead}>
-            <Title2 style={{ fontSize: tokens.fontSizeBase500, marginBottom: tokens.spacingVerticalXXS }}>
-              {active.name}
-            </Title2>
-            <Body1 style={{ color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase300 }}>
-              {active.description}
-            </Body1>
+            <Title2 style={{ fontSize: tokens.fontSizeBase500, marginBottom: tokens.spacingVerticalXXS }}>{active.name}</Title2>
+            <Body1 style={{ color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase300 }}>{active.description}</Body1>
           </div>
           <Divider style={{ marginBottom: tokens.spacingVerticalL }} />
 
