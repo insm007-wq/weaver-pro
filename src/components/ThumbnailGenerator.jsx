@@ -1,5 +1,6 @@
 // src/pages/ThumbnailGenerator.jsx
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ErrorBoundary } from "./ErrorBoundary";
 import {
   Button,
   Card,
@@ -12,7 +13,9 @@ import {
   Textarea,
   Dropdown,
   Option,
+  Divider,
   makeStyles,
+  shorthands,
   tokens,
   Spinner,
   MessageBar,
@@ -33,6 +36,7 @@ import {
   OpenRegular,
   ImageRegular,
   SparkleRegular,
+  DismissCircleRegular,
 } from "@fluentui/react-icons";
 import { DEFAULT_TEMPLATE as IMPORTED_DEFAULT_TEMPLATE } from "./scriptgen/constants";
 
@@ -78,12 +82,12 @@ const useStyles = makeStyles({
     cursor: 'pointer',
     transition: 'all 0.2s ease',
     '&:hover': {
-      borderColor: tokens.colorBrandStroke1,
+      ...shorthands.borderColor(tokens.colorBrandStroke1),
       backgroundColor: tokens.colorBrandBackground2,
     },
   },
   uploadAreaDragOver: {
-    borderColor: tokens.colorBrandStroke1,
+    ...shorthands.borderColor(tokens.colorBrandStroke1),
     backgroundColor: tokens.colorBrandBackground2,
   },
   previewContainer: {
@@ -178,7 +182,7 @@ const GENERATION_ENGINES = [
   { value: "stable-diffusion", label: "Stable Diffusion" },
 ];
 
-export default function ThumbnailGenerator() {
+function ThumbnailGenerator() {
   const styles = useStyles();
   const fileInputRef = useRef(null);
 
@@ -377,22 +381,32 @@ export default function ThumbnailGenerator() {
 
   /** 생성 버튼 핸들러 */
   const onGenerate = async () => {
+    // 템플릿 로딩 중인 경우 대기
+    if (templateLoading) {
+      setToast({ type: "error", text: "템플릿을 로딩 중입니다. 잠시 후 다시 시도하세요." });
+      return;
+    }
+
     // 각 프로바이더별 필수 필드 가드
     if (provider === "replicate" && !prompt.trim() && !fxEn.trim() && !metaTemplate.trim()) {
-      return alert("장면 설명 또는 템플릿/분석 결과 중 하나는 필요합니다.");
+      setToast({ type: "error", text: "장면 설명 또는 템플릿/분석 결과 중 하나는 필요합니다." });
+      return;
     }
     if (provider === "gemini" && !metaTemplate.trim()) {
-      return alert("Gemini 모드에서는 템플릿이 필요합니다.");
+      setToast({ type: "error", text: "Gemini 모드에서는 템플릿이 필요합니다." });
+      return;
     }
 
     // IPC 가드
     const hasReplicate = !!window?.api?.generateThumbnails;
     const hasGemini = !!window?.api?.generateThumbnailsGemini;
     if (provider === "replicate" && !hasReplicate) {
-      return alert("Replicate IPC(generateThumbnails)가 없습니다. preload/main 설정을 확인하세요.");
+      setToast({ type: "error", text: "Replicate 서비스를 사용할 수 없습니다. 설정을 확인하세요." });
+      return;
     }
     if (provider === "gemini" && !hasGemini) {
-      return alert("Google Gemini IPC(generateThumbnailsGemini)가 없습니다. preload/main 설정을 확인하세요.");
+      setToast({ type: "error", text: "Gemini 서비스를 사용할 수 없습니다. 설정을 확인하세요." });
+      return;
     }
 
     setLoading(true);
@@ -408,6 +422,9 @@ export default function ThumbnailGenerator() {
       if (provider === "gemini") {
         // ⬇️ Google Gemini 호출 (count, aspectRatio 사용)
         const geminiApiKey = await window.api.getSecret("geminiKey");
+        if (!geminiApiKey?.trim()) {
+          throw new Error("Gemini API 키가 설정되지 않았습니다. 설정 > API에서 키를 입력하세요.");
+        }
         res = await window.api.generateThumbnailsGemini({
           prompt: finalPrompt,
           count,
@@ -431,7 +448,11 @@ export default function ThumbnailGenerator() {
       setResults(urls.map((u) => ({ url: u })));
       setTookMs(Date.now() - started);
     } catch (e) {
-      alert(`실패: ${e?.message || e}`);
+      console.error("썸네일 생성 실패:", e);
+      setToast({ 
+        type: "error", 
+        text: `생성 실패: ${e?.message || "알 수 없는 오류가 발생했습니다."}` 
+      });
     } finally {
       setLoading(false);
     }
@@ -615,61 +636,71 @@ export default function ThumbnailGenerator() {
         </Field>
 
         {(fxLoading || fxErr || fxEn || fxKo) && (
-          <div className="mt-4 rounded-lg border bg-gray-50 p-3">
-            {fxErr && <div className="text-sm text-rose-600 mb-2">에러: {fxErr}</div>}
-            {fxLoading && !fxErr && <div className="text-sm text-gray-600">이미지 분석 중…</div>}
+          <div className={styles.analysisResult}>
+            {fxErr && (
+              <div className={`${styles.statusMessage} ${styles.errorMessage}`}>
+                <DismissCircleRegular />
+                <Caption1>에러: {fxErr}</Caption1>
+              </div>
+            )}
+            {fxLoading && !fxErr && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS }}>
+                <Spinner size="small" />
+                <Caption1>이미지 분석 중…</Caption1>
+              </div>
+            )}
             {fxEn && (
-              <>
-                <div className="text-[13px] font-medium mb-1">English Prompt</div>
-                <textarea className="w-full h-28 border rounded p-2 text-xs" readOnly value={fxEn} />
-              </>
+              <Field style={{ marginBottom: tokens.spacingVerticalM }}>
+                <Label size="small" weight="semibold">English Prompt</Label>
+                <Textarea value={fxEn} readOnly rows={4} resize="vertical" />
+              </Field>
             )}
             {fxKo && (
-              <>
-                <div className="text-[13px] font-medium mt-3 mb-1">한국어 번역</div>
-                <textarea className="w-full h-28 border rounded p-2 text-xs" readOnly value={fxKo} />
-              </>
+              <Field>
+                <Label size="small" weight="semibold">한국어 번역</Label>
+                <Textarea value={fxKo} readOnly rows={4} resize="vertical" />
+              </Field>
             )}
           </div>
         )}
 
-        <TipCard className="bg-white/70">참고 이미지 분석을 템플릿에 주입하면 일관성이 좋아집니다.</TipCard>
+        <TipCard className={styles.tipCard}>참고 이미지 분석을 템플릿에 주입하면 일관성이 좋아집니다.</TipCard>
       </div>
 
       {/* 옵션들 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div className={styles.gridTwoColumns}>
         {/* 공통: 생성 개수 */}
-        <div>
-          <label className="font-semibold mb-2 block">생성 개수</label>
-          <select className="w-full border rounded-lg p-2 text-sm" value={count} onChange={(e) => setCount(Number(e.target.value))}>
+        <Field>
+          <Label weight="semibold">생성 개수</Label>
+          <Dropdown value={count.toString()} onOptionSelect={(_, data) => setCount(Number(data.optionValue))}>
             {[1, 2, 3, 4].map((n) => (
-              <option key={n} value={n}>
+              <Option key={n} value={n.toString()}>
                 {n}개
-              </option>
+              </Option>
             ))}
-          </select>
-        </div>
+          </Dropdown>
+        </Field>
 
         {/* 분기 옵션 */}
         {provider === "replicate" ? (
-          <div>
-            <label className="font-semibold mb-2 block">생성 모드</label>
-            <select className="w-full border rounded-lg p-2 text-sm" value={mode} onChange={(e) => setMode(e.target.value)}>
-              <option value="dramatic">극적 & 자극적 모드</option>
-              <option value="calm">차분 & 자연스러운 모드</option>
-            </select>
-          </div>
+          <Field>
+            <Label weight="semibold">생성 모드</Label>
+            <Dropdown value={mode} onOptionSelect={(_, data) => setMode(data.optionValue)}>
+              <Option value="dramatic">극적 & 자극적 모드</Option>
+              <Option value="calm">차분 & 자연스러운 모드</Option>
+            </Dropdown>
+          </Field>
         ) : (
-          <div>
-            <label className="font-semibold mb-2 block">가로세로 비율 (ImageFX)</label>
-            <select className="w-full border rounded-lg p-2 text-sm" value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)}>
+          <Field>
+            <Label weight="semibold">가로세로 비율 (ImageFX)</Label>
+            <Dropdown value={aspectRatio} onOptionSelect={(_, data) => setAspectRatio(data.optionValue)}>
               {["1:1", "3:4", "4:3", "9:16", "16:9"].map((r) => (
-                <option key={r} value={r}>
+                <Option key={r} value={r}>
                   {r}
-                </option>
+                </Option>
               ))}
-            </select>
-          </div>
+            </Dropdown>
+          </Field>
         )}
       </div>
 
@@ -717,7 +748,9 @@ export default function ThumbnailGenerator() {
                           suggestedName: `thumbnail-${i + 1}.jpg`,
                         });
                         if (!res?.ok && res?.message !== "canceled") {
-                          alert(`저장 실패: ${res?.message || "unknown"}`);
+                          showToast("error", `저장 실패: ${res?.message || "알 수 없는 오류"}`);
+                        } else if (res?.ok) {
+                          showToast("success", "썸네일이 성공적으로 저장되었습니다!");
                         }
                       }}
                     >
@@ -749,5 +782,13 @@ export default function ThumbnailGenerator() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ThumbnailGeneratorWithErrorBoundary() {
+  return (
+    <ErrorBoundary>
+      <ThumbnailGenerator />
+    </ErrorBoundary>
   );
 }

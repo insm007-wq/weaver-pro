@@ -12,10 +12,17 @@ ipcMain.handle("generateThumbnailsGemini", async (_e, payload = {}) => {
   try {
     // --- 입력 검증 ---
     const promptText = (prompt || "").trim();
-    if (!promptText) return { ok: false, message: "prompt_required" };
-    if (!apiKey?.trim()) return { ok: false, message: "api_key_required" };
+    if (!promptText) {
+      console.error("[gemini] Empty prompt provided");
+      return { ok: false, message: "prompt_required" };
+    }
+    if (!apiKey?.trim()) {
+      console.error("[gemini] No API key provided");
+      return { ok: false, message: "api_key_required" };
+    }
 
     const numOutputs = Math.max(1, Math.min(4, Number(count) || 1)); // 1~4 클램프
+    console.log(`[gemini] Starting thumbnail generation for ${numOutputs} images`);
 
     // --- Google Generative AI (Gemini) API 호출 ---
     // Imagen 생성을 위한 프롬프트를 먼저 Gemini로 최적화
@@ -48,6 +55,7 @@ Output only the optimized English prompt:`
 
     if (!optimizeResponse.ok) {
       const errorData = await optimizeResponse.json().catch(() => ({}));
+      console.error(`[gemini] API optimization failed: ${optimizeResponse.status}`, errorData);
       return { 
         ok: false, 
         message: `Gemini API Error: ${optimizeResponse.status} - ${errorData.error?.message || optimizeResponse.statusText}` 
@@ -58,6 +66,7 @@ Output only the optimized English prompt:`
     const optimizedPrompt = optimizeData.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
     
     if (!optimizedPrompt) {
+      console.error("[gemini] No optimized prompt returned from Gemini API", optimizeData);
       return { ok: false, message: "Failed to optimize prompt with Gemini" };
     }
 
@@ -94,9 +103,20 @@ Output only the optimized English prompt:`
     };
 
   } catch (err) {
-    console.error("Gemini thumbnail generation error:", err);
+    console.error("[gemini] Thumbnail generation error:", err);
     const msg = err?.message || String(err);
-    return { ok: false, message: msg };
+    
+    // 네트워크 오류 처리
+    if (err.code === 'ENOTFOUND' || err.code === 'ECONNREFUSED') {
+      return { ok: false, message: "네트워크 연결을 확인해주세요." };
+    }
+    
+    // API 키 관련 오류 처리
+    if (msg.includes('API_KEY_INVALID') || msg.includes('403')) {
+      return { ok: false, message: "API 키가 유효하지 않습니다. 설정을 확인해주세요." };
+    }
+    
+    return { ok: false, message: `오류가 발생했습니다: ${msg}` };
   }
 });
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { ErrorBoundary } from "../../ErrorBoundary";
 import {
   makeStyles,
   shorthands,
@@ -155,7 +156,7 @@ const useStyles = makeStyles({
   },
 });
 
-export default function ThumbnailTab() {
+function ThumbnailTab() {
   const styles = useStyles();
   
   // 상태
@@ -193,8 +194,10 @@ export default function ThumbnailTab() {
       setOriginalTemplate(templateToUse);
     } catch (error) {
       console.error("템플릿 로드 실패:", error);
-      setMessage({ type: "error", text: "템플릿을 불러오는데 실패했습니다." });
-      // 기본 템플릿 사용
+      setMessage({ 
+        type: "error", 
+        text: "템플릿을 불러오는데 실패했습니다. 기본 템플릿을 사용합니다." 
+      });
       setTemplate(DEFAULT_TEMPLATE);
       setOriginalTemplate(DEFAULT_TEMPLATE);
     } finally {
@@ -206,17 +209,26 @@ export default function ThumbnailTab() {
   const saveTemplate = async () => {
     if (!isModified) return;
     
+    // 템플릿 유효성 검사
+    if (!template || template.trim().length === 0) {
+      setMessage({ type: "error", text: "빈 템플릿은 저장할 수 없습니다." });
+      return;
+    }
+    
     setSaveLoading(true);
     try {
       await window.api.setSetting({ 
         key: "thumbnailPromptTemplate", 
-        value: template 
+        value: template.trim()
       });
-      setOriginalTemplate(template);
+      setOriginalTemplate(template.trim());
       setMessage({ type: "success", text: "템플릿이 성공적으로 저장되었습니다!" });
     } catch (error) {
       console.error("템플릿 저장 실패:", error);
-      setMessage({ type: "error", text: "템플릿 저장에 실패했습니다." });
+      setMessage({ 
+        type: "error", 
+        text: `템플릿 저장에 실패했습니다: ${error?.message || "알 수 없는 오류"}` 
+      });
     } finally {
       setSaveLoading(false);
     }
@@ -230,12 +242,21 @@ export default function ThumbnailTab() {
 
   // 변수 치환 미리보기
   const getPreview = () => {
+    if (!template || template.trim().length === 0) {
+      return "템플릿을 입력해주세요...";
+    }
+
     const sampleContent = "긴장감 넘치는 사무실에서 팀장이 직원에게 중요한 발표를 하는 장면";
     const sampleAnalysis = "참고 이미지: 전문적인 비즈니스 환경, 극적인 조명, 감정적 긴장감";
     
-    return template
-      .replace(/{content}/g, sampleContent)
-      .replace(/{referenceAnalysis}/g, sampleAnalysis);
+    try {
+      return template
+        .replace(/{content}/g, sampleContent)
+        .replace(/{referenceAnalysis}/g, sampleAnalysis);
+    } catch (error) {
+      console.warn("프리뷰 생성 오류:", error);
+      return "프리뷰를 생성하는 중 오류가 발생했습니다.";
+    }
   };
 
   if (loading) {
@@ -351,5 +372,13 @@ export default function ThumbnailTab() {
         </div>
       </Card>
     </div>
+  );
+}
+
+export default function ThumbnailTabWithErrorBoundary() {
+  return (
+    <ErrorBoundary>
+      <ThumbnailTab />
+    </ErrorBoundary>
   );
 }
