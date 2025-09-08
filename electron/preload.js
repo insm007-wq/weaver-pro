@@ -419,6 +419,9 @@ contextBridge.exposeInMainWorld("api", {
 // ✨ Electron API (기존 window.electron 호환성을 위해 별도 노출)  
 // ============================================================================
 contextBridge.exposeInMainWorld("electron", {
+  // 플랫폼 정보
+  platform: process.platform,
+  
   // 기본 ipcRenderer 호출
   ipcRenderer: {
     invoke: (channel, payload) => ipcRenderer.invoke(channel, payload),

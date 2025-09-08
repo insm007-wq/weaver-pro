@@ -1,4 +1,3 @@
-// src/App.jsx (중요 부분만; 전체 파일 교체해도 됨)
 import {
   useCallback,
   useMemo,
@@ -7,6 +6,18 @@ import {
   Suspense,
   lazy,
 } from "react";
+import {
+  makeStyles,
+  shorthands,
+  tokens,
+  Card,
+  CardHeader,
+  Body1,
+  Title1,
+  Subtitle1,
+  Spinner,
+  Text,
+} from "@fluentui/react-components";
 import KeepAlivePane from "./components/common/KeepAlivePane";
 
 const Sidebar = lazy(() => import("./components/Sidebar"));
@@ -28,10 +39,83 @@ const DraftExportPage = lazy(() =>
 const RefineEditor = lazy(() => import("./components/refine/RefineEditor"));
 const FinalizePage = lazy(() => import("./components/finalize/FinalizePage"));
 
-function Spinner({ label = "Loading..." }) {
+const useStyles = makeStyles({
+  root: {
+    display: "flex",
+    minHeight: "100vh",
+    flexDirection: "column",
+    backgroundColor: tokens.colorNeutralBackground1,
+  },
+  header: {
+    backgroundColor: tokens.colorNeutralBackground2,
+    ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke1),
+  },
+  body: {
+    display: "flex",
+    flex: 1,
+    overflow: "hidden",
+  },
+  main: {
+    flex: 1,
+    ...shorthands.padding(tokens.spacingVerticalXXL, tokens.spacingHorizontalXXL),
+    overflowY: "auto",
+    backgroundColor: tokens.colorNeutralBackground1,
+  },
+  loadingContainer: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    ...shorthands.padding(tokens.spacingVerticalXXXL),
+    ...shorthands.gap(tokens.spacingHorizontalM),
+  },
+  welcomeCard: {
+    maxWidth: "800px",
+    ...shorthands.margin("0", "auto"),
+    animation: "fadeIn 0.3s ease-out",
+  },
+  welcomeHeader: {
+    display: "flex",
+    alignItems: "center",
+    ...shorthands.gap(tokens.spacingHorizontalL),
+  },
+  logoBox: {
+    width: "48px",
+    height: "48px",
+    backgroundImage: `linear-gradient(135deg, ${tokens.colorBrandBackground}, ${tokens.colorBrandBackground2})`,
+    ...shorthands.borderRadius(tokens.borderRadiusLarge),
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: tokens.colorNeutralForegroundOnBrand,
+    fontSize: tokens.fontSizeBase600,
+    boxShadow: tokens.shadow16,
+  },
+  gridContainer: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+    ...shorthands.gap(tokens.spacingHorizontalL),
+    marginTop: tokens.spacingVerticalL,
+  },
+  featureCard: {
+    ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalL),
+    ...shorthands.borderRadius(tokens.borderRadiusMedium),
+    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
+  },
+  quickStartCard: {
+    backgroundColor: tokens.colorBrandBackground2,
+    ...shorthands.borderColor(tokens.colorBrandStroke1),
+  },
+  newFeatureCard: {
+    backgroundColor: tokens.colorPaletteGreenBackground2,
+    ...shorthands.borderColor(tokens.colorPaletteGreenBorder2),
+  },
+});
+
+function LoadingSpinner({ label = "로딩 중..." }) {
+  const styles = useStyles();
   return (
-    <div className="flex items-center justify-center p-10 text-sm text-slate-600">
-      <span className="animate-pulse">{label}</span>
+    <div className={styles.loadingContainer}>
+      <Spinner size="medium" label={label} />
     </div>
   );
 }
@@ -40,6 +124,7 @@ export default function App() {
   const [projectName, setProjectName] = useState(null);
   const [currentPage, setCurrentPage] = useState(null);
   const canOpenWithoutProject = true;
+  const styles = useStyles();
 
   const handleCreateProject = useCallback((name) => {
     setProjectName(name);
@@ -48,7 +133,6 @@ export default function App() {
   const handleSelectMenu = useCallback((key) => setCurrentPage(key), []);
   const handleOpenSettings = useCallback(() => setCurrentPage("settings"), []);
 
-  // 다운로드 큐(이전과 동일)
   useEffect(() => {
     if (!window.__autoPlaceQueue) window.__autoPlaceQueue = [];
     const off = window.api?.onFileDownloaded?.((payload) => {
@@ -64,56 +148,58 @@ export default function App() {
   }, []);
 
   return (
-    <div className="flex min-h-screen flex-col bg-neutral-25">
-      <Suspense fallback={<Spinner label="Loading header..." />}>
-        <HeaderBar onOpenSettings={handleOpenSettings} />
+    <div className={styles.root}>
+      <Suspense fallback={<LoadingSpinner label="헤더 로딩 중..." />}>
+        <div className={styles.header}>
+          <HeaderBar onOpenSettings={handleOpenSettings} />
+        </div>
       </Suspense>
 
-      <div className="flex flex-1">
-        <Suspense fallback={<Spinner />}>
+      <div className={styles.body}>
+        <Suspense fallback={<LoadingSpinner />}>
           <Sidebar onSelectMenu={handleSelectMenu} />
         </Suspense>
         
-        <main className="flex-1 p-8 overflow-auto">
-          <Suspense fallback={<Spinner />}>
-            {/* 프로젝트 필요 시 초기화 페이지만 예외 처리 */}
+        <main className={styles.main}>
+          <Suspense fallback={<LoadingSpinner />}>
             {!projectName && !canOpenWithoutProject ? (
               <ProjectInit onCreate={handleCreateProject} />
             ) : (
               <>
                 <KeepAlivePane active={currentPage === null}>
-                  {/* 기본 대시(초기 상태) */}
-                  <div className="card max-w-3xl animate-fade-in">
-                    <div className="card-header">
-                      <h1 className="text-3xl font-bold text-neutral-900 flex items-center gap-4">
-                        <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-xl flex items-center justify-center text-white text-xl">
-                          🎥
+                  <Card className={styles.welcomeCard}>
+                    <CardHeader
+                      header={
+                        <div className={styles.welcomeHeader}>
+                          <div className={styles.logoBox}>
+                            🎥
+                          </div>
+                          <div>
+                            <Title1>{projectName || "Content Weaver Pro"}</Title1>
+                            <Subtitle1>
+                              AI 기반 영상 제작 솔루션에 오신 것을 환영합니다
+                            </Subtitle1>
+                          </div>
                         </div>
-                        {projectName || "Content Weaver Pro"}
-                      </h1>
-                      <p className="text-neutral-500 mt-2">
-                        AI 기반 영상 제작 솔루션에 오신 것을 환영합니다
-                      </p>
-                    </div>
+                      }
+                    />
                     
-                    <div className="card-body">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-4 bg-primary-50 rounded-lg border border-primary-200">
-                          <h3 className="font-semibold text-primary-900 mb-2">🎯 빠른 시작</h3>
-                          <p className="text-sm text-primary-700">
-                            왼쪽 사이드바에서 원하는 기능을 선택하여 시작하세요.
-                          </p>
-                        </div>
-                        
-                        <div className="p-4 bg-secondary-50 rounded-lg border border-secondary-200">
-                          <h3 className="font-semibold text-secondary-900 mb-2">⚡ 새로운 기능</h3>
-                          <p className="text-sm text-secondary-700">
-                            최신 AI 모델과 향상된 사용자 경험을 체험해보세요.
-                          </p>
-                        </div>
+                    <div className={styles.gridContainer}>
+                      <div className={`${styles.featureCard} ${styles.quickStartCard}`}>
+                        <Text as="h3" weight="semibold" size={500}>🎯 빠른 시작</Text>
+                        <Body1>
+                          왼쪽 사이드바에서 원하는 기능을 선택하여 시작하세요.
+                        </Body1>
+                      </div>
+                      
+                      <div className={`${styles.featureCard} ${styles.newFeatureCard}`}>
+                        <Text as="h3" weight="semibold" size={500}>⚡ 새로운 기능</Text>
+                        <Body1>
+                          최신 AI 모델과 향상된 사용자 경험을 체험해보세요.
+                        </Body1>
                       </div>
                     </div>
-                  </div>
+                  </Card>
                 </KeepAlivePane>
 
                 <KeepAlivePane active={currentPage === "thumbnail"}>
@@ -147,7 +233,6 @@ export default function App() {
             )}
           </Suspense>
         </main>
-
       </div>
     </div>
   );

@@ -179,7 +179,8 @@
       "Read(//d/smart-video-editor/extracted_source/**)",
       "Bash(timeout:*)",
       "Read(//d/smart-video-editor/**)",
-      "Bash(wmic:*)"
+      "Bash(wmic:*)",
+      "Bash(npm uninstall:*)"
     ],
     "deny": [],
     "ask": []

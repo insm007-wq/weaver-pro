@@ -1,230 +1,123 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* Fluent UI Global Styles */
+@import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;500;600;700&display=swap');
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-@layer base {
-  * {
-    box-sizing: border-box;
-  }
-  
-  html {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-  
-  body {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    background: theme('colors.neutral.25');
-    color: theme('colors.neutral.900') !important;
-  }
-  
-  /* 모든 요소에 기본 텍스트 색상 강제 적용 */
-  * {
-    color: inherit;
-  }
-  
-  /* div, span 등 기본 요소들에 텍스트 색상 보장 */
-  div, span, p, h1, h2, h3, h4, h5, h6, 
-  button, label, input, textarea, select {
-    color: #0f172a !important;
-  }
-  
-  /* 강제 텍스트 색상 적용 클래스 */
-  .force-text-dark {
-    color: #0f172a !important;
-  }
-  
-  .force-text-dark * {
-    color: #0f172a !important;
-  }
-  
-  /* 폼 요소 기본 스타일 강화 */
-  input, textarea, select {
-    color: theme('colors.neutral.900');
-  }
-  
-  input::placeholder, textarea::placeholder {
-    color: theme('colors.neutral.400');
-  }
-  
-  button {
-    color: inherit;
-  }
-  
-  label {
-    color: theme('colors.neutral.700');
-  }
-  
-  /* 레거시 gray 클래스들을 neutral로 매핑 */
-  .text-gray-50 { @apply text-neutral-50; }
-  .text-gray-100 { @apply text-neutral-100; }
-  .text-gray-200 { @apply text-neutral-200; }
-  .text-gray-300 { @apply text-neutral-300; }
-  .text-gray-400 { @apply text-neutral-400; }
-  .text-gray-500 { @apply text-neutral-500; }
-  .text-gray-600 { @apply text-neutral-600; }
-  .text-gray-700 { @apply text-neutral-700; }
-  .text-gray-800 { @apply text-neutral-800; }
-  .text-gray-900 { @apply text-neutral-900; }
-  
-  .bg-gray-50 { @apply bg-neutral-50; }
-  .bg-gray-100 { @apply bg-neutral-100; }
-  .bg-gray-200 { @apply bg-neutral-200; }
-  .bg-gray-300 { @apply bg-neutral-300; }
-  .bg-gray-400 { @apply bg-neutral-400; }
-  .bg-gray-500 { @apply bg-neutral-500; }
-  .bg-gray-600 { @apply bg-neutral-600; }
-  .bg-gray-700 { @apply bg-neutral-700; }
-  .bg-gray-800 { @apply bg-neutral-800; }
-  .bg-gray-900 { @apply bg-neutral-900; }
-  
-  .border-gray-50 { @apply border-neutral-50; }
-  .border-gray-100 { @apply border-neutral-100; }
-  .border-gray-200 { @apply border-neutral-200; }
-  .border-gray-300 { @apply border-neutral-300; }
-  .border-gray-400 { @apply border-neutral-400; }
-  .border-gray-500 { @apply border-neutral-500; }
-  .border-gray-600 { @apply border-neutral-600; }
-  .border-gray-700 { @apply border-neutral-700; }
-  .border-gray-800 { @apply border-neutral-800; }
-  .border-gray-900 { @apply border-neutral-900; }
-  
-  .hover\\:bg-gray-50:hover { @apply bg-neutral-50; }
-  .hover\\:bg-gray-100:hover { @apply bg-neutral-100; }
-  
-  /* 레거시 slate 클래스들도 neutral로 매핑 */
-  .text-slate-50 { @apply text-neutral-50; }
-  .text-slate-100 { @apply text-neutral-100; }
-  .text-slate-200 { @apply text-neutral-200; }
-  .text-slate-300 { @apply text-neutral-300; }
-  .text-slate-400 { @apply text-neutral-400; }
-  .text-slate-500 { @apply text-neutral-500; }
-  .text-slate-600 { @apply text-neutral-600; }
-  .text-slate-700 { @apply text-neutral-700; }
-  .text-slate-800 { @apply text-neutral-800; }
-  .text-slate-900 { @apply text-neutral-900; }
-  
-  .bg-slate-50 { @apply bg-neutral-50; }
-  .bg-slate-100 { @apply bg-neutral-100; }
-  .bg-slate-200 { @apply bg-neutral-200; }
-  .bg-slate-300 { @apply bg-neutral-300; }
-  .bg-slate-400 { @apply bg-neutral-400; }
-  .bg-slate-500 { @apply bg-neutral-500; }
-  .bg-slate-600 { @apply bg-neutral-600; }
-  .bg-slate-700 { @apply bg-neutral-700; }
-  .bg-slate-800 { @apply bg-neutral-800; }
-  .bg-slate-900 { @apply bg-neutral-900; }
-  
-  .border-slate-50 { @apply border-neutral-50; }
-  .border-slate-100 { @apply border-neutral-100; }
-  .border-slate-200 { @apply border-neutral-200; }
-  .border-slate-300 { @apply border-neutral-300; }
-  .border-slate-400 { @apply border-neutral-400; }
-  .border-slate-500 { @apply border-neutral-500; }
-  .border-slate-600 { @apply border-neutral-600; }
-  .border-slate-700 { @apply border-neutral-700; }
-  .border-slate-800 { @apply border-neutral-800; }
-  .border-slate-900 { @apply border-neutral-900; }
-  
-  .hover\\:text-slate-700:hover { @apply text-neutral-700; }
-  .hover\\:text-slate-800:hover { @apply text-neutral-800; }
+* {
+  box-sizing: border-box;
 }
 
-@layer components {
-  /* Button Components */
-  .btn-primary {
-    @apply inline-flex items-center justify-center px-4 py-2.5 text-sm font-medium text-white bg-primary-500 border border-transparent rounded-lg shadow-soft hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200;
-  }
-  
-  .btn-secondary {
-    @apply inline-flex items-center justify-center px-4 py-2.5 text-sm font-medium text-neutral-700 bg-white border border-neutral-300 rounded-lg shadow-soft hover:bg-neutral-50 hover:border-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200;
-  }
-  
-  .btn-ghost {
-    @apply inline-flex items-center justify-center px-3 py-2 text-sm font-medium text-neutral-600 bg-transparent border border-transparent rounded-lg hover:bg-neutral-100 hover:text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200;
-  }
-  
-  .btn-danger {
-    @apply inline-flex items-center justify-center px-4 py-2.5 text-sm font-medium text-white bg-error-500 border border-transparent rounded-lg shadow-soft hover:bg-error-600 focus:outline-none focus:ring-2 focus:ring-error-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200;
-  }
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--colorNeutralBackground1);
+  color: var(--colorNeutralForeground1);
+}
 
-  /* Card Components */
-  .card {
-    @apply bg-white rounded-xl shadow-soft border border-neutral-200/50 overflow-hidden;
-  }
-  
-  .card-body {
-    @apply p-6;
-  }
-  
-  .card-header {
-    @apply px-6 py-4 bg-neutral-50/50 border-b border-neutral-200/50;
-  }
+#root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
 
-  /* Input Components */
-  .input-field {
-    @apply w-full px-3 py-2.5 text-sm text-neutral-900 bg-white border border-neutral-300 rounded-lg shadow-soft placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-neutral-50 disabled:text-neutral-500 transition-all duration-200;
-  }
-  
-  /* Radio Button and Checkbox Styles */
-  .form-radio, .form-checkbox {
-    @apply text-primary-600 focus:ring-primary-500 focus:ring-2 focus:ring-offset-2;
-  }
-  
-  input[type="radio"], input[type="checkbox"] {
-    @apply text-primary-600 focus:ring-primary-500 focus:ring-2 focus:ring-offset-2;
-  }
-  
-  /* Select Styles */
-  .form-select, select {
-    @apply text-neutral-900 bg-white border border-neutral-300 rounded-lg shadow-soft focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500;
-  }
+/* OS-specific font overrides */
+.os-windows {
+  font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+}
 
-  /* Status Components */
-  .status-dot {
-    @apply inline-flex items-center justify-center w-2 h-2 rounded-full;
-  }
-  
-  .status-online {
-    @apply bg-success-500;
-  }
-  
-  .status-offline {
-    @apply bg-error-500;
-  }
-  
-  .status-pending {
-    @apply bg-warning-500;
-  }
+.os-macos {
+  font-family: -apple-system, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
+}
 
-  /* Menu Items */
-  .menu-item {
-    @apply flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-neutral-700 rounded-lg hover:bg-primary-50 hover:text-primary-700 transition-all duration-200 cursor-pointer;
-  }
-  
-  .menu-item.active {
-    @apply bg-primary-100 text-primary-700 shadow-soft;
-  }
+.os-linux {
+  font-family: 'Segoe UI', 'Ubuntu', system-ui, sans-serif;
+}
 
-  /* Navigation */
-  .nav-sidebar {
-    @apply bg-white border-r border-neutral-200/50 shadow-soft;
-  }
-  
-  .nav-header {
-    @apply bg-white border-b border-neutral-200/50 shadow-soft backdrop-blur-sm;
-  }
+/* Windows-specific styling */
+.os-windows .app-window {
+  backdrop-filter: blur(20px);
+  background: rgba(243, 242, 241, 0.85);
+}
 
-  /* Loading States */
-  .loading-spinner {
-    @apply animate-spin h-4 w-4 text-current;
-  }
+.os-windows.dark .app-window {
+  background: rgba(32, 31, 30, 0.85);
+}
 
-  /* Tooltips */
-  .tooltip {
-    @apply absolute z-10 px-2 py-1 text-xs font-medium text-white bg-neutral-900 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none;
+/* macOS-specific styling */
+.os-macos .app-window {
+  backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.os-macos.dark .app-window {
+  background: rgba(30, 30, 30, 0.8);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--colorNeutralBackground2);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--colorNeutralStroke1);
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--colorNeutralStroke2);
+}
+
+/* Custom animation classes */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
+.slide-in {
+  animation: slideIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Focus indicators for accessibility */
+.focus-visible {
+  outline: 2px solid var(--colorBrandStroke1);
+  outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .app-window {
+    backdrop-filter: none;
+    background: var(--colorNeutralBackground1);
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

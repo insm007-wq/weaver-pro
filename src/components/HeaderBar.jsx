@@ -1,45 +1,98 @@
 import { useEffect, useState } from "react";
-import { FaWifi, FaBan } from "react-icons/fa6"; // ✅ fa6에서 지원되는 아이콘 사용
+import {
+  makeStyles,
+  shorthands,
+  tokens,
+  Button,
+  Badge,
+  Spinner,
+  Tooltip,
+  Text,
+} from "@fluentui/react-components";
+import {
+  CheckmarkCircleRegular,
+  DismissCircleRegular,
+  ArrowClockwiseRegular,
+  SettingsRegular,
+} from "@fluentui/react-icons";
 
-function Dot({ state }) {
-  const cls =
+const useStyles = makeStyles({
+  header: {
+    height: "56px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    ...shorthands.padding("0", tokens.spacingHorizontalXL),
+    backgroundColor: tokens.colorNeutralBackground2,
+  },
+  container: {
+    display: "flex",
+    alignItems: "center",
+    ...shorthands.gap(tokens.spacingHorizontalM),
+  },
+  statusItem: {
+    display: "flex",
+    alignItems: "center",
+    ...shorthands.gap(tokens.spacingHorizontalS),
+    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
+    ...shorthands.borderRadius(tokens.borderRadiusMedium),
+    backgroundColor: tokens.colorNeutralBackground1,
+    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
+    cursor: "default",
+    transition: "all 0.2s ease",
+    "&:hover": {
+      backgroundColor: tokens.colorNeutralBackground1Hover,
+      ...shorthands.borderColor(tokens.colorBrandStroke1),
+    },
+  },
+  statusDot: {
+    width: "8px",
+    height: "8px",
+    ...shorthands.borderRadius("50%"),
+  },
+  statusOnline: {
+    backgroundColor: tokens.colorPaletteGreenBackground3,
+  },
+  statusOffline: {
+    backgroundColor: tokens.colorPaletteRedBackground3,
+  },
+  statusPending: {
+    backgroundColor: tokens.colorPaletteYellowBackground3,
+  },
+  networkStatus: {
+    display: "flex",
+    alignItems: "center",
+    ...shorthands.gap(tokens.spacingHorizontalS),
+    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
+    ...shorthands.borderRadius(tokens.borderRadiusMedium),
+    backgroundColor: tokens.colorNeutralBackground1,
+    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
+  },
+  onlineIcon: {
+    color: tokens.colorPaletteGreenForeground1,
+  },
+  offlineIcon: {
+    color: tokens.colorPaletteRedForeground1,
+  },
+});
+
+function StatusDot({ state }) {
+  const styles = useStyles();
+  const className = 
     state === "ok"
-      ? "status-online"
+      ? styles.statusOnline
       : state === "fail"
-      ? "status-offline"
-      : "status-pending";
-  return <span className={`status-dot ${cls}`} />;
-}
-
-function Spinner() {
-  return (
-    <svg
-      className="loading-spinner"
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-    >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-      />
-    </svg>
-  );
+      ? styles.statusOffline
+      : styles.statusPending;
+  
+  return <span className={`${styles.statusDot} ${className}`} />;
 }
 
 export default function HeaderBar({ onOpenSettings }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const styles = useStyles();
 
   const refresh = async () => {
     setLoading(true);
@@ -70,58 +123,62 @@ export default function HeaderBar({ onOpenSettings }) {
     };
   }, []);
 
-  const Item = ({ name, r }) => (
-    <div
-      className="group relative flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-white border border-neutral-200 hover:border-primary-300 hover:bg-primary-25 cursor-default transition-all duration-200"
-      title={r ? `${name}: ${r.state} (${String(r.detail)})` : `${name}: -`}
-      onDoubleClick={onOpenSettings}
+  const StatusItem = ({ name, r }) => (
+    <Tooltip
+      content={r ? `${name}: ${r.state} (${String(r.detail)})` : `${name}: -`}
+      relationship="label"
     >
-      <Dot state={r?.state} />
-      <span className="text-neutral-700 font-medium">{name}</span>
-    </div>
+      <div
+        className={styles.statusItem}
+        onDoubleClick={onOpenSettings}
+      >
+        <StatusDot state={r?.state} />
+        <Text size={200} weight="medium">{name}</Text>
+      </div>
+    </Tooltip>
   );
 
   return (
-    <header className="nav-header h-14 flex items-center justify-end px-6">
-      <div className="flex items-center gap-3">
-        {/* 네트워크 상태 */}
-        <div
-          className="group relative flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-white border border-neutral-200 hover:border-primary-300 hover:bg-primary-25 cursor-default transition-all duration-200"
-          title={isOnline ? "온라인" : "오프라인"}
+    <header className={styles.header}>
+      <div className={styles.container}>
+        {/* Network Status */}
+        <Tooltip
+          content={isOnline ? "온라인" : "오프라인"}
+          relationship="label"
         >
-          {isOnline ? (
-            <FaWifi className="text-success-500" />
-          ) : (
-            <>
-              <FaWifi className="text-error-500" />
-              <FaBan className="absolute text-error-600" />
-            </>
-          )}
-          <span className="text-neutral-700 font-medium">
-            {isOnline ? "Online" : "Offline"}
-          </span>
-        </div>
+          <div className={styles.networkStatus}>
+            {isOnline ? (
+              <CheckmarkCircleRegular className={styles.onlineIcon} />
+            ) : (
+              <DismissCircleRegular className={styles.offlineIcon} />
+            )}
+            <Text size={200} weight="medium">
+              {isOnline ? "Online" : "Offline"}
+            </Text>
+          </div>
+        </Tooltip>
 
-        {/* API 상태 */}
-        <Item name="Anthropic" r={data?.anthropic} />
-        <Item name="Replicate" r={data?.replicate} />
+        {/* API Status */}
+        <StatusItem name="Anthropic" r={data?.anthropic} />
+        <StatusItem name="Replicate" r={data?.replicate} />
 
-        {/* 버튼 */}
-        <button
-          onClick={refresh}
+        {/* Buttons */}
+        <Button
+          appearance="primary"
+          icon={loading ? <Spinner size="tiny" /> : <ArrowClockwiseRegular />}
           disabled={loading}
-          className="btn-primary min-w-[80px]"
-          title="새로고침"
+          onClick={refresh}
         >
-          {loading ? <Spinner /> : "Refresh"}
-        </button>
-        <button
+          {loading ? "새로고침 중..." : "새로고침"}
+        </Button>
+        
+        <Button
+          appearance="secondary"
+          icon={<SettingsRegular />}
           onClick={onOpenSettings}
-          className="btn-secondary"
-          title="전역 설정"
         >
-          Settings
-        </button>
+          설정
+        </Button>
       </div>
     </header>
   );
