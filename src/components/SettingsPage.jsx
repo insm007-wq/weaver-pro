@@ -36,11 +36,11 @@ const useStyles = makeStyles({
   root: {
     maxWidth: "1200px",
     ...shorthands.margin("0", "auto"),
-    ...shorthands.padding(tokens.spacingVerticalXXL, tokens.spacingHorizontalXXL),
+    ...shorthands.padding(tokens.spacingVerticalXL, tokens.spacingHorizontalL),
   },
 
   pageHeader: {
-    ...shorthands.margin(0, 0, tokens.spacingVerticalXL),
+    ...shorthands.margin(0, 0, tokens.spacingVerticalL),
   },
   pageTitle: {
     display: "flex",
@@ -50,6 +50,7 @@ const useStyles = makeStyles({
   pageDesc: {
     color: tokens.colorNeutralForeground3,
     marginTop: tokens.spacingVerticalXS,
+    fontSize: tokens.fontSizeBase300,
   },
   hairline: {
     ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke2),
@@ -60,7 +61,7 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
     ...shorthands.borderRadius(tokens.borderRadiusLarge),
-    boxShadow: tokens.shadow4,
+    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
     minHeight: "640px",
     display: "flex",
     flexDirection: "column",
@@ -71,15 +72,16 @@ const useStyles = makeStyles({
     ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke2),
     ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalL),
   },
+  
   tabContent: {
     flex: 1,
-    ...shorthands.padding(tokens.spacingVerticalXL, tokens.spacingHorizontalXXL),
+    ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalL),
     display: "flex",
     flexDirection: "column",
-    minWidth: 0, // <-- 콘텐츠 폭 계산 보장
+    minWidth: 0,
   },
   sectionLead: {
-    marginBottom: tokens.spacingVerticalL,
+    marginBottom: tokens.spacingVerticalM,
   },
   scroll: {
     flex: 1,
@@ -140,7 +142,11 @@ export default function SettingsPage({ onBack }) {
       {/* 본문 카드 */}
       <Card className={styles.mainCard}>
         <div className={styles.tabListWrap}>
-          <TabList selectedValue={selectedTab} onTabSelect={(_, d) => setSelectedTab(d.value)} size="large">
+          <TabList 
+            selectedValue={selectedTab} 
+            onTabSelect={(_, d) => setSelectedTab(d.value)} 
+            size="medium"
+          >
             {tabs.map((t) => (
               <Tab key={t.key} value={t.key} icon={t.icon}>
                 {t.name}
@@ -151,10 +157,14 @@ export default function SettingsPage({ onBack }) {
 
         <div className={styles.tabContent}>
           <div className={styles.sectionLead}>
-            <Title2>{active.name}</Title2>
-            <Subtitle1>{active.description}</Subtitle1>
+            <Title2 style={{ fontSize: tokens.fontSizeBase500, marginBottom: tokens.spacingVerticalXXS }}>
+              {active.name}
+            </Title2>
+            <Body1 style={{ color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase300 }}>
+              {active.description}
+            </Body1>
           </div>
-          <Divider />
+          <Divider style={{ marginBottom: tokens.spacingVerticalL }} />
 
           <div className={styles.scroll}>
             <Suspense

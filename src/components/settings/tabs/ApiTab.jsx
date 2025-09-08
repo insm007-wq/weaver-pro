@@ -26,17 +26,18 @@ import {
 
 const useStyles = makeStyles({
   container: {
-    ...shorthands.padding(tokens.spacingVerticalXL),
+    ...shorthands.padding(tokens.spacingVerticalL),
     display: "flex",
     flexDirection: "column",
-    ...shorthands.gap(tokens.spacingVerticalXL),
-    maxWidth: "1400px",
+    ...shorthands.gap(tokens.spacingVerticalL),
+    maxWidth: "1200px",
     margin: "0 auto",
   },
 
   header: {
     textAlign: "center",
-    marginBottom: tokens.spacingVerticalXL,
+    marginBottom: tokens.spacingVerticalL,
+    ...shorthands.padding("0", tokens.spacingHorizontalM),
   },
 
   headerTitle: {
@@ -44,33 +45,35 @@ const useStyles = makeStyles({
     backgroundClip: "text",
     WebkitBackgroundClip: "text",
     WebkitTextFillColor: "transparent",
-    marginBottom: tokens.spacingVerticalM,
-    fontSize: tokens.fontSizeHero800,
-    fontWeight: tokens.fontWeightBold,
+    marginBottom: tokens.spacingVerticalS,
+    fontSize: tokens.fontSizeBase500,
+    fontWeight: tokens.fontWeightSemibold,
+    lineHeight: "1.4",
+    wordBreak: "keep-all",
   },
 
   headerDescription: {
     color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase400,
-    maxWidth: "600px",
+    fontSize: tokens.fontSizeBase300,
+    maxWidth: "500px",
     margin: "0 auto",
-    lineHeight: "1.6",
+    lineHeight: "1.5",
   },
 
   servicesGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))",
-    ...shorthands.gap(tokens.spacingVerticalXL, tokens.spacingHorizontalXL),
+    gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
+    ...shorthands.gap(tokens.spacingVerticalL, tokens.spacingHorizontalL),
     width: "100%",
   },
 
   serviceCard: {
     backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
-    ...shorthands.borderRadius(tokens.borderRadiusXLarge),
-    ...shorthands.padding(tokens.spacingVerticalXL),
-    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
-    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+    ...shorthands.borderRadius(tokens.borderRadiusLarge),
+    ...shorthands.padding(tokens.spacingVerticalL),
+    boxShadow: "0 1px 4px rgba(0, 0, 0, 0.06)",
+    transition: "all 0.2s ease",
     position: "relative",
     overflow: "hidden",
     
@@ -80,57 +83,60 @@ const useStyles = makeStyles({
       top: 0,
       left: 0,
       right: 0,
-      height: "4px",
+      height: "3px",
       background: `linear-gradient(90deg, ${tokens.colorBrandBackground} 0%, ${tokens.colorBrandBackground2} 100%)`,
     },
     
     "&:hover": {
-      transform: "translateY(-4px)",
-      boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12)",
+      transform: "translateY(-2px)",
+      boxShadow: "0 4px 16px rgba(0, 0, 0, 0.1)",
       ...shorthands.borderColor(tokens.colorBrandStroke1),
     },
   },
 
   specialCard: {
     gridColumn: "1 / -1",
-    maxWidth: "800px",
+    maxWidth: "700px",
     margin: "0 auto",
   },
 
   cardHeader: {
     display: "flex",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: tokens.spacingVerticalL,
+    marginBottom: tokens.spacingVerticalM,
   },
 
   serviceInfo: {
     display: "flex",
     flexDirection: "column",
-    ...shorthands.gap(tokens.spacingVerticalXS),
+    ...shorthands.gap(tokens.spacingVerticalXXS),
+    flex: 1,
   },
 
   serviceName: {
-    fontSize: tokens.fontSizeBase500,
+    fontSize: tokens.fontSizeBase400,
     fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorNeutralForeground1,
     display: "flex",
     alignItems: "center",
-    ...shorthands.gap(tokens.spacingHorizontalM),
+    ...shorthands.gap(tokens.spacingHorizontalS),
+    lineHeight: "1.3",
   },
 
   serviceDescription: {
-    fontSize: tokens.fontSizeBase300,
+    fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground3,
-    lineHeight: "1.4",
+    lineHeight: "1.3",
   },
 
   statusBadge: {
     flexShrink: 0,
+    marginLeft: tokens.spacingHorizontalM,
   },
 
   inputSection: {
-    marginBottom: tokens.spacingVerticalL,
+    marginBottom: tokens.spacingVerticalM,
   },
 
   actionRow: {
@@ -138,23 +144,23 @@ const useStyles = makeStyles({
     alignItems: "center",
     justifyContent: "space-between",
     flexWrap: "wrap",
-    ...shorthands.gap(tokens.spacingHorizontalM),
-    marginBottom: tokens.spacingVerticalM,
+    ...shorthands.gap(tokens.spacingHorizontalS),
+    marginBottom: tokens.spacingVerticalS,
   },
 
   actionButtons: {
     display: "flex",
     alignItems: "center",
-    ...shorthands.gap(tokens.spacingHorizontalM),
+    ...shorthands.gap(tokens.spacingHorizontalS),
   },
 
   statusMessage: {
-    ...shorthands.padding(tokens.spacingVerticalM),
+    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
     display: "flex",
     alignItems: "center",
-    ...shorthands.gap(tokens.spacingHorizontalM),
-    fontSize: tokens.fontSizeBase300,
+    ...shorthands.gap(tokens.spacingHorizontalS),
+    fontSize: tokens.fontSizeBase200,
   },
 
   successMessage: {
@@ -171,7 +177,7 @@ const useStyles = makeStyles({
 
   timestamp: {
     color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
+    fontSize: tokens.fontSizeBase100,
     whiteSpace: "nowrap",
   },
 
@@ -184,7 +190,23 @@ const useStyles = makeStyles({
     alignItems: "center",
     justifyContent: "space-between",
     flexWrap: "wrap",
-    ...shorthands.gap(tokens.spacingHorizontalM),
+    ...shorthands.gap(tokens.spacingHorizontalS),
+  },
+
+  compactInput: {
+    "& .fui-Field__label": {
+      fontSize: tokens.fontSizeBase200,
+      marginBottom: tokens.spacingVerticalXXS,
+    },
+    "& .fui-Field__hint": {
+      fontSize: tokens.fontSizeBase100,
+    },
+  },
+
+  compactButton: {
+    minHeight: "32px",
+    fontSize: tokens.fontSizeBase200,
+    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalM),
   },
 });
 
@@ -522,11 +544,11 @@ export default function ApiTab() {
     <div className={s.container}>
       {/* Header */}
       <div className={s.header}>
-        <Title3 className={s.headerTitle}>🔧 API 설정 및 연결 관리</Title3>
-        <Body2 className={s.headerDescription}>
-          외부 서비스 API 키를 안전하게 저장하고 연결 상태를 확인할 수 있습니다. 
+        <div className={s.headerTitle}>🔧 API 설정 외부 서비스 연결 관리</div>
+        <Caption1 className={s.headerDescription}>
+          외부 서비스 API 키를 안전하게 저장하고 연결 상태를 확인할 수 있습니다.<br />
           각 서비스의 API 키를 입력한 후 테스트 버튼을 클릭하여 연결을 확인하세요.
-        </Body2>
+        </Caption1>
       </div>
 
       {/* Services Grid */}
@@ -538,28 +560,35 @@ export default function ApiTab() {
                 <div className={s.serviceName}>
                   {service.name}
                 </div>
-                <div className={s.serviceDescription}>
+                <Caption1 className={s.serviceDescription}>
                   {service.description}
-                </div>
+                </Caption1>
               </div>
               {getStatusBadge(service.status)}
             </div>
 
             <div className={s.inputSection}>
-              <Field label="API Key" hint={service.hint}>
+              <Field label="API Key" hint={service.hint} className={s.compactInput}>
                 <Input
                   type="password"
                   value={service.value}
                   onChange={(_, data) => service.setValue(data.value)}
                   placeholder={service.placeholder}
                   contentBefore={<KeyRegular />}
+                  size="small"
                 />
               </Field>
             </div>
 
             <div className={s.actionRow}>
               <div className={s.actionButtons}>
-                <Button appearance="secondary" icon={<SaveRegular />} onClick={service.onSave}>
+                <Button 
+                  appearance="secondary" 
+                  icon={<SaveRegular />} 
+                  onClick={service.onSave}
+                  className={s.compactButton}
+                  size="small"
+                >
                   저장
                 </Button>
                 <Button
@@ -567,21 +596,23 @@ export default function ApiTab() {
                   icon={service.loading ? <Spinner size="tiny" /> : <BeakerRegular />}
                   disabled={service.loading}
                   onClick={service.onTest}
+                  className={s.compactButton}
+                  size="small"
                 >
                   {service.loading ? "테스트 중..." : "테스트"}
                 </Button>
               </div>
               {service.status?.ts && (
-                <Caption1 className={s.timestamp}>
+                <div className={s.timestamp}>
                   마지막 확인: {new Date(service.status.ts).toLocaleTimeString()}
-                </Caption1>
+                </div>
               )}
             </div>
 
             {service.status?.msg && (
               <div className={`${s.statusMessage} ${service.status.ok === false ? s.errorMessage : s.successMessage}`}>
                 {service.status.ok ? <CheckmarkCircleRegular /> : <DismissCircleRegular />}
-                <Body2>{service.status.msg}</Body2>
+                <Caption1>{service.status.msg}</Caption1>
               </div>
             )}
           </Card>
@@ -594,9 +625,9 @@ export default function ApiTab() {
               <div className={s.serviceName}>
                 🎨 Google Imagen3
               </div>
-              <div className={s.serviceDescription}>
+              <Caption1 className={s.serviceDescription}>
                 구글의 최신 AI 이미지 생성 모델 - 텍스트에서 고품질 이미지 생성
-              </div>
+              </Caption1>
             </div>
             {getStatusBadge(status.imagen3)}
           </div>
@@ -605,12 +636,13 @@ export default function ApiTab() {
             <Field 
               label="서비스 계정 JSON" 
               hint="Google Cloud Console에서 생성한 서비스 계정의 JSON 키 파일 내용"
+              className={s.compactInput}
             >
               <Textarea
                 value={imagen3ServiceAccount}
                 onChange={(_, data) => setImagen3ServiceAccount(data.value)}
                 placeholder='{\n  "type": "service_account",\n  "project_id": "your-project-id",\n  "private_key_id": "...",\n  ...\n}'
-                rows={8}
+                rows={6}
                 resize="vertical"
               />
             </Field>
@@ -621,12 +653,20 @@ export default function ApiTab() {
               appearance="subtle"
               icon={<FolderRegular />}
               onClick={handleFileUpload}
+              className={s.compactButton}
+              size="small"
             >
               JSON 파일 선택
             </Button>
             
             <div className={s.actionButtons}>
-              <Button appearance="secondary" icon={<SaveRegular />} onClick={saveImagen3}>
+              <Button 
+                appearance="secondary" 
+                icon={<SaveRegular />} 
+                onClick={saveImagen3}
+                className={s.compactButton}
+                size="small"
+              >
                 저장
               </Button>
               <Button
@@ -634,6 +674,8 @@ export default function ApiTab() {
                 icon={loading.imagen3 ? <Spinner size="tiny" /> : <BeakerRegular />}
                 disabled={loading.imagen3}
                 onClick={testImagen3}
+                className={s.compactButton}
+                size="small"
               >
                 {loading.imagen3 ? "테스트 중..." : "테스트"}
               </Button>
@@ -641,17 +683,17 @@ export default function ApiTab() {
           </div>
 
           {status.imagen3?.ts && (
-            <div style={{ textAlign: "right", marginTop: tokens.spacingVerticalM }}>
-              <Caption1 className={s.timestamp}>
+            <div style={{ textAlign: "right", marginTop: tokens.spacingVerticalS }}>
+              <div className={s.timestamp}>
                 마지막 확인: {new Date(status.imagen3.ts).toLocaleTimeString()}
-              </Caption1>
+              </div>
             </div>
           )}
 
           {status.imagen3?.msg && (
             <div className={`${s.statusMessage} ${status.imagen3.ok === false ? s.errorMessage : s.successMessage}`}>
               {status.imagen3.ok ? <CheckmarkCircleRegular /> : <DismissCircleRegular />}
-              <Body2>{status.imagen3.msg}</Body2>
+              <Caption1>{status.imagen3.msg}</Caption1>
             </div>
           )}
         </Card>
