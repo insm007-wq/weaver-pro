@@ -1,15 +1,5 @@
 import { useState } from "react";
-import {
-  makeStyles,
-  shorthands,
-  tokens,
-  Button,
-  Text,
-  Title3,
-  Caption1,
-  Tooltip,
-  mergeClasses,
-} from "@fluentui/react-components";
+import { makeStyles, shorthands, tokens, Button, Text, Title3, Caption1, Tooltip, mergeClasses } from "@fluentui/react-components";
 import {
   FolderOpenRegular,
   ImageRegular,
@@ -28,106 +18,189 @@ const useStyles = makeStyles({
   sidebar: {
     display: "flex",
     flexDirection: "column",
-    justifyContent: "space-between",
-    backgroundColor: tokens.colorNeutralBackground2,
+    height: "100vh",
+    backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.borderRight("1px", "solid", tokens.colorNeutralStroke1),
-    transition: "width 0.3s ease",
+    transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+    position: "relative",
+    boxShadow: "4px 0 12px rgba(0, 0, 0, 0.05)",
+    backdropFilter: "blur(10px)",
+    WebkitBackdropFilter: "blur(10px)",
   },
   expanded: {
-    width: "320px",
+    width: "280px",
   },
   collapsed: {
-    width: "80px",
+    width: "72px",
   },
   toggleContainer: {
     display: "flex",
     justifyContent: "flex-end",
-    ...shorthands.padding(tokens.spacingVerticalL),
+    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalM),
+    ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke2),
   },
+  
+  headerSection: {
+    ...shorthands.padding(tokens.spacingVerticalXL, tokens.spacingHorizontalL),
+    ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke2),
+    background: `linear-gradient(135deg, ${tokens.colorBrandBackground} 0%, ${tokens.colorBrandBackground2} 100%)`,
+    color: tokens.colorNeutralForegroundOnBrand,
+    position: "relative",
+    "&::before": {
+      content: "''",
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: "rgba(255, 255, 255, 0.1)",
+      backdropFilter: "blur(10px)",
+      WebkitBackdropFilter: "blur(10px)",
+    },
+  },
+  
   logoContainer: {
     display: "flex",
     alignItems: "center",
-    ...shorthands.gap(tokens.spacingHorizontalL),
-    ...shorthands.padding("0", tokens.spacingHorizontalXL),
-    marginBottom: tokens.spacingVerticalXL,
+    ...shorthands.gap(tokens.spacingHorizontalM),
+    position: "relative",
+    zIndex: 1,
   },
+  
   logoBox: {
-    width: "48px",
-    height: "48px",
-    minWidth: "48px",
-    backgroundImage: `linear-gradient(135deg, ${tokens.colorBrandBackground}, ${tokens.colorBrandBackground2})`,
+    width: "44px",
+    height: "44px",
+    minWidth: "44px",
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
     ...shorthands.borderRadius(tokens.borderRadiusLarge),
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    color: tokens.colorNeutralForegroundOnBrand,
-    fontSize: tokens.fontSizeBase600,
-    boxShadow: tokens.shadow16,
+    fontSize: "20px",
+    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+    backdropFilter: "blur(10px)",
+    WebkitBackdropFilter: "blur(10px)",
+    ...shorthands.border("1px", "solid", "rgba(255, 255, 255, 0.3)"),
   },
   logoText: {
     animation: "fadeIn 0.3s ease-out",
+    color: "inherit",
   },
+  
+  mainContent: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    overflowY: "auto",
+    ...shorthands.padding(tokens.spacingVerticalL, "0"),
+  },
+  
   navigation: {
     ...shorthands.padding("0", tokens.spacingHorizontalM),
+    marginBottom: tokens.spacingVerticalL,
   },
-  menuSection: {
+  
+  sectionTitle: {
+    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
     marginBottom: tokens.spacingVerticalM,
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+    fontWeight: tokens.fontWeightSemibold,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
   },
+  
+  menuSection: {
+    marginBottom: tokens.spacingVerticalXL,
+  },
+  
   menuItem: {
     display: "flex",
-    alignItems: "flex-start",
+    alignItems: "center",
     width: "100%",
     ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalM),
-    ...shorthands.borderRadius(tokens.borderRadiusMedium),
+    ...shorthands.margin("0", tokens.spacingHorizontalXS),
+    ...shorthands.borderRadius(tokens.borderRadiusLarge),
     backgroundColor: "transparent",
-    ...shorthands.border("1px", "solid", "transparent"),
     cursor: "pointer",
-    transition: "all 0.2s ease",
-    marginBottom: tokens.spacingVerticalXS,
+    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
     position: "relative",
+    "&::before": {
+      content: "''",
+      position: "absolute",
+      left: "0",
+      top: "50%",
+      transform: "translateY(-50%)",
+      width: "3px",
+      height: "0",
+      backgroundColor: tokens.colorBrandBackground,
+      ...shorthands.borderRadius("0", "2px", "2px", "0"),
+      transition: "height 0.3s ease",
+    },
     "&:hover": {
-      backgroundColor: tokens.colorNeutralBackground1Hover,
-      ...shorthands.borderColor(tokens.colorBrandStroke1),
-      transform: "translateX(2px)",
+      backgroundColor: "rgba(0, 120, 212, 0.05)",
+      transform: "translateX(4px)",
+      "&::before": {
+        height: "24px",
+      },
     },
     "&:active": {
-      backgroundColor: tokens.colorNeutralBackground1Pressed,
+      transform: "translateX(2px)",
+      backgroundColor: "rgba(0, 120, 212, 0.1)",
     },
   },
   menuItemCollapsed: {
     justifyContent: "center",
-    ...shorthands.padding(tokens.spacingVerticalM),
+    ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalS),
+    ...shorthands.margin("0", tokens.spacingHorizontalXXS),
   },
+  
   iconContainer: {
-    width: "20px",
-    height: "20px",
+    width: "24px",
+    height: "24px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    transition: "transform 0.2s ease",
+    transition: "all 0.2s ease",
     marginRight: tokens.spacingHorizontalM,
+    fontSize: "18px",
   },
+  
   iconContainerCollapsed: {
     marginRight: "0",
+    fontSize: "20px",
   },
+  
   menuContent: {
     flex: 1,
     animation: "fadeIn 0.3s ease-out",
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.gap(tokens.spacingVerticalXXS),
   },
-  divider: {
-    ...shorthands.margin(tokens.spacingVerticalM, tokens.spacingHorizontalXL),
-    ...shorthands.padding(tokens.spacingVerticalS, "0"),
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+  
+  menuLabel: {
+    fontSize: tokens.fontSizeBase300,
+    fontWeight: tokens.fontWeightMedium,
+    color: tokens.colorNeutralForeground1,
   },
-  dividerLabel: {
-    marginBottom: tokens.spacingVerticalS,
+  
+  menuDescription: {
+    fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground3,
   },
   footer: {
-    ...shorthands.padding(tokens.spacingVerticalXL),
+    ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalL),
     ...shorthands.borderTop("1px", "solid", tokens.colorNeutralStroke2),
-    backgroundColor: tokens.colorNeutralBackground1,
-    animation: "fadeIn 0.3s ease-out",
+    backgroundColor: "rgba(0, 0, 0, 0.02)",
+    backdropFilter: "blur(10px)",
+    WebkitBackdropFilter: "blur(10px)",
+  },
+  
+  footerContent: {
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.gap(tokens.spacingVerticalXS),
   },
 });
 
@@ -210,30 +283,24 @@ export default function Sidebar({ onSelectMenu }) {
 
   const MenuItem = ({ item, collapsed }) => {
     const content = (
-      <div
-        className={mergeClasses(
-          styles.menuItem,
-          collapsed && styles.menuItemCollapsed
-        )}
+      <div 
+        className={mergeClasses(styles.menuItem, collapsed && styles.menuItemCollapsed)} 
         onClick={() => handleMenuClick(item.key)}
       >
-        <div
-          className={mergeClasses(
-            styles.iconContainer,
-            collapsed && styles.iconContainerCollapsed
-          )}
+        <div 
+          className={mergeClasses(styles.iconContainer, collapsed && styles.iconContainerCollapsed)} 
           style={{ color: item.color }}
         >
           {item.icon}
         </div>
         {!collapsed && (
           <div className={styles.menuContent}>
-            <Text weight="semibold" block>
+            <div className={styles.menuLabel}>
               {item.label}
-            </Text>
-            <Caption1 block color="subtle">
+            </div>
+            <div className={styles.menuDescription}>
               {item.desc}
-            </Caption1>
+            </div>
           </div>
         )}
       </div>
@@ -241,7 +308,7 @@ export default function Sidebar({ onSelectMenu }) {
 
     if (collapsed) {
       return (
-        <Tooltip content={item.label} relationship="label" positioning="after">
+        <Tooltip content={`${item.label} - ${item.desc}`} relationship="label" positioning="after">
           {content}
         </Tooltip>
       );
@@ -251,38 +318,39 @@ export default function Sidebar({ onSelectMenu }) {
   };
 
   return (
-    <aside
-      className={mergeClasses(
-        styles.sidebar,
-        isCollapsed ? styles.collapsed : styles.expanded
-      )}
-    >
-      <div>
-        {/* Toggle Button */}
-        <div className={styles.toggleContainer}>
-          <Button
-            appearance="subtle"
-            icon={isCollapsed ? <ChevronRightRegular /> : <ChevronLeftRegular />}
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            size="small"
-          />
-        </div>
+    <aside className={mergeClasses(styles.sidebar, isCollapsed ? styles.collapsed : styles.expanded)}>
+      {/* Toggle Button */}
+      <div className={styles.toggleContainer}>
+        <Button
+          appearance="subtle"
+          icon={isCollapsed ? <ChevronRightRegular /> : <ChevronLeftRegular />}
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          size="small"
+        />
+      </div>
 
-        {/* Logo */}
+      {/* Header Section */}
+      <div className={styles.headerSection}>
         <div className={styles.logoContainer}>
-          <div className={styles.logoBox}>🎥</div>
+          <div className={styles.logoBox}>🎬</div>
           {!isCollapsed && (
             <div className={styles.logoText}>
-              <Title3 block>Content Weaver Pro</Title3>
-              <Caption1 block color="subtle">
+              <Title3 block>Weaver Pro</Title3>
+              <Caption1 block>
                 AI 영상 제작 솔루션
               </Caption1>
             </div>
           )}
         </div>
+      </div>
 
+      {/* Main Content */}
+      <div className={styles.mainContent}>
         {/* Global Menu */}
         <nav className={styles.navigation}>
+          {!isCollapsed && (
+            <div className={styles.sectionTitle}>전역 메뉴</div>
+          )}
           <div className={styles.menuSection}>
             {globalMenu.map((item) => (
               <MenuItem key={item.key} item={item} collapsed={isCollapsed} />
@@ -290,17 +358,11 @@ export default function Sidebar({ onSelectMenu }) {
           </div>
         </nav>
 
-        {/* Divider */}
-        {!isCollapsed && (
-          <div className={styles.divider}>
-            <Caption1 className={styles.dividerLabel} weight="semibold">
-              프로젝트 작업 영역
-            </Caption1>
-          </div>
-        )}
-
         {/* Project Menu */}
         <nav className={styles.navigation}>
+          {!isCollapsed && (
+            <div className={styles.sectionTitle}>프로젝트 워크플로우</div>
+          )}
           <div className={styles.menuSection}>
             {projectMenu.map((item) => (
               <MenuItem key={item.key} item={item} collapsed={isCollapsed} />
@@ -312,12 +374,14 @@ export default function Sidebar({ onSelectMenu }) {
       {/* Footer */}
       {!isCollapsed && (
         <div className={styles.footer}>
-          <Text size={100} weight="medium" block>
-            Version 1.0.0
-          </Text>
-          <Caption1 block color="subtle">
-            © 2025 Content Weaver
-          </Caption1>
+          <div className={styles.footerContent}>
+            <Text size={200} weight="medium">
+              Version 1.0.0
+            </Text>
+            <Caption1 color="subtle">
+              © 2025 Weaver Pro
+            </Caption1>
+          </div>
         </div>
       )}
     </aside>

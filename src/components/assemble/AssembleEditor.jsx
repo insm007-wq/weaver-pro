@@ -37,7 +37,7 @@ import ArrangeTab from "./tabs/ArrangeTab.jsx";
 import ReviewTab from "./tabs/ReviewTab.jsx";
 import SetupTab from "./tabs/SetupTab.jsx";
 import CanvaTab from "./tabs/CanvaTab";
-import CanvaStealthTab from "./tabs/CanvaStealthTab";
+// import CanvaStealthTab from "./tabs/CanvaStealthTab"; // Temporarily disabled due to Ant Design dependency
 import CanvaSessionTab from "./tabs/CanvaSessionTab";
 import KeepAlivePane from "../common/KeepAlivePane";
 
@@ -379,7 +379,11 @@ export default function AssembleEditor() {
             </KeepAlivePane>
 
             <KeepAlivePane active={selectedTab === "canva-stealth"}>
-              <CanvaStealthTab addAssets={addAssets} />
+              {/* <CanvaStealthTab addAssets={addAssets} /> */}
+              <div style={{ padding: '20px', textAlign: 'center' }}>
+                <p>Canva Stealth 기능은 현재 업데이트 중입니다.</p>
+                <p>임시로 Canva Session 탭을 사용해주세요.</p>
+              </div>
             </KeepAlivePane>
 
             <KeepAlivePane active={selectedTab === "canva-session"}>

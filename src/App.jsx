@@ -1,41 +1,15 @@
-import {
-  useCallback,
-  useMemo,
-  useState,
-  useEffect,
-  Suspense,
-  lazy,
-} from "react";
-import {
-  makeStyles,
-  shorthands,
-  tokens,
-  Card,
-  CardHeader,
-  Body1,
-  Title1,
-  Subtitle1,
-  Spinner,
-  Text,
-} from "@fluentui/react-components";
+import { useCallback, useMemo, useState, useEffect, Suspense, lazy } from "react";
+import { makeStyles, shorthands, tokens, Card, CardHeader, Body1, Title1, Subtitle1, Spinner, Text } from "@fluentui/react-components";
 import KeepAlivePane from "./components/common/KeepAlivePane";
 
 const Sidebar = lazy(() => import("./components/Sidebar"));
 const ProjectInit = lazy(() => import("./components/ProjectInit"));
 const SettingsPage = lazy(() => import("./components/SettingsPage"));
 const HeaderBar = lazy(() => import("./components/HeaderBar"));
-const ThumbnailGenerator = lazy(() =>
-  import("./components/ThumbnailGenerator")
-);
-const ScriptVoiceGenerator = lazy(() =>
-  import("./components/scriptgen/ScriptVoiceGenerator")
-);
-const AssembleEditor = lazy(() =>
-  import("./components/assemble/AssembleEditor")
-);
-const DraftExportPage = lazy(() =>
-  import("./components/draftexport/DraftExportPage")
-);
+const ThumbnailGenerator = lazy(() => import("./components/ThumbnailGenerator"));
+const ScriptVoiceGenerator = lazy(() => import("./components/scriptgen/ScriptVoiceGenerator"));
+const AssembleEditor = lazy(() => import("./components/assemble/AssembleEditor"));
+const DraftExportPage = lazy(() => import("./components/draftexport/DraftExportPage"));
 const RefineEditor = lazy(() => import("./components/refine/RefineEditor"));
 const FinalizePage = lazy(() => import("./components/finalize/FinalizePage"));
 
@@ -159,7 +133,7 @@ export default function App() {
         <Suspense fallback={<LoadingSpinner />}>
           <Sidebar onSelectMenu={handleSelectMenu} />
         </Suspense>
-        
+
         <main className={styles.main}>
           <Suspense fallback={<LoadingSpinner />}>
             {!projectName && !canOpenWithoutProject ? (
@@ -171,32 +145,28 @@ export default function App() {
                     <CardHeader
                       header={
                         <div className={styles.welcomeHeader}>
-                          <div className={styles.logoBox}>
-                            🎥
-                          </div>
+                          <div className={styles.logoBox}>🎥</div>
                           <div>
-                            <Title1>{projectName || "Content Weaver Pro"}</Title1>
-                            <Subtitle1>
-                              AI 기반 영상 제작 솔루션에 오신 것을 환영합니다
-                            </Subtitle1>
+                            <Title1>{projectName || "Weaver Pro"}</Title1>
+                            <Subtitle1>AI 기반 영상 제작 솔루션에 오신 것을 환영합니다</Subtitle1>
                           </div>
                         </div>
                       }
                     />
-                    
+
                     <div className={styles.gridContainer}>
                       <div className={`${styles.featureCard} ${styles.quickStartCard}`}>
-                        <Text as="h3" weight="semibold" size={500}>🎯 빠른 시작</Text>
-                        <Body1>
-                          왼쪽 사이드바에서 원하는 기능을 선택하여 시작하세요.
-                        </Body1>
+                        <Text as="h3" weight="semibold" size={500}>
+                          🎯 빠른 시작
+                        </Text>
+                        <Body1>왼쪽 사이드바에서 원하는 기능을 선택하여 시작하세요.</Body1>
                       </div>
-                      
+
                       <div className={`${styles.featureCard} ${styles.newFeatureCard}`}>
-                        <Text as="h3" weight="semibold" size={500}>⚡ 새로운 기능</Text>
-                        <Body1>
-                          최신 AI 모델과 향상된 사용자 경험을 체험해보세요.
-                        </Body1>
+                        <Text as="h3" weight="semibold" size={500}>
+                          ⚡ 새로운 기능
+                        </Text>
+                        <Body1>최신 AI 모델과 향상된 사용자 경험을 체험해보세요.</Body1>
                       </div>
                     </div>
                   </Card>

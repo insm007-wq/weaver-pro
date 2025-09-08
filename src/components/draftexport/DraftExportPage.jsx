@@ -56,17 +56,10 @@ export default function DraftPage({ scenes: propScenes = [] }) {
   const [range, setRange] = useState("all"); // all | selected
   const [selectedScene, setSelectedScene] = useState(seedScenes[0]?.id || null);
 
-  const totalDuration = useMemo(
-    () => seedScenes.reduce((acc, s) => acc + (s?.duration || 0), 0),
-    [seedScenes]
-  );
+  const totalDuration = useMemo(() => seedScenes.reduce((acc, s) => acc + (s?.duration || 0), 0), [seedScenes]);
   const estSizeMB = useMemo(() => {
     const bitrateByPreset = { "540p": 1.5, "720p": 2.5, "1080p": 4 };
-    return Math.max(
-      1,
-      Math.round(((totalDuration * (bitrateByPreset[preset] || 2)) / 6) * 10) /
-        10
-    );
+    return Math.max(1, Math.round(((totalDuration * (bitrateByPreset[preset] || 2)) / 6) * 10) / 10);
   }, [preset, totalDuration]);
 
   /* --------------------- 진행 상태 (데모) --------------------- */
@@ -138,16 +131,10 @@ export default function DraftPage({ scenes: propScenes = [] }) {
   /* -------------------------- UI ---------------------------- */
   return (
     <div className="mx-auto max-w-4xl p-8">
-      <div
-        ref={containerRef}
-        className="bg-white rounded-2xl shadow-md border border-slate-200 p-6"
-        style={containerStyle}
-      >
+      <div ref={containerRef} className="bg-white rounded-2xl shadow-md border border-slate-200 p-6" style={containerStyle}>
         {/* 상단 헤더 */}
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-slate-800">
-            Content Weaver Pro
-          </h1>
+          <h1 className="text-xl font-semibold text-slate-800">Weaver Pro</h1>
           <div className="text-sm text-slate-500">초안 내보내기</div>
         </div>
 
@@ -155,9 +142,7 @@ export default function DraftPage({ scenes: propScenes = [] }) {
         <div className="grid gap-6 grid-cols-[360px,1fr,260px] 2xl:grid-cols-[380px,1fr,280px]">
           {/* 좌측: 옵션 */}
           <section className="space-y-4">
-            <h2 className="text-lg font-semibold text-slate-800 mb-1">
-              초안 내보내기
-            </h2>
+            <h2 className="text-lg font-semibold text-slate-800 mb-1">초안 내보내기</h2>
 
             <div className="rounded-2xl border border-slate-200 shadow-sm p-5">
               <Label>해상도</Label>
@@ -198,9 +183,7 @@ export default function DraftPage({ scenes: propScenes = [] }) {
               <div className="mt-4 flex items-center justify-between">
                 <div className="min-w-0">
                   <Label>워터마크 “DRAFT”</Label>
-                  <p className="text-xs text-slate-500 mt-1">
-                    내보내기 테스트 용도
-                  </p>
+                  <p className="text-xs text-slate-500 mt-1">내보내기 테스트 용도</p>
                 </div>
                 <Toggle checked={watermark} onChange={setWatermark} />
               </div>
@@ -235,8 +218,7 @@ export default function DraftPage({ scenes: propScenes = [] }) {
               <div className="mt-6">
                 <Label className="mb-2">프리플라이트</Label>
                 <div className="text-sm text-slate-600 bg-slate-50 rounded-xl border border-slate-200 p-4 overflow-hidden">
-                  씬 수: {seedScenes.length} · 총 길이:{" "}
-                  {secToTime(totalDuration)}
+                  씬 수: {seedScenes.length} · 총 길이: {secToTime(totalDuration)}
                   <br />
                   모든 씬에 소스가 있습니다.
                 </div>
@@ -245,24 +227,16 @@ export default function DraftPage({ scenes: propScenes = [] }) {
 
             {/* 하단 미니 진행 요약 */}
             <div className="rounded-2xl border border-slate-200 shadow-sm p-5">
-              <h3 className="text-base font-semibold text-slate-800">
-                초안 내보내기
-              </h3>
+              <h3 className="text-base font-semibold text-slate-800">초안 내보내기</h3>
               <div className="mt-3 flex items-center justify-between text-sm text-slate-600">
                 <div>길이 {secToTime(totalDuration)}</div>
                 <div>{estSizeMB} MB</div>
               </div>
               <div className="mt-3 h-2 rounded-full bg-slate-100">
-                <div
-                  className="h-2 rounded-full bg-indigo-500 transition-all"
-                  style={{ width: `${progress}%` }}
-                />
+                <div className="h-2 rounded-full bg-indigo-500 transition-all" style={{ width: `${progress}%` }} />
               </div>
               <div className="mt-3">
-                <button
-                  className="px-3 py-2 text-sm rounded-lg border border-slate-200 hover:bg-slate-50"
-                  onClick={handleCancel}
-                >
+                <button className="px-3 py-2 text-sm rounded-lg border border-slate-200 hover:bg-slate-50" onClick={handleCancel}>
                   취소
                 </button>
               </div>
@@ -271,9 +245,7 @@ export default function DraftPage({ scenes: propScenes = [] }) {
 
           {/* 중앙: 진행 + 미리보기 */}
           <section className="space-y-4 min-w-0">
-            <h2 className="text-lg font-semibold text-slate-800 mb-1">
-              초안 내보내기
-            </h2>
+            <h2 className="text-lg font-semibold text-slate-800 mb-1">초안 내보내기</h2>
 
             <div className="rounded-2xl border border-slate-200 shadow-sm p-6">
               <div className="flex items-center justify-center">
@@ -285,10 +257,7 @@ export default function DraftPage({ scenes: propScenes = [] }) {
                 <p className="text-xs text-slate-500">draft.mp4</p>
               </div>
               <div className="mt-5 flex justify-center">
-                <button
-                  className="h-11 w-40 rounded-xl border border-slate-200 hover:bg-slate-50"
-                  onClick={handleCancel}
-                >
+                <button className="h-11 w-40 rounded-xl border border-slate-200 hover:bg-slate-50" onClick={handleCancel}>
                   취소
                 </button>
               </div>
@@ -304,14 +273,7 @@ export default function DraftPage({ scenes: propScenes = [] }) {
               </div>
 
               <div className="mt-3">
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={progress}
-                  className="w-full"
-                  readOnly
-                />
+                <input type="range" min={0} max={100} value={progress} className="w-full" readOnly />
                 <div className="mt-2 flex items-center justify-between text-sm text-slate-600">
                   <span>길이 {secToTime(totalDuration)}</span>
                   <span>{estSizeMB} MB</span>
@@ -331,9 +293,7 @@ export default function DraftPage({ scenes: propScenes = [] }) {
 
           {/* 우측: 씬 썸네일 */}
           <section className="space-y-4 min-w-0 overflow-hidden">
-            <h2 className="text-lg font-semibold text-slate-800 mb-1">
-              씬 목록
-            </h2>
+            <h2 className="text-lg font-semibold text-slate-800 mb-1">씬 목록</h2>
 
             <div className="rounded-2xl border border-slate-200 shadow-sm p-3 h-[620px] overflow-y-auto pr-1">
               <ol className="space-y-2">
@@ -341,34 +301,24 @@ export default function DraftPage({ scenes: propScenes = [] }) {
                   <li key={sc.id}>
                     <button
                       className={`w-full flex items-center gap-3 rounded-xl border p-2 transition ${
-                        selectedScene === sc.id
-                          ? "border-indigo-500 bg-indigo-50"
-                          : "border-slate-200 hover:bg-slate-50"
+                        selectedScene === sc.id ? "border-indigo-500 bg-indigo-50" : "border-slate-200 hover:bg-slate-50"
                       }`}
                       onClick={() => setSelectedScene(sc.id)}
                     >
                       {/* 비율 고정 썸네일 (절대 배치 + object-cover) */}
                       <div className="relative w-24 aspect-video rounded-lg bg-slate-200 overflow-hidden flex-shrink-0">
                         {sc.thumb ? (
-                          <img
-                            src={sc.thumb}
-                            alt={sc.label}
-                            className="absolute inset-0 w-full h-full object-cover"
-                          />
+                          <img src={sc.thumb} alt={sc.label} className="absolute inset-0 w-full h-full object-cover" />
                         ) : (
                           <div className="absolute inset-0 grid place-items-center">
-                            <span className="text-[11px] text-slate-600">
-                              No Thumb
-                            </span>
+                            <span className="text-[11px] text-slate-600">No Thumb</span>
                           </div>
                         )}
                       </div>
 
                       <div className="flex-1 text-left min-w-0">
                         <div className="text-xs text-slate-500">{sc.label}</div>
-                        <div className="text-sm text-slate-800">
-                          {secToTime(sc.duration)}
-                        </div>
+                        <div className="text-sm text-slate-800">{secToTime(sc.duration)}</div>
                       </div>
                     </button>
                   </li>
