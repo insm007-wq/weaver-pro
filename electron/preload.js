@@ -308,6 +308,7 @@ contextBridge.exposeInMainWorld("api", {
   testGoogleImageFX: (apiKey) => ipcRenderer.invoke("googleImageFx:test", apiKey),
   testPexels: (key) => ipcRenderer.invoke("pexels:test", key),
   testPixabay: (key) => ipcRenderer.invoke("pixabay:test", key),
+  testGemini: (apiKey) => ipcRenderer.invoke("gemini:test", apiKey),
 
   // ========================================================================
   // 프리뷰(초안 내보내기)

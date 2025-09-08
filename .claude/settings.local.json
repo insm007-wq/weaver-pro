@@ -180,7 +180,9 @@
       "Bash(timeout:*)",
       "Read(//d/smart-video-editor/**)",
       "Bash(wmic:*)",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Read(//d/ai-video-generator/**)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

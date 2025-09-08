@@ -178,3 +178,37 @@ ipcMain.handle("pixabay:test", async (_e, arg) => {
   }
   return fail(0, "Pixabay 테스트 실패(재시도 초과)");
 });
+
+/** ✅ Google Gemini */
+ipcMain.handle("gemini:test", async (_e, apiKey) => {
+  try {
+    if (!apiKey || !apiKey.trim()) return fail(400, "Gemini API 키를 입력하세요.");
+    
+    // 먼저 models 목록을 가져와서 API 키가 유효한지 확인
+    const modelsUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey.trim())}`;
+    
+    const modelsResponse = await axios.get(modelsUrl, {
+      headers: { "Content-Type": "application/json" },
+      timeout: 15000
+    });
+    
+    // 사용 가능한 모델이 있으면 성공
+    const models = modelsResponse.data?.models || [];
+    const geminiModels = models.filter(m => m.name && m.name.includes('gemini'));
+    
+    if (geminiModels.length > 0) {
+      return ok({ 
+        model: "gemini-pro", 
+        availableModels: geminiModels.length,
+        message: `${geminiModels.length}개의 Gemini 모델 사용 가능`
+      });
+    }
+    
+    return fail(404, "사용 가능한 Gemini 모델을 찾을 수 없습니다.");
+    
+  } catch (err) {
+    const { status, message } = normalizeError(err);
+    console.error("[Gemini Test Error]", err.response?.data || err.message);
+    return fail(status, message);
+  }
+});

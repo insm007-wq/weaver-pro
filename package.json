@@ -20,6 +20,7 @@
     "google-auth-library": "^10.3.0",
     "keytar": "^7.9.0",
     "music-metadata": "^11.8.3",
+    "node-fetch": "^3.3.2",
     "openai": "^4.104.0",
     "playwright": "^1.55.0",
     "playwright-core": "^1.55.0",

@@ -220,7 +220,7 @@ export default function ApiTab() {
   const [pexelsKey, setPexelsKey] = useState("");
   const [pixabayKey, setPixabayKey] = useState("");
   const [googleTtsKey, setGoogleTtsKey] = useState("");
-  const [imagen3ServiceAccount, setImagen3ServiceAccount] = useState("");
+  const [geminiKey, setGeminiKey] = useState("");
 
   const [status, setStatus] = useState({
     openai: null,
@@ -229,7 +229,7 @@ export default function ApiTab() {
     pexels: null,
     pixabay: null,
     googleTts: null,
-    imagen3: null,
+    gemini: null,
   });
 
   const [loading, setLoading] = useState({
@@ -239,20 +239,20 @@ export default function ApiTab() {
     pexels: false,
     pixabay: false,
     googleTts: false,
-    imagen3: false,
+    gemini: false,
   });
 
   // ===== 초기 로드 =====
   useEffect(() => {
     (async () => {
-      const [ok, ak, rk, gk, pxk, pbk, i3] = await Promise.all([
+      const [ok, ak, rk, gk, pxk, pbk, gmk] = await Promise.all([
         window.api.getSecret("openaiKey"),
         window.api.getSecret("anthropicKey"),
         window.api.getSecret("replicateKey"),
         window.api.getSecret("googleTtsApiKey"),
         window.api.getSecret("pexelsApiKey"),
         window.api.getSecret("pixabayApiKey"),
-        window.api.getSecret("imagen3ServiceAccount"),
+        window.api.getSecret("geminiKey"),
       ]);
       setOpenaiKey(ok || "");
       setAnthropicKey(ak || "");
@@ -260,7 +260,7 @@ export default function ApiTab() {
       setGoogleTtsKey(gk || "");
       setPexelsKey(pxk || "");
       setPixabayKey(pbk || "");
-      setImagen3ServiceAccount(i3 || "");
+      setGeminiKey(gmk || "");
     })();
   }, []);
 
@@ -296,9 +296,9 @@ export default function ApiTab() {
     await saveSecret("googleTtsApiKey", googleTtsKey);
     setSaved("googleTts");
   };
-  const saveImagen3 = async () => {
-    await saveSecret("imagen3ServiceAccount", imagen3ServiceAccount);
-    setSaved("imagen3");
+  const saveGemini = async () => {
+    await saveSecret("geminiKey", geminiKey);
+    setSaved("gemini");
   };
 
   // ===== 테스트 =====
@@ -398,34 +398,20 @@ export default function ApiTab() {
     }
   };
 
-  const testImagen3 = async () => {
-    if (!imagen3ServiceAccount?.trim()) return setStat("imagen3", false, "서비스 계정 미입력");
-    setBusy("imagen3", true);
-    setStat("imagen3", false, "");
+  const testGemini = async () => {
+    if (!geminiKey?.trim()) return setStat("gemini", false, "키 미입력");
+    setBusy("gemini", true);
+    setStat("gemini", false, "");
     try {
-      const res = await window.api.testImagen3?.(imagen3ServiceAccount.trim());
-      res?.ok ? setStat("imagen3", true, "연결 성공") : setStat("imagen3", false, `실패: ${stringifyErr(res?.message)}`);
+      const res = await window.api.testGemini?.(geminiKey.trim());
+      res?.ok ? setStat("gemini", true, "연결 성공") : setStat("gemini", false, `실패: ${stringifyErr(res?.message)}`);
     } catch (e) {
-      setStat("imagen3", false, `오류: ${e?.message || e}`);
+      setStat("gemini", false, `오류: ${e?.message || e}`);
     } finally {
-      setBusy("imagen3", false);
+      setBusy("gemini", false);
     }
   };
 
-  const handleFileUpload = () => {
-    const el = document.createElement("input");
-    el.type = "file";
-    el.accept = ".json";
-    el.onchange = (e) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (ev) => setImagen3ServiceAccount(ev.target.result);
-        reader.readAsText(file);
-      }
-    };
-    el.click();
-  };
 
   const services = [
     {
@@ -505,6 +491,19 @@ export default function ApiTab() {
       onTest: testGoogleTts,
       status: status.googleTts,
       loading: loading.googleTts,
+    },
+    {
+      key: "gemini",
+      name: "💎 Google Gemini",
+      description: "구글의 최신 멀티모달 AI 모델 - 텍스트, 이미지, 코드 생성 및 분석",
+      value: geminiKey,
+      setValue: setGeminiKey,
+      placeholder: "AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      hint: "Google AI Studio에서 발급받은 Gemini API 키를 입력하세요",
+      onSave: saveGemini,
+      onTest: testGemini,
+      status: status.gemini,
+      loading: loading.gemini,
     },
   ];
 
@@ -617,86 +616,6 @@ export default function ApiTab() {
             )}
           </Card>
         ))}
-
-        {/* Google Imagen3 - Special Card */}
-        <Card className={`${s.serviceCard} ${s.specialCard}`}>
-          <div className={s.cardHeader}>
-            <div className={s.serviceInfo}>
-              <div className={s.serviceName}>
-                🎨 Google Imagen3
-              </div>
-              <Caption1 className={s.serviceDescription}>
-                구글의 최신 AI 이미지 생성 모델 - 텍스트에서 고품질 이미지 생성
-              </Caption1>
-            </div>
-            {getStatusBadge(status.imagen3)}
-          </div>
-
-          <div className={s.textareaField}>
-            <Field 
-              label="서비스 계정 JSON" 
-              hint="Google Cloud Console에서 생성한 서비스 계정의 JSON 키 파일 내용"
-              className={s.compactInput}
-            >
-              <Textarea
-                value={imagen3ServiceAccount}
-                onChange={(_, data) => setImagen3ServiceAccount(data.value)}
-                placeholder='{\n  "type": "service_account",\n  "project_id": "your-project-id",\n  "private_key_id": "...",\n  ...\n}'
-                rows={6}
-                resize="vertical"
-              />
-            </Field>
-          </div>
-
-          <div className={s.fileActions}>
-            <Button
-              appearance="subtle"
-              icon={<FolderRegular />}
-              onClick={handleFileUpload}
-              className={s.compactButton}
-              size="small"
-            >
-              JSON 파일 선택
-            </Button>
-            
-            <div className={s.actionButtons}>
-              <Button 
-                appearance="secondary" 
-                icon={<SaveRegular />} 
-                onClick={saveImagen3}
-                className={s.compactButton}
-                size="small"
-              >
-                저장
-              </Button>
-              <Button
-                appearance="primary"
-                icon={loading.imagen3 ? <Spinner size="tiny" /> : <BeakerRegular />}
-                disabled={loading.imagen3}
-                onClick={testImagen3}
-                className={s.compactButton}
-                size="small"
-              >
-                {loading.imagen3 ? "테스트 중..." : "테스트"}
-              </Button>
-            </div>
-          </div>
-
-          {status.imagen3?.ts && (
-            <div style={{ textAlign: "right", marginTop: tokens.spacingVerticalS }}>
-              <div className={s.timestamp}>
-                마지막 확인: {new Date(status.imagen3.ts).toLocaleTimeString()}
-              </div>
-            </div>
-          )}
-
-          {status.imagen3?.msg && (
-            <div className={`${s.statusMessage} ${status.imagen3.ok === false ? s.errorMessage : s.successMessage}`}>
-              {status.imagen3.ok ? <CheckmarkCircleRegular /> : <DismissCircleRegular />}
-              <Caption1>{status.imagen3.msg}</Caption1>
-            </div>
-          )}
-        </Card>
       </div>
     </div>
   );

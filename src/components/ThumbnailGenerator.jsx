@@ -1,27 +1,167 @@
 // src/pages/ThumbnailGenerator.jsx
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { HiLightBulb } from "react-icons/hi";
+import {
+  Button,
+  Card,
+  Text,
+  Title1,
+  Title3,
+  Subtitle1,
+  Body1,
+  Caption1,
+  Textarea,
+  Dropdown,
+  Option,
+  makeStyles,
+  tokens,
+  Spinner,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
+  MessageBarActions,
+  Badge,
+  Field,
+  Label,
+} from "@fluentui/react-components";
+import {
+  LightbulbRegular,
+  SaveRegular,
+  ArrowResetRegular,
+  DocumentAddRegular,
+  DeleteRegular,
+  ArrowDownloadRegular,
+  OpenRegular,
+  ImageRegular,
+  SparkleRegular,
+} from "@fluentui/react-icons";
 import { DEFAULT_TEMPLATE as IMPORTED_DEFAULT_TEMPLATE } from "./scriptgen/constants";
+
+const useStyles = makeStyles({
+  container: {
+    maxWidth: '1024px',
+    margin: '0 auto',
+    padding: tokens.spacingVerticalXXL,
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: tokens.borderRadiusLarge,
+    boxShadow: tokens.shadow16,
+    boxSizing: 'border-box',
+  },
+  toastContainer: {
+    position: 'fixed',
+    top: tokens.spacingVerticalL,
+    right: tokens.spacingHorizontalL,
+    zIndex: 1000,
+  },
+  headerContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: tokens.spacingVerticalL,
+  },
+  titleContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+  },
+  formSection: {
+    marginBottom: tokens.spacingVerticalL,
+  },
+  templateActions: {
+    display: 'flex',
+    gap: tokens.spacingHorizontalS,
+  },
+  uploadArea: {
+    border: `2px dashed ${tokens.colorNeutralStroke1}`,
+    borderRadius: tokens.borderRadiusMedium,
+    padding: tokens.spacingVerticalXL,
+    textAlign: 'center',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    '&:hover': {
+      borderColor: tokens.colorBrandStroke1,
+      backgroundColor: tokens.colorBrandBackground2,
+    },
+  },
+  uploadAreaDragOver: {
+    borderColor: tokens.colorBrandStroke1,
+    backgroundColor: tokens.colorBrandBackground2,
+  },
+  previewContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalM,
+  },
+  previewImage: {
+    width: '112px',
+    height: '112px',
+    objectFit: 'cover',
+    borderRadius: tokens.borderRadiusSmall,
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+  },
+  previewInfo: {
+    textAlign: 'left',
+    flex: 1,
+  },
+  gridTwoColumns: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+    gap: tokens.spacingHorizontalM,
+  },
+  analysisResult: {
+    marginTop: tokens.spacingVerticalM,
+    padding: tokens.spacingVerticalM,
+    backgroundColor: tokens.colorNeutralBackground2,
+    borderRadius: tokens.borderRadiusSmall,
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+  },
+  resultsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+    gap: tokens.spacingHorizontalL,
+  },
+  resultCard: {
+    overflow: 'hidden',
+  },
+  resultImage: {
+    width: '100%',
+    height: 'auto',
+    objectFit: 'cover',
+  },
+  resultFooter: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: tokens.spacingVerticalM,
+  },
+  resultActions: {
+    display: 'flex',
+    gap: tokens.spacingHorizontalS,
+  },
+  promptDisplay: {
+    backgroundColor: tokens.colorNeutralBackground2,
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    borderRadius: tokens.borderRadiusSmall,
+    padding: tokens.spacingVerticalM,
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase200,
+    whiteSpace: 'pre-wrap',
+    marginTop: tokens.spacingVerticalM,
+  },
+  tipCard: {
+    marginTop: tokens.spacingVerticalS,
+  },
+});
 
 function TipCard({ children, className = "" }) {
   return (
-    <div className={`mt-2 flex items-start gap-3 rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 ${className}`}>
-      <div className="mt-0.5 shrink-0">
-        <HiLightBulb className="h-4 w-4 text-warning-500" />
-      </div>
-      <div className="text-[13px] leading-6 text-neutral-700">{children}</div>
-    </div>
+    <MessageBar intent="warning" className={className}>
+      <MessageBarBody>
+        <LightbulbRegular /> {children}
+      </MessageBarBody>
+    </MessageBar>
   );
 }
 
-function Spinner({ size = 16 }) {
-  return (
-    <svg className="animate-spin" width={size} height={size} viewBox="0 0 24 24">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-    </svg>
-  );
-}
 
 /** 업로드 정책 */
 const MAX_UPLOAD_MB = 10; // 10MB로 제한
@@ -32,13 +172,14 @@ const DEFAULT_TEMPLATE = IMPORTED_DEFAULT_TEMPLATE;
 /** 생성 엔진 옵션들 */
 const GENERATION_ENGINES = [
   { value: "replicate", label: "Replicate" },
-  { value: "imagen3", label: "Google ImageFX (Imagen 3)" },
+  { value: "gemini", label: "Google Gemini (이미지 생성)" },
   { value: "dalle3", label: "DALL-E 3" },
   { value: "midjourney", label: "Midjourney" },
   { value: "stable-diffusion", label: "Stable Diffusion" },
 ];
 
 export default function ThumbnailGenerator() {
+  const styles = useStyles();
   const fileInputRef = useRef(null);
 
   /** 🔒 고정 폭 측정/저장 (리플리케이트 기준) */
@@ -46,7 +187,7 @@ export default function ThumbnailGenerator() {
   const [fixedWidthPx, setFixedWidthPx] = useState(null);
 
   /** 공통 상태 */
-  const [provider, setProvider] = useState("replicate"); // 'replicate' | 'imagen3'
+  const [provider, setProvider] = useState("replicate"); // 'replicate' | 'gemini'
   const [metaTemplate, setMetaTemplate] = useState(DEFAULT_TEMPLATE);
   const [originalTemplate, setOriginalTemplate] = useState(DEFAULT_TEMPLATE);
   const [isTemplateModified, setIsTemplateModified] = useState(false);
@@ -194,8 +335,8 @@ export default function ThumbnailGenerator() {
   const buildFinalPrompt = () => {
     const referenceAnalysis = (fxEn || "").trim();
 
-    if (provider === "imagen3") {
-      // ✅ ImageFX(Imagen3): 장면 설명란 사용 X, 템플릿만 사용
+    if (provider === "gemini") {
+      // ✅ Gemini: 대화형 이미지 생성, 템플릿과 참고 분석 활용
       // {content}는 비워두고 {referenceAnalysis}만 주입 가능
       const core = (metaTemplate || "").replaceAll("{content}", "").replaceAll("{referenceAnalysis}", referenceAnalysis).trim();
       return core;
@@ -229,18 +370,18 @@ export default function ThumbnailGenerator() {
     if (provider === "replicate" && !prompt.trim() && !fxEn.trim() && !metaTemplate.trim()) {
       return alert("장면 설명 또는 템플릿/분석 결과 중 하나는 필요합니다.");
     }
-    if (provider === "imagen3" && !metaTemplate.trim()) {
-      return alert("ImageFX 모드에서는 템플릿이 필요합니다.");
+    if (provider === "gemini" && !metaTemplate.trim()) {
+      return alert("Gemini 모드에서는 템플릿이 필요합니다.");
     }
 
     // IPC 가드
     const hasReplicate = !!window?.api?.generateThumbnails;
-    const hasImagen3 = !!window?.api?.generateThumbnailsGoogleImagen3;
+    const hasGemini = !!window?.api?.generateThumbnailsGemini;
     if (provider === "replicate" && !hasReplicate) {
       return alert("Replicate IPC(generateThumbnails)가 없습니다. preload/main 설정을 확인하세요.");
     }
-    if (provider === "imagen3" && !hasImagen3) {
-      return alert("Google Imagen3 IPC(generateThumbnailsGoogleImagen3)가 없습니다. preload/main 설정을 확인하세요.");
+    if (provider === "gemini" && !hasGemini) {
+      return alert("Google Gemini IPC(generateThumbnailsGemini)가 없습니다. preload/main 설정을 확인하세요.");
     }
 
     setLoading(true);
@@ -253,13 +394,13 @@ export default function ThumbnailGenerator() {
       setUsedPrompt(finalPrompt);
 
       let res;
-      if (provider === "imagen3") {
-        // ⬇️ Google Imagen3 호출 (count, aspectRatio 사용)
-        res = await window.api.generateThumbnailsGoogleImagen3({
+      if (provider === "gemini") {
+        // ⬇️ Google Gemini 호출 (count, aspectRatio 사용)
+        res = await window.api.generateThumbnailsGemini({
           prompt: finalPrompt,
           count,
           aspectRatio,
-          // 추가 파라미터 필요하면 여기에…
+          apiKey: 'AIzaSyCqvZy8sXBK_awgTdohPpSbuykJ0Bht-ds', // API 키 직접 전달
         });
       } else {
         // ⬇️ Replicate 호출 (count, mode 사용)
@@ -287,7 +428,7 @@ export default function ThumbnailGenerator() {
   return (
     <div
       ref={containerRef}
-      className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-md"
+      className={styles.container}
       style={
         fixedWidthPx
           ? {
@@ -295,204 +436,194 @@ export default function ThumbnailGenerator() {
               minWidth: `${fixedWidthPx}px`,
               maxWidth: `${fixedWidthPx}px`,
               flex: `0 0 ${fixedWidthPx}px`,
-              boxSizing: "border-box",
-              // 스크롤바 유무에 따른 레이아웃 흔들림 방지
-              scrollbarGutter: "stable both-edges",
             }
-          : {
-              scrollbarGutter: "stable both-edges",
-            }
+          : {}
       }
     >
       {/* Toast 알림 */}
-      <div aria-live="polite" className="pointer-events-none fixed right-6 top-6 z-50">
+      <div className={styles.toastContainer}>
         {toast && (
-          <div
-            className={`pointer-events-auto px-4 py-3 rounded-lg shadow-large text-white font-medium animate-slide-up ${
-              toast.type === "success" ? "bg-success-600" : "bg-error-600"
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              {toast.type === "success" ? "✅" : "❌"}
-              {toast.text}
-            </div>
-          </div>
+          <MessageBar intent={toast.type === "success" ? "success" : "error"}>
+            <MessageBarBody>
+              {toast.type === "success" ? "✅" : "❌"} {toast.text}
+            </MessageBarBody>
+          </MessageBar>
         )}
       </div>
 
       {/* 헤더 */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold text-neutral-900 flex items-center gap-2">
-          <span>🎯</span> 썸네일 생성기
-        </h1>
-        <span className="text-xs text-neutral-600 font-medium">PNG, JPG, JPEG · 최대 {MAX_UPLOAD_MB}MB (WEBP 불가)</span>
+      <div className={styles.headerContainer}>
+        <div className={styles.titleContainer}>
+          <SparkleRegular />
+          <Title1>썸네일 생성기</Title1>
+        </div>
+        <Caption1>PNG, JPG, JPEG · 최대 {MAX_UPLOAD_MB}MB (WEBP 불가)</Caption1>
       </div>
 
       {/* 프로바이더 선택 */}
-      <div className="mb-6">
-        <label className="font-semibold text-neutral-900 mb-2 block">생성 엔진</label>
-
-        <select
-          className="w-full max-w-[520px] border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          value={provider}
-          onChange={(e) => setProvider(e.target.value)}
-        >
-          {GENERATION_ENGINES.map((engine) => (
-            <option key={engine.value} value={engine.value}>
-              {engine.label}
-            </option>
-          ))}
-        </select>
-
-        <p className="text-xs text-gray-500 mt-2">Replicate는 장면 설명 + 템플릿, ImageFX는 템플릿 중심으로 생성합니다.</p>
+      <div className={styles.formSection}>
+        <Field>
+          <Label weight="semibold">생성 엔진</Label>
+          <Dropdown
+            value={provider}
+            onOptionSelect={(_, data) => setProvider(data.optionValue)}
+            style={{ maxWidth: '520px' }}
+          >
+            {GENERATION_ENGINES.map((engine) => (
+              <Option key={engine.value} value={engine.value}>
+                {engine.label}
+              </Option>
+            ))}
+          </Dropdown>
+          <Caption1>Replicate는 장면 설명 + 템플릿, Gemini는 AI 대화형 이미지 생성을 지원합니다.</Caption1>
+        </Field>
       </div>
 
       {/* 프롬프트 템플릿 (공통) */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <label className="font-semibold">썸네일 생성 프롬프트 템플릿</label>
-          <div className="flex items-center gap-2">
-            {/* 초기화 버튼 */}
-            <button
-              onClick={resetTemplate}
-              className="text-xs px-3 py-1 rounded border border-red-300 text-red-600 hover:bg-red-50 flex items-center gap-1"
-              title="기본 템플릿으로 초기화"
-            >
-              초기화
-            </button>
-
-            {/* 저장 버튼 - 템플릿이 수정된 경우에만 활성화 */}
-            <button
-              onClick={saveTemplate}
-              disabled={!isTemplateModified}
-              className={`text-xs px-3 py-1 rounded border flex items-center gap-1 transition ${
-                isTemplateModified ? "border-blue-300 text-blue-600 hover:bg-blue-50" : "border-gray-300 text-gray-400 cursor-not-allowed"
-              }`}
-              title={isTemplateModified ? "템플릿 저장" : "변경사항 없음"}
-            >
-              저장
-            </button>
+      <div className={styles.formSection}>
+        <Field>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: tokens.spacingVerticalS }}>
+            <Label weight="semibold">썸네일 생성 프롬프트 템플릿</Label>
+            <div className={styles.templateActions}>
+              <Button
+                size="small"
+                appearance="outline"
+                icon={<ArrowResetRegular />}
+                onClick={resetTemplate}
+              >
+                초기화
+              </Button>
+              <Button
+                size="small"
+                appearance="primary"
+                icon={<SaveRegular />}
+                disabled={!isTemplateModified}
+                onClick={saveTemplate}
+              >
+                저장
+              </Button>
+            </div>
           </div>
-        </div>
 
-        <p className="text-xs text-gray-500 mb-2">
-          <code className="bg-gray-100 px-1 rounded">{`{content}`}</code>,{" "}
-          <code className="bg-gray-100 px-1 rounded">{`{referenceAnalysis}`}</code> 변수를 사용할 수 있어요. 초기화 버튼을 누르면 기본
-          Imagen-3 프롬프트 템플릿이 로드됩니다.
-        </p>
-        <textarea
-          rows={6}
-          className="w-full border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono"
-          placeholder="여기에 템플릿을 작성하세요. {content}, {referenceAnalysis} 변수를 사용할 수 있습니다."
-          value={metaTemplate}
-          onChange={(e) => setMetaTemplate(e.target.value)}
-        />
+          <Caption1 style={{ marginBottom: tokens.spacingVerticalS }}>
+            <code style={{ backgroundColor: tokens.colorNeutralBackground3, padding: '2px 4px', borderRadius: tokens.borderRadiusXSmall }}>{'{'}{"content"}</code>{', '}
+            <code style={{ backgroundColor: tokens.colorNeutralBackground3, padding: '2px 4px', borderRadius: tokens.borderRadiusXSmall }}>{'{'}{"referenceAnalysis"}</code> 변수를 사용할 수 있어요. 초기화 버튼을 누르면 기본 Imagen-3 프롬프트 템플릿이 로드됩니다.
+          </Caption1>
+          <Textarea
+            rows={6}
+            placeholder="여기에 템플릿을 작성하세요. {content}, {referenceAnalysis} 변수를 사용할 수 있습니다."
+            value={metaTemplate}
+            onChange={(e) => setMetaTemplate(e.target.value)}
+            style={{ fontFamily: tokens.fontFamilyMonospace }}
+          />
+        </Field>
       </div>
 
       {/* 장면 설명 — Replicate에서만 표시 */}
       {provider === "replicate" && (
-        <div className="mb-6">
-          <label className="font-semibold mb-2 block">장면 설명</label>
-          <textarea
-            rows={5}
-            placeholder="어떤 썸네일을 원하시나요? 인물의 표정, 상황, 감정을 구체적으로 적어주세요."
-            className="w-full border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-          />
-          <TipCard>
-            <span className="font-medium text-gray-700 mr-1">Tip.</span>
-            <span className="inline-flex flex-wrap items-center gap-1">
-              <span className="inline-flex items-center rounded-md bg-white/80 px-2 py-0.5 text-[12px] font-medium text-gray-700 ring-1 ring-gray-200">
-                표정
-              </span>
-              <span className="text-gray-400">+</span>
-              <span className="inline-flex items-center rounded-md bg-white/80 px-2 py-0.5 text-[12px] font-medium text-gray-700 ring-1 ring-gray-200">
-                구도(MCU/Close-up)
-              </span>
-              <span className="text-gray-400">+</span>
-              <span className="inline-flex items-center rounded-md bg-white/80 px-2 py-0.5 text-[12px] font-medium text-gray-700 ring-1 ring-gray-200">
-                조명(dramatic)
-              </span>
-              <span className="text-gray-400">+</span>
-              <span className="inline-flex items-center rounded-md bg-white/80 px-2 py-0.5 text-[12px] font-medium text-gray-700 ring-1 ring-gray-200">
-                배경(공항/사무실)
-              </span>
-              <span className="ml-1">을 구체적으로 적을수록 결과가 좋아집니다.</span>
-            </span>
+        <div className={styles.formSection}>
+          <Field>
+            <Label weight="semibold">장면 설명</Label>
+            <Textarea
+              rows={5}
+              placeholder="어떤 썸네일을 원하시나요? 인물의 표정, 상황, 감정을 구체적으로 적어주세요."
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+            />
+          </Field>
+          <TipCard className={styles.tipCard}>
+            <Body1><strong>Tip.</strong></Body1>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: tokens.spacingHorizontalXS }}>
+              <Badge appearance="outline">표정</Badge>
+              <Text>+</Text>
+              <Badge appearance="outline">구도(MCU/Close-up)</Badge>
+              <Text>+</Text>
+              <Badge appearance="outline">조명(dramatic)</Badge>
+              <Text>+</Text>
+              <Badge appearance="outline">배경(공항/사무실)</Badge>
+              <Text>을 구체적으로 적을수록 결과가 좋아집니다.</Text>
+            </div>
           </TipCard>
         </div>
       )}
 
       {/* 참고 이미지 업로드 (분석 보조) — 두 모드 공통 사용 가능 */}
-      <div className="mb-6">
-        <label className="font-semibold mb-2 block">참고 이미지 (선택사항)</label>
-        <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={onDrop}
-          className={`border-2 border-dashed rounded-xl p-6 text-center transition cursor-pointer ${
-            dragOver ? "border-blue-400 bg-blue-50/30" : "border-gray-300 hover:border-blue-400"
-          }`}
-          onClick={onPickFile}
-        >
-          {imagePreview ? (
-            <div className="flex items-center gap-4">
-              <img src={imagePreview} alt="preview" className="w-28 h-28 object-cover rounded-lg border" />
-              <div className="text-left">
-                <p className="text-sm font-medium">{imageFile?.name}</p>
-                <p className="text-xs text-gray-500">{(imageFile?.size / 1024 / 1024).toFixed(2)}MB</p>
-                <div className="flex gap-2 mt-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setImageFile(null);
-                      if (previewUrlRef.current) {
-                        URL.revokeObjectURL(previewUrlRef.current);
-                        previewUrlRef.current = null;
-                      }
-                      setImagePreview(null);
-                      setFxEn("");
-                      setFxKo("");
-                      setFxErr("");
-                    }}
-                    className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
-                  >
-                    제거
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      analyzeReference(imageFile);
-                    }}
-                    className="text-xs px-2 py-1 rounded border hover:bg-gray-50 disabled:opacity-50"
-                    disabled={!imageFile || fxLoading}
-                    title="참고 이미지 재분석"
-                  >
-                    {fxLoading ? "분석 중…" : "분석 다시 실행"}
-                  </button>
+      <div className={styles.formSection}>
+        <Field>
+          <Label weight="semibold">참고 이미지 (선택사항)</Label>
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
+            className={`${styles.uploadArea} ${dragOver ? styles.uploadAreaDragOver : ''}`}
+            onClick={onPickFile}
+          >
+            {imagePreview ? (
+              <div className={styles.previewContainer}>
+                <img src={imagePreview} alt="preview" className={styles.previewImage} />
+                <div className={styles.previewInfo}>
+                  <Body1 weight="semibold">{imageFile?.name}</Body1>
+                  <Caption1>{(imageFile?.size / 1024 / 1024).toFixed(2)}MB</Caption1>
+                  <div style={{ display: 'flex', gap: tokens.spacingHorizontalS, marginTop: tokens.spacingVerticalS }}>
+                    <Button
+                      size="small"
+                      appearance="outline"
+                      icon={<DeleteRegular />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setImageFile(null);
+                        if (previewUrlRef.current) {
+                          URL.revokeObjectURL(previewUrlRef.current);
+                          previewUrlRef.current = null;
+                        }
+                        setImagePreview(null);
+                        setFxEn("");
+                        setFxKo("");
+                        setFxErr("");
+                      }}
+                    >
+                      제거
+                    </Button>
+                    <Button
+                      size="small"
+                      appearance="outline"
+                      disabled={!imageFile || fxLoading}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        analyzeReference(imageFile);
+                      }}
+                    >
+                      {fxLoading ? (
+                        <>
+                          <Spinner size="extra-small" /> 분석 중…
+                        </>
+                      ) : (
+                        "분석 다시 실행"
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="text-gray-500">
-              <div className="text-2xl mb-2">⬆️</div>
-              <p className="text-sm">클릭하거나 드래그하여 업로드</p>
-              <p className="text-xs mt-1">PNG, JPG, JPEG (최대 {MAX_UPLOAD_MB}MB, WEBP 불가)</p>
-            </div>
-          )}
+            ) : (
+              <div style={{ color: tokens.colorNeutralForeground2 }}>
+                <div style={{ fontSize: '1.5rem', marginBottom: tokens.spacingVerticalS }}>⬆️</div>
+                <Body1>클릭하거나 드래그하여 업로드</Body1>
+                <Caption1>PNG, JPG, JPEG (최대 {MAX_UPLOAD_MB}MB, WEBP 불가)</Caption1>
+              </div>
+            )}
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg" // webp 제외
-            className="hidden"
-            onChange={(e) => onFile(e.target.files?.[0])}
-          />
-        </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg" // webp 제외
+              style={{ display: 'none' }}
+              onChange={(e) => onFile(e.target.files?.[0])}
+            />
+          </div>
+        </Field>
 
         {(fxLoading || fxErr || fxEn || fxKo) && (
           <div className="mt-4 rounded-lg border bg-gray-50 p-3">
@@ -554,62 +685,77 @@ export default function ThumbnailGenerator() {
       </div>
 
       {/* 생성 버튼 */}
-      <button
+      <Button
+        appearance="primary"
+        size="large"
         onClick={onGenerate}
         disabled={loading}
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+        icon={loading ? <Spinner size="small" /> : <SparkleRegular />}
+        style={{ width: '100%', marginTop: tokens.spacingVerticalL }}
       >
-        {loading && <Spinner />}썸네일 생성하기
-      </button>
+        썸네일 생성하기
+      </Button>
 
       {/* 결과 */}
       {results.length > 0 && (
-        <div className="mt-8">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="text-lg">🎉</span>
-            <h2 className="text-lg font-semibold">생성 완료!</h2>
+        <div style={{ marginTop: tokens.spacingVerticalXXL }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS, marginBottom: tokens.spacingVerticalM }}>
+            <span>🎉</span>
+            <Title3>생성 완료!</Title3>
             {tookMs != null && (
-              <span className="text-sm text-gray-500">
+              <Caption1>
                 {(tookMs / 1000).toFixed(1)}초 만에 {results.length}개의 썸네일이 생성되었습니다.
-              </span>
+              </Caption1>
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className={styles.resultsGrid}>
             {results.map((r, i) => (
-              <div key={i} className="rounded-xl border bg-white overflow-hidden shadow-sm">
-                <div className="bg-black/5">
-                  <img src={r.url} alt={`thumb-${i + 1}`} className="w-full object-cover" />
+              <Card key={i} className={styles.resultCard}>
+                <div style={{ backgroundColor: 'rgba(0,0,0,0.05)' }}>
+                  <img src={r.url} alt={`thumb-${i + 1}`} className={styles.resultImage} />
                 </div>
-                <div className="p-3 flex items-center justify-between">
-                  <div className="text-sm font-medium">썸네일 #{i + 1}</div>
-                  <div className="flex items-center gap-2">
-                    <button
+                <div className={styles.resultFooter}>
+                  <Body1 weight="semibold">썸네일 #{i + 1}</Body1>
+                  <div className={styles.resultActions}>
+                    <Button
+                      size="small"
+                      appearance="outline"
+                      icon={<ArrowDownloadRegular />}
                       onClick={async () => {
                         const res = await window.api.saveUrlToFile({
                           url: r.url,
-                          suggestedName: `thumbnail-${i + 1}.jpg`, // JPG 저장 권장
+                          suggestedName: `thumbnail-${i + 1}.jpg`,
                         });
                         if (!res?.ok && res?.message !== "canceled") {
                           alert(`저장 실패: ${res?.message || "unknown"}`);
                         }
                       }}
-                      className="text-xs px-2 py-1 rounded border hover:bg-gray-50"
                     >
                       다운로드
-                    </button>
-                    <a href={r.url} target="_blank" rel="noreferrer" className="text-xs px-2 py-1 rounded border hover:bg-gray-50">
+                    </Button>
+                    <Button
+                      size="small"
+                      appearance="outline"
+                      icon={<OpenRegular />}
+                      as="a"
+                      href={r.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       새 창에서 보기
-                    </a>
+                    </Button>
                   </div>
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
 
-          <div className="mt-6">
-            <div className="text-sm font-semibold mb-2">🧩 생성에 사용된 프롬프트</div>
-            <pre className="text-xs leading-6 text-gray-700 bg-gray-50 border rounded-lg p-3 whitespace-pre-wrap">{usedPrompt}</pre>
+          <div style={{ marginTop: tokens.spacingVerticalL }}>
+            <Body1 weight="semibold" style={{ marginBottom: tokens.spacingVerticalS }}>
+              🧩 생성에 사용된 프롬프트
+            </Body1>
+            <div className={styles.promptDisplay}>{usedPrompt}</div>
           </div>
         </div>
       )}
