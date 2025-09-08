@@ -513,10 +513,15 @@ async function stopNetworkMonitoring(page) {
 }
 
 // CDN에서 비디오 파일 다운로드 (진행률 콜백 지원)
-async function downloadFromCDN(url, destPath, progressCallback) {
+async function downloadFromCDN(url, destPath, progressCallback, options = {}) {
   if (!url || !destPath) return { success: false, error: "잘못된 매개변수" };
 
-  console.log(`[canva-browse] 🌐 CDN 다운로드 시작: ${path.basename(destPath)}`);
+  const minMB = options.minMB ?? 1;
+  const maxMB = options.maxMB ?? 14;
+  const minBytes = minMB * 1024 * 1024;
+  const maxBytes = maxMB * 1024 * 1024;
+
+  console.log(`[canva-browse] 🌐 CDN 다운로드 시작: ${path.basename(destPath)} (크기 제한: ${minMB}MB-${maxMB}MB)`);
 
   return new Promise((resolve, reject) => {
     const client = url.startsWith("https:") ? https : http;
@@ -580,6 +585,23 @@ async function downloadFromCDN(url, destPath, progressCallback) {
           )} MB/s)`
         );
 
+        // 📏 파일 크기 검증
+        if (downloadedSize < minBytes || downloadedSize > maxBytes) {
+          console.log(
+            `[canva-browse] ❌ 파일 크기 범위 초과: ${Math.round(downloadedSize / 1024 / 1024)}MB (허용: ${minMB}MB-${maxMB}MB)`
+          );
+          fs.unlink(destPath, () => {}); // 크기가 맞지 않는 파일 삭제
+          resolve({
+            success: false,
+            error: `파일 크기 ${Math.round(downloadedSize / 1024 / 1024)}MB가 설정 범위(${minMB}MB-${maxMB}MB)를 벗어남`,
+            size: downloadedSize,
+            sizeRejected: true
+          });
+          return;
+        }
+
+        console.log(`[canva-browse] ✅ 파일 크기 검증 통과: ${Math.round(downloadedSize / 1024 / 1024)}MB`);
+
         // 🚫 다운로드 완료 후 메타데이터에 추가 (협력업체 로직 통합)
         const videoData = {
           id: `canva_${Date.now()}`,
@@ -630,7 +652,7 @@ async function downloadCaughtVideo(url) {
 
   // downloadFromCDN 함수를 재사용
   try {
-    return await downloadFromCDN(url, filePath);
+    return await downloadFromCDN(url, filePath, null, { minMB: 1, maxMB: 14 });
   } catch (error) {
     console.error(`[canva-browse] ❌ 즉시 다운로드 실패: ${error.message}`);
     return { success: false, error: error.message };
@@ -1606,7 +1628,7 @@ async function openFirstResultAndDownload(context, rootPage, keyword, indexInKey
               downloadedSize: progress.downloadedSize,
               totalSize: progress.totalSize,
             });
-          });
+          }, opts);
 
           if (cdnResult.success) {
             console.log(`[canva-browse] ✅ CDN 다운로드 성공: ${dest}`);
@@ -1674,7 +1696,7 @@ async function openFirstResultAndDownload(context, rootPage, keyword, indexInKey
                   downloadedSize: progress.downloadedSize,
                   totalSize: progress.totalSize,
                 });
-              });
+              }, opts);
 
               if (cdnResult.success && !saved) {
                 console.log(`[canva-browse] ✅ 추가 CDN 다운로드 성공: ${dest}`);
@@ -1990,6 +2012,8 @@ async function handleBulkDownload(event, payload) {
     resolutionLabel: options.resolutionLabel ?? DEFAULTS.resolutionLabel,
     perKeywordLimit: options.perKeywordLimit ?? DEFAULTS.perKeywordLimit,
     waitAfterEach: options.waitAfterEach ?? DEFAULTS.waitAfterEach,
+    minMB: options.minMB ?? 1,
+    maxMB: options.maxMB ?? 14,
   };
 
   const profile = getChromeProfileDir();

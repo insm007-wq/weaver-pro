@@ -384,5 +384,84 @@ contextBridge.exposeInMainWorld("api", {
       ipcRenderer.on("canva:downloaded", wrapped);
       return () => ipcRenderer.removeListener("canva:downloaded", wrapped);
     },
+
+    // ---- ✅ NEW: Stealth 방식 (puppeteer-extra + stealth) ----
+    stealth: {
+      init: () => ipcRenderer.invoke("canva:stealth:init"),
+      confirm: () => ipcRenderer.invoke("canva:stealth:confirm"),
+      download: (params) => ipcRenderer.invoke("canva:stealth:download", params),
+      autoRun: (params) => ipcRenderer.invoke("canva:stealth:autoRun", params),
+      status: () => ipcRenderer.invoke("canva:stealth:status"),
+      cleanup: () => ipcRenderer.invoke("canva:stealth:cleanup"),
+    },
+  },
+
+  // ========================================================================
+  // ✨ Video Service (downloaded_canva 폴더 스캔 및 관리)
+  // ========================================================================
+  video: {
+    getAll: () => ipcRenderer.invoke("video:getAll"),
+    getCanvaVideos: () => ipcRenderer.invoke("video:getCanvaVideos"),
+    getByKeyword: (keyword) => ipcRenderer.invoke("video:getByKeyword", keyword),
+    getKeywords: () => ipcRenderer.invoke("video:getKeywords"),
+    search: (query) => ipcRenderer.invoke("video:search", query),
+    getStats: () => ipcRenderer.invoke("video:getStats"),
+    delete: (videoPath) => ipcRenderer.invoke("video:delete", videoPath),
+    move: (params) => ipcRenderer.invoke("video:move", params),
+    refreshCanva: () => ipcRenderer.invoke("video:refreshCanva"),
+    clearCache: () => ipcRenderer.invoke("video:clearCache"),
+    cleanupDirs: () => ipcRenderer.invoke("video:cleanupDirs"),
+    getPaths: () => ipcRenderer.invoke("video:getPaths"),
+  },
+});
+
+// ============================================================================
+// ✨ Electron API (기존 window.electron 호환성을 위해 별도 노출)  
+// ============================================================================
+contextBridge.exposeInMainWorld("electron", {
+  // 기본 ipcRenderer 호출
+  ipcRenderer: {
+    invoke: (channel, payload) => ipcRenderer.invoke(channel, payload),
+  },
+
+  // shell 기능 (IPC를 통해 처리)
+  shell: {
+    openPath: (path) => ipcRenderer.invoke("shell:openPath", path),
+  },
+
+  // canva 기능
+  canva: {
+    // 기존 canva 기능
+    login: () => ipcRenderer.invoke("canva:login"),
+    getSession: () => ipcRenderer.invoke("canva:getSession"),
+    logout: () => ipcRenderer.invoke("canva:logout"),
+    autoRun: (payload) => ipcRenderer.invoke("canva:autoRun", payload),
+    stop: () => ipcRenderer.invoke("canva:stop"),
+    
+    // stealth 기능
+    stealth: {
+      init: () => ipcRenderer.invoke("canva:stealth:init"),
+      confirm: () => ipcRenderer.invoke("canva:stealth:confirm"),
+      download: (params) => ipcRenderer.invoke("canva:stealth:download", params),
+      autoRun: (params) => ipcRenderer.invoke("canva:stealth:autoRun", params),
+      status: () => ipcRenderer.invoke("canva:stealth:status"),
+      cleanup: () => ipcRenderer.invoke("canva:stealth:cleanup"),
+    },
+  },
+
+  // video 기능
+  video: {
+    getAll: () => ipcRenderer.invoke("video:getAll"),
+    getCanvaVideos: () => ipcRenderer.invoke("video:getCanvaVideos"),
+    getByKeyword: (keyword) => ipcRenderer.invoke("video:getByKeyword", keyword),
+    getKeywords: () => ipcRenderer.invoke("video:getKeywords"),
+    search: (query) => ipcRenderer.invoke("video:search", query),
+    getStats: () => ipcRenderer.invoke("video:getStats"),
+    delete: (videoPath) => ipcRenderer.invoke("video:delete", videoPath),
+    move: (params) => ipcRenderer.invoke("video:move", params),
+    refreshCanva: () => ipcRenderer.invoke("video:refreshCanva"),
+    clearCache: () => ipcRenderer.invoke("video:clearCache"),
+    cleanupDirs: () => ipcRenderer.invoke("video:cleanupDirs"),
+    getPaths: () => ipcRenderer.invoke("video:getPaths"),
   },
 });

@@ -410,7 +410,9 @@ export default function CanvaTab({ addAssets }) {
       const options = {
         perKeywordLimit: Math.max(1, Math.min(10, perKeyword)),
         downloadFormat: "MP4",
-        resolutionPreference: `${chosenRes.w}x${chosenRes.h}`,
+        resolutionLabel: `${chosenRes.w} × ${chosenRes.h}`,
+        minMB: minMB,
+        maxMB: maxMB,
       };
 
       setMsg(`키워드 ${runKeywords.length}개에서 총 ${runKeywords.length * perKeyword}개 영상 API 다운로드 시작`);
@@ -454,7 +456,9 @@ export default function CanvaTab({ addAssets }) {
           options: {
             perKeywordLimit: perKeyword,
             downloadFormat: "MP4",
-            resolutionPreference: `${chosenRes.w}x${chosenRes.h}`,
+            resolutionLabel: `${chosenRes.w} × ${chosenRes.h}`,
+            minMB: minMB,
+            maxMB: maxMB,
             timeout: 60000
           }
         });

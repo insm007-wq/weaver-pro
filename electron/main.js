@@ -174,6 +174,30 @@ if (!gotLock) {
     // ✅ 협력업체 방식 활성화 - 최강 보안 우회
     const canvaEnhanced = safeRequire("ipc/canva-service-enhanced", () => require("./ipc/canva-service-enhanced"));
     await tryRegister("canva-enhanced", canvaEnhanced, "register");
+    
+    // ✅ Canva 세션 방식 (로그인 후 세션 유지, 영상 목록 표시) - puppeteer-core 의존성으로 비활성화
+    // const canvaSession = safeRequire("ipc/canva-session", () => require("./ipc/canva-session"));
+    // await tryRegister("canva-session", canvaSession, "register");
+    
+    // ✅ Canva 스텔스 방식 (puppeteer-extra + stealth + CDP 네트워크 모니터링)
+    const canvaStealth = safeRequire("ipc/canva-stealth", () => require("./ipc/canva-stealth"));
+    await tryRegister("canva-stealth", canvaStealth, "register");
+    
+    // ✅ 비디오 서비스 (downloaded_canva 폴더 스캔 및 통합 관리)
+    const videoService = safeRequire("ipc/videoService", () => require("./ipc/videoService"));
+    await tryRegister("video-service", videoService, "register");
+    
+    // ✅ Shell 기능 (폴더 열기 등)
+    const { shell } = require("electron");
+    const { ipcMain } = require("electron");
+    ipcMain.handle("shell:openPath", async (event, path) => {
+      try {
+        await shell.openPath(path);
+        return { success: true };
+      } catch (error) {
+        return { success: false, message: error.message };
+      }
+    });
 
     /* -----------------------------------------------------------------------
      * 메인 윈도우

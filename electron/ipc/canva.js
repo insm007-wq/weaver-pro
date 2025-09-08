@@ -19,6 +19,8 @@ let win = null;
 let running = false;
 let stopRequested = false;
 let downloadHookAttached = false;
+let canvaHeaders = {}; // 캔바 전용 헤더 저장
+let videoDocTypeId = null; // 비디오 docType ID 저장
 
 const PARTITION = "persist:canva";
 const START_URL = "https://www.canva.com/"; // 로그인 진입
@@ -58,10 +60,17 @@ function emitAll(event, payload) {
   }
 }
 
-// 고도화된 캔바 자동 다운로드 (강화된 DOM 셀렉터)
+// 고도화된 캔바 자동 다운로드 (강화된 DOM 셀렉터 + API 호출 방식)
 async function advancedCanvaDownload(browserWindow, keyword, targetCount) {
   try {
-    // 고도화된 DOM 자동화 스크립트
+    // 먼저 API 방식 시도
+    const apiResult = await tryApiDownload(browserWindow, keyword, targetCount);
+    if (apiResult && apiResult > 0) {
+      return apiResult;
+    }
+    
+    // API 실패시 DOM 자동화 폴백
+    console.log('[canva] API download failed, falling back to DOM automation');
     const result = await browserWindow.webContents.executeJavaScript(`
       (async function() {
         const wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -289,6 +298,242 @@ async function advancedCanvaDownload(browserWindow, keyword, targetCount) {
   }
 }
 
+// API 기반 다운로드 시도 (smart-video-editor 방식)
+async function tryApiDownload(browserWindow, keyword, targetCount) {
+  try {
+    console.log('[canva] Trying API-based download for:', keyword);
+    
+    // 캔바 API를 통한 비디오 검색 및 다운로드
+    const apiScript = `
+      (async function() {
+        const wait = (ms) => new Promise(r => setTimeout(r, ms));
+        
+        try {
+          // 비디오 docType ID 가져오기
+          const docTypeResponse = await fetch('https://www.canva.com/_ajax/home/home-subpage-init?page=LAUNCHPAD', {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+              'accept': '*/*',
+              'x-canva-app': 'home',
+              'x-canva-locale': 'ko-KR',
+              'x-canva-request': 'gethomesubpageinit'
+            }
+          });
+          
+          if (!docTypeResponse.ok) {
+            console.log('[API] Failed to get docType');
+            return 0;
+          }
+          
+          let docTypeText = await docTypeResponse.text();
+          // 보안 prefix 제거
+          const prefixes = ["'\"])}while(1);</x>//", "'\"])}while(1);</x>/"];
+          for (const prefix of prefixes) {
+            if (docTypeText.startsWith(prefix)) {
+              docTypeText = docTypeText.substring(prefix.length);
+              break;
+            }
+          }
+          
+          const docTypeData = JSON.parse(docTypeText);
+          let videoDocTypeId = null;
+          
+          // docType.id 찾기
+          const findDocTypeId = (obj) => {
+            if (typeof obj === 'object' && obj !== null) {
+              for (const [key, value] of Object.entries(obj)) {
+                if (key === 'docType.name' && value === '동영상') {
+                  if (obj['docType.id']) return obj['docType.id'];
+                }
+                const result = findDocTypeId(value);
+                if (result) return result;
+              }
+            }
+            return null;
+          };
+          
+          videoDocTypeId = findDocTypeId(docTypeData);
+          if (!videoDocTypeId) {
+            console.log('[API] Video docType ID not found');
+            return 0;
+          }
+          
+          console.log('[API] Found video docType ID:', videoDocTypeId);
+          
+          // 비디오 검색
+          const searchUrl = \`https://www.canva.com/_ajax/search/content2?query=\${encodeURIComponent('${keyword}')}&contentTypes=H&doctype=\${videoDocTypeId}&limit=${targetCount * 2}\`;
+          const searchResponse = await fetch(searchUrl, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+              'accept': '*/*',
+              'x-canva-app': 'editor',
+              'x-canva-request': 'searchcontent2api',
+              'x-canva-locale': 'ko-KR'
+            }
+          });
+          
+          if (!searchResponse.ok) {
+            console.log('[API] Search failed');
+            return 0;
+          }
+          
+          let searchText = await searchResponse.text();
+          // 보안 prefix 제거
+          for (const prefix of prefixes) {
+            if (searchText.startsWith(prefix)) {
+              searchText = searchText.substring(prefix.length);
+              break;
+            }
+          }
+          
+          const searchData = JSON.parse(searchText);
+          const videos = searchData?.A || [];
+          
+          console.log('[API] Found', videos.length, 'videos');
+          
+          let downloadCount = 0;
+          const maxDownloads = Math.min(videos.length, ${targetCount});
+          
+          // 각 비디오에 대해 고화질 URL 가져오기 및 다운로드 트리거
+          for (let i = 0; i < maxDownloads; i++) {
+            const video = videos[i];
+            if (!video.K) continue;
+            
+            try {
+              // 고화질 비디오 정보 가져오기
+              const hqUrl = \`https://www.canva.com/_ajax/video/?type=IDS&includeFiles&includePosterframes&includeTimelines&containers=A&containers=B&containers=D&ids=\${video.K}&mintVideoUrls=false&mintVideoFiles=false\`;
+              const hqResponse = await fetch(hqUrl, {
+                method: 'GET',
+                credentials: 'include',
+                headers: {
+                  'accept': '*/*',
+                  'x-canva-app': 'editor',
+                  'x-canva-request': 'findvideosapi'
+                }
+              });
+              
+              if (hqResponse.ok) {
+                let hqText = await hqResponse.text();
+                for (const prefix of prefixes) {
+                  if (hqText.startsWith(prefix)) {
+                    hqText = hqText.substring(prefix.length);
+                    break;
+                  }
+                }
+                
+                const hqData = JSON.parse(hqText);
+                const videoFiles = hqData?.A?.[0]?.c || [];
+                
+                // 최고 화질 URL 찾기
+                let bestUrl = null;
+                let bestResolution = 0;
+                
+                for (const file of videoFiles) {
+                  const resolution = (file.A || 0) * (file.B || 0);
+                  if (resolution > bestResolution) {
+                    bestResolution = resolution;
+                    bestUrl = file.E;
+                  }
+                }
+                
+                if (bestUrl) {
+                  // 다운로드 트리거 (실제 다운로드는 Electron will-download 이벤트가 처리)
+                  const link = document.createElement('a');
+                  link.href = bestUrl;
+                  link.download = \`canva_${keyword}_\${i + 1}.mp4\`;
+                  link.click();
+                  downloadCount++;
+                  await wait(1000);
+                }
+              }
+            } catch (e) {
+              console.warn('[API] Video', i, 'download error:', e);
+            }
+          }
+          
+          // 비디오가 부족한 경우 사진으로 대체
+          if (downloadCount < ${targetCount}) {
+            console.log('[API] Not enough videos, trying photos...');
+            
+            // 사진 검색 API
+            const photoUrl = \`https://www.canva.com/_ajax/search/media2-untokenized?q=\${encodeURIComponent('${keyword}')}&domainName=photos&category=tACFanYhFT4&expandCategoryScope=false&types=B&perGroupLimit=10&docId=\${videoDocTypeId}&organic&trigger=search_bar&clientFeature=web_2_object_panel&mediaTypes=R&freeOnly=false&designSchemaVersion=web-2&fileQualities=TLSHU&includeTotalHits=false&explain=false&limit=${targetCount - downloadCount}&skipRewrites=false&skipAnalytics=false&preferredSize=90000&includeAnimatedPreviews&cutout=false&contentTypes=P\`;
+            
+            const photoResponse = await fetch(photoUrl, {
+              method: 'GET',
+              credentials: 'include',
+              headers: {
+                'accept': '*/*',
+                'x-canva-app': 'editor',
+                'x-canva-locale': 'ko-KR',
+                'x-canva-request': 'searchmedia2api'
+              }
+            });
+            
+            if (photoResponse.ok) {
+              let photoText = await photoResponse.text();
+              for (const prefix of prefixes) {
+                if (photoText.startsWith(prefix)) {
+                  photoText = photoText.substring(prefix.length);
+                  break;
+                }
+              }
+              
+              const photoData = JSON.parse(photoText);
+              const photos = photoData?.A || [];
+              
+              console.log('[API] Found', photos.length, 'photos');
+              
+              // 사진 다운로드
+              for (let i = 0; i < Math.min(photos.length, ${targetCount} - downloadCount); i++) {
+                const photo = photos[i];
+                const imageVersions = photo.V || [];
+                
+                // 최고 화질 이미지 URL 찾기
+                let bestUrl = '';
+                let maxSize = 0;
+                
+                for (const version of imageVersions) {
+                  const size = (version.width || 0) * (version.height || 0);
+                  if (!version.watermarked && size > maxSize) {
+                    maxSize = size;
+                    bestUrl = version.url;
+                  }
+                }
+                
+                if (bestUrl) {
+                  const link = document.createElement('a');
+                  link.href = bestUrl;
+                  link.download = \`canva_${keyword}_photo_\${downloadCount + i + 1}.jpg\`;
+                  link.click();
+                  await wait(500);
+                }
+              }
+              
+              downloadCount += Math.min(photos.length, ${targetCount} - downloadCount);
+            }
+          }
+          
+          console.log('[API] Total downloaded:', downloadCount);
+          return downloadCount;
+          
+        } catch (error) {
+          console.error('[API] Error:', error);
+          return 0;
+        }
+      })();
+    `;
+    
+    const result = await browserWindow.webContents.executeJavaScript(apiScript);
+    return result || 0;
+    
+  } catch (error) {
+    console.warn('[canva] API download error:', error?.message || error);
+    return 0;
+  }
+}
+
 function createOrFocusWindow() {
   if (win && !win.isDestroyed()) {
     win.show();
@@ -389,8 +634,61 @@ function createOrFocusWindow() {
     downloadHookAttached = true;
   }
 
+  // 네트워크 요청 모니터링으로 캔바 헤더 수집
+  win.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
+    if (details.url.includes('canva.com')) {
+      // 캔바 전용 헤더 수집
+      const headers = details.requestHeaders;
+      for (const key in headers) {
+        if (key.toLowerCase().startsWith('x-canva')) {
+          canvaHeaders[key] = headers[key];
+        }
+      }
+      
+      // API 요청에서 docType ID 추출 시도
+      if (details.url.includes('home-subpage-init') && !videoDocTypeId) {
+        win.webContents.executeJavaScript(`
+          fetch('${details.url}', { credentials: 'include' })
+            .then(r => r.text())
+            .then(text => {
+              const prefixes = ["'\"])}while(1);</x>//"];
+              for (const prefix of prefixes) {
+                if (text.startsWith(prefix)) {
+                  text = text.substring(prefix.length);
+                  break;
+                }
+              }
+              const data = JSON.parse(text);
+              // docType.id 찾기 로직
+              const findId = (obj) => {
+                if (typeof obj === 'object' && obj !== null) {
+                  for (const [k, v] of Object.entries(obj)) {
+                    if (k === 'docType.name' && v === '동영상') {
+                      return obj['docType.id'];
+                    }
+                    const result = findId(v);
+                    if (result) return result;
+                  }
+                }
+                return null;
+              };
+              return findId(data);
+            });
+        `).then(id => {
+          if (id) {
+            videoDocTypeId = id;
+            console.log('[canva] Found video docType ID:', videoDocTypeId);
+          }
+        }).catch(() => {});
+      }
+    }
+    callback({ requestHeaders: details.requestHeaders });
+  });
+
   win.on("closed", () => {
     win = null;
+    canvaHeaders = {};
+    videoDocTypeId = null;
   });
 
   win.loadURL(START_URL);
@@ -554,11 +852,11 @@ function register() {
     return { ok: true, user: null };
   });
 
-  // 세션 조회
-  ipcMain.handle("canva:getSession", async () => {
-    const ok = await hasCanvaCookie();
-    return { ok, session: ok ? { user: null } : null };
-  });
+  // 세션 조회 - canva-browse.js에서 처리하므로 주석 처리
+  // ipcMain.handle("canva:getSession", async () => {
+  //   const ok = await hasCanvaCookie();
+  //   return { ok, session: ok ? { user: null } : null };
+  // });
 
   // 로그아웃: 파티션 쿠키 모두 제거
   ipcMain.handle("canva:logout", async () => {
@@ -648,6 +946,9 @@ function register() {
         });
         
         try {
+          // 먼저 검색 페이지가 제대로 로드되었는지 확인
+          await new Promise(r => setTimeout(r, 2000));
+          
           const downloadCount = await advancedCanvaDownload(w, k, quota);
           totalCompleted += downloadCount;
           

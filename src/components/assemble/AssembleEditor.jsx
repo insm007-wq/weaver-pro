@@ -14,6 +14,8 @@ import SetupTab from "./tabs/SetupTab.jsx";
 import { parseSrtToScenes } from "../../utils/parseSrt";
 import KeepAlivePane from "../common/KeepAlivePane";
 import CanvaTab from "./tabs/CanvaTab";
+import CanvaStealthTab from "./tabs/CanvaStealthTab";
+import CanvaSessionTab from "./tabs/CanvaSessionTab";
 
 // ▼ 분리한 유틸
 import { getSetting, readTextAny, getMp3DurationSafe } from "../../utils/ipcSafe";
@@ -63,7 +65,7 @@ export default function AssembleEditor() {
     : { scrollbarGutter: "stable both-edges" };
 
   // 상태
-  const [tab, setTab] = useState("setup"); // setup | keywords | arrange | review | canva
+  const [tab, setTab] = useState("setup"); // setup | keywords | arrange | review | canva | canva-session
   const [scenes, setScenes] = useState([]); // ← SRT에서 채움 (상위 보관: Arrange/Review 공유)
   const [selectedSceneIdx, setSelectedSceneIdx] = useState(0);
 
@@ -214,6 +216,12 @@ export default function AssembleEditor() {
           {/* FIX: setActiveTab → setTab 으로 수정하여 탭 전환 정상화 */}
           캔바 다운로드
         </TabButton>
+        <TabButton active={tab === "canva-stealth"} onClick={() => setTab("canva-stealth")}>
+          스텔스 캔바
+        </TabButton>
+        <TabButton active={tab === "canva-session"} onClick={() => setTab("canva-session")}>
+          세션 캔바
+        </TabButton>
         <TabButton active={tab === "keywords"} onClick={() => setTab("keywords")}>
           키워드 & 소스
         </TabButton>
@@ -242,6 +250,14 @@ export default function AssembleEditor() {
 
         <KeepAlivePane active={tab === "canva"}>
           <CanvaTab addAssets={addAssets} />
+        </KeepAlivePane>
+
+        <KeepAlivePane active={tab === "canva-stealth"}>
+          <CanvaStealthTab addAssets={addAssets} />
+        </KeepAlivePane>
+
+        <KeepAlivePane active={tab === "canva-session"}>
+          <CanvaSessionTab addAssets={addAssets} />
         </KeepAlivePane>
 
         <KeepAlivePane active={tab === "keywords"}>
