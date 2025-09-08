@@ -296,6 +296,7 @@ contextBridge.exposeInMainWorld("api", {
   // ========================================================================
   generateThumbnails: (payload) => ipcRenderer.invoke("replicate:generate", payload),
   generateThumbnailsGoogleImagen3: (payload) => ipcRenderer.invoke("generateThumbnailsGoogleImagen3", payload),
+  generateThumbnailsGemini: (payload) => ipcRenderer.invoke("generateThumbnailsGemini", payload),
 
   // ========================================================================
   // 테스트 채널들

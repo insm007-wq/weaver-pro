@@ -188,9 +188,8 @@ export default function ThumbnailGenerator() {
 
   /** 공통 상태 */
   const [provider, setProvider] = useState("replicate"); // 'replicate' | 'gemini'
-  const [metaTemplate, setMetaTemplate] = useState(DEFAULT_TEMPLATE);
-  const [originalTemplate, setOriginalTemplate] = useState(DEFAULT_TEMPLATE);
-  const [isTemplateModified, setIsTemplateModified] = useState(false);
+  const [metaTemplate, setMetaTemplate] = useState("");
+  const [templateLoading, setTemplateLoading] = useState(true);
   const [toast, setToast] = useState(null);
 
   /** Replicate 전용 */
@@ -232,6 +231,36 @@ export default function ThumbnailGenerator() {
     }
   }, [fixedWidthPx]);
 
+  /** 템플릿 로드 */
+  useEffect(() => {
+    const loadTemplate = async () => {
+      try {
+        const savedTemplate = await window.api.getSetting("thumbnailPromptTemplate");
+        setMetaTemplate(savedTemplate || DEFAULT_TEMPLATE);
+      } catch (error) {
+        console.error("템플릿 로드 실패:", error);
+        setMetaTemplate(DEFAULT_TEMPLATE);
+      } finally {
+        setTemplateLoading(false);
+      }
+    };
+    loadTemplate();
+  }, []);
+
+  /** 설정 변경 감지 */
+  useEffect(() => {
+    const handleSettingsChanged = (payload) => {
+      if (payload?.key === "thumbnailPromptTemplate") {
+        setMetaTemplate(payload.value || DEFAULT_TEMPLATE);
+      }
+    };
+    
+    if (window.api.onSettingsChanged) {
+      const unsubscribe = window.api.onSettingsChanged(handleSettingsChanged);
+      return unsubscribe;
+    }
+  }, []);
+
   /** 안전한 미리보기 URL 해제 */
   useEffect(() => {
     return () => {
@@ -242,10 +271,6 @@ export default function ThumbnailGenerator() {
     };
   }, []);
 
-  /** 템플릿 수정 감지 */
-  useEffect(() => {
-    setIsTemplateModified(metaTemplate !== originalTemplate);
-  }, [metaTemplate, originalTemplate]);
 
   /** Toast 자동 숨김 */
   useEffect(() => {
@@ -254,20 +279,6 @@ export default function ThumbnailGenerator() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  /** 템플릿 초기화 함수 */
-  const resetTemplate = () => {
-    setMetaTemplate(DEFAULT_TEMPLATE);
-    setOriginalTemplate(DEFAULT_TEMPLATE);
-    setIsTemplateModified(false);
-  };
-
-  /** 템플릿 저장 함수 */
-  const saveTemplate = () => {
-    setOriginalTemplate(metaTemplate);
-    setIsTemplateModified(false);
-    setToast({ type: "success", text: "템플릿이 저장되었습니다!" });
-    // 여기에 실제 저장 로직 추가 가능 (예: localStorage, 서버 저장 등)
-  };
 
   /** 참고 이미지 분석 (메인 프로세스 Anthropic IPC) */
   const analyzeReference = async (file) => {
@@ -338,13 +349,13 @@ export default function ThumbnailGenerator() {
     if (provider === "gemini") {
       // ✅ Gemini: 대화형 이미지 생성, 템플릿과 참고 분석 활용
       // {content}는 비워두고 {referenceAnalysis}만 주입 가능
-      const core = (metaTemplate || "").replaceAll("{content}", "").replaceAll("{referenceAnalysis}", referenceAnalysis).trim();
+      const core = (metaTemplate || "").replace(/{content}/g, "").replace(/{referenceAnalysis}/g, referenceAnalysis).trim();
       return core;
     }
 
     // ✅ Replicate: 장면 설명 + 공통 키워드 + 모드
     const base = (prompt || "").trim();
-    let core = (metaTemplate || "").replaceAll("{content}", base).replaceAll("{referenceAnalysis}", referenceAnalysis).trim();
+    let core = (metaTemplate || "").replace(/{content}/g, base).replace(/{referenceAnalysis}/g, referenceAnalysis).trim();
 
     if (!core) core = base;
 
@@ -396,11 +407,12 @@ export default function ThumbnailGenerator() {
       let res;
       if (provider === "gemini") {
         // ⬇️ Google Gemini 호출 (count, aspectRatio 사용)
+        const geminiApiKey = await window.api.getSecret("geminiKey");
         res = await window.api.generateThumbnailsGemini({
           prompt: finalPrompt,
           count,
           aspectRatio,
-          apiKey: 'AIzaSyCqvZy8sXBK_awgTdohPpSbuykJ0Bht-ds', // API 키 직접 전달
+          apiKey: geminiApiKey,
         });
       } else {
         // ⬇️ Replicate 호출 (count, mode 사용)
@@ -479,43 +491,20 @@ export default function ThumbnailGenerator() {
         </Field>
       </div>
 
-      {/* 프롬프트 템플릿 (공통) */}
+      {/* 프롬프트 템플릿 상태 표시 */}
       <div className={styles.formSection}>
         <Field>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: tokens.spacingVerticalS }}>
-            <Label weight="semibold">썸네일 생성 프롬프트 템플릿</Label>
-            <div className={styles.templateActions}>
-              <Button
-                size="small"
-                appearance="outline"
-                icon={<ArrowResetRegular />}
-                onClick={resetTemplate}
-              >
-                초기화
-              </Button>
-              <Button
-                size="small"
-                appearance="primary"
-                icon={<SaveRegular />}
-                disabled={!isTemplateModified}
-                onClick={saveTemplate}
-              >
-                저장
-              </Button>
+          <Label weight="semibold">썸네일 생성 프롬프트 템플릿</Label>
+          {templateLoading ? (
+            <div style={{ display: 'flex', alignItems: 'center', padding: tokens.spacingVerticalM }}>
+              <Spinner size="small" />
+              <Caption1 style={{ marginLeft: tokens.spacingHorizontalS }}>설정에서 템플릿 로드 중...</Caption1>
             </div>
-          </div>
-
-          <Caption1 style={{ marginBottom: tokens.spacingVerticalS }}>
-            <code style={{ backgroundColor: tokens.colorNeutralBackground3, padding: '2px 4px', borderRadius: tokens.borderRadiusXSmall }}>{'{'}{"content"}</code>{', '}
-            <code style={{ backgroundColor: tokens.colorNeutralBackground3, padding: '2px 4px', borderRadius: tokens.borderRadiusXSmall }}>{'{'}{"referenceAnalysis"}</code> 변수를 사용할 수 있어요. 초기화 버튼을 누르면 기본 Imagen-3 프롬프트 템플릿이 로드됩니다.
-          </Caption1>
-          <Textarea
-            rows={6}
-            placeholder="여기에 템플릿을 작성하세요. {content}, {referenceAnalysis} 변수를 사용할 수 있습니다."
-            value={metaTemplate}
-            onChange={(e) => setMetaTemplate(e.target.value)}
-            style={{ fontFamily: tokens.fontFamilyMonospace }}
-          />
+          ) : (
+            <Caption1>
+              현재 설정된 템플릿을 사용합니다. 설정 → 썸네일 탭에서 수정할 수 있습니다.
+            </Caption1>
+          )}
         </Field>
       </div>
 
