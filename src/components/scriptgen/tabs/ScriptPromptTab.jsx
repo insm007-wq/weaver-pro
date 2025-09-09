@@ -1,6 +1,28 @@
 // src/components/tabs/ScriptPromptTab.jsx
-import { useEffect, useMemo, useState } from "react";
-import { SelectField } from "../parts/SmallUI";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  makeStyles,
+  tokens,
+  shorthands,
+  Text,
+  Button,
+  Dropdown,
+  Option,
+  Field,
+  Input,
+  Textarea,
+  Badge,
+  Card,
+  CardHeader,
+  Divider,
+} from "@fluentui/react-components";
+import { 
+  AddRegular, 
+  DeleteRegular, 
+  SaveRegular, 
+  ArrowResetRegular,
+  DocumentTextRegular,
+} from "@fluentui/react-icons";
 import {
   LLM_OPTIONS,
   TTS_ENGINES,
@@ -17,327 +39,432 @@ function slugify(name = "") {
     .replace(/[^a-z0-9-_]/g, "");
 }
 
+const useStyles = makeStyles({
+  container: {
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.gap(tokens.spacingVerticalL),
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalL),
+    backgroundColor: tokens.colorNeutralBackground2,
+    ...shorthands.borderRadius(tokens.borderRadiusMedium),
+  },
+  headerLeft: {
+    display: "flex",
+    alignItems: "center",
+    ...shorthands.gap(tokens.spacingHorizontalM),
+  },
+  headerTitle: {
+    display: "flex",
+    alignItems: "center",
+    ...shorthands.gap(tokens.spacingHorizontalS),
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    ...shorthands.gap(tokens.spacingHorizontalS),
+  },
+  createForm: {
+    ...shorthands.padding(tokens.spacingVerticalL),
+    backgroundColor: tokens.colorNeutralBackground1,
+    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
+    ...shorthands.borderRadius(tokens.borderRadiusLarge),
+  },
+  createActions: {
+    display: "flex",
+    ...shorthands.gap(tokens.spacingHorizontalS),
+    marginTop: tokens.spacingVerticalM,
+  },
+  settingsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+    ...shorthands.gap(tokens.spacingVerticalM, tokens.spacingHorizontalM),
+  },
+  editorSection: {
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.gap(tokens.spacingVerticalS),
+  },
+  editor: {
+    minHeight: "300px",
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase300,
+  },
+  actions: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    ...shorthands.padding(tokens.spacingVerticalM, "0", "0", "0"),
+    ...shorthands.borderTop("1px", "solid", tokens.colorNeutralStroke2),
+  },
+  actionButtons: {
+    display: "flex",
+    ...shorthands.gap(tokens.spacingHorizontalS),
+  },
+  savedIndicator: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+  },
+});
+
 export default function ScriptPromptTab({
   template,
   setTemplate,
   form,
   onChange,
   voices,
-  savedAt, // 선택
-  onSave, // 선택
-  onReset, // 선택
-  disabled = false, // 로딩 상태 비활성화
+  savedAt,
+  onSave,
+  onReset,
+  disabled = false,
 }) {
-  // 프리셋 메타
-  const [presets, setPresets] = useState([]);
-  const [currentId, setCurrentId] = useState("default");
+  const styles = useStyles();
+  
+  // 전역 프롬프트 시스템
+  const [prompts, setPrompts] = useState([]);
+  const [currentId, setCurrentId] = useState("default-script");
   const [savingAt, setSavingAt] = useState(null);
 
   // 새 프롬프트 UI
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
 
-  const countTotal = 1 + (presets?.length || 0);
+  // 스크립트 카테고리 프롬프트만 필터링
+  const scriptPrompts = prompts.filter(p => p.category === "script");
+  const countTotal = scriptPrompts.length;
 
-  // 초기: 프리셋 목록/현재 id만 불러오기
+  // 초기 로드 - 전역 프롬프트 시스템 사용
   useEffect(() => {
-    (async () => {
-      try {
-        const list =
-          (await window?.api?.getSetting("prompt.generate.presets")) || [];
-        setPresets(Array.isArray(list) ? list : []);
-
-        const cur =
-          (await window?.api?.getSetting("prompt.generate.current")) ||
-          "default";
-        setCurrentId(cur);
-      } catch {
-        /* ignore */
-      }
-    })();
+    loadPrompts();
   }, []);
 
-  // 프리셋 선택 시 본문 로드
-  const handleSelect = async (id) => {
+  const loadPrompts = async () => {
+    try {
+      const result = await window?.api?.invoke("prompts:getByCategory", "script");
+      if (result?.ok) {
+        setPrompts(result.data);
+        // 기본 프롬프트 선택
+        const defaultPrompt = result.data.find(p => p.isDefault);
+        if (defaultPrompt && !template) {
+          setCurrentId(defaultPrompt.id);
+          setTemplate(defaultPrompt.content);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load prompts:", error);
+    }
+  };
+
+  // 프롬프트 선택 시 본문 로드
+  const handleSelect = async (_, data) => {
+    const id = data.optionValue;
     try {
       setCurrentId(id);
-      await window?.api?.setSetting({
-        key: "prompt.generate.current",
-        value: id,
-      });
-
-      let body = "";
-      if (id === "default") {
-        body = (await window?.api?.getSetting("prompt.generateTemplate")) || "";
+      
+      const result = await window?.api?.invoke("prompts:getById", id);
+      if (result?.ok && result.data) {
+        setTemplate(result.data.content);
       } else {
-        body =
-          (await window?.api?.getSetting(`prompt.generate.preset.${id}`)) || "";
+        // fallback to default
+        const defaultResult = await window?.api?.invoke("prompts:getDefault", "script");
+        if (defaultResult?.ok && defaultResult.data) {
+          setTemplate(defaultResult.data.content);
+        } else {
+          setTemplate(DEFAULT_GENERATE_PROMPT);
+        }
       }
-      if (!body) body = DEFAULT_GENERATE_PROMPT;
-      setTemplate(body);
-    } catch {
+    } catch (error) {
+      console.error("Failed to load prompt:", error);
       setTemplate(DEFAULT_GENERATE_PROMPT);
     }
   };
 
-  // 저장 (기본 템플릿은 부모 onSave 우선, 프리셋은 여기서 처리)
+  // 저장
   const handleSave = async () => {
     try {
-      if (currentId === "default") {
-        if (typeof onSave === "function") {
-          await onSave();
+      const currentPrompt = scriptPrompts.find(p => p.id === currentId);
+      
+      if (currentPrompt) {
+        // 기존 프롬프트 업데이트
+        const result = await window?.api?.invoke("prompts:update", currentId, {
+          content: template
+        });
+        
+        if (result?.ok) {
+          await loadPrompts(); // 목록 새로고침
+          setSavingAt(new Date());
         } else {
-          await window?.api?.setSetting({
-            key: "prompt.generateTemplate",
-            value: template,
-          });
+          console.error("Failed to save prompt:", result?.message);
         }
       } else {
-        await window?.api?.setSetting({
-          key: `prompt.generate.preset.${currentId}`,
-          value: template,
+        // 새 프롬프트로 저장 (기본값이 없는 경우)
+        const result = await window?.api?.invoke("prompts:create", {
+          name: "대본 프롬프트",
+          category: "script", 
+          content: template
         });
-        const next = (presets || []).map((p) =>
-          p.id === currentId ? { ...p, updatedAt: Date.now() } : p
-        );
-        setPresets(next);
-        await window?.api?.setSetting({
-          key: "prompt.generate.presets",
-          value: next,
-        });
+        
+        if (result?.ok) {
+          setCurrentId(result.data.id);
+          await loadPrompts();
+          setSavingAt(new Date());
+        }
       }
-      await window?.api?.setSetting({
-        key: "prompt.generate.current",
-        value: currentId,
-      });
-      setSavingAt(new Date());
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error("Save error:", error);
     }
   };
 
   // 기본값으로 초기화
-  const handleReset = () => {
-    if (typeof onReset === "function") onReset();
-    else setTemplate(DEFAULT_GENERATE_PROMPT);
-  };
-
-  // 새 프리셋 생성
-  const handleCreate = async () => {
-    const name = newName.trim();
-    if (!name) return;
-    const id = slugify(name);
+  const handleReset = async () => {
     try {
-      await window?.api?.setSetting({
-        key: `prompt.generate.preset.${id}`,
-        value: template || DEFAULT_GENERATE_PROMPT,
-      });
-      const next = [
-        ...(presets || []).filter((p) => p.id !== id),
-        { id, name, updatedAt: Date.now() },
-      ];
-      await window?.api?.setSetting({
-        key: "prompt.generate.presets",
-        value: next,
-      });
-      await window?.api?.setSetting({
-        key: "prompt.generate.current",
-        value: id,
-      });
-
-      setPresets(next);
-      setCurrentId(id);
-      setCreating(false);
-      setNewName("");
-
-      const body =
-        (await window?.api?.getSetting(`prompt.generate.preset.${id}`)) ||
-        DEFAULT_GENERATE_PROMPT;
-      setTemplate(body);
-    } catch (e) {
-      console.error(e);
+      const result = await window?.api?.invoke("prompts:getDefault", "script");
+      if (result?.ok && result.data) {
+        setTemplate(result.data.content);
+        setCurrentId(result.data.id);
+      } else {
+        setTemplate(DEFAULT_GENERATE_PROMPT);
+      }
+    } catch (error) {
+      console.error("Reset error:", error);
+      setTemplate(DEFAULT_GENERATE_PROMPT);
     }
   };
 
-  // 프리셋 삭제 (기본 제외)
-  const handleDelete = async () => {
-    if (currentId === "default") return;
+  // 새 프롬프트 생성
+  const handleCreate = async () => {
+    const name = newName.trim();
+    if (!name) return;
+    
     try {
-      await window?.api?.setSetting({
-        key: `prompt.generate.preset.${currentId}`,
-        value: "",
+      const result = await window?.api?.invoke("prompts:create", {
+        name,
+        category: "script",
+        content: template || DEFAULT_GENERATE_PROMPT
       });
-      const next = (presets || []).filter((p) => p.id !== currentId);
-      setPresets(next);
-      await window?.api?.setSetting({
-        key: "prompt.generate.presets",
-        value: next,
-      });
+      
+      if (result?.ok) {
+        setCurrentId(result.data.id);
+        await loadPrompts();
+        setCreating(false);
+        setNewName("");
+      } else {
+        console.error("Failed to create prompt:", result?.message);
+      }
+    } catch (error) {
+      console.error("Create error:", error);
+    }
+  };
 
-      setCurrentId("default");
-      await window?.api?.setSetting({
-        key: "prompt.generate.current",
-        value: "default",
-      });
-
-      const base =
-        (await window?.api?.getSetting("prompt.generateTemplate")) ||
-        DEFAULT_GENERATE_PROMPT;
-      setTemplate(base);
-    } catch (e) {
-      console.error(e);
+  // 프롬프트 삭제
+  const handleDelete = async () => {
+    const currentPrompt = scriptPrompts.find(p => p.id === currentId);
+    if (!currentPrompt || currentPrompt.isDefault) return;
+    
+    try {
+      const result = await window?.api?.invoke("prompts:delete", currentId);
+      if (result?.ok) {
+        // 기본 프롬프트로 전환
+        const defaultResult = await window?.api?.invoke("prompts:getDefault", "script");
+        if (defaultResult?.ok && defaultResult.data) {
+          setCurrentId(defaultResult.data.id);
+          setTemplate(defaultResult.data.content);
+        } else {
+          setTemplate(DEFAULT_GENERATE_PROMPT);
+        }
+        
+        await loadPrompts();
+      } else {
+        console.error("Failed to delete prompt:", result?.message);
+      }
+    } catch (error) {
+      console.error("Delete error:", error);
     }
   };
 
   const savedLabel = savedAt || savingAt;
+  const currentPrompt = scriptPrompts.find(p => p.id === currentId);
+  const selectedOption = currentPrompt?.name || "기본 프롬프트";
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* 프롬프트 관리 헤더 라인 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded bg-slate-100">
-            📝
-          </span>
-          <div className="text-sm font-semibold text-neutral-900">프롬프트 관리</div>
-          <span className="ml-1 text-xs text-neutral-600">{countTotal}개</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <select
-            className="h-9 rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900"
-            value={currentId}
-            onChange={(e) => handleSelect(e.target.value)}
-          >
-            <option value="default">기본 프롬프트 (기본)</option>
-            {(presets || []).map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-
-          <button
-            type="button"
-            onClick={() => setCreating((v) => !v)}
-            className="btn-primary h-9"
-          >
-            + 새 프롬프트
-          </button>
-
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={currentId === "default"}
-            className={`h-9 rounded-lg px-3 text-sm font-medium transition-all duration-200 ${
-              currentId === "default"
-                ? "bg-error-100 text-error-300 cursor-not-allowed"
-                : "bg-error-50 text-error-600 hover:bg-error-100 border border-error-200"
-            }`}
-          >
-            삭제
-          </button>
-        </div>
-      </div>
-
-      {/* 새 프롬프트 입력 박스 */}
-      {creating && (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <label className="block text-sm font-medium text-neutral-700 mb-2">
-            프롬프트 이름
-          </label>
-          <input
-            autoFocus
-            className="input-field h-11"
-            placeholder="새 프롬프트 이름을 입력하세요"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleCreate();
-              if (e.key === "Escape") setCreating(false);
-            }}
-          />
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={handleCreate}
-              className="flex-1 h-10 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-500"
+    <div className={styles.container}>
+      {/* 프롬프트 관리 헤더 */}
+      <Card>
+        <div className={styles.header}>
+          <div className={styles.headerLeft}>
+            <div className={styles.headerTitle}>
+              <DocumentTextRegular />
+              <Text weight="semibold" size={500}>프롬프트 관리</Text>
+              <Badge appearance="tint" size="small">{countTotal}개</Badge>
+            </div>
+          </div>
+          <div className={styles.headerActions}>
+            <Dropdown
+              value={selectedOption}
+              onOptionSelect={handleSelect}
+              disabled={disabled}
             >
-              생성
-            </button>
-            <button
-              type="button"
-              onClick={() => setCreating(false)}
-              className="flex-1 h-10 rounded-lg border border-slate-200 bg-white text-sm hover:bg-slate-50"
+              {scriptPrompts.map((prompt) => (
+                <Option key={prompt.id} value={prompt.id}>
+                  {prompt.name}
+                </Option>
+              ))}
+            </Dropdown>
+            
+            <Button
+              appearance="primary"
+              icon={<AddRegular />}
+              onClick={() => setCreating(!creating)}
+              disabled={disabled}
             >
-              취소
-            </button>
+              새 프롬프트
+            </Button>
+            
+            <Button
+              appearance="subtle"
+              icon={<DeleteRegular />}
+              onClick={handleDelete}
+              disabled={!currentPrompt || currentPrompt?.isDefault || disabled}
+            >
+              삭제
+            </Button>
           </div>
         </div>
+      </Card>
+
+      {/* 새 프롬프트 생성 폼 */}
+      {creating && (
+        <Card className={styles.createForm}>
+          <Text weight="semibold" size={400}>새 프롬프트 생성</Text>
+          <Field label="프롬프트 이름" style={{ marginTop: tokens.spacingVerticalM }}>
+            <Input
+              autoFocus
+              placeholder="새 프롬프트 이름을 입력하세요"
+              value={newName}
+              onChange={(_, data) => setNewName(data.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleCreate();
+                if (e.key === "Escape") setCreating(false);
+              }}
+            />
+          </Field>
+          <div className={styles.createActions}>
+            <Button 
+              appearance="primary" 
+              onClick={handleCreate}
+              disabled={!newName.trim()}
+            >
+              생성
+            </Button>
+            <Button onClick={() => setCreating(false)}>
+              취소
+            </Button>
+          </div>
+        </Card>
       )}
 
-      {/* 실행 옵션 (엔진/보이스만) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <SelectField
-          label="LLM (대본)"
-          value={form.llmMain}
-          options={LLM_OPTIONS}
-          onChange={(v) => onChange("llmMain", v)}
+      {/* 실행 설정 */}
+      <Card>
+        <CardHeader
+          header={
+            <Text weight="semibold" size={400}>⚙️ 실행 설정</Text>
+          }
         />
-        <SelectField
-          label="TTS 엔진"
-          value={form.ttsEngine}
-          options={TTS_ENGINES}
-          onChange={(v) => {
-            onChange("ttsEngine", v);
-            const vs = VOICES_BY_ENGINE[v] || [];
-            if (vs.length) onChange("voiceName", vs[0]);
-          }}
-        />
-        <SelectField
-          label="보이스"
-          value={form.voiceName}
-          options={(voices || []).map((v) => ({ label: v, value: v }))}
-          onChange={(v) => onChange("voiceName", v)}
-        />
-      </div>
-
-      {/* 에디터 */}
-      <div className="w-full">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-sm font-semibold">대본 프롬프트</div>
+        <div className={styles.settingsGrid}>
+          <Field label="LLM 모델">
+            <Dropdown
+              value={LLM_OPTIONS.find(opt => opt.value === form.llmMain)?.label || ""}
+              onOptionSelect={(_, data) => onChange("llmMain", data.optionValue)}
+              disabled={disabled}
+            >
+              {LLM_OPTIONS.map((option) => (
+                <Option key={option.value} value={option.value}>
+                  {option.label}
+                </Option>
+              ))}
+            </Dropdown>
+          </Field>
+          <Field label="TTS 엔진">
+            <Dropdown
+              value={TTS_ENGINES.find(opt => opt.value === form.ttsEngine)?.label || ""}
+              onOptionSelect={(_, data) => {
+                onChange("ttsEngine", data.optionValue);
+                const vs = VOICES_BY_ENGINE[data.optionValue] || [];
+                if (vs.length) onChange("voiceName", vs[0]);
+              }}
+              disabled={disabled}
+            >
+              {TTS_ENGINES.map((option) => (
+                <Option key={option.value} value={option.value}>
+                  {option.label}
+                </Option>
+              ))}
+            </Dropdown>
+          </Field>
+          <Field label="보이스">
+            <Dropdown
+              value={form.voiceName || ""}
+              onOptionSelect={(_, data) => onChange("voiceName", data.optionValue)}
+              disabled={disabled}
+            >
+              {(voices || []).map((voice) => (
+                <Option key={voice} value={voice}>
+                  {voice}
+                </Option>
+              ))}
+            </Dropdown>
+          </Field>
         </div>
-        <textarea
-          className={`w-full h-72 text-sm rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 overflow-auto resize-none whitespace-pre-wrap transition-all duration-200 ${
-            disabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'
-          }`}
-          value={template}
-          onChange={(e) => setTemplate(e.target.value)}
-          disabled={disabled}
-        />
-      </div>
+      </Card>
 
-      {/* 하단 액션 (실행 버튼 없음) */}
-      <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-        <button
-          type="button"
-          onClick={handleReset}
-          className="text-sm bg-slate-100 text-slate-700 rounded-lg px-4 py-2 hover:bg-slate-200"
-        >
-          기본값으로 초기화
-        </button>
-        <button
-          type="button"
-          onClick={handleSave}
-          className="text-sm bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-500"
-        >
-          저장
-        </button>
-        {(savedLabel || savingAt) && (
-          <span className="ml-2 self-center text-[11px] text-slate-500">
-            저장됨: {new Date(savedLabel || savingAt).toLocaleTimeString()}
-          </span>
-        )}
-      </div>
+      {/* 프롬프트 에디터 */}
+      <Card>
+        <div className={styles.editorSection}>
+          <Text weight="semibold" size={500}>📝 대본 프롬프트</Text>
+          <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>
+            AI가 대본을 생성할 때 사용할 프롬프트를 작성하세요
+          </Text>
+          <Field>
+            <Textarea
+              className={styles.editor}
+              value={template || ""}
+              onChange={(_, data) => setTemplate(data.value)}
+              disabled={disabled}
+              resize="vertical"
+            />
+          </Field>
+        </div>
+
+        {/* 액션 버튼 */}
+        <div className={styles.actions}>
+          <div className={styles.actionButtons}>
+            <Button
+              icon={<ArrowResetRegular />}
+              onClick={handleReset}
+              disabled={disabled}
+            >
+              기본값으로 초기화
+            </Button>
+            <Button
+              appearance="primary"
+              icon={<SaveRegular />}
+              onClick={handleSave}
+              disabled={disabled}
+            >
+              저장
+            </Button>
+          </div>
+          {savedLabel && (
+            <Text className={styles.savedIndicator}>
+              저장됨: {new Date(savedLabel).toLocaleTimeString()}
+            </Text>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }
