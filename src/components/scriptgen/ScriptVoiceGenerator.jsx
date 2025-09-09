@@ -1,6 +1,30 @@
 // src/ScriptVoiceGenerator.jsx
 import { useMemo, useRef, useState, useLayoutEffect, useEffect } from "react";
-import { Card, TabButton, Th, Td } from "./parts/SmallUI";
+import {
+  Card,
+  CardHeader,
+  Button,
+  TabList,
+  Tab,
+  Body1,
+  Title1,
+  Text,
+  Spinner,
+  Badge,
+  DataGrid,
+  DataGridHeader,
+  DataGridRow,
+  DataGridHeaderCell,
+  DataGridCell,
+  DataGridBody,
+  createTableColumn,
+  MessageBar,
+  MessageBarBody,
+  makeStyles,
+  tokens,
+  shorthands
+} from "@fluentui/react-components";
+import { PlayRegular, DocumentEditRegular } from "@fluentui/react-icons";
 import { CompactProgressBar, CompactIndeterminateBar } from "./parts/CompactProgressBar";
 import AutoTab from "./tabs/AutoTab";
 import RefTab from "./tabs/RefTab";
@@ -18,6 +42,57 @@ import { secToTime } from "../../utils/time";
 import { base64ToArrayBuffer } from "../../utils/buffer";
 import { estimateEtaSec } from "../../utils/eta";
 import { ipcCall as call } from "../../utils/ipc";
+
+const useStyles = makeStyles({
+  container: {
+    maxWidth: "1200px",
+    ...shorthands.margin("0", "auto"),
+    ...shorthands.padding(tokens.spacingVerticalXL, tokens.spacingHorizontalL),
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.gap(tokens.spacingVerticalL),
+  },
+  pageHeader: {
+    ...shorthands.margin(0, 0, tokens.spacingVerticalL),
+  },
+  pageTitle: {
+    display: "flex",
+    alignItems: "center",
+    columnGap: tokens.spacingHorizontalM,
+  },
+  pageDesc: {
+    color: tokens.colorNeutralForeground3,
+    marginTop: tokens.spacingVerticalXS,
+    fontSize: tokens.fontSizeBase300,
+  },
+  hairline: {
+    ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke2),
+    marginTop: tokens.spacingVerticalM,
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...shorthands.margin('0', '0', tokens.spacingVerticalL, '0'),
+  },
+  headerInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap(tokens.spacingHorizontalS),
+  },
+  tabList: {
+    ...shorthands.margin('0', '0', tokens.spacingVerticalL, '0'),
+  },
+  progressSection: {
+    ...shorthands.margin('0', '0', tokens.spacingVerticalL, '0'),
+  },
+  scenePreview: {
+    ...shorthands.margin(tokens.spacingVerticalL, '0', '0', '0'),
+  },
+  runButton: {
+    minWidth: '120px',
+  },
+});
 
 /** ========================= 기본 TTS 옵션 ========================= */
 const DEFAULT_TTS_ENGINE = "google";
@@ -37,6 +112,8 @@ const makeDefaultForm = () => ({
 });
 
 export default function ScriptVoiceGenerator() {
+  const styles = useStyles();
+  
   /* ========================= 상태: 탭/폼/문서 ========================= */
   const [activeTab, setActiveTab] = useState("auto");
   const [forms, setForms] = useState({
@@ -106,46 +183,46 @@ export default function ScriptVoiceGenerator() {
   const [phase, setPhase] = useState(""); // SCRIPT|TTS|SRT|MERGE|완료
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [detailedProgress, setDetailedProgress] = useState({
-    phase: 'idle',
+    phase: "idle",
     overallPercent: 0,
     phasePercent: 0,
-    currentStep: '',
+    currentStep: "",
     totalSteps: 0,
-    completedSteps: 0
+    completedSteps: 0,
   });
   const [phaseElapsedSec, setPhaseElapsedSec] = useState(0);
-  
+
   // 취소 기능
   const [abortController, setAbortController] = useState(null);
 
   // Phase weights for accurate overall progress calculation
   const PHASE_WEIGHTS = {
-    SCRIPT: 20,  // 20% - Script generation
-    TTS: 60,     // 60% - Text-to-speech (most time consuming)
-    SRT: 15,     // 15% - Subtitle generation
-    MERGE: 5     // 5% - Audio merging
+    SCRIPT: 20, // 20% - Script generation
+    TTS: 60, // 60% - Text-to-speech (most time consuming)
+    SRT: 15, // 15% - Subtitle generation
+    MERGE: 5, // 5% - Audio merging
   };
 
-  const PHASE_ORDER = ['SCRIPT', 'TTS', 'SRT', 'MERGE'];
+  const PHASE_ORDER = ["SCRIPT", "TTS", "SRT", "MERGE"];
 
   // Calculate overall progress based on phase weights
   const calculateOverallProgress = (currentPhase, phaseProgress = 0) => {
-    if (!currentPhase || currentPhase === 'idle') return 0;
-    if (currentPhase === '완료') return 100;
-    
+    if (!currentPhase || currentPhase === "idle") return 0;
+    if (currentPhase === "완료") return 100;
+
     let totalProgress = 0;
     const phaseIndex = PHASE_ORDER.indexOf(currentPhase);
-    
+
     // Add completed phases
     for (let i = 0; i < phaseIndex; i++) {
       totalProgress += PHASE_WEIGHTS[PHASE_ORDER[i]];
     }
-    
+
     // Add current phase progress
     if (phaseIndex >= 0) {
-      totalProgress += (PHASE_WEIGHTS[currentPhase] * phaseProgress / 100);
+      totalProgress += (PHASE_WEIGHTS[currentPhase] * phaseProgress) / 100;
     }
-    
+
     return Math.min(100, Math.max(0, totalProgress));
   };
   const phaseTimerRef = useRef(null);
@@ -163,7 +240,7 @@ export default function ScriptVoiceGenerator() {
   }, [fixedWidthPx]);
 
   /** 단계 시작 시 타이머 초기화 및 상세 진행률 업데이트 */
-  const beginPhase = (name, stepDescription = '') => {
+  const beginPhase = (name, stepDescription = "") => {
     setPhase(name);
     if (phaseTimerRef.current) clearInterval(phaseTimerRef.current);
     const start = Date.now();
@@ -171,30 +248,30 @@ export default function ScriptVoiceGenerator() {
     phaseTimerRef.current = setInterval(() => {
       setPhaseElapsedSec(Math.floor((Date.now() - start) / 1000));
     }, 1000);
-    
+
     // Update detailed progress
-    setDetailedProgress(prev => ({
+    setDetailedProgress((prev) => ({
       ...prev,
       phase: name,
       currentStep: stepDescription,
       phasePercent: 0,
-      overallPercent: calculateOverallProgress(name, 0)
+      overallPercent: calculateOverallProgress(name, 0),
     }));
   };
 
   /** 현재 단계의 진행률 업데이트 */
-  const updatePhaseProgress = (current, total, stepDescription = '') => {
+  const updatePhaseProgress = (current, total, stepDescription = "") => {
     const phasePercent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
     const overallPercent = calculateOverallProgress(phase, phasePercent);
-    
+
     setProgress({ current, total });
-    setDetailedProgress(prev => ({
+    setDetailedProgress((prev) => ({
       ...prev,
       phasePercent,
       overallPercent,
       currentStep: stepDescription || prev.currentStep,
       completedSteps: current,
-      totalSteps: total
+      totalSteps: total,
     }));
   };
   useEffect(() => () => phaseTimerRef.current && clearInterval(phaseTimerRef.current), []);
@@ -210,12 +287,12 @@ export default function ScriptVoiceGenerator() {
     setPhase("");
     setProgress({ current: 0, total: 0 });
     setDetailedProgress({
-      phase: 'idle',
+      phase: "idle",
       overallPercent: 0,
       phasePercent: 0,
-      currentStep: '',
+      currentStep: "",
       totalSteps: 0,
-      completedSteps: 0
+      completedSteps: 0,
     });
   };
 
@@ -227,7 +304,7 @@ export default function ScriptVoiceGenerator() {
     // 새로운 abort controller 생성
     const controller = new AbortController();
     setAbortController(controller);
-    
+
     setStatus("running");
     setError("");
     setProgress({ current: 0, total: 0 });
@@ -379,34 +456,34 @@ export default function ScriptVoiceGenerator() {
       // 완료
       if (phaseTimerRef.current) clearInterval(phaseTimerRef.current);
       setPhase("완료");
-      setDetailedProgress(prev => ({
+      setDetailedProgress((prev) => ({
         ...prev,
-        phase: '완료',
+        phase: "완료",
         overallPercent: 100,
         phasePercent: 100,
-        currentStep: '모든 작업 완료',
+        currentStep: "모든 작업 완료",
         completedSteps: 1,
-        totalSteps: 1
+        totalSteps: 1,
       }));
       setProgress({ current: 1, total: 1 });
       setStatus("done");
     } catch (e) {
       if (phaseTimerRef.current) clearInterval(phaseTimerRef.current);
       setAbortController(null);
-      
+
       // 취소된 경우와 오류 구분
-      if (e.name === 'AbortError' || controller.signal.aborted) {
+      if (e.name === "AbortError" || controller.signal.aborted) {
         setStatus("idle");
         setError("");
         setPhase("");
         setProgress({ current: 0, total: 0 });
         setDetailedProgress({
-          phase: 'idle',
+          phase: "idle",
           overallPercent: 0,
           phasePercent: 0,
-          currentStep: '',
+          currentStep: "",
           totalSteps: 0,
-          completedSteps: 0
+          completedSteps: 0,
         });
       } else {
         setStatus("error");
@@ -438,7 +515,7 @@ export default function ScriptVoiceGenerator() {
   return (
     <div
       ref={containerRef}
-      className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-md"
+      className={styles.container}
       style={
         fixedWidthPx
           ? {
@@ -452,36 +529,36 @@ export default function ScriptVoiceGenerator() {
           : { scrollbarGutter: "stable both-edges" }
       }
     >
-      {/* 헤더 */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold text-neutral-900">대본 &amp; 음성 생성</h1>
-          <span className="text-xs text-neutral-600">SRT 자막 + MP3 내레이션을 한 번에</span>
+      {/* 페이지 헤더 */}
+      <div className={styles.pageHeader}>
+        <div className={styles.pageTitle}>
+          <DocumentEditRegular />
+          <Title1>대본 & 음성 생성</Title1>
         </div>
-        <button
-          type="button"
+        <div className={styles.pageDesc}>
+          SRT 자막 + MP3 내레이션을 한 번에 생성합니다
+        </div>
+        <div className={styles.hairline} />
+      </div>
+
+      {/* 실행 버튼 헤더 */}
+      <div className={styles.header}>
+        <div /> {/* 빈 공간 */}
+        <Button
+          appearance="primary"
+          size="large"
+          className={styles.runButton}
           onClick={() => runGenerate(activeTab)}
           disabled={!canRun || status === "running"}
-          className={`px-6 py-2.5 rounded-lg text-sm font-medium text-white transition-all duration-200 ${
-            status === "running" 
-              ? "bg-slate-400 cursor-not-allowed" 
-              : "bg-blue-600 hover:bg-blue-500 hover:shadow-lg hover:scale-105"
-          }`}
+          icon={status === "running" ? <Spinner size="tiny" /> : <PlayRegular />}
         >
-          {status === "running" ? (
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              실행 중...
-            </div>
-          ) : (
-            "실행"
-          )}
-        </button>
+          {status === "running" ? "실행 중..." : "실행"}
+        </Button>
       </div>
 
       {/* 진행 바 - 컴팩트 버전 */}
       {status !== "idle" && (
-        <div className="mb-4">
+        <div className={styles.progressSection}>
           {progress.total > 0 ? (
             <CompactProgressBar
               phase={phase}
@@ -504,12 +581,16 @@ export default function ScriptVoiceGenerator() {
       )}
 
       {/* 탭 바 */}
-      <div className="mb-4 flex gap-2 border-b border-slate-200">
-        <TabButton active={activeTab === "auto"} onClick={() => setActiveTab("auto")} label="자동 생성" />
-        <TabButton active={activeTab === "ref"} onClick={() => setActiveTab("ref")} label="레퍼런스 기반" />
-        <TabButton active={activeTab === "prompt-gen"} onClick={() => setActiveTab("prompt-gen")} label="대본 프롬프트" />
-        <TabButton active={activeTab === "prompt-ref"} onClick={() => setActiveTab("prompt-ref")} label="레퍼런스 프롬프트" />
-      </div>
+      <TabList 
+        className={styles.tabList}
+        selectedValue={activeTab} 
+        onTabSelect={(_, data) => setActiveTab(data.value)}
+      >
+        <Tab value="auto">자동 생성</Tab>
+        <Tab value="ref">레퍼런스 기반</Tab>
+        <Tab value="prompt-gen">대본 프롬프트</Tab>
+        <Tab value="prompt-ref">레퍼런스 프롬프트</Tab>
+      </TabList>
 
       {/* 본문 */}
       {activeTab === "auto" && (
@@ -546,79 +627,116 @@ export default function ScriptVoiceGenerator() {
         />
       )}
       {activeTab === "prompt-gen" && (
-        <Card>
-          <ScriptPromptTab
-            template={genPrompt}
-            setTemplate={setGenPrompt}
-            savedAt={promptSavedAt}
-            onSave={() => savePrompt("generate")}
-            onReset={() => resetPrompt("generate")}
-            form={forms["prompt-gen"]}
-            onChange={onChangeFor("prompt-gen")}
-            voices={VOICES_BY_ENGINE[forms["prompt-gen"].ttsEngine] || []}
-            disabled={isLoading}
-          />
-        </Card>
+        <ScriptPromptTab
+          template={genPrompt}
+          setTemplate={setGenPrompt}
+          savedAt={promptSavedAt}
+          onSave={() => savePrompt("generate")}
+          onReset={() => resetPrompt("generate")}
+          form={forms["prompt-gen"]}
+          onChange={onChangeFor("prompt-gen")}
+          voices={VOICES_BY_ENGINE[forms["prompt-gen"].ttsEngine] || []}
+          disabled={isLoading}
+        />
       )}
       {activeTab === "prompt-ref" && (
-        <Card>
-          <ReferencePromptTab
-            template={refPrompt}
-            setTemplate={setRefPrompt}
-            savedAt={promptSavedAt}
-            onSave={() => savePrompt("reference")}
-            onReset={() => resetPrompt("reference")}
-            form={forms["prompt-ref"]}
-            onChange={onChangeFor("prompt-ref")}
-            voices={VOICES_BY_ENGINE[forms["prompt-ref"].ttsEngine] || []}
-            refText={promptRefText}
-            setRefText={setPromptRefText}
-            onRun={() => runGenerate("prompt-ref")}
-            disabled={isLoading}
-          />
-        </Card>
+        <ReferencePromptTab
+          template={refPrompt}
+          setTemplate={setRefPrompt}
+          savedAt={promptSavedAt}
+          onSave={() => savePrompt("reference")}
+          onReset={() => resetPrompt("reference")}
+          form={forms["prompt-ref"]}
+          onChange={onChangeFor("prompt-ref")}
+          voices={VOICES_BY_ENGINE[forms["prompt-ref"].ttsEngine] || []}
+          refText={promptRefText}
+          setRefText={setPromptRefText}
+          onRun={() => runGenerate("prompt-ref")}
+          disabled={isLoading}
+        />
       )}
 
       {/* 결과 테이블 */}
-      <Card className="mt-5">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-sm font-semibold text-neutral-900">씬 미리보기</div>
-          <div className="text-xs text-neutral-600">{currentDoc?.scenes?.length ? `${currentDoc.scenes.length}개 씬` : "대본 없음"}</div>
-        </div>
+      <Card className={styles.scenePreview}>
+        <CardHeader
+          header={
+            <div className={styles.headerInfo}>
+              <Text weight="semibold">씬 미리보기</Text>
+              <Badge appearance="tint">
+                {currentDoc?.scenes?.length ? `${currentDoc.scenes.length}개 씬` : "대본 없음"}
+              </Badge>
+            </div>
+          }
+        />
 
-        <div className="border border-neutral-200 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-700">
-              <tr>
-                <Th>#</Th>
-                <Th>시작–끝</Th>
-                <Th>글자수</Th>
-                <Th className="text-left">텍스트</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {(currentDoc?.scenes || []).map((sc, i) => (
-                <tr key={sc.id || i} className="border-t border-slate-100">
-                  <Td className="text-center">{sc.scene_number ?? i + 1}</Td>
-                  <Td className="text-center">
-                    {secToTime(sc.start)}–{secToTime(sc.end)}
-                  </Td>
-                  <Td className="text-center">{safeCharCount(sc.text)}</Td>
-                  <Td className="text-neutral-800">{sc.text}</Td>
-                </tr>
-              ))}
-              {!currentDoc?.scenes?.length && (
-                <tr>
-                  <td colSpan={4} className="text-center py-10 text-neutral-500">
-                    대본을 생성하거나 SRT를 불러오면 씬 목록이 표시됩니다.
-                  </td>
-                </tr>
+        {(currentDoc?.scenes || []).length > 0 ? (
+          <DataGrid
+            items={currentDoc.scenes}
+            columns={[
+              createTableColumn({
+                columnId: "scene_number",
+                renderHeaderCell: () => "#",
+                renderCell: (item, index) => (
+                  <DataGridCell>
+                    <Text>{item.scene_number ?? index + 1}</Text>
+                  </DataGridCell>
+                ),
+              }),
+              createTableColumn({
+                columnId: "time",
+                renderHeaderCell: () => "시작–끝",
+                renderCell: (item) => (
+                  <DataGridCell>
+                    <Text>{secToTime(item.start)}–{secToTime(item.end)}</Text>
+                  </DataGridCell>
+                ),
+              }),
+              createTableColumn({
+                columnId: "charCount",
+                renderHeaderCell: () => "글자수",
+                renderCell: (item) => (
+                  <DataGridCell>
+                    <Text>{safeCharCount(item.text)}</Text>
+                  </DataGridCell>
+                ),
+              }),
+              createTableColumn({
+                columnId: "text",
+                renderHeaderCell: () => "텍스트",
+                renderCell: (item) => (
+                  <DataGridCell>
+                    <Text>{item.text}</Text>
+                  </DataGridCell>
+                ),
+              }),
+            ]}
+          >
+            <DataGridHeader>
+              <DataGridRow>
+                {({ renderHeaderCell }) => (
+                  <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
+                )}
+              </DataGridRow>
+            </DataGridHeader>
+            <DataGridBody>
+              {({ item, rowId }) => (
+                <DataGridRow key={rowId}>
+                  {({ renderCell }) => renderCell(item)}
+                </DataGridRow>
               )}
-            </tbody>
-          </table>
-        </div>
+            </DataGridBody>
+          </DataGrid>
+        ) : (
+          <div style={{ textAlign: 'center', padding: tokens.spacingVerticalXXL }}>
+            <Body1>대본을 생성하거나 SRT를 불러오면 씬 목록이 표시됩니다.</Body1>
+          </div>
+        )}
 
-        {error && <div className="mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</div>}
+        {error && (
+          <MessageBar intent="error">
+            <MessageBarBody>{error}</MessageBarBody>
+          </MessageBar>
+        )}
       </Card>
     </div>
   );

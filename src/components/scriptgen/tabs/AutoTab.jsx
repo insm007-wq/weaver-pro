@@ -1,6 +1,17 @@
 // src/components/scriptgen/tabs/AutoTab.jsx
-import { useMemo } from "react";
-import { Card, FormGrid, TextField, SelectField } from "../parts/SmallUI";
+import React, { useMemo } from "react";
+import {
+  makeStyles,
+  tokens,
+  shorthands,
+  Text,
+  Divider,
+  Card,
+  Field,
+  Input,
+  Dropdown,
+  Option,
+} from "@fluentui/react-components";
 import { DUR_OPTIONS, MAX_SCENE_OPTIONS, LLM_OPTIONS } from "../constants";
 import TtsPanel from "../parts/TtsPanel";
 
@@ -9,6 +20,24 @@ function toInt(v, d = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? n : d;
 }
+
+const useStyles = makeStyles({
+  container: {
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.gap(tokens.spacingVerticalL),
+  },
+  sectionTitle: {
+    display: "flex",
+    alignItems: "center",
+    ...shorthands.gap(tokens.spacingHorizontalS),
+    ...shorthands.margin('0', '0', tokens.spacingVerticalM, '0'),
+  },
+  description: {
+    color: tokens.colorNeutralForeground3,
+    marginBottom: tokens.spacingVerticalL,
+  },
+});
 
 /**
  * Auto 탭: 폼 편집 전용
@@ -21,6 +50,8 @@ export default function AutoTab({
   voices,
   disabled = false /* 로딩 상태에서 비활성화 */,
 }) {
+  const styles = useStyles();
+
   // 표시용 정규화 (옵션 값 보정)
   const norm = useMemo(
     () => ({
@@ -35,48 +66,79 @@ export default function AutoTab({
 
   return (
     <Card>
-      <FormGrid>
-        <TextField
-          label="주제"
-          value={form.topic}
-          onChange={(v) => onChange("topic", v)}
-          placeholder="예) 2025 AI 트렌드 요약"
-          disabled={disabled}
-        />
-        <TextField
-          label="스타일"
-          value={form.style}
-          onChange={(v) => onChange("style", v)}
-          placeholder="예) 전문가, 쉽고 차분하게"
-          disabled={disabled}
-        />
+      <div className={styles.container}>
+        {/* 기본 설정 섹션 */}
+        <div>
+          <Text className={styles.sectionTitle} weight="semibold" size={500}>
+            ⚙️ 기본 설정
+          </Text>
+          <Text className={styles.description} size={300}>
+            주제와 스타일을 입력하면 AI가 자동으로 대본을 생성합니다
+          </Text>
+          <div className={styles.formGrid}>
+            <Field label="주제">
+              <Input
+                value={form.topic || ""}
+                onChange={(_, data) => onChange("topic", data.value)}
+                placeholder="예) 2025 AI 트렌드 요약"
+                disabled={disabled}
+              />
+            </Field>
+            <Field label="스타일">
+              <Input
+                value={form.style || ""}
+                onChange={(_, data) => onChange("style", data.value)}
+                placeholder="예) 전문가, 쉽고 차분하게"
+                disabled={disabled}
+              />
+            </Field>
+            <Field label="길이(분)">
+              <Dropdown
+                value={`${norm.durationMin}분`}
+                onOptionSelect={(_, data) => onChange("durationMin", Number(data.optionValue))}
+                disabled={disabled}
+              >
+                {DUR_OPTIONS.map((v) => (
+                  <Option key={v} value={v}>
+                    {v}분
+                  </Option>
+                ))}
+              </Dropdown>
+            </Field>
+            <Field label="최대 장면 수">
+              <Dropdown
+                value={`${norm.maxScenes}개`}
+                onOptionSelect={(_, data) => onChange("maxScenes", Number(data.optionValue))}
+                disabled={disabled}
+              >
+                {MAX_SCENE_OPTIONS.map((v) => (
+                  <Option key={v} value={v}>
+                    {v}개
+                  </Option>
+                ))}
+              </Dropdown>
+            </Field>
+            <Field label="LLM 모델">
+              <Dropdown
+                value={LLM_OPTIONS.find(opt => opt.value === form.llmMain)?.label || ""}
+                onOptionSelect={(_, data) => onChange("llmMain", data.optionValue)}
+                disabled={disabled}
+              >
+                {LLM_OPTIONS.map((option) => (
+                  <Option key={option.value} value={option.value}>
+                    {option.label}
+                  </Option>
+                ))}
+              </Dropdown>
+            </Field>
+          </div>
+        </div>
 
-        <SelectField
-          label="길이(분)"
-          value={norm.durationMin}
-          options={DUR_OPTIONS.map((v) => ({ label: `${v}`, value: v }))}
-          onChange={(v) => onChange("durationMin", Number(v))}
-          disabled={disabled}
-        />
+        <Divider />
 
-        <SelectField
-          label="최대 장면 수"
-          value={norm.maxScenes}
-          options={MAX_SCENE_OPTIONS.map((v) => ({ label: `${v}`, value: v }))}
-          onChange={(v) => onChange("maxScenes", Number(v))}
-          disabled={disabled}
-        />
-
-        <SelectField
-          label="LLM (대본)"
-          value={form.llmMain}
-          options={LLM_OPTIONS}
-          onChange={(v) => onChange("llmMain", v)}
-          disabled={disabled}
-        />
-      </FormGrid>
-
-      <TtsPanel form={form} onChange={onChange} voices={voices} disabled={disabled} />
+        {/* TTS 설정 섹션 */}
+        <TtsPanel form={form} onChange={onChange} voices={voices} disabled={disabled} />
+      </div>
     </Card>
   );
 }

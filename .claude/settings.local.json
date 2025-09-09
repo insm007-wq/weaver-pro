@@ -183,7 +183,8 @@
       "Bash(npm uninstall:*)",
       "Read(//d/ai-video-generator/**)",
       "Bash(find:*)",
-      "WebFetch(domain:ai.google.dev)"
+      "WebFetch(domain:ai.google.dev)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": [],
     "ask": []
