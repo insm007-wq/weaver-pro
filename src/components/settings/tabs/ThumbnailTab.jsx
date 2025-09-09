@@ -167,6 +167,8 @@ function ThumbnailTab() {
   const [originalTemplate, setOriginalTemplate] = useState("");
   const [defaultEngine, setDefaultEngine] = useState("replicate");
   const [originalEngine, setOriginalEngine] = useState("replicate");
+  const [analysisEngine, setAnalysisEngine] = useState("anthropic");
+  const [originalAnalysisEngine, setOriginalAnalysisEngine] = useState("anthropic");
   const [isModified, setIsModified] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -179,8 +181,12 @@ function ThumbnailTab() {
 
   // 수정 감지
   useEffect(() => {
-    setIsModified(template !== originalTemplate || defaultEngine !== originalEngine);
-  }, [template, originalTemplate, defaultEngine, originalEngine]);
+    setIsModified(
+      template !== originalTemplate || 
+      defaultEngine !== originalEngine ||
+      analysisEngine !== originalAnalysisEngine
+    );
+  }, [template, originalTemplate, defaultEngine, originalEngine, analysisEngine, originalAnalysisEngine]);
 
   // 메시지 자동 숨김
   useEffect(() => {
@@ -195,14 +201,18 @@ function ThumbnailTab() {
     try {
       const savedTemplate = await window.api.getSetting("thumbnailPromptTemplate");
       const savedEngine = await window.api.getSetting("thumbnailDefaultEngine");
+      const savedAnalysisEngine = await window.api.getSetting("thumbnailAnalysisEngine");
       
       const templateToUse = savedTemplate || DEFAULT_TEMPLATE;
       const engineToUse = savedEngine || "replicate";
+      const analysisEngineToUse = savedAnalysisEngine || "anthropic";
       
       setTemplate(templateToUse);
       setOriginalTemplate(templateToUse);
       setDefaultEngine(engineToUse);
       setOriginalEngine(engineToUse);
+      setAnalysisEngine(analysisEngineToUse);
+      setOriginalAnalysisEngine(analysisEngineToUse);
     } catch (error) {
       console.error("템플릿 로드 실패:", error);
       setMessage({ 
@@ -213,6 +223,8 @@ function ThumbnailTab() {
       setOriginalTemplate(DEFAULT_TEMPLATE);
       setDefaultEngine("replicate");
       setOriginalEngine("replicate");
+      setAnalysisEngine("anthropic");
+      setOriginalAnalysisEngine("anthropic");
     } finally {
       setLoading(false);
     }
@@ -238,8 +250,13 @@ function ThumbnailTab() {
         key: "thumbnailDefaultEngine", 
         value: defaultEngine
       });
+      await window.api.setSetting({ 
+        key: "thumbnailAnalysisEngine", 
+        value: analysisEngine
+      });
       setOriginalTemplate(template.trim());
       setOriginalEngine(defaultEngine);
+      setOriginalAnalysisEngine(analysisEngine);
       setMessage({ type: "success", text: "설정이 성공적으로 저장되었습니다!" });
     } catch (error) {
       console.error("설정 저장 실패:", error);
@@ -310,7 +327,21 @@ function ThumbnailTab() {
             </Label>
             <Dropdown
               value={defaultEngine}
-              onOptionSelect={(_, data) => setDefaultEngine(data.optionValue)}
+              onOptionSelect={async (_, data) => {
+                const newEngine = data.optionValue;
+                setDefaultEngine(newEngine);
+                try {
+                  await window.api.setSetting({ 
+                    key: "thumbnailDefaultEngine", 
+                    value: newEngine
+                  });
+                  setOriginalEngine(newEngine);
+                  setMessage({ type: "success", text: "기본 생성 엔진이 자동 저장되었습니다." });
+                } catch (error) {
+                  console.error("엔진 설정 저장 실패:", error);
+                  setMessage({ type: "error", text: "엔진 설정 저장에 실패했습니다." });
+                }
+              }}
               style={{ marginTop: tokens.spacingVerticalS }}
             >
               <Option value="replicate">Replicate (고품질)</Option>
@@ -318,6 +349,41 @@ function ThumbnailTab() {
             </Dropdown>
             <Caption1 style={{ marginTop: tokens.spacingVerticalXS, color: tokens.colorNeutralForeground3 }}>
               썸네일 생성 시 기본으로 사용할 AI 엔진을 선택합니다.
+            </Caption1>
+          </Field>
+
+          {/* 이미지 분석 AI 설정 */}
+          <Field style={{ marginBottom: tokens.spacingVerticalL }}>
+            <Label weight="semibold" size="large">
+              <InfoRegular style={{ marginRight: tokens.spacingHorizontalXS }} />
+              이미지 분석 AI
+            </Label>
+            <Dropdown
+              value={analysisEngine}
+              onOptionSelect={async (_, data) => {
+                const newAnalysisEngine = data.optionValue;
+                setAnalysisEngine(newAnalysisEngine);
+                try {
+                  await window.api.setSetting({ 
+                    key: "thumbnailAnalysisEngine", 
+                    value: newAnalysisEngine
+                  });
+                  setOriginalAnalysisEngine(newAnalysisEngine);
+                  setMessage({ type: "success", text: "이미지 분석 AI가 자동 저장되었습니다." });
+                } catch (error) {
+                  console.error("분석 AI 설정 저장 실패:", error);
+                  setMessage({ type: "error", text: "분석 AI 설정 저장에 실패했습니다." });
+                }
+              }}
+              style={{ marginTop: tokens.spacingVerticalS }}
+            >
+              <Option value="anthropic">Claude Sonnet 4 (고성능 분석)</Option>
+              <Option value="gemini">Google Gemini 2.5 Flash (멀티모달, 권장)</Option>
+              <Option value="gemini-pro">Google Gemini 2.5 Pro (고성능)</Option>
+              <Option value="gemini-lite">Google Gemini 2.5 Flash-Lite (경제형)</Option>
+            </Dropdown>
+            <Caption1 style={{ marginTop: tokens.spacingVerticalXS, color: tokens.colorNeutralForeground3 }}>
+              참고 이미지 분석에 사용할 AI 엔진을 선택합니다.
             </Caption1>
           </Field>
 

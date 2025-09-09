@@ -182,7 +182,8 @@
       "Bash(wmic:*)",
       "Bash(npm uninstall:*)",
       "Read(//d/ai-video-generator/**)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebFetch(domain:ai.google.dev)"
     ],
     "deny": [],
     "ask": []

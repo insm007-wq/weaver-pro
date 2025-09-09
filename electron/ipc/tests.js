@@ -198,7 +198,7 @@ ipcMain.handle("gemini:test", async (_e, apiKey) => {
     
     if (geminiModels.length > 0) {
       return ok({ 
-        model: "gemini-pro", 
+        model: "gemini-2.5-flash", 
         availableModels: geminiModels.length,
         message: `${geminiModels.length}개의 Gemini 모델 사용 가능`
       });

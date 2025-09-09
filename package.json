@@ -12,6 +12,7 @@
     "@fluentui/react-components": "^9.69.0",
     "@fluentui/react-icons": "^2.0.309",
     "@fluentui/tokens": "^1.0.0-alpha.22",
+    "@google/genai": "^1.17.0",
     "@heroicons/react": "^2.2.0",
     "axios": "^1.11.0",
     "dotenv": "^17.2.1",

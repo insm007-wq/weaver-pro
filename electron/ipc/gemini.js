@@ -47,7 +47,7 @@ ipcMain.handle("generateThumbnailsGemini", async (_e, payload = {}) => {
     // --- Google Generative AI (Gemini) API 호출 ---
     // Imagen 생성을 위한 프롬프트를 먼저 Gemini로 최적화
     const optimizeResponse = await retryHandler.execute(async () => {
-      return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${encodeURIComponent(apiKey)}`, {
+      return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -94,27 +94,68 @@ Output only the optimized English prompt:`
 
     console.log("🧠 Gemini optimized prompt:", optimizedPrompt);
 
-    // --- ImageFX API 호출 (Google의 이미지 생성 서비스) ---
-    // ImageFX는 현재 공개 API가 없으므로 폴백으로 Imagen-3와 유사한 결과 시뮬레이션
-    // 실제 구현에서는 적절한 이미지 생성 API를 사용해야 합니다.
+    // --- Imagen-3 API 호출로 실제 이미지 생성 ---
+    console.log("🎨 Imagen-3로 이미지 생성 중...", optimizedPrompt);
     
-    // 임시로 optimizedPrompt를 사용하여 응답 생성 (실제 이미지 생성은 별도 구현 필요)
     const images = [];
-    for (let i = 0; i < numOutputs; i++) {
-      // 실제로는 이미지 생성 API를 호출해야 합니다.
-      // 현재는 placeholder 이미지 URL을 반환
-      const placeholderUrl = `data:image/svg+xml;base64,${Buffer.from(`
-        <svg width="1920" height="1080" xmlns="http://www.w3.org/2000/svg">
-          <rect width="1920" height="1080" fill="#1a365d"/>
-          <text x="960" y="500" text-anchor="middle" fill="white" font-family="Arial" font-size="48">
-            Gemini Optimized Thumbnail ${i + 1}
-          </text>
-          <text x="960" y="580" text-anchor="middle" fill="#63b3ed" font-family="Arial" font-size="24">
-            ${optimizedPrompt.substring(0, 100)}...
-          </text>
-        </svg>
-      `).toString('base64')}`;
-      images.push(placeholderUrl);
+    
+    try {
+      // Google GenAI SDK 사용하여 Imagen-3 API 호출
+      const { GoogleGenAI } = require('@google/genai');
+      const genAI = new GoogleGenAI({ apiKey });
+      
+      const imageResponse = await retryHandler.execute(async () => {
+        return await genAI.models.generateImages({
+          model: 'imagen-3.0-generate-002',
+          prompt: optimizedPrompt,
+          config: {
+            numberOfImages: numOutputs,
+            aspectRatio: aspectRatio === "16:9" ? "16:9" : "1:1" // 16:9 또는 1:1 지원
+          }
+        });
+      }, { operationName: 'Imagen-3 API Call' });
+
+      // 생성된 이미지를 base64 데이터 URL로 변환
+      for (const generatedImage of imageResponse.generatedImages) {
+        const imageBytes = generatedImage.image.imageBytes;
+        const dataUrl = `data:image/png;base64,${imageBytes}`;
+        images.push(dataUrl);
+      }
+
+      console.log(`✅ Imagen-3로 ${images.length}개 이미지 생성 완료`);
+      
+    } catch (imagenError) {
+      console.error("❌ Imagen-3 API 오류:", imagenError);
+      
+      // 구체적인 오류 메시지 생성
+      let errorReason = "일시적 오류";
+      if (imagenError.message?.includes("billed users")) {
+        errorReason = "유료 결제 필요 (Google Cloud 결제 계정 연결 필요)";
+      } else if (imagenError.message?.includes("quota")) {
+        errorReason = "사용량 할당 초과";
+      } else if (imagenError.message?.includes("API_KEY")) {
+        errorReason = "API 키 오류";
+      }
+      
+      // Imagen-3 실패 시 placeholder 이미지로 폴백
+      console.log(`📝 Placeholder 이미지로 폴백 (사유: ${errorReason})`);
+      for (let i = 0; i < numOutputs; i++) {
+        const placeholderUrl = `data:image/svg+xml;base64,${Buffer.from(`
+          <svg width="1920" height="1080" xmlns="http://www.w3.org/2000/svg">
+            <rect width="1920" height="1080" fill="#1a365d"/>
+            <text x="960" y="430" text-anchor="middle" fill="white" font-family="Arial" font-size="32">
+              Imagen-3: ${errorReason}
+            </text>
+            <text x="960" y="520" text-anchor="middle" fill="#63b3ed" font-family="Arial" font-size="20">
+              Gemini 최적화된 프롬프트: 
+            </text>
+            <text x="960" y="580" text-anchor="middle" fill="#63b3ed" font-family="Arial" font-size="16">
+              ${optimizedPrompt.substring(0, 80)}...
+            </text>
+          </svg>
+        `).toString('base64')}`;
+        images.push(placeholderUrl);
+      }
     }
 
     // 결과 캐싱

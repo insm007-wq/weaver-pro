@@ -90,10 +90,15 @@ const useStyles = makeStyles({
   uploadArea: {
     border: `2px dashed ${tokens.colorNeutralStroke1}`,
     borderRadius: tokens.borderRadiusMedium,
-    padding: tokens.spacingVerticalXL,
+    padding: tokens.spacingVerticalL,
     textAlign: "center",
     cursor: "pointer",
     transition: "all 0.2s ease",
+    minHeight: "200px", // 텍스트 영역과 유사한 높이
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "center",
     "&:hover": {
       ...shorthands.borderColor(tokens.colorBrandStroke1),
       backgroundColor: tokens.colorBrandBackground2,
@@ -109,8 +114,8 @@ const useStyles = makeStyles({
     gap: tokens.spacingHorizontalM,
   },
   previewImage: {
-    width: "200px",
-    height: "200px",
+    width: "300px",
+    height: "300px",
     objectFit: "cover",
     borderRadius: tokens.borderRadiusMedium,
     border: `2px solid ${tokens.colorNeutralStroke1}`,
@@ -220,11 +225,10 @@ function ThumbnailGenerator() {
   const [fixedWidthPx, setFixedWidthPx] = useState(null);
 
   /** 공통 상태 */
-  const [provider, setProvider] = useState("replicate"); // 'replicate' | 'gemini'
+  const [provider, setProvider] = useState("replicate"); // 'replicate' | 'gemini' - 전역 설정에서 로드
   const [metaTemplate, setMetaTemplate] = useState("");
   const [templateLoading, setTemplateLoading] = useState(true);
   const [toast, setToast] = useState(null);
-  const [defaultEngineLoaded, setDefaultEngineLoaded] = useState(false);
 
   /** 프로그레스 상태 */
   const [progress, setProgress] = useState({
@@ -268,6 +272,7 @@ function ThumbnailGenerator() {
   const [fxEn, setFxEn] = useState("");
   const [fxKo, setFxKo] = useState("");
   const [fxAnalysis, setFxAnalysis] = useState(""); // 구도 분석 및 개선점
+  const [analysisEngine, setAnalysisEngine] = useState(""); // 분석 엔진 정보
 
   const onPickFile = () => fileInputRef.current?.click();
 
@@ -289,10 +294,10 @@ function ThumbnailGenerator() {
         ]);
 
         setMetaTemplate(savedTemplate || DEFAULT_TEMPLATE);
-
-        if (savedEngine && !defaultEngineLoaded) {
+        
+        // 전역 설정의 기본 엔진을 항상 사용
+        if (savedEngine) {
           setProvider(savedEngine);
-          setDefaultEngineLoaded(true);
         }
       } catch (error) {
         console.error("설정 로드 실패:", error);
@@ -302,13 +307,17 @@ function ThumbnailGenerator() {
       }
     };
     loadSettings();
-  }, [defaultEngineLoaded]);
+  }, []);
 
   /** 설정 변경 감지 */
   useEffect(() => {
     const handleSettingsChanged = (payload) => {
       if (payload?.key === "thumbnailPromptTemplate") {
         setMetaTemplate(payload.value || DEFAULT_TEMPLATE);
+      } else if (payload?.key === "thumbnailDefaultEngine") {
+        // 생성 엔진 변경 시 실시간 업데이트
+        setProvider(payload.value || "replicate");
+        console.log(`생성 엔진 변경됨: ${payload.value}`);
       }
     };
 
@@ -344,6 +353,7 @@ function ThumbnailGenerator() {
       setFxEn("");
       setFxKo("");
       setFxAnalysis("");
+      setAnalysisEngine(""); // 분석 엔진 정보도 초기화
 
       const filePath = file.path || file.name; // Electron은 path 제공
       const res = await window.api.imagefxAnalyze({
@@ -354,15 +364,26 @@ function ThumbnailGenerator() {
       });
       if (!res?.ok) throw new Error(res?.message || "analysis_failed");
 
-      // 구도 분석 추출 (첫 번째 블록)
-      const fullText = res.text || "";
-      const analysisMatch = fullText.match(/구도 분석 및 개선점:([\s\S]*?)(?=English Prompt:|$)/);
-      if (analysisMatch) {
-        setFxAnalysis(analysisMatch[1].trim());
+      // 전체 텍스트 받기
+      const fullText = res.raw || res.text || "";
+      
+      // 전체 분석 결과를 그대로 사용 (협력업체처럼)
+      setFxAnalysis(fullText);
+      
+      // 영어와 한국어 프롬프트는 무시 (필요없음)
+      setFxEn("");
+      setFxKo("");
+      
+      // 설정에서 선택된 분석 엔진에 따라 표시 (실제 사용된 엔진 표시)
+      try {
+        const savedAnalysisEngine = await window.api.getSetting("thumbnailAnalysisEngine");
+        const engineName = savedAnalysisEngine === "gemini" ? "Google Gemini 1.5 Pro" : "Claude Sonnet 4";
+        setAnalysisEngine(engineName);
+        console.log(`이미지 분석 완료 - 사용된 엔진: ${engineName} (설정값: ${savedAnalysisEngine})`);
+      } catch (settingError) {
+        console.error("분석 엔진 설정 로드 실패:", settingError);
+        setAnalysisEngine("Claude Sonnet 4"); // 기본값
       }
-
-      setFxEn(res.english || "");
-      setFxKo(res.korean || "");
     } catch (e) {
       setFxErr(String(e?.message || e));
     } finally {
@@ -483,8 +504,8 @@ function ThumbnailGenerator() {
       setToast({ type: "error", text: "장면 설명 또는 템플릿/분석 결과 중 하나는 필요합니다." });
       return;
     }
-    if (provider === "gemini" && !metaTemplate.trim()) {
-      setToast({ type: "error", text: "Gemini 모드에서는 템플릿이 필요합니다." });
+    if (provider === "gemini" && !prompt.trim() && !metaTemplate.trim() && !fxEn.trim()) {
+      setToast({ type: "error", text: "장면 설명, 템플릿, 또는 분석 결과 중 하나는 필요합니다." });
       return;
     }
 
@@ -557,9 +578,25 @@ function ThumbnailGenerator() {
       setTimeout(() => updateProgress("idle"), 3000);
     } catch (e) {
       console.error("썸네일 생성 실패:", e);
+      
+      // 특정 오류 타입에 따른 사용자 친화적 메시지
+      let errorMessage = e?.message || "알 수 없는 오류가 발생했습니다.";
+      
+      if (errorMessage.includes("402") && errorMessage.includes("Insufficient credit")) {
+        errorMessage = "💳 Replicate 크레딧이 부족합니다. 크레딧을 충전하거나 설정에서 다른 AI 엔진을 선택해주세요.";
+      } else if (errorMessage.includes("404") && errorMessage.includes("gemini")) {
+        errorMessage = "🤖 Gemini 모델을 찾을 수 없습니다. 최신 모델로 업데이트가 필요할 수 있습니다.";
+      } else if (errorMessage.includes("API_KEY") || errorMessage.includes("401") || errorMessage.includes("403")) {
+        errorMessage = "🔑 API 키가 유효하지 않습니다. 설정에서 API 키를 확인해주세요.";
+      } else if (errorMessage.includes("rate limit") || errorMessage.includes("429")) {
+        errorMessage = "⏱️ API 사용 한도를 초과했습니다. 잠시 후 다시 시도해주세요.";
+      } else if (errorMessage.includes("network") || errorMessage.includes("ENOTFOUND")) {
+        errorMessage = "🌐 네트워크 연결을 확인해주세요. 인터넷 연결이 불안정할 수 있습니다.";
+      }
+      
       setToast({
         type: "error",
-        text: `생성 실패: ${e?.message || "알 수 없는 오류가 발생했습니다."}`,
+        text: `생성 실패: ${errorMessage}`,
       });
     } finally {
       setLoading(false);
@@ -614,28 +651,33 @@ function ThumbnailGenerator() {
         <div className={styles.hairline} />
       </div>
 
-      {/* 장면 설명 — Replicate에서만 표시 */}
-      {provider === "replicate" && (
-        <Card className={styles.settingsCard}>
-          <Field>
-            <Label weight="semibold" size="large">
-              <SparkleRegular style={{ marginRight: tokens.spacingHorizontalXS }} />
-              장면 설명
-            </Label>
-            <Textarea
-              rows={5}
-              placeholder="어떤 썸네일을 원하시나요? 인물의 표정, 상황, 감정을 구체적으로 적어주세요."
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              style={{
-                marginTop: tokens.spacingVerticalS,
-                fontFamily: tokens.fontFamilyBase,
-                fontSize: tokens.fontSizeBase300,
-              }}
-            />
-          </Field>
-        </Card>
-      )}
+      {/* 장면 설명 — 둘 모드 모두에서 표시 */}
+      <Card className={styles.settingsCard}>
+        <Field>
+          <Label weight="semibold" size="large">
+            <SparkleRegular style={{ marginRight: tokens.spacingHorizontalXS }} />
+            장면 설명
+          </Label>
+          <Textarea
+            rows={8}
+            placeholder={
+              provider === "replicate" 
+                ? "어떤 썸네일을 원하시나요? 인물의 표정, 상황, 감정을 구체적으로 적어주세요."
+                : "장면에 대한 설명을 입력하세요. 참고 이미지와 함께 프롬프트 템플릿에 활용됩니다."
+            }
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            style={{
+              marginTop: tokens.spacingVerticalS,
+              fontFamily: tokens.fontFamilyBase,
+              fontSize: tokens.fontSizeBase300,
+            }}
+          />
+          <Caption1 style={{ marginTop: tokens.spacingVerticalXS, color: tokens.colorNeutralForeground3 }}>
+            장면 설명이 템플릿의 {'{'}content{'}'} 변수에 삽입되어 프롬프트가 생성됩니다.
+          </Caption1>
+        </Field>
+      </Card>
 
       {/* 참고 이미지 업로드 (분석 보조) — 두 모드 공통 사용 가능 */}
       <Card className={styles.settingsCard}>
@@ -676,6 +718,8 @@ function ThumbnailGenerator() {
                         setFxEn("");
                         setFxKo("");
                         setFxErr("");
+                        setFxAnalysis(""); // 분석 결과도 제거
+                        setAnalysisEngine(""); // 분석 엔진 정보도 초기화
                       }}
                     >
                       제거
@@ -735,67 +779,97 @@ function ThumbnailGenerator() {
             {fxAnalysis && (
               <Card
                 style={{
-                  backgroundColor: tokens.colorPaletteLightTealBackground1,
-                  border: `1px solid ${tokens.colorPaletteLightTealBorder1}`,
-                  padding: tokens.spacingVerticalM,
-                  marginBottom: tokens.spacingVerticalM,
+                  backgroundColor: tokens.colorNeutralBackground1,
+                  border: `1px solid ${tokens.colorNeutralStroke2}`,
+                  padding: tokens.spacingVerticalL,
+                  marginTop: tokens.spacingVerticalM,
+                  borderRadius: tokens.borderRadiusLarge,
+                  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
                 }}
               >
-                <Label
-                  weight="semibold"
-                  style={{
-                    marginBottom: tokens.spacingVerticalS,
-                    display: "flex",
-                    alignItems: "center",
-                    color: tokens.colorPaletteDarkBlueForeground2,
-                  }}
-                >
-                  <InfoRegular style={{ marginRight: tokens.spacingHorizontalXS }} />
-                  📊 참고 이미지 분석
-                </Label>
                 <div
                   style={{
-                    backgroundColor: tokens.colorNeutralBackground1,
-                    padding: tokens.spacingVerticalM,
-                    borderRadius: tokens.borderRadiusSmall,
-                    border: `1px solid ${tokens.colorNeutralStroke1}`,
-                    fontFamily: tokens.fontFamilyBase,
-                    lineHeight: "1.8",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: tokens.spacingVerticalL,
+                    paddingBottom: tokens.spacingVerticalS,
+                    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
                   }}
                 >
-                  {fxAnalysis
-                    .split("\n")
-                    .map((line, index) => {
-                      if (line.trim().startsWith("•") || line.trim().startsWith("-")) {
-                        return (
-                          <div
-                            key={index}
-                            style={{
-                              marginBottom: tokens.spacingVerticalXS,
-                              paddingLeft: tokens.spacingHorizontalS,
-                              color: tokens.colorNeutralForeground1,
-                            }}
-                          >
-                            <Body1>{line.trim()}</Body1>
+                  <div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS }}>
+                    <div style={{ 
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "32px",
+                      height: "32px",
+                      backgroundColor: tokens.colorBrandBackground2,
+                      borderRadius: "50%",
+                      color: tokens.colorBrandForeground1
+                    }}>
+                      🔍
+                    </div>
+                    <Title3 style={{ margin: 0, fontSize: tokens.fontSizeBase400 }}>참고 이미지 분석</Title3>
+                  </div>
+                  {analysisEngine && (
+                    <Badge 
+                      appearance="tint" 
+                      color={analysisEngine.includes("Gemini") ? "success" : "brand"} 
+                      size="small"
+                    >
+                      {analysisEngine}
+                    </Badge>
+                  )}
+                </div>
+                
+                <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM }}>
+                  {/* 분석 내용을 구조화된 형태로 표시 */}
+                  {fxAnalysis.split('\n\n').map((section, index) => {
+                    const isMainSection = section.match(/^\d+\.\s*\*\*(.*?)\*\*/);
+                    const sectionTitle = isMainSection ? isMainSection[1] : null;
+                    const sectionContent = isMainSection 
+                      ? section.replace(/^\d+\.\s*\*\*(.*?)\*\*:\s*/, '') 
+                      : section;
+                    
+                    return (
+                      <div key={index} style={{ 
+                        padding: tokens.spacingVerticalM,
+                        backgroundColor: tokens.colorSubtleBackground,
+                        borderRadius: tokens.borderRadiusMedium,
+                        border: `1px solid ${tokens.colorNeutralStroke2}`,
+                      }}>
+                        {sectionTitle && (
+                          <div style={{ 
+                            marginBottom: tokens.spacingVerticalS,
+                            fontWeight: tokens.fontWeightSemibold,
+                            color: tokens.colorNeutralForeground1,
+                            fontSize: tokens.fontSizeBase200,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: tokens.spacingHorizontalXS
+                          }}>
+                            <div style={{
+                              width: "6px",
+                              height: "6px",
+                              backgroundColor: tokens.colorBrandForeground1,
+                              borderRadius: "50%"
+                            }} />
+                            {sectionTitle}
                           </div>
-                        );
-                      } else if (line.trim()) {
-                        return (
-                          <div
-                            key={index}
-                            style={{
-                              marginBottom: tokens.spacingVerticalS,
-                              fontWeight: tokens.fontWeightSemibold,
-                              color: tokens.colorNeutralForeground1,
-                            }}
-                          >
-                            <Body1>{line.trim()}</Body1>
-                          </div>
-                        );
-                      }
-                      return null;
-                    })
-                    .filter(Boolean)}
+                        )}
+                        <Body2 style={{ 
+                          whiteSpace: "pre-wrap", 
+                          lineHeight: "1.5",
+                          color: tokens.colorNeutralForeground2,
+                          margin: 0,
+                          fontSize: tokens.fontSizeBase300
+                        }}>
+                          {sectionContent}
+                        </Body2>
+                      </div>
+                    );
+                  })}
                 </div>
               </Card>
             )}
@@ -873,6 +947,14 @@ function ThumbnailGenerator() {
 
       {/* 생성 버튼 */}
       <Card className={styles.settingsCard}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tokens.spacingVerticalM }}>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+            생성 엔진: 
+          </Caption1>
+          <Badge appearance="filled" color="brand" size="medium">
+            {provider === "replicate" ? "Replicate (Flux)" : "Google Gemini (Imagen 3)"}
+          </Badge>
+        </div>
         <Button
           appearance="primary"
           size="large"
@@ -914,14 +996,19 @@ function ThumbnailGenerator() {
       {/* 결과 */}
       {results.length > 0 && (
         <div style={{ marginTop: tokens.spacingVerticalXXL }}>
-          <div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS, marginBottom: tokens.spacingVerticalM }}>
-            <span>🎉</span>
-            <Title3>생성 완료!</Title3>
-            {tookMs != null && (
-              <Caption1>
-                {(tookMs / 1000).toFixed(1)}초 만에 {results.length}개의 썸네일이 생성되었습니다.
-              </Caption1>
-            )}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tokens.spacingVerticalM }}>
+            <div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS }}>
+              <span>🎉</span>
+              <Title3>생성 완료!</Title3>
+              {tookMs != null && (
+                <Caption1>
+                  {(tookMs / 1000).toFixed(1)}초 만에 {results.length}개의 썸네일이 생성되었습니다.
+                </Caption1>
+              )}
+            </div>
+            <Badge appearance="filled" color="success" size="medium">
+              {provider === "replicate" ? "Replicate (Flux)" : "Google Gemini (Imagen 3)"}
+            </Badge>
           </div>
 
           <div className={styles.resultsGrid}>
