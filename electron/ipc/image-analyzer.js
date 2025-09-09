@@ -27,17 +27,63 @@ async function readGeminiKey() {
 }
 
 // ---------- 유틸 ----------
-function detectMimeByExt(filePath) {
-  const ext = (path.extname(filePath) || "").toLowerCase();
-  if (ext === ".png") return "image/png";
-  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
-  if (ext === ".webp") return "image/webp";
-  return "application/octet-stream";
+async function detectImageFormat(filePath) {
+  try {
+    const sharp = require('sharp');
+    const metadata = await sharp(filePath).metadata();
+    
+    // Sharp에서 감지된 실제 이미지 포맷을 기반으로 MIME 타입 결정
+    switch (metadata.format) {
+      case 'jpeg':
+        return "image/jpeg";
+      case 'png':
+        return "image/png";
+      case 'webp':
+        return "image/webp";
+      case 'gif':
+        return "image/gif";
+      case 'tiff':
+        return "image/tiff";
+      case 'bmp':
+        return "image/bmp";
+      default:
+        // 포맷을 감지할 수 없는 경우 파일 확장자로 폴백
+        const ext = (path.extname(filePath) || "").toLowerCase();
+        if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+        if (ext === ".png") return "image/png";
+        if (ext === ".webp") return "image/webp";
+        return "image/jpeg"; // 기본값으로 JPEG 사용
+    }
+  } catch (error) {
+    console.warn(`[이미지 포맷 감지 실패] ${filePath}:`, error.message);
+    // Sharp 실패 시 파일 확장자로 폴백
+    const ext = (path.extname(filePath) || "").toLowerCase();
+    if (ext === ".png") return "image/png";
+    if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+    if (ext === ".webp") return "image/webp";
+    return "image/jpeg"; // 기본값
+  }
 }
-function fileToBase64Parts(filePath) {
-  const buf = fs.readFileSync(filePath);
-  const mime = detectMimeByExt(filePath);
-  return { mime, b64: buf.toString("base64") };
+
+async function fileToBase64Parts(filePath) {
+  try {
+    // Sharp를 사용하여 이미지를 JPEG로 정규화하여 호환성 보장
+    const sharp = require('sharp');
+    const buffer = await sharp(filePath)
+      .jpeg({ quality: 90 }) // 높은 품질의 JPEG로 변환
+      .toBuffer();
+    
+    return { 
+      mime: "image/jpeg", 
+      b64: buffer.toString("base64") 
+    };
+  } catch (error) {
+    console.warn(`[이미지 변환 실패] ${filePath}, 원본 파일 사용:`, error.message);
+    // Sharp 실패 시 원본 파일 사용
+    const buf = fs.readFileSync(filePath);
+    const mime = await detectImageFormat(filePath);
+    return { mime, b64: buf.toString("base64") };
+  }
 }
 
 // ---------- 시스템 프롬프트 (톤 고정) ----------
@@ -71,7 +117,7 @@ async function analyzeWithAnthropic({ filePath, description }) {
 
   let imagePart = null;
   if (filePath) {
-    const { mime, b64 } = fileToBase64Parts(filePath);
+    const { mime, b64 } = await fileToBase64Parts(filePath);
     if (!b64 || !mime) return { ok: false, message: "invalid_image_file" };
     imagePart = {
       type: "image",
@@ -146,7 +192,7 @@ async function analyzeWithGemini({ filePath, description, engineType = 'gemini' 
   }
 
   try {
-    const { mime, b64 } = fileToBase64Parts(filePath);
+    const { mime, b64 } = await fileToBase64Parts(filePath);
     if (!b64 || !mime) return { ok: false, message: "invalid_image_file" };
 
     console.log('[제미니] 이미지 데이터 준비 완료, MIME:', mime);
@@ -199,13 +245,17 @@ async function analyzeWithGemini({ filePath, description, engineType = 'gemini' 
 // ---------- 설정에 따른 분석 엔진 선택 ----------
 async function analyzeWithSelectedEngine({ filePath, description }) {
   try {
-    // 설정에서 이미지 분석 엔진 가져오기
+    // 설정에서 이미지 분석 엔진 가져오기 (매번 새로 읽기)
     const Store = (await import('electron-store')).default;
     const store = new Store();
+    store.store = store.store; // 강제 리로드
     const analysisEngine = store.get('thumbnailAnalysisEngine', 'anthropic');
 
     console.log(`[이미지 분석] 사용 엔진: ${analysisEngine}`);
-    console.log(`[이미지 분석] 전체 설정:`, store.store);
+    console.log(`[이미지 분석] 설정 값:`, {
+      thumbnailAnalysisEngine: store.get('thumbnailAnalysisEngine'),
+      allSettings: store.store
+    });
 
     if (analysisEngine === 'gemini' || analysisEngine === 'gemini-pro' || analysisEngine === 'gemini-lite') {
       console.log('[이미지 분석] Gemini 엔진 사용:', analysisEngine);

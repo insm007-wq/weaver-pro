@@ -76,7 +76,7 @@ const useStyles = makeStyles({
     transition: "all 0.2s ease",
     position: "relative",
     overflow: "hidden",
-    
+
     "&::before": {
       content: "''",
       position: "absolute",
@@ -86,7 +86,7 @@ const useStyles = makeStyles({
       height: "3px",
       background: `linear-gradient(90deg, ${tokens.colorBrandBackground} 0%, ${tokens.colorBrandBackground2} 100%)`,
     },
-    
+
     "&:hover": {
       transform: "translateY(-2px)",
       boxShadow: "0 4px 16px rgba(0, 0, 0, 0.1)",
@@ -412,7 +412,6 @@ export default function ApiTab() {
     }
   };
 
-
   const services = [
     {
       key: "openai",
@@ -515,7 +514,7 @@ export default function ApiTab() {
         </Badge>
       );
     }
-    
+
     if (status.ok === true) {
       return (
         <Badge appearance="tint" color="success" icon={<CheckmarkCircleRegular />} className={s.statusBadge}>
@@ -523,7 +522,7 @@ export default function ApiTab() {
         </Badge>
       );
     }
-    
+
     if (status.ok === false) {
       return (
         <Badge appearance="tint" color="danger" icon={<DismissCircleRegular />} className={s.statusBadge}>
@@ -531,7 +530,7 @@ export default function ApiTab() {
         </Badge>
       );
     }
-    
+
     return (
       <Badge appearance="tint" color="brand" icon={<SaveRegular />} className={s.statusBadge}>
         저장됨
@@ -545,8 +544,8 @@ export default function ApiTab() {
       <div className={s.header}>
         <div className={s.headerTitle}>🔧 API 설정 외부 서비스 연결 관리</div>
         <Caption1 className={s.headerDescription}>
-          외부 서비스 API 키를 안전하게 저장하고 연결 상태를 확인할 수 있습니다.<br />
-          각 서비스의 API 키를 입력한 후 테스트 버튼을 클릭하여 연결을 확인하세요.
+          외부 서비스 API 키를 안전하게 저장하고 연결 상태를 확인할 수 있습니다.
+          <br />각 서비스의 API 키를 입력한 후 테스트 버튼을 클릭하여 연결을 확인하세요.
         </Caption1>
       </div>
 
@@ -556,12 +555,8 @@ export default function ApiTab() {
           <Card key={service.key} className={s.serviceCard}>
             <div className={s.cardHeader}>
               <div className={s.serviceInfo}>
-                <div className={s.serviceName}>
-                  {service.name}
-                </div>
-                <Caption1 className={s.serviceDescription}>
-                  {service.description}
-                </Caption1>
+                <div className={s.serviceName}>{service.name}</div>
+                <Caption1 className={s.serviceDescription}>{service.description}</Caption1>
               </div>
               {getStatusBadge(service.status)}
             </div>
@@ -581,13 +576,7 @@ export default function ApiTab() {
 
             <div className={s.actionRow}>
               <div className={s.actionButtons}>
-                <Button 
-                  appearance="secondary" 
-                  icon={<SaveRegular />} 
-                  onClick={service.onSave}
-                  className={s.compactButton}
-                  size="small"
-                >
+                <Button appearance="secondary" icon={<SaveRegular />} onClick={service.onSave} className={s.compactButton} size="small">
                   저장
                 </Button>
                 <Button
@@ -601,11 +590,7 @@ export default function ApiTab() {
                   {service.loading ? "테스트 중..." : "테스트"}
                 </Button>
               </div>
-              {service.status?.ts && (
-                <div className={s.timestamp}>
-                  마지막 확인: {new Date(service.status.ts).toLocaleTimeString()}
-                </div>
-              )}
+              {service.status?.ts && <div className={s.timestamp}>마지막 확인: {new Date(service.status.ts).toLocaleTimeString()}</div>}
             </div>
 
             {service.status?.msg && (

@@ -299,6 +299,12 @@ contextBridge.exposeInMainWorld("api", {
   generateThumbnailsGemini: (payload) => ipcRenderer.invoke("generateThumbnailsGemini", payload),
 
   // ========================================================================
+  // 캐시 관리
+  // ========================================================================
+  clearCache: () => ipcRenderer.invoke("cache:clear"),
+  cacheStats: () => ipcRenderer.invoke("cache:stats"),
+
+  // ========================================================================
   // 테스트 채널들
   // ========================================================================
   testOpenAI: (apiKey) => ipcRenderer.invoke("openai:test", apiKey),

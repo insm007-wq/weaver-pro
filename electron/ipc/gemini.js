@@ -78,6 +78,15 @@ Output only the optimized English prompt:`
     if (!optimizeResponse.ok) {
       const errorData = await optimizeResponse.json().catch(() => ({}));
       console.error(`[gemini] API optimization failed: ${optimizeResponse.status}`, errorData);
+      
+      // 503 과부하 오류에 대한 사용자 친화적 메시지
+      if (optimizeResponse.status === 503) {
+        return { 
+          ok: false, 
+          message: "🔄 Gemini 서비스가 일시적으로 과부하 상태입니다. 잠시 후 다시 시도해주세요." 
+        };
+      }
+      
       return { 
         ok: false, 
         message: `Gemini API Error: ${optimizeResponse.status} - ${errorData.error?.message || optimizeResponse.statusText}` 
@@ -183,6 +192,32 @@ Output only the optimized English prompt:`
     }
     
     return { ok: false, message: `오류가 발생했습니다: ${msg}` };
+  }
+});
+
+// 캐시 클리어 IPC 핸들러
+ipcMain.handle("cache:clear", async (_e) => {
+  try {
+    const { getThumbnailCache } = require("../services/thumbnailCache");
+    const cache = getThumbnailCache();
+    await cache.clear();
+    return { ok: true, message: "캐시가 성공적으로 삭제되었습니다." };
+  } catch (err) {
+    console.error("[cache:clear] error", err);
+    return { ok: false, message: String(err?.message || err) };
+  }
+});
+
+// 캐시 상태 확인 IPC 핸들러
+ipcMain.handle("cache:stats", async (_e) => {
+  try {
+    const { getThumbnailCache } = require("../services/thumbnailCache");
+    const cache = getThumbnailCache();
+    const stats = cache.getStats();
+    return { ok: true, stats };
+  } catch (err) {
+    console.error("[cache:stats] error", err);
+    return { ok: false, message: String(err?.message || err) };
   }
 });
 

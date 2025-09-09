@@ -11,6 +11,7 @@ import {
   Body1,
   Body2,
   Caption1,
+  Caption2,
   Textarea,
   Dropdown,
   Option,
@@ -30,7 +31,6 @@ import {
   LightbulbRegular,
   DeleteRegular,
   ArrowDownloadRegular,
-  OpenRegular,
   ImageRegular,
   SparkleRegular,
   DismissCircleRegular,
@@ -170,6 +170,21 @@ const useStyles = makeStyles({
   tipCard: {
     marginTop: tokens.spacingVerticalS,
   },
+  statusMessage: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+    padding: tokens.spacingVerticalM,
+    borderRadius: tokens.borderRadiusMedium,
+    marginBottom: tokens.spacingVerticalS,
+  },
+  errorMessage: {
+    backgroundColor: "#fef2f2",
+    border: `2px solid #dc2626`,
+    color: "#dc2626",
+    fontSize: tokens.fontSizeBase400,
+    fontWeight: tokens.fontWeightSemibold,
+  },
 });
 
 function TipCard({ children, className = "" }) {
@@ -265,6 +280,8 @@ function ThumbnailGenerator() {
   const [usedPrompt, setUsedPrompt] = useState("");
   const [tookMs, setTookMs] = useState(null);
   const [estimatedTime, setEstimatedTime] = useState(null);
+  const [remainingTime, setRemainingTime] = useState(null); // 실시간 카운트다운용
+  const [startTime, setStartTime] = useState(null); // 생성 시작 시점
 
   // 이미지 분석(Anthropic) 결과
   const [fxLoading, setFxLoading] = useState(false);
@@ -294,7 +311,7 @@ function ThumbnailGenerator() {
         ]);
 
         setMetaTemplate(savedTemplate || DEFAULT_TEMPLATE);
-        
+
         // 전역 설정의 기본 엔진을 항상 사용
         if (savedEngine) {
           setProvider(savedEngine);
@@ -344,9 +361,29 @@ function ThumbnailGenerator() {
     return () => clearTimeout(t);
   }, [toast]);
 
+  /** 실시간 카운트다운 계산 */
+  useEffect(() => {
+    if ((!loading && !fxLoading) || !startTime || !estimatedTime) return;
+
+    const timer = setInterval(() => {
+      const now = Date.now();
+      const elapsed = (now - startTime) / 1000; // 경과 시간 (초)
+      const remaining = Math.max(0, estimatedTime - elapsed); // 남은 시간
+
+      setRemainingTime(remaining);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [loading, fxLoading, startTime, estimatedTime]);
+
   /** 참고 이미지 분석 (메인 프로세스 Anthropic IPC) */
   const analyzeReference = async (file) => {
     if (!file || !window?.api?.imagefxAnalyze) return;
+
+    // 분석 시작 시점 설정
+    const analysisStartTime = Date.now();
+    const analysisEstimatedTime = 15; // 15초 예상
+
     try {
       setFxLoading(true);
       setFxErr("");
@@ -354,6 +391,14 @@ function ThumbnailGenerator() {
       setFxKo("");
       setFxAnalysis("");
       setAnalysisEngine(""); // 분석 엔진 정보도 초기화
+
+      // 분석용 카운트다운 시작
+      setStartTime(analysisStartTime);
+      setEstimatedTime(analysisEstimatedTime);
+      setRemainingTime(analysisEstimatedTime);
+
+      // 프로그레스 상태 업데이트
+      updateProgress("analyzing", 0, 1, "이미지 분석 중...");
 
       const filePath = file.path || file.name; // Electron은 path 제공
       const res = await window.api.imagefxAnalyze({
@@ -366,28 +411,36 @@ function ThumbnailGenerator() {
 
       // 전체 텍스트 받기
       const fullText = res.raw || res.text || "";
-      
+
       // 전체 분석 결과를 그대로 사용 (협력업체처럼)
       setFxAnalysis(fullText);
-      
+
       // 영어와 한국어 프롬프트는 무시 (필요없음)
       setFxEn("");
       setFxKo("");
-      
+
       // 설정에서 선택된 분석 엔진에 따라 표시 (실제 사용된 엔진 표시)
       try {
         const savedAnalysisEngine = await window.api.getSetting("thumbnailAnalysisEngine");
-        const engineName = savedAnalysisEngine === "gemini" ? "Google Gemini 1.5 Pro" : "Claude Sonnet 4";
+        const engineName = savedAnalysisEngine === "gemini" ? "Google Gemini 2.5" : "Claude Sonnet 4";
         setAnalysisEngine(engineName);
         console.log(`이미지 분석 완료 - 사용된 엔진: ${engineName} (설정값: ${savedAnalysisEngine})`);
       } catch (settingError) {
         console.error("분석 엔진 설정 로드 실패:", settingError);
         setAnalysisEngine("Claude Sonnet 4"); // 기본값
       }
+
+      // 분석 완료 상태 업데이트
+      updateProgress("completed", 1, 1, "분석 완료!");
+      setTimeout(() => updateProgress("idle"), 2000);
     } catch (e) {
       setFxErr(String(e?.message || e));
+      updateProgress("idle");
     } finally {
       setFxLoading(false);
+      // 분석 완료 시 카운트다운 리셋
+      setRemainingTime(null);
+      setStartTime(null);
     }
   };
 
@@ -428,20 +481,19 @@ function ThumbnailGenerator() {
 
   /** 최종 프롬프트 만들기 */
   const buildFinalPrompt = () => {
-    const referenceAnalysis = (fxEn || "").trim();
+    const referenceAnalysis = (fxAnalysis || "").trim(); // 전체 분석 결과 사용
+    const base = (prompt || "").trim(); // 사용자 입력
 
     if (provider === "gemini") {
-      // ✅ Gemini: 대화형 이미지 생성, 템플릿과 참고 분석 활용
-      // {content}는 비워두고 {referenceAnalysis}만 주입 가능
+      // ✅ Gemini: 사용자 입력을 {content}에, 분석 결과를 {referenceAnalysis}에 주입
       const core = (metaTemplate || "")
-        .replace(/{content}/g, "")
+        .replace(/{content}/g, base)
         .replace(/{referenceAnalysis}/g, referenceAnalysis)
         .trim();
       return core;
     }
 
-    // ✅ Replicate: 장면 설명 + 공통 키워드 + 모드
-    const base = (prompt || "").trim();
+    // ✅ Replicate: 장면 설명 + 참고 이미지 분석 + 공통 키워드 + 모드
     let core = (metaTemplate || "")
       .replace(/{content}/g, base)
       .replace(/{referenceAnalysis}/g, referenceAnalysis)
@@ -492,6 +544,7 @@ function ThumbnailGenerator() {
   };
 
   /** 생성 버튼 핸들러 */
+
   const onGenerate = async () => {
     // 템플릿 로딩 중인 경우 대기
     if (templateLoading) {
@@ -521,11 +574,24 @@ function ThumbnailGenerator() {
       return;
     }
 
+    // 생성 시작 전 캐시 삭제
+    try {
+      await window.api.clearCache();
+      console.log("캐시가 자동으로 삭제되었습니다.");
+    } catch (error) {
+      console.warn("캐시 삭제 실패 (무시하고 계속 진행):", error);
+    }
+
     setLoading(true);
     setResults([]);
     setTookMs(null);
     updateProgress("generating", 0, count);
-    setEstimatedTime(calculateEstimatedTime());
+
+    const calcTime = calculateEstimatedTime();
+    const now = Date.now();
+    setEstimatedTime(calcTime);
+    setStartTime(now); // 시작 시점 설정
+    setRemainingTime(calcTime); // 초기 남은 시간
 
     try {
       const started = Date.now();
@@ -578,10 +644,10 @@ function ThumbnailGenerator() {
       setTimeout(() => updateProgress("idle"), 3000);
     } catch (e) {
       console.error("썸네일 생성 실패:", e);
-      
+
       // 특정 오류 타입에 따른 사용자 친화적 메시지
       let errorMessage = e?.message || "알 수 없는 오류가 발생했습니다.";
-      
+
       if (errorMessage.includes("402") && errorMessage.includes("Insufficient credit")) {
         errorMessage = "💳 Replicate 크레딧이 부족합니다. 크레딧을 충전하거나 설정에서 다른 AI 엔진을 선택해주세요.";
       } else if (errorMessage.includes("404") && errorMessage.includes("gemini")) {
@@ -593,13 +659,15 @@ function ThumbnailGenerator() {
       } else if (errorMessage.includes("network") || errorMessage.includes("ENOTFOUND")) {
         errorMessage = "🌐 네트워크 연결을 확인해주세요. 인터넷 연결이 불안정할 수 있습니다.";
       }
-      
+
       setToast({
         type: "error",
         text: `생성 실패: ${errorMessage}`,
       });
     } finally {
       setLoading(false);
+      setRemainingTime(null); // 카운트다운 리셋
+      setStartTime(null); // 시작 시점 리셋
       if (progress.phase !== "completed") {
         updateProgress("idle");
       }
@@ -661,7 +729,7 @@ function ThumbnailGenerator() {
           <Textarea
             rows={8}
             placeholder={
-              provider === "replicate" 
+              provider === "replicate"
                 ? "어떤 썸네일을 원하시나요? 인물의 표정, 상황, 감정을 구체적으로 적어주세요."
                 : "장면에 대한 설명을 입력하세요. 참고 이미지와 함께 프롬프트 템플릿에 활용됩니다."
             }
@@ -674,7 +742,7 @@ function ThumbnailGenerator() {
             }}
           />
           <Caption1 style={{ marginTop: tokens.spacingVerticalXS, color: tokens.colorNeutralForeground3 }}>
-            장면 설명이 템플릿의 {'{'}content{'}'} 변수에 삽입되어 프롬프트가 생성됩니다.
+            □ 장면 설명이 템플릿의 {"{"}content{"}"} 변수에 삽입되어 프롬프트가 생성됩니다.
           </Caption1>
         </Field>
       </Card>
@@ -735,7 +803,15 @@ function ThumbnailGenerator() {
                     >
                       {fxLoading ? (
                         <>
-                          <Spinner size="extra-small" /> 분석 중…
+                          <Spinner size="extra-small" />
+                          분석 중…
+                          {remainingTime !== null && (
+                            <span style={{ 
+                              marginLeft: tokens.spacingHorizontalXS,
+                              color: tokens.colorNeutralForegroundOnBrand,
+                              fontWeight: tokens.fontWeightSemibold
+                            }}>(약 {Math.ceil(remainingTime)}초 남음)</span>
+                          )}
                         </>
                       ) : (
                         "분석 다시 실행"
@@ -760,6 +836,9 @@ function ThumbnailGenerator() {
               onChange={(e) => onFile(e.target.files?.[0])}
             />
           </div>
+          <Caption1 style={{ marginTop: tokens.spacingVerticalXS, color: tokens.colorNeutralForeground3 }}>
+            □ 참고 이미지 분석을 템플릿에 주입하면 일관성이 좋아집니다.
+          </Caption1>
         </Field>
 
         {(fxLoading || fxErr || fxEn || fxKo || fxAnalysis) && (
@@ -767,13 +846,7 @@ function ThumbnailGenerator() {
             {fxErr && (
               <div className={`${styles.statusMessage} ${styles.errorMessage}`}>
                 <DismissCircleRegular />
-                <Caption1>에러: {fxErr}</Caption1>
-              </div>
-            )}
-            {fxLoading && !fxErr && (
-              <div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS }}>
-                <Spinner size="small" />
-                <Caption1>이미지 분석 중…</Caption1>
+                <Body1 weight="semibold">❌ 분석 실패: {fxErr}</Body1>
               </div>
             )}
             {fxAnalysis && (
@@ -798,73 +871,78 @@ function ThumbnailGenerator() {
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS }}>
-                    <div style={{ 
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      width: "32px",
-                      height: "32px",
-                      backgroundColor: tokens.colorBrandBackground2,
-                      borderRadius: "50%",
-                      color: tokens.colorBrandForeground1
-                    }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "32px",
+                        height: "32px",
+                        backgroundColor: tokens.colorBrandBackground2,
+                        borderRadius: "50%",
+                        color: tokens.colorBrandForeground1,
+                      }}
+                    >
                       🔍
                     </div>
                     <Title3 style={{ margin: 0, fontSize: tokens.fontSizeBase400 }}>참고 이미지 분석</Title3>
                   </div>
                   {analysisEngine && (
-                    <Badge 
-                      appearance="tint" 
-                      color={analysisEngine.includes("Gemini") ? "success" : "brand"} 
-                      size="small"
-                    >
+                    <Badge appearance="tint" color={analysisEngine.includes("Gemini") ? "success" : "brand"} size="small">
                       {analysisEngine}
                     </Badge>
                   )}
                 </div>
-                
+
                 <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM }}>
                   {/* 분석 내용을 구조화된 형태로 표시 */}
-                  {fxAnalysis.split('\n\n').map((section, index) => {
+                  {fxAnalysis.split("\n\n").map((section, index) => {
                     const isMainSection = section.match(/^\d+\.\s*\*\*(.*?)\*\*/);
                     const sectionTitle = isMainSection ? isMainSection[1] : null;
-                    const sectionContent = isMainSection 
-                      ? section.replace(/^\d+\.\s*\*\*(.*?)\*\*:\s*/, '') 
-                      : section;
-                    
+                    const sectionContent = isMainSection ? section.replace(/^\d+\.\s*\*\*(.*?)\*\*:\s*/, "") : section;
+
                     return (
-                      <div key={index} style={{ 
-                        padding: tokens.spacingVerticalM,
-                        backgroundColor: tokens.colorSubtleBackground,
-                        borderRadius: tokens.borderRadiusMedium,
-                        border: `1px solid ${tokens.colorNeutralStroke2}`,
-                      }}>
+                      <div
+                        key={index}
+                        style={{
+                          padding: tokens.spacingVerticalM,
+                          backgroundColor: tokens.colorSubtleBackground,
+                          borderRadius: tokens.borderRadiusMedium,
+                          border: `1px solid ${tokens.colorNeutralStroke2}`,
+                        }}
+                      >
                         {sectionTitle && (
-                          <div style={{ 
-                            marginBottom: tokens.spacingVerticalS,
-                            fontWeight: tokens.fontWeightSemibold,
-                            color: tokens.colorNeutralForeground1,
-                            fontSize: tokens.fontSizeBase200,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: tokens.spacingHorizontalXS
-                          }}>
-                            <div style={{
-                              width: "6px",
-                              height: "6px",
-                              backgroundColor: tokens.colorBrandForeground1,
-                              borderRadius: "50%"
-                            }} />
+                          <div
+                            style={{
+                              marginBottom: tokens.spacingVerticalS,
+                              fontWeight: tokens.fontWeightSemibold,
+                              color: tokens.colorNeutralForeground1,
+                              fontSize: tokens.fontSizeBase200,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: tokens.spacingHorizontalXS,
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: "6px",
+                                height: "6px",
+                                backgroundColor: tokens.colorBrandForeground1,
+                                borderRadius: "50%",
+                              }}
+                            />
                             {sectionTitle}
                           </div>
                         )}
-                        <Body2 style={{ 
-                          whiteSpace: "pre-wrap", 
-                          lineHeight: "1.5",
-                          color: tokens.colorNeutralForeground2,
-                          margin: 0,
-                          fontSize: tokens.fontSizeBase300
-                        }}>
+                        <Body2
+                          style={{
+                            whiteSpace: "pre-wrap",
+                            lineHeight: "1.5",
+                            color: tokens.colorNeutralForeground2,
+                            margin: 0,
+                            fontSize: tokens.fontSizeBase300,
+                          }}
+                        >
                           {sectionContent}
                         </Body2>
                       </div>
@@ -875,11 +953,6 @@ function ThumbnailGenerator() {
             )}
           </div>
         )}
-
-        <TipCard className={styles.tipCard}>
-          <InfoRegular style={{ marginRight: tokens.spacingHorizontalXS }} />
-          참고 이미지 분석을 템플릿에 주입하면 일관성이 좋아집니다.
-        </TipCard>
       </Card>
 
       {/* 옵션들 */}
@@ -948,50 +1021,50 @@ function ThumbnailGenerator() {
       {/* 생성 버튼 */}
       <Card className={styles.settingsCard}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tokens.spacingVerticalM }}>
-          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-            생성 엔진: 
-          </Caption1>
-          <Badge appearance="filled" color="brand" size="medium">
-            {provider === "replicate" ? "Replicate (Flux)" : "Google Gemini (Imagen 3)"}
-          </Badge>
+          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>생성 엔진:</Caption1>
+          <div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS }}>
+            <Badge appearance="filled" color="brand" size="medium">
+              {provider === "replicate" ? "Replicate (Flux)" : "Google Gemini (Imagen 3)"}
+            </Badge>
+            {(loading || fxLoading) && remainingTime !== null && (
+              <Caption1 style={{ 
+                color: fxLoading ? tokens.colorBrandForeground1 : tokens.colorNeutralForeground1,
+                fontWeight: tokens.fontWeightSemibold 
+              }}>
+                <TimerRegular style={{ marginRight: tokens.spacingHorizontalXXS }} />
+                {fxLoading
+                  ? remainingTime > 1
+                    ? `분석 중 약 ${Math.ceil(remainingTime)}초 남음`
+                    : "분석 거의 완료..."
+                  : remainingTime > 1
+                  ? `생성 중 약 ${Math.ceil(remainingTime)}초 남음`
+                  : "생성 거의 완료..."}
+              </Caption1>
+            )}
+          </div>
         </div>
         <Button
           appearance="primary"
           size="large"
           onClick={onGenerate}
           disabled={loading}
-          icon={loading ? <Spinner size="small" /> : <SparkleRegular />}
           style={{
             width: "100%",
             height: "56px",
             fontSize: tokens.fontSizeBase400,
             fontWeight: tokens.fontWeightSemibold,
+            overflow: "visible",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: tokens.spacingHorizontalS,
+            padding: "0 24px", // 충분한 패딩으로 아이콘 공간 확보
           }}
         >
+          {loading ? <Spinner size="small" /> : <SparkleRegular />}
           {loading ? "생성 중..." : "🎨 썸네일 생성하기"}
         </Button>
       </Card>
-
-      {/* 프로그레스 표시 */}
-      {progress.phase !== "idle" && (
-        <Card style={{ marginTop: tokens.spacingVerticalL, padding: tokens.spacingVerticalM }}>
-          <div style={{ marginBottom: tokens.spacingVerticalS }}>
-            <Body1 weight="semibold">{progress.message}</Body1>
-            {estimatedTime && progress.phase === "generating" && (
-              <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-                <TimerRegular style={{ marginRight: tokens.spacingHorizontalXS }} />
-                예상 소요 시간: 약 {estimatedTime}초
-              </Caption1>
-            )}
-          </div>
-          <ProgressBar value={progress.percentage / 100} color={progress.phase === "completed" ? "success" : "brand"} />
-          {progress.total > 0 && (
-            <Caption1 style={{ marginTop: tokens.spacingVerticalXS, textAlign: "right" }}>
-              {progress.current} / {progress.total} 완료
-            </Caption1>
-          )}
-        </Card>
-      )}
 
       {/* 결과 */}
       {results.length > 0 && (
@@ -1038,21 +1111,21 @@ function ThumbnailGenerator() {
                     >
                       다운로드
                     </Button>
-                    <Button size="small" appearance="outline" icon={<OpenRegular />} as="a" href={r.url} target="_blank" rel="noreferrer">
-                      새 창에서 보기
-                    </Button>
                   </div>
                 </div>
               </Card>
             ))}
           </div>
 
-          <div style={{ marginTop: tokens.spacingVerticalL }}>
-            <Body1 weight="semibold" style={{ marginBottom: tokens.spacingVerticalS }}>
-              🧩 생성에 사용된 프롬프트
-            </Body1>
-            <div className={styles.promptDisplay}>{usedPrompt}</div>
-          </div>
+          {/* 프롬프트 표시 숨김 처리 */}
+          {false && (
+            <div style={{ marginTop: tokens.spacingVerticalL }}>
+              <Body1 weight="semibold" style={{ marginBottom: tokens.spacingVerticalS }}>
+                🧩 생성에 사용된 프롬프트
+              </Body1>
+              <div className={styles.promptDisplay}>{usedPrompt}</div>
+            </div>
+          )}
         </div>
       )}
     </div>

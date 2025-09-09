@@ -167,8 +167,8 @@ function ThumbnailTab() {
   const [originalTemplate, setOriginalTemplate] = useState("");
   const [defaultEngine, setDefaultEngine] = useState("replicate");
   const [originalEngine, setOriginalEngine] = useState("replicate");
-  const [analysisEngine, setAnalysisEngine] = useState("anthropic");
-  const [originalAnalysisEngine, setOriginalAnalysisEngine] = useState("anthropic");
+  const [analysisEngine, setAnalysisEngine] = useState("gemini-pro");
+  const [originalAnalysisEngine, setOriginalAnalysisEngine] = useState("gemini-pro");
   const [isModified, setIsModified] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -205,7 +205,7 @@ function ThumbnailTab() {
       
       const templateToUse = savedTemplate || DEFAULT_TEMPLATE;
       const engineToUse = savedEngine || "replicate";
-      const analysisEngineToUse = savedAnalysisEngine || "anthropic";
+      const analysisEngineToUse = savedAnalysisEngine || "gemini-pro";
       
       setTemplate(templateToUse);
       setOriginalTemplate(templateToUse);
@@ -223,8 +223,8 @@ function ThumbnailTab() {
       setOriginalTemplate(DEFAULT_TEMPLATE);
       setDefaultEngine("replicate");
       setOriginalEngine("replicate");
-      setAnalysisEngine("anthropic");
-      setOriginalAnalysisEngine("anthropic");
+      setAnalysisEngine("gemini-pro");
+      setOriginalAnalysisEngine("gemini-pro");
     } finally {
       setLoading(false);
     }
