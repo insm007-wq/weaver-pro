@@ -61,32 +61,35 @@ const useStyles = makeStyles({
     boxShadow: "0 1px 4px rgba(0, 0, 0, 0.06)",
   },
 
-  /* ===== 프롬프트 관리 영역 (스크린샷 스타일) ===== */
+  /* ===== 프롬프트 관리 영역 (한 줄 스타일) ===== */
   manageCard: {
     backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
     ...shorthands.borderRadius(tokens.borderRadiusLarge),
-    ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalL),
+    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalL),
     boxShadow: "0 1px 4px rgba(0, 0, 0, 0.06)",
     marginBottom: tokens.spacingVerticalL,
   },
-  manageHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: tokens.spacingVerticalM,
-  },
-  manageTitle: {
-    display: "flex",
-    alignItems: "center",
-    ...shorthands.gap(tokens.spacingHorizontalS),
-    fontWeight: tokens.fontWeightSemibold,
-  },
   manageRow: {
-    display: "grid",
-    gridTemplateColumns: "1fr auto auto",
+    display: "flex",
     alignItems: "center",
+    ...shorthands.gap(tokens.spacingHorizontalM),
+  },
+  manageLabel: {
+    fontWeight: tokens.fontWeightSemibold,
+    display: "flex",
+    alignItems: "center",
+    ...shorthands.gap(tokens.spacingHorizontalXS),
+  },
+  manageDropdown: {
+    minWidth: "200px",
+    flex: 1,
+    maxWidth: "400px",
+  },
+  manageActions: {
+    display: "flex",
     ...shorthands.gap(tokens.spacingHorizontalS),
+    marginLeft: "auto",
   },
   inlineCreate: {
     marginTop: tokens.spacingVerticalM,
@@ -234,30 +237,60 @@ export default function PromptTab() {
   /* ================= CRUD ================= */
   const handleCreateInline = async () => {
     try {
-      const payload = { name: newName.trim(), category: mgrCategory, content: "" };
-      if (!payload.name) return;
+      const payload = { 
+        name: newName.trim(), 
+        category: mgrCategory, 
+        content: "# 새 프롬프트\n\n여기에 프롬프트 내용을 입력하세요." 
+      };
+      if (!payload.name) {
+        console.log("No name provided");
+        return;
+      }
 
+      console.log("Creating prompt with payload:", payload);
       const result = await window.api.invoke("prompts:create", payload);
+      console.log("Create result:", result);
+      
       if (result?.ok) {
+        // 새로 만든 항목의 ID 가져오기
+        const created = result?.data?.id;
+        
+        // 프롬프트 목록을 다시 로드
         await loadPrompts();
+        
+        // 새로 만든 항목을 선택
+        if (created) {
+          const newContent = "# 새 프롬프트\n\n여기에 프롬프트 내용을 입력하세요.";
+          if (mgrCategory === "script") {
+            setSelectedScriptId(created);
+            setScriptPrompt(newContent);
+          } else if (mgrCategory === "reference") {
+            setSelectedReferenceId(created);
+            setReferencePrompt(newContent);
+          }
+        }
+        
+        // 인라인 생성 폼 닫기 및 초기화
         setShowInlineCreate(false);
         setNewName("");
 
-        // 새로 만든 항목을 선택
-        const coll = prompts.filter((p) => p.category === mgrCategory);
-        const created = (result?.data && result.data.id) || null;
-        if (mgrCategory === "script" && created) setSelectedScriptId(created);
-        if (mgrCategory === "reference" && created) setSelectedReferenceId(created);
-
         dispatchToast(
           <Toast>
-            <ToastTitle>프롬프트가 생성되었습니다.</ToastTitle>
+            <ToastTitle>✅ 프롬프트가 생성되었습니다.</ToastTitle>
           </Toast>,
           { intent: "success" }
         );
+      } else {
+        console.error("Create failed:", result);
+        dispatchToast(
+          <Toast>
+            <ToastTitle>프롬프트 생성에 실패했습니다.</ToastTitle>
+          </Toast>,
+          { intent: "error" }
+        );
       }
     } catch (e) {
-      console.error(e);
+      console.error("Create error:", e);
       dispatchToast(
         <Toast>
           <ToastTitle>프롬프트 생성에 실패했습니다.</ToastTitle>
@@ -393,22 +426,16 @@ export default function PromptTab() {
         </Caption1>
       </div>
 
-      {/* ===== 프롬프트 관리 (스크린샷 스타일) ===== */}
+      {/* ===== 프롬프트 관리 (한 줄 컴팩트) ===== */}
       <Card className={styles.manageCard}>
-        <div className={styles.manageHeader}>
-          <div className={styles.manageTitle}>
-            <DocumentTextRegular />
-            <Text weight="semibold">프롬프트 관리</Text>
-          </div>
-
-          {/* 화면상 카테고리 토글은 노출하지 않지만, 내부적으로 script 먼저 관리합니다.
-              필요하면 아래 두 줄 중 하나를 주석 해제해 사용하세요. */}
-          {/* <SegmentedControl .../> */}
-        </div>
-
         <div className={styles.manageRow}>
-          {/* 드롭다운: 현재 관리 카테고리(script 기준) */}
+          <div className={styles.manageLabel}>
+            <DocumentTextRegular />
+            <Text weight="semibold">프롬프트</Text>
+          </div>
+          
           <Dropdown
+            className={styles.manageDropdown}
             value={
               currentList.find((p) => p.id === currentSelectedId)?.name ||
               (mgrCategory === "script" ? "대본 생성 선택" : "레퍼런스 분석 선택")
@@ -424,33 +451,48 @@ export default function PromptTab() {
             ))}
           </Dropdown>
 
-          {/* 새 프롬프트 */}
-          <Button
-            icon={<AddRegular />}
-            appearance="primary"
-            onClick={() => {
-              setMgrCategory("script"); // 스크린샷과 동일 흐름(대본 중심)
-              setShowInlineCreate(true);
-            }}
-          >
-            새 프롬프트
-          </Button>
-
-          {/* 삭제 */}
-          <Button
-            appearance="secondary"
-            icon={<DeleteRegular />}
-            onClick={handleDelete}
-            disabled={!currentSelectedId}
-          >
-            삭제
-          </Button>
+          <div className={styles.manageActions}>
+            <Button
+              icon={<AddRegular />}
+              appearance="primary"
+              size="small"
+              onClick={() => {
+                setMgrCategory("script");
+                setShowInlineCreate(!showInlineCreate);
+              }}
+            >
+              새 프롬프트
+            </Button>
+            <Button
+              appearance="secondary"
+              icon={<DeleteRegular />}
+              size="small"
+              onClick={handleDelete}
+              disabled={!currentSelectedId}
+            >
+              삭제
+            </Button>
+            <Button 
+              appearance="primary" 
+              icon={<SaveRegular />} 
+              size="small"
+              onClick={handleSaveAll} 
+              disabled={loading}
+            >
+              모두 저장
+            </Button>
+          </div>
         </div>
 
-        {/* 인라인 생성 박스 */}
+        {/* 인라인 생성 박스 (접이식) */}
         {showInlineCreate && (
           <div className={styles.inlineCreate}>
-            <Input value={newName} onChange={(_, d) => setNewName(d.value)} placeholder="새 프롬프트 이름을 입력하세요" />
+            <Input 
+              value={newName} 
+              onChange={(_, d) => setNewName(d.value)} 
+              placeholder="새 프롬프트 이름을 입력하세요"
+              autoFocus
+            />
             <Button
               appearance="primary"
               icon={<SaveRegular />}
@@ -470,13 +512,6 @@ export default function PromptTab() {
             </Button>
           </div>
         )}
-
-        {/* 모두 저장 버튼은 기존 위치/동작 그대로 유지 */}
-        <div style={{ marginTop: tokens.spacingVerticalM, textAlign: "right" }}>
-          <Button appearance="primary" icon={<SaveRegular />} onClick={handleSaveAll} disabled={loading}>
-            모두 저장
-          </Button>
-        </div>
       </Card>
 
       {/* ===== 프롬프트 에디터 영역 ===== */}
