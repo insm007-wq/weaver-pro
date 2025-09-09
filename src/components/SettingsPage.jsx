@@ -152,11 +152,6 @@ export default function SettingsPage({ onBack }) {
         </div>
 
         <div className={styles.tabContent}>
-          <div className={styles.sectionLead}>
-            <Title2 style={{ fontSize: tokens.fontSizeBase500, marginBottom: tokens.spacingVerticalXXS }}>{active.name}</Title2>
-            <Body1 style={{ color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase300 }}>{active.description}</Body1>
-          </div>
-          <Divider style={{ marginBottom: tokens.spacingVerticalL }} />
 
           <div className={styles.scroll}>
             <Suspense
