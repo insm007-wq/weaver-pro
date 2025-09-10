@@ -11,14 +11,13 @@ import {
   Input,
   Textarea,
   Card,
-  Toaster,
   Caption1,
-  Label,
-  useToastController,
-  Toast,
-  ToastTitle,
 } from "@fluentui/react-components";
-import { AddRegular, DeleteRegular, SaveRegular, ArrowResetRegular, SettingsRegular, DocumentTextRegular } from "@fluentui/react-icons";
+import { AddRegular, DeleteRegular, SaveRegular, ArrowResetRegular, DocumentTextRegular } from "@fluentui/react-icons";
+import { useToast } from "../../../hooks/useToast";
+import { useApi } from "../../../hooks/useApi";
+import { LoadingSpinner } from "../../common/LoadingSpinner";
+import { ErrorBoundary } from "../../common/ErrorBoundary";
 
 const useStyles = makeStyles({
   container: {
@@ -168,7 +167,8 @@ const useStyles = makeStyles({
 
 export default function PromptTab() {
   const styles = useStyles();
-  const { dispatchToast } = useToastController("prompts");
+  const toast = useToast();
+  const api = useApi();
 
   // 프롬프트 상태 관리
   const [prompts, setPrompts] = useState([]);
@@ -226,7 +226,7 @@ export default function PromptTab() {
 
   const loadPrompts = async () => {
     try {
-      const result = await window.api.invoke("prompts:getAll");
+      const result = await api.invoke("prompts:getAll");
       if (result?.ok && Array.isArray(result.data)) setPrompts(result.data);
     } catch (e) {
       console.error(e);
@@ -237,10 +237,10 @@ export default function PromptTab() {
   /* ================= CRUD ================= */
   const handleCreateInline = async () => {
     try {
-      const payload = { 
-        name: newName.trim(), 
-        category: mgrCategory, 
-        content: "# 새 프롬프트\n\n여기에 프롬프트 내용을 입력하세요." 
+      const payload = {
+        name: newName.trim(),
+        category: mgrCategory,
+        content: "# 새 프롬프트\n\n여기에 프롬프트 내용을 입력하세요.",
       };
       if (!payload.name) {
         console.log("No name provided");
@@ -248,16 +248,16 @@ export default function PromptTab() {
       }
 
       console.log("Creating prompt with payload:", payload);
-      const result = await window.api.invoke("prompts:create", payload);
+      const result = await api.invoke("prompts:create", payload);
       console.log("Create result:", result);
-      
+
       if (result?.ok) {
         // 새로 만든 항목의 ID 가져오기
         const created = result?.data?.id;
-        
+
         // 프롬프트 목록을 다시 로드
         await loadPrompts();
-        
+
         // 새로 만든 항목을 선택
         if (created) {
           const newContent = "# 새 프롬프트\n\n여기에 프롬프트 내용을 입력하세요.";
@@ -269,34 +269,19 @@ export default function PromptTab() {
             setReferencePrompt(newContent);
           }
         }
-        
+
         // 인라인 생성 폼 닫기 및 초기화
         setShowInlineCreate(false);
         setNewName("");
 
-        dispatchToast(
-          <Toast>
-            <ToastTitle>✅ 프롬프트가 생성되었습니다.</ToastTitle>
-          </Toast>,
-          { intent: "success" }
-        );
+        toast.success("프롬프트가 생성되었습니다.");
       } else {
         console.error("Create failed:", result);
-        dispatchToast(
-          <Toast>
-            <ToastTitle>프롬프트 생성에 실패했습니다.</ToastTitle>
-          </Toast>,
-          { intent: "error" }
-        );
+        toast.error("프롬프트 생성에 실패했습니다.");
       }
     } catch (e) {
       console.error("Create error:", e);
-      dispatchToast(
-        <Toast>
-          <ToastTitle>프롬프트 생성에 실패했습니다.</ToastTitle>
-        </Toast>,
-        { intent: "error" }
-      );
+      toast.error("프롬프트 생성에 실패했습니다.");
     }
   };
 
@@ -306,7 +291,7 @@ export default function PromptTab() {
       if (!targetId) return;
 
       // 백엔드에 prompts:delete가 없다면 무시되며 토스트만 표시됩니다.
-      const result = await window.api.invoke?.("prompts:delete", targetId);
+      const result = await api.invoke?.("prompts:delete", targetId);
       if (result?.ok) {
         await loadPrompts();
         if (mgrCategory === "script") {
@@ -316,28 +301,13 @@ export default function PromptTab() {
           setSelectedReferenceId("");
           setReferencePrompt("");
         }
-        dispatchToast(
-          <Toast>
-            <ToastTitle>삭제되었습니다.</ToastTitle>
-          </Toast>,
-          { intent: "success" }
-        );
+        toast.success("삭제되었습니다.");
       } else {
-        dispatchToast(
-          <Toast>
-            <ToastTitle>삭제 API가 없거나 실패했습니다.</ToastTitle>
-          </Toast>,
-          { intent: "warning" }
-        );
+        toast.warning("삭제 API가 없거나 실패했습니다.");
       }
     } catch (e) {
       console.error(e);
-      dispatchToast(
-        <Toast>
-          <ToastTitle>삭제 중 오류가 발생했습니다.</ToastTitle>
-        </Toast>,
-        { intent: "error" }
-      );
+      toast.error("삭제 중 오류가 발생했습니다.");
     }
   };
 
@@ -346,24 +316,14 @@ export default function PromptTab() {
       const promptId = category === "script" ? selectedScriptId : selectedReferenceId;
       if (!promptId) return;
 
-      const result = await window.api.invoke("prompts:update", promptId, { content });
+      const result = await api.invoke("prompts:update", promptId, { content });
       if (result?.ok) {
         await loadPrompts();
-        dispatchToast(
-          <Toast>
-            <ToastTitle>프롬프트가 저장되었습니다.</ToastTitle>
-          </Toast>,
-          { intent: "success" }
-        );
+        toast.success("프롬프트가 저장되었습니다.");
       }
     } catch (e) {
       console.error(e);
-      dispatchToast(
-        <Toast>
-          <ToastTitle>저장에 실패했습니다.</ToastTitle>
-        </Toast>,
-        { intent: "error" }
-      );
+      toast.error("저장에 실패했습니다.");
     }
   };
 
@@ -374,7 +334,7 @@ export default function PromptTab() {
 
   const handleReset = async (category) => {
     try {
-      const result = await window.api.invoke("prompts:getDefault", category);
+      const result = await api.invoke("prompts:getDefault", category);
       if (result?.ok && result.data) {
         if (category === "script") {
           setScriptPrompt(result.data.content || "");
@@ -412,172 +372,157 @@ export default function PromptTab() {
   const scriptCount = scriptPrompt ? scriptPrompt.length : 0;
   const referenceCount = referencePrompt ? referencePrompt.length : 0;
 
-  return (
-    <div className={styles.container}>
-      <Toaster toasterId="prompts" position="top-end" />
-
-      {/* Header (그대로) */}
-      <div className={styles.header}>
-        <div className={styles.headerTitle}>🧠 프롬프트 템플릿 관리</div>
-        <Caption1 className={styles.headerDescription}>
-          AI 대본 생성과 레퍼런스 분석에 사용할 프롬프트 템플릿을 관리합니다.
-          <br />
-          카테고리별로 프롬프트를 생성하고 편집하여 더 나은 결과를 얻으세요.
-        </Caption1>
+  if (loading) {
+    return (
+      <div className={styles.container}>
+        <LoadingSpinner size="large" message="프롬프트를 로드하는 중..." />
       </div>
+    );
+  }
 
-      {/* ===== 프롬프트 관리 (한 줄 컴팩트) ===== */}
-      <Card className={styles.manageCard}>
-        <div className={styles.manageRow}>
-          <div className={styles.manageLabel}>
-            <DocumentTextRegular />
-            <Text weight="semibold">프롬프트</Text>
-          </div>
-          
-          <Dropdown
-            className={styles.manageDropdown}
-            value={
-              currentList.find((p) => p.id === currentSelectedId)?.name ||
-              (mgrCategory === "script" ? "대본 생성 선택" : "레퍼런스 분석 선택")
-            }
-            selectedOptions={[currentSelectedId]}
-            onOptionSelect={onSelectPrompt}
-            placeholder="프롬프트를 선택하세요"
-          >
-            {currentList.map((p) => (
-              <Option key={p.id} value={p.id}>
-                {p.name}
-              </Option>
-            ))}
-          </Dropdown>
-
-          <div className={styles.manageActions}>
-            <Button
-              icon={<AddRegular />}
-              appearance="primary"
-              size="small"
-              onClick={() => {
-                setMgrCategory("script");
-                setShowInlineCreate(!showInlineCreate);
-              }}
-            >
-              새 프롬프트
-            </Button>
-            <Button
-              appearance="secondary"
-              icon={<DeleteRegular />}
-              size="small"
-              onClick={handleDelete}
-              disabled={!currentSelectedId}
-            >
-              삭제
-            </Button>
-            <Button 
-              appearance="primary" 
-              icon={<SaveRegular />} 
-              size="small"
-              onClick={handleSaveAll} 
-              disabled={loading}
-            >
-              모두 저장
-            </Button>
-          </div>
+  return (
+    <ErrorBoundary>
+      <div className={styles.container}>
+        {/* Header (그대로) */}
+        <div className={styles.header}>
+          <div className={styles.headerTitle}>🧠 프롬프트 템플릿 관리</div>
+          <Caption1 className={styles.headerDescription}>
+            AI 대본 생성과 레퍼런스 분석에 사용할 프롬프트 템플릿을 관리합니다.
+            <br />
+            카테고리별로 프롬프트를 생성하고 편집하여 더 나은 결과를 얻으세요.
+          </Caption1>
         </div>
 
-        {/* 인라인 생성 박스 (접이식) */}
-        {showInlineCreate && (
-          <div className={styles.inlineCreate}>
-            <Input 
-              value={newName} 
-              onChange={(_, d) => setNewName(d.value)} 
-              placeholder="새 프롬프트 이름을 입력하세요"
-              autoFocus
-            />
-            <Button
-              appearance="primary"
-              icon={<SaveRegular />}
-              onClick={handleCreateInline}
-              disabled={!newName.trim()}
+        {/* ===== 프롬프트 관리 (한 줄 컴팩트) ===== */}
+        <Card className={styles.manageCard}>
+          <div className={styles.manageRow}>
+            <div className={styles.manageLabel}>
+              <DocumentTextRegular />
+              <Text weight="semibold">프롬프트</Text>
+            </div>
+
+            <Dropdown
+              className={styles.manageDropdown}
+              value={
+                currentList.find((p) => p.id === currentSelectedId)?.name ||
+                (mgrCategory === "script" ? "대본 생성 선택" : "레퍼런스 분석 선택")
+              }
+              selectedOptions={[currentSelectedId]}
+              onOptionSelect={onSelectPrompt}
+              placeholder="프롬프트를 선택하세요"
             >
-              생성
-            </Button>
-            <Button
-              appearance="secondary"
-              onClick={() => {
-                setShowInlineCreate(false);
-                setNewName("");
-              }}
-            >
-              취소
-            </Button>
-          </div>
-        )}
-      </Card>
+              {currentList.map((p) => (
+                <Option key={p.id} value={p.id}>
+                  {p.name}
+                </Option>
+              ))}
+            </Dropdown>
 
-      {/* ===== 프롬프트 에디터 영역 ===== */}
-      <Card className={styles.settingsCard}>
-
-        {/* 프롬프트 에디터 섹션 */}
-        <div className={styles.sectionsGrid}>
-          {/* 대본 생성 섹션 */}
-          <div className={styles.sectionCard}>
-            <div className={styles.sectionHeader}>
-              <div className={styles.sectionTitle}>
-                <Text weight="semibold" size={500}>
-                  📝 대본 생성
-                </Text>
-              </div>
-              <div>
-                <Button size="small" icon={<ArrowResetRegular />} onClick={() => handleReset("script")} disabled={loading}>
-                  초기화
-                </Button>
-              </div>
-            </div>
-
-            <Field>
-              <Textarea
-                className={styles.editor}
-                value={scriptPrompt}
-                onChange={(_, data) => setScriptPrompt(data.value)}
-                disabled={loading}
-                resize="vertical"
-              />
-            </Field>
-            <div className={styles.charCount}>
-              {scriptCount.toLocaleString()} 글자 | 변수: {"{topic}, {duration}, {style}"}
+            <div className={styles.manageActions}>
+              <Button
+                icon={<AddRegular />}
+                appearance="primary"
+                size="small"
+                onClick={() => {
+                  setMgrCategory("script");
+                  setShowInlineCreate(!showInlineCreate);
+                }}
+              >
+                새 프롬프트
+              </Button>
+              <Button appearance="secondary" icon={<DeleteRegular />} size="small" onClick={handleDelete} disabled={!currentSelectedId}>
+                삭제
+              </Button>
+              <Button appearance="primary" icon={<SaveRegular />} size="small" onClick={handleSaveAll} disabled={loading}>
+                모두 저장
+              </Button>
             </div>
           </div>
 
-          {/* 레퍼런스 분석 섹션 */}
-          <div className={styles.sectionCard}>
-            <div className={styles.sectionHeader}>
-              <div className={styles.sectionTitle}>
-                <Text weight="semibold" size={500}>
-                  🔍 레퍼런스 분석
-                </Text>
+          {/* 인라인 생성 박스 (접이식) */}
+          {showInlineCreate && (
+            <div className={styles.inlineCreate}>
+              <Input value={newName} onChange={(_, d) => setNewName(d.value)} placeholder="새 프롬프트 이름을 입력하세요" autoFocus />
+              <Button appearance="primary" icon={<SaveRegular />} onClick={handleCreateInline} disabled={!newName.trim()}>
+                생성
+              </Button>
+              <Button
+                appearance="secondary"
+                onClick={() => {
+                  setShowInlineCreate(false);
+                  setNewName("");
+                }}
+              >
+                취소
+              </Button>
+            </div>
+          )}
+        </Card>
+
+        {/* ===== 프롬프트 에디터 영역 ===== */}
+        <Card className={styles.settingsCard}>
+          {/* 프롬프트 에디터 섹션 */}
+          <div className={styles.sectionsGrid}>
+            {/* 대본 생성 섹션 */}
+            <div className={styles.sectionCard}>
+              <div className={styles.sectionHeader}>
+                <div className={styles.sectionTitle}>
+                  <Text weight="semibold" size={500}>
+                    📝 대본 생성
+                  </Text>
+                </div>
+                <div>
+                  <Button size="small" icon={<ArrowResetRegular />} onClick={() => handleReset("script")} disabled={loading}>
+                    초기화
+                  </Button>
+                </div>
               </div>
-              <div>
-                <Button size="small" icon={<ArrowResetRegular />} onClick={() => handleReset("reference")} disabled={loading}>
-                  초기화
-                </Button>
+
+              <Field>
+                <Textarea
+                  className={styles.editor}
+                  value={scriptPrompt}
+                  onChange={(_, data) => setScriptPrompt(data.value)}
+                  disabled={loading}
+                  resize="vertical"
+                />
+              </Field>
+              <div className={styles.charCount}>
+                {scriptCount.toLocaleString()} 글자 | 변수: {"{topic}, {duration}, {style}"}
               </div>
             </div>
 
-            <Field>
-              <Textarea
-                className={styles.editor}
-                value={referencePrompt}
-                onChange={(_, data) => setReferencePrompt(data.value)}
-                disabled={loading}
-                resize="vertical"
-              />
-            </Field>
-            <div className={styles.charCount}>
-              {referenceCount.toLocaleString()} 글자 | 변수: {"{referenceScript}, {topic}"}
+            {/* 레퍼런스 분석 섹션 */}
+            <div className={styles.sectionCard}>
+              <div className={styles.sectionHeader}>
+                <div className={styles.sectionTitle}>
+                  <Text weight="semibold" size={500}>
+                    🔍 레퍼런스 분석
+                  </Text>
+                </div>
+                <div>
+                  <Button size="small" icon={<ArrowResetRegular />} onClick={() => handleReset("reference")} disabled={loading}>
+                    초기화
+                  </Button>
+                </div>
+              </div>
+
+              <Field>
+                <Textarea
+                  className={styles.editor}
+                  value={referencePrompt}
+                  onChange={(_, data) => setReferencePrompt(data.value)}
+                  disabled={loading}
+                  resize="vertical"
+                />
+              </Field>
+              <div className={styles.charCount}>
+                {referenceCount.toLocaleString()} 글자 | 변수: {"{referenceScript}, {topic}"}
+              </div>
             </div>
           </div>
-        </div>
-      </Card>
-    </div>
+        </Card>
+      </div>
+    </ErrorBoundary>
   );
 }

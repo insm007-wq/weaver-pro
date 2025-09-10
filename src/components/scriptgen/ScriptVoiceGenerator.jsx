@@ -1,5 +1,5 @@
 // src/ScriptVoiceGenerator.jsx
-import { useMemo, useRef, useState, useLayoutEffect, useEffect } from "react";
+import { useRef, useState, useLayoutEffect, useEffect } from "react";
 import {
   Card,
   CardHeader,
@@ -24,6 +24,8 @@ import {
   tokens,
   shorthands
 } from "@fluentui/react-components";
+import { useApi } from "../../hooks/useApi";
+import { ErrorBoundary } from "../common/ErrorBoundary";
 import { PlayRegular, DocumentEditRegular } from "@fluentui/react-icons";
 import { CompactProgressBar, CompactIndeterminateBar } from "./parts/CompactProgressBar";
 import AutoTab from "./tabs/AutoTab";
@@ -33,7 +35,7 @@ import { VOICES_BY_ENGINE, DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT } f
 import ScriptPromptTab from "./tabs/ScriptPromptTab";
 import ReferencePromptTab from "./tabs/ReferencePromptTab";
 
-// ▶ 새로 분리된 유틸들
+// 유틸 함수들 (공통 모듈 적용)
 import { safeCharCount } from "../../utils/safeChars";
 import { computeCharBudget } from "../../utils/charBudget";
 import { compilePromptRaw, compileRefPrompt } from "../../utils/prompts";
@@ -111,8 +113,9 @@ const makeDefaultForm = () => ({
   pitch: 0.2,
 });
 
-export default function ScriptVoiceGenerator() {
+function ScriptVoiceGenerator() {
   const styles = useStyles();
+  const api = useApi();
   
   /* ========================= 상태: 탭/폼/문서 ========================= */
   const [activeTab, setActiveTab] = useState("auto");
@@ -122,11 +125,10 @@ export default function ScriptVoiceGenerator() {
     "prompt-gen": makeDefaultForm(),
     "prompt-ref": makeDefaultForm(),
   });
-  const form = forms[activeTab];
+  // const form = forms[activeTab]; // 각 탭에서 직접 사용
   const onChangeFor = (tab) => (key, v) => setForms((prev) => ({ ...prev, [tab]: { ...prev[tab], [key]: v } }));
 
-  // 탭에서 필요로 하는 보이스 목록
-  const voices = useMemo(() => VOICES_BY_ENGINE[form.ttsEngine] || [], [form.ttsEngine]);
+  // 탭에서 필요로 하는 보이스 목록 (각 탭에서 직접 계산)
 
   // 입력/문서
   const [refText, setRefText] = useState("");
@@ -148,8 +150,8 @@ export default function ScriptVoiceGenerator() {
     (async () => {
       try {
         const [gp, rp] = await Promise.all([
-          window.api?.getSetting?.("prompt.generateTemplate"),
-          window.api?.getSetting?.("prompt.referenceTemplate"),
+          api.invoke?.("getSetting", "prompt.generateTemplate"),
+          api.invoke?.("getSetting", "prompt.referenceTemplate"),
         ]);
         if (gp) setGenPrompt(gp);
         if (rp) setRefPrompt(rp);
@@ -160,12 +162,12 @@ export default function ScriptVoiceGenerator() {
   const savePrompt = async (type) => {
     try {
       if (type === "generate") {
-        await window.api?.setSetting?.({
+        await api.invoke?.("setSetting", {
           key: "prompt.generateTemplate",
           value: genPrompt,
         });
       } else if (type === "reference") {
-        await window.api?.setSetting?.({
+        await api.invoke?.("setSetting", {
           key: "prompt.referenceTemplate",
           value: refPrompt,
         });
@@ -513,22 +515,23 @@ export default function ScriptVoiceGenerator() {
 
   /* ========================= 렌더 ========================= */
   return (
-    <div
-      ref={containerRef}
-      className={styles.container}
-      style={
-        fixedWidthPx
-          ? {
-              width: `${fixedWidthPx}px`,
-              minWidth: `${fixedWidthPx}px`,
-              maxWidth: `${fixedWidthPx}px`,
-              flex: `0 0 ${fixedWidthPx}px`,
-              boxSizing: "border-box",
-              scrollbarGutter: "stable both-edges",
-            }
-          : { scrollbarGutter: "stable both-edges" }
-      }
-    >
+    <ErrorBoundary>
+      <div
+        ref={containerRef}
+        className={styles.container}
+        style={
+          fixedWidthPx
+            ? {
+                width: `${fixedWidthPx}px`,
+                minWidth: `${fixedWidthPx}px`,
+                maxWidth: `${fixedWidthPx}px`,
+                flex: `0 0 ${fixedWidthPx}px`,
+                boxSizing: "border-box",
+                scrollbarGutter: "stable both-edges",
+              }
+            : { scrollbarGutter: "stable both-edges" }
+        }
+      >
       {/* 페이지 헤더 */}
       <div className={styles.pageHeader}>
         <div className={styles.pageTitle}>
@@ -738,6 +741,11 @@ export default function ScriptVoiceGenerator() {
           </MessageBar>
         )}
       </Card>
-    </div>
+      </div>
+    </ErrorBoundary>
   );
+}
+
+export default function ScriptVoiceGeneratorWithBoundary() {
+  return <ScriptVoiceGenerator />;
 }
