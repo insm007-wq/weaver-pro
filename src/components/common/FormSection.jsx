@@ -22,7 +22,8 @@ import {
   shorthands,
   tokens,
   Text,
-  Divider
+  Divider,
+  mergeClasses
 } from '@fluentui/react-components';
 
 const useStyles = makeStyles({
@@ -223,40 +224,38 @@ function FormSection({
 
   // 스타일 조합
   const getSectionClasses = () => {
-    const classes = [styles.section];
-    
-    if (spacing === 'compact') classes.push(styles.compact);
-    if (spacing === 'spacious') classes.push(styles.spacious);
-    if (card) classes.push(styles.card);
-    if (divider) classes.push(styles.withDivider);
-    if (className) classes.push(className);
-
-    return classes.join(' ');
+    return mergeClasses(
+      styles.section,
+      spacing === 'compact' && styles.compact,
+      spacing === 'spacious' && styles.spacious,
+      card && styles.card,
+      divider && styles.withDivider,
+      className
+    );
   };
 
   const getHeaderClasses = () => {
-    const classes = [styles.header];
-    if (spacing === 'compact') classes.push(styles.compactHeader);
-    return classes.join(' ');
+    return mergeClasses(
+      styles.header,
+      spacing === 'compact' && styles.compactHeader
+    );
   };
 
   const getContentClasses = () => {
-    const classes = [styles.content];
-    
-    if (layout === 'grid') classes.push(styles.grid);
-    if (layout === 'twoColumn') classes.push(styles.twoColumn);
-
-    return classes.join(' ');
+    return mergeClasses(
+      styles.content,
+      layout === 'grid' && styles.grid,
+      layout === 'twoColumn' && styles.twoColumn
+    );
   };
 
   const getActionsClasses = () => {
-    const classes = [styles.actions];
-    
-    if (actionsAlign === 'end') classes.push(styles.actionsEnd);
-    if (actionsAlign === 'center') classes.push(styles.actionsCenter);
-    if (actionsAlign === 'between') classes.push(styles.actionsBetween);
-
-    return classes.join(' ');
+    return mergeClasses(
+      styles.actions,
+      actionsAlign === 'end' && styles.actionsEnd,
+      actionsAlign === 'center' && styles.actionsCenter,
+      actionsAlign === 'between' && styles.actionsBetween
+    );
   };
 
   // 제목 스타일 결정

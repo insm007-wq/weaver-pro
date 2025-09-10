@@ -18,6 +18,7 @@
 import React, { memo } from 'react';
 import {
   makeStyles,
+  mergeClasses,
   tokens,
   Text,
   Caption1
@@ -80,14 +81,10 @@ function SettingsHeader({
   const styles = useStyles();
 
   // 스타일 조합
-  const getHeaderClasses = () => {
-    const classes = [styles.header];
-    if (className) classes.push(className);
-    return classes.join(' ');
-  };
+  const headerClasses = mergeClasses(styles.header, className);
 
   return (
-    <div className={getHeaderClasses()} style={style} {...props}>
+    <div className={headerClasses} style={style} {...props}>
       <div className={styles.headerTitle}>
         {icon} {title}
       </div>

@@ -39,6 +39,7 @@ import {
   Spinner, 
   Text,
   makeStyles,
+  mergeClasses,
   tokens 
 } from '@fluentui/react-components';
 
@@ -147,10 +148,10 @@ export function LoadingSpinner({
     return styles.container;
   };
 
-  const containerClass = [
+  const containerClass = mergeClasses(
     getContainerStyle(),
     className
-  ].filter(Boolean).join(' ');
+  );
 
   return (
     <div className={containerClass} style={style} {...props}>

@@ -46,6 +46,7 @@
 import React, { useCallback, useState, useId } from 'react';
 import {
   makeStyles,
+  mergeClasses,
   tokens,
   Field,
   Input,
@@ -401,13 +402,12 @@ export function FormField({
 
   // 레이아웃에 따른 렌더링
   const getContainerClass = () => {
-    const classes = [styles.fieldContainer];
-    
-    if (layout === 'inline') classes.push(styles.inline);
-    if (layout === 'grid') classes.push(styles.grid);
-    if (className) classes.push(className);
-    
-    return classes.join(' ');
+    return mergeClasses(
+      styles.fieldContainer,
+      layout === 'inline' && styles.inline,
+      layout === 'grid' && styles.grid,
+      className
+    );
   };
 
   return (

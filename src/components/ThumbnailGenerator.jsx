@@ -26,6 +26,7 @@ import {
   Field,
   Label,
   ProgressBar,
+  mergeClasses,
 } from "@fluentui/react-components";
 import {
   LightbulbRegular,
@@ -776,7 +777,10 @@ function ThumbnailGenerator() {
             }}
             onDragLeave={() => setDragOver(false)}
             onDrop={onDrop}
-            className={`${styles.uploadArea} ${dragOver ? styles.uploadAreaDragOver : ""}`}
+            className={mergeClasses(
+              styles.uploadArea,
+              dragOver && styles.uploadAreaDragOver
+            )}
             onClick={onPickFile}
           >
             {imagePreview ? (
@@ -859,7 +863,7 @@ function ThumbnailGenerator() {
         {(fxLoading || fxErr || fxEn || fxKo || fxAnalysis) && (
           <div className={styles.analysisResult}>
             {fxErr && (
-              <div className={`${styles.statusMessage} ${styles.errorMessage}`}>
+              <div className={mergeClasses(styles.statusMessage, styles.errorMessage)}>
                 <DismissCircleRegular />
                 <Body1 weight="semibold">❌ 분석 실패: {fxErr}</Body1>
               </div>

@@ -18,6 +18,7 @@
 import React, { memo } from 'react';
 import { 
   makeStyles, 
+  mergeClasses,
   shorthands, 
   tokens,
   Card,
@@ -212,39 +213,40 @@ function StandardCard({
 
   // 스타일 조합
   const getCardStyles = () => {
-    const styleArray = [];
-    
     // Variant 스타일
+    let variantStyle;
     switch (variant) {
       case 'glass':
-        styleArray.push(styles.glassCard);
+        variantStyle = styles.glassCard;
         break;
       case 'elevated':
-        styleArray.push(styles.elevatedCard);
+        variantStyle = styles.elevatedCard;
         break;
       default:
-        styleArray.push(styles.defaultCard);
+        variantStyle = styles.defaultCard;
         break;
     }
 
     // 패딩 스타일
+    let paddingStyle;
     switch (size) {
       case 'compact':
-        styleArray.push(styles.compactPadding);
+        paddingStyle = styles.compactPadding;
         break;
       case 'spacious':
-        styleArray.push(styles.spaciousPadding);
+        paddingStyle = styles.spaciousPadding;
         break;
       default:
-        styleArray.push(styles.defaultPadding);
+        paddingStyle = styles.defaultPadding;
         break;
     }
 
-    // 호버/인터랙티브 설정
-    if (!hover) styleArray.push(styles.noHover);
-    if (!interactive) styleArray.push(styles.nonInteractive);
-
-    return styleArray.join(' ');
+    return mergeClasses(
+      variantStyle,
+      paddingStyle,
+      !hover && styles.noHover,
+      !interactive && styles.nonInteractive
+    );
   };
 
   // 헤더 렌더링
@@ -290,7 +292,7 @@ function StandardCard({
 
   return (
     <Card
-      className={`${getCardStyles()} ${className}`}
+      className={mergeClasses(getCardStyles(), className)}
       style={style}
       onClick={interactive ? onClick : undefined}
       {...props}

@@ -22,7 +22,8 @@ import {
   shorthands,
   tokens,
   Button,
-  Spinner
+  Spinner,
+  mergeClasses
 } from '@fluentui/react-components';
 
 const useStyles = makeStyles({
@@ -211,28 +212,21 @@ function ActionButton({
 
   // 스타일 조합
   const getClassNames = () => {
-    const classNames = [styles.button];
-    
-    // 크기 스타일
-    if (!square && !fab) {
-      classNames.push(styles[size]);
-    }
-    
-    // Variant 스타일
-    if (['success', 'danger', 'brand', 'outline', 'text'].includes(variant)) {
-      classNames.push(styles[variant]);
-    }
-    
-    // 모양 스타일
-    if (fullWidth) classNames.push(styles.fullWidth);
-    if (rounded) classNames.push(styles.rounded);
-    if (square) classNames.push(styles.square);
-    if (fab) classNames.push(styles.fab);
-    if (loading) classNames.push(styles.loading);
-    if (icon && children) classNames.push(styles.iconGap);
-    if (className) classNames.push(className);
-
-    return classNames.join(' ');
+    return mergeClasses(
+      styles.button,
+      // 크기 스타일
+      !square && !fab && styles[size],
+      // Variant 스타일
+      ['success', 'danger', 'brand', 'outline', 'text'].includes(variant) && styles[variant],
+      // 모양 스타일
+      fullWidth && styles.fullWidth,
+      rounded && styles.rounded,
+      square && styles.square,
+      fab && styles.fab,
+      loading && styles.loading,
+      icon && children && styles.iconGap,
+      className
+    );
   };
 
   // Fluent UI appearance 매핑

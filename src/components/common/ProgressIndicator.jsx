@@ -22,7 +22,8 @@ import {
   shorthands,
   tokens,
   ProgressBar,
-  Text
+  Text,
+  mergeClasses
 } from '@fluentui/react-components';
 
 const useStyles = makeStyles({
@@ -239,7 +240,7 @@ function ProgressIndicator({
     const containerClass = inline ? styles.inlineContainer : styles.container;
 
     return (
-      <div className={`${containerClass} ${className}`}>
+      <div className={mergeClasses(containerClass, className)}>
         {(label || showPercentage || showValues) && (
           <div className={styles.valueDisplay}>
             {label && (
@@ -297,7 +298,7 @@ function ProgressIndicator({
     };
 
     return (
-      <div className={`${styles.circularContainer} ${className}`}>
+      <div className={mergeClasses(styles.circularContainer, className)}>
         {label && (
           <Text className={size === 'small' ? styles.smallLabel : styles.label}>
             {label}
@@ -338,7 +339,11 @@ function ProgressIndicator({
             />
           </svg>
           
-          <div className={`${styles.circularText} ${size === 'small' ? styles.smallCircularText : size === 'large' ? styles.largeCircularText : ''}`}>
+          <div className={mergeClasses(
+            styles.circularText,
+            size === 'small' && styles.smallCircularText,
+            size === 'large' && styles.largeCircularText
+          )}>
             {showPercentage ? `${formattedPercentage}%` : `${value}/${max}`}
           </div>
         </div>
@@ -355,7 +360,7 @@ function ProgressIndicator({
   // 스텝 진행률 렌더링
   const renderStepsProgress = () => {
     return (
-      <div className={`${styles.stepsContainer} ${className}`}>
+      <div className={mergeClasses(styles.stepsContainer, className)}>
         {label && (
           <div className={styles.stepsHeader}>
             <Text className={styles.label}>{label}</Text>

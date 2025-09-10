@@ -22,7 +22,8 @@ import {
   shorthands,
   tokens,
   Badge,
-  Text
+  Text,
+  mergeClasses
 } from '@fluentui/react-components';
 import {
   CheckmarkCircleRegular,
@@ -207,18 +208,15 @@ function StatusBadge({
 
   // 스타일 조합
   const getClassNames = () => {
-    const classNames = [
+    return mergeClasses(
       styles.badge,
       styles[`${size}Size`],
-      styles[status]
-    ];
-
-    if (pulse) classNames.push(styles.pulse);
-    if (glow) classNames.push(styles.glow);
-    if (interactive) classNames.push(styles.interactive);
-    if (className) classNames.push(className);
-
-    return classNames.join(' ');
+      styles[status],
+      pulse && styles.pulse,
+      glow && styles.glow,
+      interactive && styles.interactive,
+      className
+    );
   };
 
   // 아이콘 렌더링

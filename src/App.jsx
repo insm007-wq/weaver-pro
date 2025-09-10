@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, useEffect, Suspense, lazy, memo } from "react";
-import { makeStyles, shorthands, tokens, Card, CardHeader, Body1, Title1, Subtitle1, Text } from "@fluentui/react-components";
+import { makeStyles, shorthands, tokens, Card, CardHeader, Body1, Title1, Subtitle1, Text, mergeClasses } from "@fluentui/react-components";
 import KeepAlivePane from "./components/common/KeepAlivePane";
 import { LoadingSpinner } from "./components/common";
 
@@ -163,14 +163,14 @@ function App() {
                     />
 
                     <div className={styles.gridContainer}>
-                      <div className={`${styles.featureCard} ${styles.quickStartCard}`}>
+                      <div className={mergeClasses(styles.featureCard, styles.quickStartCard)}>
                         <Text as="h3" weight="semibold" size={500}>
                           🎯 빠른 시작
                         </Text>
                         <Body1>왼쪽 사이드바에서 원하는 기능을 선택하여 시작하세요.</Body1>
                       </div>
 
-                      <div className={`${styles.featureCard} ${styles.newFeatureCard}`}>
+                      <div className={mergeClasses(styles.featureCard, styles.newFeatureCard)}>
                         <Text as="h3" weight="semibold" size={500}>
                           ⚡ 새로운 기능
                         </Text>

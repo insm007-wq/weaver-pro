@@ -19,6 +19,7 @@ import {
   Divider,
   Badge,
   Spinner,
+  mergeClasses,
 } from "@fluentui/react-components";
 import { StandardCard, ActionButton, StatusBadge } from "../common";
 import {
@@ -289,15 +290,11 @@ export default function AssembleEditor() {
   };
 
   const getContainerClass = () => {
-    let className = styles.container;
-    
-    if (platform === 'windows') {
-      className += ` ${isDark ? styles.darkWindowsContainer : styles.windowsContainer}`;
-    } else if (platform === 'macos') {
-      className += ` ${isDark ? styles.darkMacosContainer : styles.macosContainer}`;
-    }
-    
-    return className;
+    return mergeClasses(
+      styles.container,
+      platform === 'windows' && (isDark ? styles.darkWindowsContainer : styles.windowsContainer),
+      platform === 'macos' && (isDark ? styles.darkMacosContainer : styles.macosContainer)
+    );
   };
 
   return (

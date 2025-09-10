@@ -28,6 +28,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  mergeClasses,
 } from "@fluentui/react-components";
 import {
   Play24Regular,
@@ -514,7 +515,7 @@ const CanvaSessionTab = () => {
                 return (
                   <Card
                     key={video.id}
-                    className={`${styles.videoCard} ${isSelected ? styles.selectedVideoCard : ''}`}
+                    className={mergeClasses(\n                      styles.videoCard,\n                      isSelected && styles.selectedVideoCard\n                    )}
                     onClick={() => toggleVideoSelection(video.id)}
                   >
                     <div className={styles.videoThumbnail}>

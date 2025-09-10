@@ -13,6 +13,7 @@ import {
   Spinner,
   Textarea,
   Badge,
+  mergeClasses,
 } from "@fluentui/react-components";
 import {
   KeyRegular,
@@ -566,7 +567,7 @@ export default function ApiTab() {
             </div>
 
             {service.status?.msg && (
-              <div className={`${s.statusMessage} ${service.status.ok === false ? s.errorMessage : s.successMessage}`}>
+              <div className={mergeClasses(\n                s.statusMessage,\n                service.status.ok === false ? s.errorMessage : s.successMessage\n              )}>
                 {service.status.ok ? <CheckmarkCircleRegular /> : <DismissCircleRegular />}
                 <Caption1>{service.status.msg}</Caption1>
               </div>

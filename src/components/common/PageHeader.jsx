@@ -24,7 +24,8 @@ import {
   Text,
   Breadcrumb,
   BreadcrumbItem,
-  BreadcrumbDivider
+  BreadcrumbDivider,
+  mergeClasses
 } from '@fluentui/react-components';
 
 const useStyles = makeStyles({
@@ -226,10 +227,11 @@ function PageHeader({
 
   // 스타일 조합
   const getHeaderClasses = () => {
-    const classes = [styles.header];
-    if (compact) classes.push(styles.compact);
-    if (className) classes.push(className);
-    return classes.join(' ');
+    return mergeClasses(
+      styles.header,
+      compact && styles.compact,
+      className
+    );
   };
 
   // 브레드크럼 렌더링

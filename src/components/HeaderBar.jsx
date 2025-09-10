@@ -8,6 +8,7 @@ import {
   Spinner,
   Tooltip,
   Text,
+  mergeClasses,
 } from "@fluentui/react-components";
 import {
   CheckmarkCircleRegular,
@@ -85,7 +86,7 @@ function StatusDot({ state }) {
       ? styles.statusOffline
       : styles.statusPending;
   
-  return <span className={`${styles.statusDot} ${className}`} />;
+  return <span className={mergeClasses(styles.statusDot, className)} />;
 }
 
 export default function HeaderBar({ onOpenSettings }) {
