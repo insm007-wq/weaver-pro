@@ -567,7 +567,10 @@ export default function ApiTab() {
             </div>
 
             {service.status?.msg && (
-              <div className={mergeClasses(\n                s.statusMessage,\n                service.status.ok === false ? s.errorMessage : s.successMessage\n              )}>
+              <div className={mergeClasses(
+                s.statusMessage,
+                service.status.ok === false ? s.errorMessage : s.successMessage
+              )}>
                 {service.status.ok ? <CheckmarkCircleRegular /> : <DismissCircleRegular />}
                 <Caption1>{service.status.msg}</Caption1>
               </div>

@@ -16,6 +16,7 @@ import { LoadingSpinner } from "../../common/LoadingSpinner";
 import { ErrorBoundary } from "../../common/ErrorBoundary";
 import { SettingsHeader } from "../../common";
 import { useContainerStyles, useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
+import { DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT } from "../../scriptgen/constants";
 
 
 function PromptTab() {
@@ -189,15 +190,12 @@ function PromptTab() {
 
   const handleReset = async (category) => {
     try {
-      const result = await api.invoke("prompts:getDefault", category);
-      if (result?.ok && result.data) {
-        if (category === "script") {
-          setScriptPrompt(result.data.content || "");
-          setSelectedScriptId(result.data.id);
-        } else {
-          setReferencePrompt(result.data.content || "");
-          setSelectedReferenceId(result.data.id);
-        }
+      if (category === "script") {
+        setScriptPrompt(DEFAULT_GENERATE_PROMPT);
+        // selectedScriptId는 그대로 유지 (현재 선택된 프롬프트의 내용만 초기화)
+      } else if (category === "reference") {
+        setReferencePrompt(DEFAULT_REFERENCE_PROMPT);
+        // selectedReferenceId는 그대로 유지 (현재 선택된 프롬프트의 내용만 초기화)
       }
     } catch (e) {
       console.error(e);
@@ -340,7 +338,7 @@ function PromptTab() {
                   value={scriptPrompt}
                   onChange={(_, data) => setScriptPrompt(data.value)}
                   disabled={loading}
-                  resize="vertical"
+                  resize="none"
                 />
               </Field>
               <div className={settingsStyles.charCount}>
@@ -369,7 +367,7 @@ function PromptTab() {
                   value={referencePrompt}
                   onChange={(_, data) => setReferencePrompt(data.value)}
                   disabled={loading}
-                  resize="vertical"
+                  resize="none"
                 />
               </Field>
               <div className={settingsStyles.charCount}>
