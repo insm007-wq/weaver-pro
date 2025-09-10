@@ -1,14 +1,23 @@
 /**
- * 공통 스타일 테마 - Weaver Pro
+ * 공통 스타일 테마 - Weaver Pro (확장 버전)
  * 
  * 이 파일은 프로젝트 전반에서 사용되는 공통 스타일 패턴을 정의합니다.
  * Fluent UI 토큰을 기반으로 일관된 디자인 시스템을 제공합니다.
  * 
+ * @features
+ * - 📦 컨테이너 및 레이아웃 스타일
+ * - 🎨 카드 및 표면 스타일  
+ * - 📝 타이포그래피 및 헤더 스타일
+ * - 📋 폼 및 입력 스타일
+ * - 🎬 애니메이션 및 트랜지션
+ * - 🎯 상태 및 인터랙션 스타일
+ * - 📱 반응형 유틸리티
+ * 
  * @author Weaver Pro Team
- * @version 1.0.0
+ * @version 2.0.0
  */
 
-import { makeStyles, tokens, shorthands } from "@fluentui/react-components";
+import { makeStyles, tokens } from "@fluentui/react-components";
 
 /**
  * 기본 컨테이너 스타일
@@ -19,27 +28,25 @@ import { makeStyles, tokens, shorthands } from "@fluentui/react-components";
 export const useContainerStyles = makeStyles({
   container: {
     maxWidth: "1200px",
-    ...shorthands.margin("0", "auto"),
-    ...shorthands.padding(tokens.spacingVerticalXL, tokens.spacingHorizontalL),
+    margin: "0 auto",
+    padding: `${tokens.spacingVerticalXL} ${tokens.spacingHorizontalL}`,
     display: "flex",
     flexDirection: "column",
-    ...shorthands.gap(tokens.spacingVerticalL),
+    gap: tokens.spacingVerticalL,
   },
   
   /** 반응형 컨테이너 (모바일 대응) */
   responsiveContainer: {
     maxWidth: "1200px",
-    ...shorthands.margin("0", "auto"),
-    ...shorthands.padding(
-      tokens.spacingVerticalL, 
-      tokens.spacingHorizontalM,
-      "@media (min-width: 768px)": {
-        ...shorthands.padding(tokens.spacingVerticalXL, tokens.spacingHorizontalL),
-      }
-    ),
+    margin: "0 auto",
+    padding: `${tokens.spacingVerticalL} ${tokens.spacingHorizontalM}`,
     display: "flex",
     flexDirection: "column",
-    ...shorthands.gap(tokens.spacingVerticalL),
+    gap: tokens.spacingVerticalL,
+    
+    "@media (min-width: 768px)": {
+      padding: `${tokens.spacingVerticalXL} ${tokens.spacingHorizontalL}`,
+    }
   }
 });
 
@@ -51,9 +58,9 @@ export const useCardStyles = makeStyles({
   /** 기본 카드 스타일 */
   baseCard: {
     backgroundColor: tokens.colorNeutralBackground1,
-    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
-    ...shorthands.borderRadius(tokens.borderRadiusLarge),
-    ...shorthands.padding(tokens.spacingVerticalL),
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusLarge,
+    padding: tokens.spacingVerticalL,
     boxShadow: "0 1px 4px rgba(0, 0, 0, 0.06)",
     marginBottom: tokens.spacingVerticalL,
   },
@@ -61,9 +68,9 @@ export const useCardStyles = makeStyles({
   /** 설정 전용 카드 */
   settingsCard: {
     backgroundColor: tokens.colorNeutralBackground1,
-    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
-    ...shorthands.borderRadius(tokens.borderRadiusLarge),
-    ...shorthands.padding(tokens.spacingVerticalL),
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusLarge,
+    padding: tokens.spacingVerticalL,
     boxShadow: "0 1px 4px rgba(0, 0, 0, 0.06)",
     marginBottom: tokens.spacingVerticalL,
   },
@@ -71,9 +78,9 @@ export const useCardStyles = makeStyles({
   /** 결과 표시용 카드 (좀 더 눈에 띄는 스타일) */
   resultCard: {
     backgroundColor: tokens.colorNeutralBackground1,
-    ...shorthands.border("2px", "solid", tokens.colorBrandStroke1),
-    ...shorthands.borderRadius(tokens.borderRadiusLarge),
-    ...shorthands.padding(tokens.spacingVerticalL),
+    border: `2px solid ${tokens.colorBrandStroke1}`,
+    borderRadius: tokens.borderRadiusLarge,
+    padding: tokens.spacingVerticalL,
     boxShadow: "0 2px 8px rgba(0, 0, 0, 0.12)",
     marginBottom: tokens.spacingVerticalL,
   },
@@ -81,9 +88,9 @@ export const useCardStyles = makeStyles({
   /** 팁/도움말 카드 */
   tipCard: {
     backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke1),
-    ...shorthands.borderRadius(tokens.borderRadiusMedium),
-    ...shorthands.padding(tokens.spacingVerticalM),
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    borderRadius: tokens.borderRadiusMedium,
+    padding: tokens.spacingVerticalM,
     marginBottom: tokens.spacingVerticalM,
   }
 });
@@ -94,7 +101,7 @@ export const useCardStyles = makeStyles({
 export const useHeaderStyles = makeStyles({
   /** 페이지 헤더 */
   pageHeader: {
-    ...shorthands.margin(0, 0, tokens.spacingVerticalL),
+    margin: `0 0 ${tokens.spacingVerticalL}`,
   },
   
   /** 페이지 타이틀 (아이콘과 함께) */
@@ -119,7 +126,7 @@ export const useHeaderStyles = makeStyles({
   
   /** 구분선 */
   divider: {
-    ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke2),
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
     marginTop: tokens.spacingVerticalM,
   }
 });
@@ -179,7 +186,7 @@ export const useFormStyles = makeStyles({
 export const useProgressStyles = makeStyles({
   /** 프로그레스 컨테이너 */
   progressContainer: {
-    ...shorthands.padding(tokens.spacingVerticalM),
+    padding: tokens.spacingVerticalM,
     textAlign: "center",
   },
   
@@ -210,21 +217,21 @@ export const useLayoutStyles = makeStyles({
   verticalStack: {
     display: "flex",
     flexDirection: "column",
-    ...shorthands.gap(tokens.spacingVerticalM),
+    gap: tokens.spacingVerticalM,
   },
   
   /** 수평 스택 */
   horizontalStack: {
     display: "flex",
     alignItems: "center",
-    ...shorthands.gap(tokens.spacingHorizontalM),
+    gap: tokens.spacingHorizontalM,
   },
   
   /** 격자 레이아웃 (2열) */
   gridTwo: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
-    ...shorthands.gap(tokens.spacingHorizontalL),
+    gap: tokens.spacingHorizontalL,
     
     "@media (max-width: 768px)": {
       gridTemplateColumns: "1fr",
@@ -235,7 +242,7 @@ export const useLayoutStyles = makeStyles({
   gridThree: {
     display: "grid",
     gridTemplateColumns: "repeat(3, 1fr)",
-    ...shorthands.gap(tokens.spacingHorizontalL),
+    gap: tokens.spacingHorizontalL,
     
     "@media (max-width: 1024px)": {
       gridTemplateColumns: "1fr 1fr",
@@ -323,4 +330,425 @@ export const spacingTokens = {
   l: tokens.spacingVerticalL,
   xl: tokens.spacingVerticalXL,
   xxl: tokens.spacingVerticalXXL,
+};
+
+/**
+ * 상태 및 인터랙션 스타일
+ */
+export const useInteractionStyles = makeStyles({
+  /** 호버 가능한 요소 */
+  hoverable: {
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    
+    ':hover': {
+      transform: 'translateY(-1px)',
+      boxShadow: tokens.shadow8,
+    },
+  },
+
+  /** 클릭 가능한 요소 */
+  clickable: {
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+    
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground1Hover,
+    },
+    
+    ':active': {
+      transform: 'scale(0.98)',
+    },
+  },
+
+  /** 비활성화 상태 */
+  disabled: {
+    opacity: 0.6,
+    cursor: 'not-allowed',
+    pointerEvents: 'none',
+  },
+
+  /** 선택된 상태 */
+  selected: {
+    backgroundColor: tokens.colorBrandBackground2,
+    border: `1px solid ${tokens.colorBrandStroke1}`,
+  },
+
+  /** 포커스 가능한 요소 */
+  focusable: {
+    ':focus': {
+      outline: `2px solid ${tokens.colorBrandStroke1}`,
+      outlineOffset: '2px',
+    },
+  },
+
+  /** 드래그 가능한 요소 */
+  draggable: {
+    cursor: 'grab',
+    
+    ':active': {
+      cursor: 'grabbing',
+    },
+  },
+});
+
+/**
+ * 고급 애니메이션 스타일
+ */
+export const useAdvancedAnimationStyles = makeStyles({
+  /** 부드러운 스케일 호버 */
+  scaleOnHover: {
+    transition: 'transform 0.2s ease',
+    ':hover': {
+      transform: 'scale(1.05)',
+    },
+  },
+
+  /** 글로우 효과 */
+  glowEffect: {
+    transition: 'box-shadow 0.3s ease',
+    ':hover': {
+      boxShadow: `0 0 20px ${tokens.colorBrandBackground}40`,
+    },
+  },
+
+  /** 슬라이드 인 애니메이션 */
+  slideIn: {
+    animationName: {
+      '0%': { transform: 'translateX(-100%)', opacity: 0 },
+      '100%': { transform: 'translateX(0)', opacity: 1 }
+    },
+    animationDuration: '0.3s',
+    animationTimingFunction: 'ease-out',
+  },
+
+  /** 페이드 인 업 */
+  fadeInUp: {
+    animationName: {
+      '0%': { transform: 'translateY(20px)', opacity: 0 },
+      '100%': { transform: 'translateY(0)', opacity: 1 }
+    },
+    animationDuration: '0.4s',
+    animationTimingFunction: 'ease-out',
+  },
+
+  /** 펄스 애니메이션 */
+  pulse: {
+    animationName: {
+      '0%, 100%': { opacity: 1 },
+      '50%': { opacity: 0.5 }
+    },
+    animationDuration: '2s',
+    animationIterationCount: 'infinite',
+  },
+
+  /** 바운스 로딩 */
+  bounce: {
+    animationName: {
+      '0%, 20%, 53%, 80%, 100%': { transform: 'translate3d(0,0,0)' },
+      '40%, 43%': { transform: 'translate3d(0, -30px, 0)' },
+      '70%': { transform: 'translate3d(0, -15px, 0)' },
+      '90%': { transform: 'translate3d(0, -4px, 0)' }
+    },
+    animationDuration: '1s',
+    animationIterationCount: 'infinite',
+  },
+});
+
+/**
+ * 고급 레이아웃 유틸리티
+ */
+export const useAdvancedLayoutStyles = makeStyles({
+  /** 스티키 헤더 */
+  stickyHeader: {
+    position: 'sticky',
+    top: 0,
+    zIndex: 100,
+    backgroundColor: tokens.colorNeutralBackground1,
+    backdropFilter: 'blur(10px)',
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+
+  /** 사이드바 레이아웃 */
+  sidebarLayout: {
+    display: 'grid',
+    gridTemplateColumns: '250px 1fr',
+    minHeight: '100vh',
+    
+    '@media (max-width: 768px)': {
+      gridTemplateColumns: '1fr',
+    },
+  },
+
+  /** 마스터-디테일 레이아웃 */
+  masterDetail: {
+    display: 'grid',
+    gridTemplateColumns: '300px 1fr',
+    gap: tokens.spacingHorizontalL,
+    height: '100%',
+    
+    '@media (max-width: 1024px)': {
+      gridTemplateColumns: '1fr',
+      gridTemplateRows: 'auto 1fr',
+    },
+  },
+
+  /** 카드 그리드 (자동 크기 조정) */
+  autoGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+    gap: tokens.spacingVerticalL,
+  },
+
+  /** 센터링 컨테이너 */
+  absoluteCenter: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+  },
+
+  /** 전체 화면 오버레이 */
+  fullScreenOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 9999,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /** 비율 유지 컨테이너 */
+  aspectRatio16_9: {
+    aspectRatio: '16 / 9',
+    width: '100%',
+  },
+
+  aspectRatio4_3: {
+    aspectRatio: '4 / 3',
+    width: '100%',
+  },
+
+  aspectRatio1_1: {
+    aspectRatio: '1 / 1',
+    width: '100%',
+  },
+});
+
+/**
+ * 반응형 타이포그래피 스타일
+ */
+export const useResponsiveTypographyStyles = makeStyles({
+  /** 반응형 헤드라인 */
+  responsiveHeadline: {
+    fontSize: tokens.fontSizeHero900,
+    lineHeight: tokens.lineHeightHero900,
+    fontWeight: tokens.fontWeightBold,
+    
+    '@media (max-width: 768px)': {
+      fontSize: tokens.fontSizeHero700,
+      lineHeight: tokens.lineHeightHero700,
+    },
+    
+    '@media (max-width: 480px)': {
+      fontSize: tokens.fontSizeBase600,
+      lineHeight: tokens.lineHeightBase600,
+    },
+  },
+
+  /** 반응형 본문 텍스트 */
+  responsiveBody: {
+    fontSize: tokens.fontSizeBase400,
+    lineHeight: tokens.lineHeightBase400,
+    
+    '@media (max-width: 768px)': {
+      fontSize: tokens.fontSizeBase300,
+      lineHeight: tokens.lineHeightBase300,
+    },
+  },
+
+  /** 코드 블록 스타일 */
+  codeBlock: {
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase200,
+    backgroundColor: tokens.colorNeutralBackground3,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusMedium,
+    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalM}`,
+    overflowX: 'auto',
+    whiteSpace: 'pre',
+  },
+
+  /** 인라인 코드 스타일 */
+  inlineCode: {
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: '0.9em',
+    backgroundColor: tokens.colorNeutralBackground2,
+    color: tokens.colorBrandForeground1,
+    padding: '2px 4px',
+    borderRadius: tokens.borderRadiusSmall,
+  },
+});
+
+/**
+ * 접근성 스타일
+ */
+export const useAccessibilityStyles = makeStyles({
+  /** 스크린 리더 전용 텍스트 */
+  srOnly: {
+    position: 'absolute',
+    width: '1px',
+    height: '1px',
+    padding: '0',
+    margin: '-1px',
+    overflow: 'hidden',
+    clipPath: 'inset(50%)',
+    whiteSpace: 'nowrap',
+    border: '0',
+  },
+
+  /** 고대비 모드 지원 */
+  highContrast: {
+    '@media (prefers-contrast: high)': {
+      border: '2px solid ButtonText',
+      backgroundColor: 'ButtonFace',
+      color: 'ButtonText',
+    },
+  },
+
+  /** 모션 감소 지원 */
+  respectMotion: {
+    '@media (prefers-reduced-motion: reduce)': {
+      animationDuration: '0.01ms',
+      animationIterationCount: '1',
+      transitionDuration: '0.01ms',
+    },
+  },
+
+  /** 포커스 인디케이터 */
+  accessibleFocus: {
+    ':focus-visible': {
+      outline: `3px solid ${tokens.colorBrandStroke1}`,
+      outlineOffset: '2px',
+      borderRadius: tokens.borderRadiusMedium,
+    },
+  },
+});
+
+/**
+ * 유틸리티 스타일
+ */
+export const useUtilityStyles = makeStyles({
+  /** 텍스트 자르기 (말줄임표) */
+  truncate: {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+
+  /** 멀티라인 텍스트 자르기 */
+  lineClamp2: {
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    overflow: 'hidden',
+  },
+
+  lineClamp3: {
+    display: '-webkit-box',
+    WebkitLineClamp: 3,
+    WebkitBoxOrient: 'vertical',
+    overflow: 'hidden',
+  },
+
+  /** 스크롤바 스타일링 */
+  customScrollbar: {
+    scrollbarWidth: 'thin',
+    scrollbarColor: `${tokens.colorNeutralStroke1} transparent`,
+    
+    '::-webkit-scrollbar': {
+      width: '8px',
+      height: '8px',
+    },
+    
+    '::-webkit-scrollbar-track': {
+      backgroundColor: 'transparent',
+    },
+    
+    '::-webkit-scrollbar-thumb': {
+      backgroundColor: tokens.colorNeutralStroke1,
+      borderRadius: '4px',
+      
+      ':hover': {
+        backgroundColor: tokens.colorNeutralStroke2,
+      },
+    },
+  },
+
+  /** 그라디언트 배경 */
+  brandGradient: {
+    background: `linear-gradient(135deg, ${tokens.colorBrandBackground} 0%, ${tokens.colorPaletteBluBackground3} 100%)`,
+  },
+
+  successGradient: {
+    background: `linear-gradient(135deg, ${tokens.colorPaletteGreenBackground3} 0%, ${tokens.colorPaletteTealBackground3} 100%)`,
+  },
+
+  /** 쉐도우 변형 */
+  softShadow: {
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+  },
+
+  mediumShadow: {
+    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
+  },
+
+  strongShadow: {
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.16)',
+  },
+});
+
+/**
+ * 성능 최적화를 위한 스타일 상수
+ */
+export const PERFORMANCE_STYLES = {
+  // GPU 가속을 위한 transform
+  GPU_ACCELERATION: {
+    transform: 'translateZ(0)',
+    backfaceVisibility: 'hidden',
+    perspective: '1000px',
+  },
+  
+  // 레이어 승격
+  LAYER_PROMOTION: {
+    willChange: 'transform, opacity',
+  },
+  
+  // 하드웨어 가속 호버
+  HARDWARE_HOVER: {
+    transform: 'translate3d(0, 0, 0)',
+    transition: 'transform 0.2s ease',
+  },
+};
+
+/**
+ * CSS 커스텀 프로퍼티 (CSS 변수) 정의
+ */
+export const CSS_VARIABLES = {
+  '--weaver-brand-primary': tokens.colorBrandBackground,
+  '--weaver-brand-hover': tokens.colorBrandBackgroundHover,
+  '--weaver-success': tokens.colorPaletteGreenBackground3,
+  '--weaver-warning': tokens.colorPaletteYellowBackground3,
+  '--weaver-error': tokens.colorPaletteRedBackground3,
+  '--weaver-info': tokens.colorPaletteBluBackground3,
+  '--weaver-radius-small': tokens.borderRadiusSmall,
+  '--weaver-radius-medium': tokens.borderRadiusMedium,
+  '--weaver-radius-large': tokens.borderRadiusLarge,
+  '--weaver-shadow-soft': '0 2px 8px rgba(0, 0, 0, 0.08)',
+  '--weaver-shadow-medium': '0 4px 16px rgba(0, 0, 0, 0.12)',
+  '--weaver-shadow-strong': '0 8px 32px rgba(0, 0, 0, 0.16)',
 };

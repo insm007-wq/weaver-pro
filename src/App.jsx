@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState, useEffect, Suspense, lazy } from "react";
-import { makeStyles, shorthands, tokens, Card, CardHeader, Body1, Title1, Subtitle1, Spinner, Text } from "@fluentui/react-components";
+import { useCallback, useMemo, useState, useEffect, Suspense, lazy, memo } from "react";
+import { makeStyles, shorthands, tokens, Card, CardHeader, Body1, Title1, Subtitle1, Text } from "@fluentui/react-components";
 import KeepAlivePane from "./components/common/KeepAlivePane";
+import { LoadingSpinner } from "./components/common";
 
 const Sidebar = lazy(() => import("./components/Sidebar"));
 const ProjectInit = lazy(() => import("./components/ProjectInit"));
@@ -85,16 +86,14 @@ const useStyles = makeStyles({
   },
 });
 
-function LoadingSpinner({ label = "로딩 중..." }) {
+const MemoizedLoadingFallback = memo(function LoadingFallback({ label = "로딩 중..." }) {
   const styles = useStyles();
   return (
-    <div className={styles.loadingContainer}>
-      <Spinner size="medium" label={label} />
-    </div>
+    <LoadingSpinner size="medium" message={label} centered />
   );
-}
+});
 
-export default function App() {
+function App() {
   const [projectName, setProjectName] = useState(null);
   const [currentPage, setCurrentPage] = useState(null);
   const canOpenWithoutProject = true;
@@ -104,8 +103,17 @@ export default function App() {
     setProjectName(name);
     setCurrentPage("script");
   }, []);
+  
   const handleSelectMenu = useCallback((key) => setCurrentPage(key), []);
   const handleOpenSettings = useCallback(() => setCurrentPage("settings"), []);
+
+  // 메모이제이션된 계산값들
+  const shouldShowProjectInit = useMemo(() => 
+    !projectName && !canOpenWithoutProject, 
+    [projectName, canOpenWithoutProject]
+  );
+
+  const isHomePage = useMemo(() => currentPage === null, [currentPage]);
 
   useEffect(() => {
     if (!window.__autoPlaceQueue) window.__autoPlaceQueue = [];
@@ -123,24 +131,24 @@ export default function App() {
 
   return (
     <div className={styles.root}>
-      <Suspense fallback={<LoadingSpinner label="헤더 로딩 중..." />}>
+      <Suspense fallback={<MemoizedLoadingFallback label="헤더 로딩 중..." />}>
         <div className={styles.header}>
           <HeaderBar onOpenSettings={handleOpenSettings} />
         </div>
       </Suspense>
 
       <div className={styles.body}>
-        <Suspense fallback={<LoadingSpinner />}>
+        <Suspense fallback={<MemoizedLoadingFallback />}>
           <Sidebar onSelectMenu={handleSelectMenu} />
         </Suspense>
 
         <main className={styles.main}>
-          <Suspense fallback={<LoadingSpinner />}>
-            {!projectName && !canOpenWithoutProject ? (
+          <Suspense fallback={<MemoizedLoadingFallback />}>
+            {shouldShowProjectInit ? (
               <ProjectInit onCreate={handleCreateProject} />
             ) : (
               <>
-                <KeepAlivePane active={currentPage === null}>
+                <KeepAlivePane active={isHomePage}>
                   <Card className={styles.welcomeCard}>
                     <CardHeader
                       header={
@@ -207,3 +215,5 @@ export default function App() {
     </div>
   );
 }
+
+export default memo(App);

@@ -19,6 +19,7 @@ import {
   SettingsRegular,
   InfoRegular,
 } from "@fluentui/react-icons";
+import { SettingsHeader } from "../../common";
 
 const useStyles = makeStyles({
   container: {
@@ -123,13 +124,16 @@ export default function DefaultsTab() {
   return (
     <div className={styles.container}>
       {/* Header */}
-      <div className={styles.header}>
-        <div className={styles.headerTitle}>⚙️ 기본 설정 및 환경 구성</div>
-        <Caption1 className={styles.headerDescription}>
-          애플리케이션의 기본 동작을 설정합니다.<br />
-          영상 저장 위치, 해상도, 생성 모델 등을 구성할 수 있습니다.
-        </Caption1>
-      </div>
+      <SettingsHeader
+        icon="⚙️"
+        title="기본 설정 및 환경 구성"
+        description={
+          <>
+            애플리케이션의 기본 동작을 설정합니다.
+            <br />영상 저장 위치, 해상도, 생성 모델 등을 구성할 수 있습니다.
+          </>
+        }
+      />
 
       {/* Main Settings Card */}
       <Card className={styles.settingsCard}>

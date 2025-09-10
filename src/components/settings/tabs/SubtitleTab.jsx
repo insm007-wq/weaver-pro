@@ -7,6 +7,7 @@ import {
   Card,
   Caption1,
 } from "@fluentui/react-components";
+import { SettingsHeader } from "../../common";
 
 const useStyles = makeStyles({
   container: {
@@ -64,13 +65,16 @@ export default function SubtitleTab() {
   return (
     <div className={styles.container}>
       {/* Header */}
-      <div className={styles.header}>
-        <div className={styles.headerTitle}>📝 자막 및 텍스트 설정</div>
-        <Caption1 className={styles.headerDescription}>
-          영상에 표시되는 자막의 모양과 위치를 설정합니다.<br />
-          폰트, 색상, 크기, 위치 등을 조정하여 최적의 가독성을 확보하세요.
-        </Caption1>
-      </div>
+      <SettingsHeader
+        icon="📝"
+        title="자막 및 텍스트 설정"
+        description={
+          <>
+            영상에 표시되는 자막의 모양과 위치를 설정합니다.
+            <br />폰트, 색상, 크기, 위치 등을 조정하여 최적의 가독성을 확보하세요.
+          </>
+        }
+      />
 
       {/* Placeholder Content */}
       <Card className={styles.placeholderCard}>

@@ -7,6 +7,7 @@ import {
   Card,
   Caption1,
 } from "@fluentui/react-components";
+import { SettingsHeader } from "../../common";
 
 const useStyles = makeStyles({
   container: {
@@ -64,13 +65,16 @@ export default function AppearanceTab() {
   return (
     <div className={styles.container}>
       {/* Header */}
-      <div className={styles.header}>
-        <div className={styles.headerTitle}>🎨 테마 및 UI 설정</div>
-        <Caption1 className={styles.headerDescription}>
-          애플리케이션의 테마와 사용자 인터페이스를 설정합니다.<br />
-          다크 모드, 색상 테마, 크기 등을 조정하여 최적의 사용 환경을 만드세요.
-        </Caption1>
-      </div>
+      <SettingsHeader
+        icon="🎨"
+        title="테마 및 UI 설정"
+        description={
+          <>
+            애플리케이션의 테마와 사용자 인터페이스를 설정합니다.
+            <br />다크 모드, 색상 테마, 크기 등을 조정하여 최적의 사용 환경을 만드세요.
+          </>
+        }
+      />
 
       {/* Placeholder Content */}
       <Card className={styles.placeholderCard}>
