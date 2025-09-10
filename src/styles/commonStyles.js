@@ -296,6 +296,190 @@ export const useToastStyles = makeStyles({
 });
 
 /**
+ * 설정 탭 전용 스타일
+ * - 설정 페이지에서 반복적으로 사용되는 UI 패턴들
+ */
+export const useSettingsStyles = makeStyles({
+  /** 설정 그룹 그리드 */
+  settingsGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: tokens.spacingVerticalL,
+  },
+  
+  /** 정보 박스 컨테이너 */
+  infoBox: {
+    backgroundColor: tokens.colorNeutralBackground2,
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    borderRadius: tokens.borderRadiusMedium,
+    padding: tokens.spacingVerticalM,
+    display: "flex",
+    alignItems: "flex-start",
+    gap: tokens.spacingHorizontalM,
+  },
+  
+  /** 정보 박스 아이콘 */
+  infoIcon: {
+    backgroundColor: tokens.colorBrandBackground,
+    color: tokens.colorBrandForeground1,
+    width: "32px",
+    height: "32px",
+    borderRadius: "50%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  
+  /** 정보 박스 내용 */
+  infoContent: {
+    flex: 1,
+  },
+  
+  /** 정보 박스 제목 */
+  infoTitle: {
+    fontWeight: tokens.fontWeightSemibold,
+    marginBottom: tokens.spacingVerticalXS,
+  },
+  
+  /** 정보 박스 텍스트 */
+  infoText: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+    lineHeight: "1.5",
+  },
+  
+  /** 폴더 선택 섹션 */
+  folderSection: {
+    display: "flex",
+    gap: tokens.spacingHorizontalS,
+    alignItems: "flex-end",
+  },
+  
+  /** 폴더 입력 필드 */
+  folderInput: {
+    flex: 1,
+  },
+  
+  /** 플레이스홀더 카드 (개발 중 표시용) */
+  placeholderCard: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusLarge,
+    padding: tokens.spacingVerticalXXL,
+    boxShadow: "0 1px 4px rgba(0, 0, 0, 0.06)",
+    textAlign: "center",
+  },
+  
+  /** 플레이스홀더 텍스트 */
+  placeholderText: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase400,
+  },
+  
+  /** 프롬프트 관리 카드 (컴팩트) */
+  manageCard: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusLarge,
+    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL}`,
+    boxShadow: "0 1px 4px rgba(0, 0, 0, 0.06)",
+    marginBottom: tokens.spacingVerticalL,
+  },
+  
+  /** 관리 행 레이아웃 */
+  manageRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalM,
+  },
+  
+  /** 관리 라벨 */
+  manageLabel: {
+    fontWeight: tokens.fontWeightSemibold,
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalXS,
+  },
+  
+  /** 관리 드롭다운 */
+  manageDropdown: {
+    minWidth: "200px",
+    flex: 1,
+    maxWidth: "400px",
+  },
+  
+  /** 관리 액션 버튼들 */
+  manageActions: {
+    display: "flex",
+    gap: tokens.spacingHorizontalS,
+    marginLeft: "auto",
+  },
+  
+  /** 인라인 생성 폼 */
+  inlineCreate: {
+    marginTop: tokens.spacingVerticalM,
+    backgroundColor: tokens.colorNeutralBackground2,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusMedium,
+    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalM}`,
+    display: "grid",
+    gridTemplateColumns: "1fr auto auto",
+    gap: tokens.spacingHorizontalS,
+  },
+  
+  /** 섹션 그리드 (2열) */
+  sectionsGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: tokens.spacingHorizontalL,
+    marginTop: tokens.spacingVerticalL,
+    
+    "@media (max-width: 768px)": {
+      gridTemplateColumns: "1fr",
+    }
+  },
+  
+  /** 섹션 카드 */
+  sectionCard: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRadius: tokens.borderRadiusLarge,
+    padding: tokens.spacingVerticalL,
+    boxShadow: "0 1px 4px rgba(0, 0, 0, 0.06)",
+  },
+  
+  /** 섹션 헤더 */
+  sectionHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: tokens.spacingVerticalM,
+  },
+  
+  /** 섹션 제목 */
+  sectionTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalS,
+  },
+  
+  /** 에디터 스타일 */
+  editor: {
+    minHeight: "200px",
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase300,
+  },
+  
+  /** 문자 수 표시 */
+  charCount: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+    marginTop: tokens.spacingVerticalS,
+  },
+});
+
+/**
  * 색상 유틸리티
  */
 export const colorTokens = {

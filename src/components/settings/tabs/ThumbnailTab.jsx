@@ -1,5 +1,5 @@
 import React, { useEffect, useState, memo, useCallback } from "react";
-import { ErrorBoundary } from "../../ErrorBoundary";
+import { ErrorBoundary } from "../../common/ErrorBoundary";
 import { 
   Body1, 
   Body2, 
@@ -10,10 +10,7 @@ import {
   Dropdown, 
   Option, 
   Divider, 
-  tokens,
-  makeStyles,
-  shorthands,
-  Card
+  tokens
 } from "@fluentui/react-components";
 import { SaveRegular, ArrowResetRegular, SparkleRegular, InfoRegular, SettingsRegular } from "@fluentui/react-icons";
 import { DEFAULT_TEMPLATE } from "../../scriptgen/constants";

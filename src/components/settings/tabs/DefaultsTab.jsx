@@ -1,8 +1,5 @@
 import React from "react";
 import {
-  makeStyles,
-  tokens,
-  shorthands,
   Text,
   Button,
   Dropdown,
@@ -20,109 +17,16 @@ import {
   InfoRegular,
 } from "@fluentui/react-icons";
 import { SettingsHeader } from "../../common";
+import { useContainerStyles, useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
 
-const useStyles = makeStyles({
-  container: {
-    ...shorthands.padding(tokens.spacingVerticalL),
-    display: "flex",
-    flexDirection: "column",
-    ...shorthands.gap(tokens.spacingVerticalL),
-    maxWidth: "1200px",
-    margin: "0 auto",
-  },
-
-  header: {
-    textAlign: "center",
-    marginBottom: tokens.spacingVerticalL,
-  },
-
-  headerTitle: {
-    background: `linear-gradient(135deg, ${tokens.colorBrandForeground1} 0%, ${tokens.colorPaletteBlueForeground2} 100%)`,
-    backgroundClip: "text",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-    marginBottom: tokens.spacingVerticalS,
-    fontSize: tokens.fontSizeBase500,
-    fontWeight: tokens.fontWeightSemibold,
-    lineHeight: "1.4",
-    wordBreak: "keep-all",
-  },
-
-  headerDescription: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase300,
-    maxWidth: "600px",
-    margin: "0 auto",
-    lineHeight: "1.5",
-  },
-
-  settingsCard: {
-    backgroundColor: tokens.colorNeutralBackground1,
-    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
-    ...shorthands.borderRadius(tokens.borderRadiusLarge),
-    ...shorthands.padding(tokens.spacingVerticalL),
-    boxShadow: "0 1px 4px rgba(0, 0, 0, 0.06)",
-  },
-
-  settingsGrid: {
-    display: "grid",
-    gridTemplateColumns: "1fr",
-    ...shorthands.gap(tokens.spacingVerticalL),
-  },
-
-  folderSection: {
-    display: "flex",
-    ...shorthands.gap(tokens.spacingHorizontalS),
-    alignItems: "flex-end",
-  },
-
-  folderInput: {
-    flex: 1,
-  },
-
-  infoBox: {
-    backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke1),
-    ...shorthands.borderRadius(tokens.borderRadiusMedium),
-    ...shorthands.padding(tokens.spacingVerticalM),
-    display: "flex",
-    alignItems: "flex-start",
-    ...shorthands.gap(tokens.spacingHorizontalM),
-  },
-
-  infoIcon: {
-    backgroundColor: tokens.colorBrandBackground,
-    color: tokens.colorBrandForeground1,
-    width: "32px",
-    height: "32px",
-    ...shorthands.borderRadius("50%"),
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-
-  infoContent: {
-    flex: 1,
-  },
-
-  infoTitle: {
-    fontWeight: tokens.fontWeightSemibold,
-    marginBottom: tokens.spacingVerticalXS,
-  },
-
-  infoText: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
-    lineHeight: "1.5",
-  },
-});
 
 export default function DefaultsTab() {
-  const styles = useStyles();
+  const containerStyles = useContainerStyles();
+  const cardStyles = useCardStyles();
+  const settingsStyles = useSettingsStyles();
 
   return (
-    <div className={styles.container}>
+    <div className={containerStyles.container}>
       {/* Header */}
       <SettingsHeader
         icon="⚙️"
@@ -136,13 +40,13 @@ export default function DefaultsTab() {
       />
 
       {/* Main Settings Card */}
-      <Card className={styles.settingsCard}>
-        <div className={styles.settingsGrid}>
+      <Card className={cardStyles.settingsCard}>
+        <div className={settingsStyles.settingsGrid}>
           {/* 영상 저장 폴더 */}
           <Field label="🎥 영상 저장 폴더" hint="생성된 영상 파일이 저장될 경로입니다.">
-            <div className={styles.folderSection}>
+            <div className={settingsStyles.folderSection}>
               <Input
-                className={styles.folderInput}
+                className={settingsStyles.folderInput}
                 defaultValue="C:\\tmplav"
                 contentBefore={<FolderRegular />}
               />
@@ -174,13 +78,13 @@ export default function DefaultsTab() {
           </Field>
 
           {/* 정보 박스 */}
-          <div className={styles.infoBox}>
-            <div className={styles.infoIcon}>
+          <div className={settingsStyles.infoBox}>
+            <div className={settingsStyles.infoIcon}>
               <InfoRegular />
             </div>
-            <div className={styles.infoContent}>
-              <div className={styles.infoTitle}>영상 설정</div>
-              <div className={styles.infoText}>
+            <div className={settingsStyles.infoContent}>
+              <div className={settingsStyles.infoTitle}>영상 설정</div>
+              <div className={settingsStyles.infoText}>
                 프레임레이트: <strong>24fps</strong> 고정<br />
                 영상 길이: 프로젝트 생성 시 설정
               </div>

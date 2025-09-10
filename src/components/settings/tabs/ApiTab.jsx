@@ -24,42 +24,9 @@ import {
   FolderRegular,
 } from "@fluentui/react-icons";
 import { SettingsHeader } from "../../common";
+import { useContainerStyles, useCardStyles } from "../../../styles/commonStyles";
 
 const useStyles = makeStyles({
-  container: {
-    ...shorthands.padding(tokens.spacingVerticalL),
-    display: "flex",
-    flexDirection: "column",
-    ...shorthands.gap(tokens.spacingVerticalL),
-    maxWidth: "1200px",
-    margin: "0 auto",
-  },
-
-  header: {
-    textAlign: "center",
-    marginBottom: tokens.spacingVerticalL,
-    ...shorthands.padding("0", tokens.spacingHorizontalM),
-  },
-
-  headerTitle: {
-    background: `linear-gradient(135deg, ${tokens.colorBrandForeground1} 0%, ${tokens.colorPaletteBlueForeground2} 100%)`,
-    backgroundClip: "text",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-    marginBottom: tokens.spacingVerticalS,
-    fontSize: tokens.fontSizeBase500,
-    fontWeight: tokens.fontWeightSemibold,
-    lineHeight: "1.4",
-    wordBreak: "keep-all",
-  },
-
-  headerDescription: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase300,
-    maxWidth: "500px",
-    margin: "0 auto",
-    lineHeight: "1.5",
-  },
 
   servicesGrid: {
     display: "grid",
@@ -212,6 +179,8 @@ const useStyles = makeStyles({
 });
 
 export default function ApiTab() {
+  const containerStyles = useContainerStyles();
+  const cardStyles = useCardStyles();
   const s = useStyles();
 
   // ===== 상태 =====
@@ -540,7 +509,7 @@ export default function ApiTab() {
   };
 
   return (
-    <div className={s.container}>
+    <div className={containerStyles.container}>
       {/* Header */}
       <SettingsHeader
         icon="🔧"

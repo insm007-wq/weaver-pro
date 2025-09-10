@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from "react";
 import {
-  makeStyles,
   tokens,
-  shorthands,
   Text,
   Button,
   Dropdown,
@@ -19,155 +17,13 @@ import { useApi } from "../../../hooks/useApi";
 import { LoadingSpinner } from "../../common/LoadingSpinner";
 import { ErrorBoundary } from "../../common/ErrorBoundary";
 import { SettingsHeader } from "../../common";
+import { useContainerStyles, useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
 
-const useStyles = makeStyles({
-  container: {
-    ...shorthands.padding(tokens.spacingVerticalL),
-    display: "flex",
-    flexDirection: "column",
-    ...shorthands.gap(tokens.spacingVerticalL),
-    maxWidth: "1200px",
-    margin: "0 auto",
-  },
-
-  header: {
-    textAlign: "center",
-    marginBottom: tokens.spacingVerticalL,
-  },
-  headerTitle: {
-    background: `linear-gradient(135deg, ${tokens.colorBrandForeground1} 0%, ${tokens.colorPaletteBlueForeground2} 100%)`,
-    backgroundClip: "text",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-    marginBottom: tokens.spacingVerticalS,
-    fontSize: tokens.fontSizeBase500,
-    fontWeight: tokens.fontWeightSemibold,
-    lineHeight: "1.4",
-    wordBreak: "keep-all",
-  },
-  headerDescription: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase300,
-    maxWidth: "600px",
-    margin: "0 auto",
-    lineHeight: "1.5",
-  },
-
-  settingsCard: {
-    backgroundColor: tokens.colorNeutralBackground1,
-    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
-    ...shorthands.borderRadius(tokens.borderRadiusLarge),
-    ...shorthands.padding(tokens.spacingVerticalL),
-    boxShadow: "0 1px 4px rgba(0, 0, 0, 0.06)",
-  },
-
-  /* ===== 프롬프트 관리 영역 (한 줄 스타일) ===== */
-  manageCard: {
-    backgroundColor: tokens.colorNeutralBackground1,
-    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
-    ...shorthands.borderRadius(tokens.borderRadiusLarge),
-    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalL),
-    boxShadow: "0 1px 4px rgba(0, 0, 0, 0.06)",
-    marginBottom: tokens.spacingVerticalL,
-  },
-  manageRow: {
-    display: "flex",
-    alignItems: "center",
-    ...shorthands.gap(tokens.spacingHorizontalM),
-  },
-  manageLabel: {
-    fontWeight: tokens.fontWeightSemibold,
-    display: "flex",
-    alignItems: "center",
-    ...shorthands.gap(tokens.spacingHorizontalXS),
-  },
-  manageDropdown: {
-    minWidth: "200px",
-    flex: 1,
-    maxWidth: "400px",
-  },
-  manageActions: {
-    display: "flex",
-    ...shorthands.gap(tokens.spacingHorizontalS),
-    marginLeft: "auto",
-  },
-  inlineCreate: {
-    marginTop: tokens.spacingVerticalM,
-    backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
-    ...shorthands.borderRadius(tokens.borderRadiusMedium),
-    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalM),
-    display: "grid",
-    gridTemplateColumns: "1fr auto auto",
-    ...shorthands.gap(tokens.spacingHorizontalS),
-  },
-
-  /* ===== 기존 영역 유지 ===== */
-  templateSection: { marginTop: tokens.spacingVerticalL },
-  variableHelp: {
-    backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke1),
-    ...shorthands.borderRadius(tokens.borderRadiusMedium),
-    ...shorthands.padding(tokens.spacingVerticalM),
-    marginTop: tokens.spacingVerticalS,
-  },
-  variableList: {
-    display: "flex",
-    flexWrap: "wrap",
-    ...shorthands.gap(tokens.spacingHorizontalS),
-    marginTop: tokens.spacingVerticalS,
-  },
-  variableTag: {
-    backgroundColor: tokens.colorNeutralBackground1,
-    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
-    ...shorthands.borderRadius(tokens.borderRadiusSmall),
-    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
-    fontSize: tokens.fontSizeBase200,
-    fontFamily: tokens.fontFamilyMonospace,
-  },
-  sectionsGrid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    ...shorthands.gap(tokens.spacingHorizontalL),
-    marginTop: tokens.spacingVerticalL,
-  },
-  sectionCard: {
-    backgroundColor: tokens.colorNeutralBackground1,
-    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
-    ...shorthands.borderRadius(tokens.borderRadiusLarge),
-    ...shorthands.padding(tokens.spacingVerticalL),
-    boxShadow: "0 1px 4px rgba(0, 0, 0, 0.06)",
-  },
-  sectionHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: tokens.spacingVerticalM,
-  },
-  sectionTitle: {
-    display: "flex",
-    alignItems: "center",
-    ...shorthands.gap(tokens.spacingHorizontalS),
-  },
-  editor: {
-    minHeight: "200px",
-    fontFamily: tokens.fontFamilyMonospace,
-    fontSize: tokens.fontSizeBase300,
-  },
-  charCount: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase200,
-    marginTop: tokens.spacingVerticalS,
-  },
-  editorField: {
-    minHeight: "200px",
-    fontFamily: tokens.fontFamilyMonospace,
-    fontSize: tokens.fontSizeBase300,
-  },
-});
 
 export default function PromptTab() {
-  const styles = useStyles();
+  const containerStyles = useContainerStyles();
+  const cardStyles = useCardStyles();
+  const settingsStyles = useSettingsStyles();
   const toast = useToast();
   const api = useApi();
 
@@ -189,7 +45,7 @@ export default function PromptTab() {
   // API 가드
   if (!window.api) {
     return (
-      <div className={styles.container}>
+      <div className={containerStyles.container}>
         <Card>
           <div style={{ padding: tokens.spacingVerticalL, textAlign: "center" }}>
             <Text size={600}>⚠️</Text>
@@ -375,7 +231,7 @@ export default function PromptTab() {
 
   if (loading) {
     return (
-      <div className={styles.container}>
+      <div className={containerStyles.container}>
         <LoadingSpinner size="large" message="프롬프트를 로드하는 중..." />
       </div>
     );
@@ -383,7 +239,7 @@ export default function PromptTab() {
 
   return (
     <ErrorBoundary>
-      <div className={styles.container}>
+      <div className={containerStyles.container}>
         {/* Header (그대로) */}
         <SettingsHeader
           icon="🧠"
@@ -397,15 +253,15 @@ export default function PromptTab() {
         />
 
         {/* ===== 프롬프트 관리 (한 줄 컴팩트) ===== */}
-        <Card className={styles.manageCard}>
-          <div className={styles.manageRow}>
-            <div className={styles.manageLabel}>
+        <Card className={settingsStyles.manageCard}>
+          <div className={settingsStyles.manageRow}>
+            <div className={settingsStyles.manageLabel}>
               <DocumentTextRegular />
               <Text weight="semibold">프롬프트</Text>
             </div>
 
             <Dropdown
-              className={styles.manageDropdown}
+              className={settingsStyles.manageDropdown}
               value={
                 currentList.find((p) => p.id === currentSelectedId)?.name ||
                 (mgrCategory === "script" ? "대본 생성 선택" : "레퍼런스 분석 선택")
@@ -421,7 +277,7 @@ export default function PromptTab() {
               ))}
             </Dropdown>
 
-            <div className={styles.manageActions}>
+            <div className={settingsStyles.manageActions}>
               <Button
                 icon={<AddRegular />}
                 appearance="primary"
@@ -444,7 +300,7 @@ export default function PromptTab() {
 
           {/* 인라인 생성 박스 (접이식) */}
           {showInlineCreate && (
-            <div className={styles.inlineCreate}>
+            <div className={settingsStyles.inlineCreate}>
               <Input value={newName} onChange={(_, d) => setNewName(d.value)} placeholder="새 프롬프트 이름을 입력하세요" autoFocus />
               <Button appearance="primary" icon={<SaveRegular />} onClick={handleCreateInline} disabled={!newName.trim()}>
                 생성
@@ -463,13 +319,13 @@ export default function PromptTab() {
         </Card>
 
         {/* ===== 프롬프트 에디터 영역 ===== */}
-        <Card className={styles.settingsCard}>
+        <Card className={cardStyles.settingsCard}>
           {/* 프롬프트 에디터 섹션 */}
-          <div className={styles.sectionsGrid}>
+          <div className={settingsStyles.sectionsGrid}>
             {/* 대본 생성 섹션 */}
-            <div className={styles.sectionCard}>
-              <div className={styles.sectionHeader}>
-                <div className={styles.sectionTitle}>
+            <div className={settingsStyles.sectionCard}>
+              <div className={settingsStyles.sectionHeader}>
+                <div className={settingsStyles.sectionTitle}>
                   <Text weight="semibold" size={500}>
                     📝 대본 생성
                   </Text>
@@ -483,22 +339,22 @@ export default function PromptTab() {
 
               <Field>
                 <Textarea
-                  className={styles.editor}
+                  className={settingsStyles.editor}
                   value={scriptPrompt}
                   onChange={(_, data) => setScriptPrompt(data.value)}
                   disabled={loading}
                   resize="vertical"
                 />
               </Field>
-              <div className={styles.charCount}>
+              <div className={settingsStyles.charCount}>
                 {scriptCount.toLocaleString()} 글자 | 변수: {"{topic}, {duration}, {style}"}
               </div>
             </div>
 
             {/* 레퍼런스 분석 섹션 */}
-            <div className={styles.sectionCard}>
-              <div className={styles.sectionHeader}>
-                <div className={styles.sectionTitle}>
+            <div className={settingsStyles.sectionCard}>
+              <div className={settingsStyles.sectionHeader}>
+                <div className={settingsStyles.sectionTitle}>
                   <Text weight="semibold" size={500}>
                     🔍 레퍼런스 분석
                   </Text>
@@ -512,14 +368,14 @@ export default function PromptTab() {
 
               <Field>
                 <Textarea
-                  className={styles.editor}
+                  className={settingsStyles.editor}
                   value={referencePrompt}
                   onChange={(_, data) => setReferencePrompt(data.value)}
                   disabled={loading}
                   resize="vertical"
                 />
               </Field>
-              <div className={styles.charCount}>
+              <div className={settingsStyles.charCount}>
                 {referenceCount.toLocaleString()} 글자 | 변수: {"{referenceScript}, {topic}"}
               </div>
             </div>

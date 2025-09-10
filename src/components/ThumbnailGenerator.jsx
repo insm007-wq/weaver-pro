@@ -1,6 +1,6 @@
 // src/pages/ThumbnailGenerator.jsx
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ErrorBoundary } from "./ErrorBoundary";
+import { ErrorBoundary } from "./common/ErrorBoundary";
 import {
   Button,
   Card,
