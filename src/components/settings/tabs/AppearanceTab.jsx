@@ -2,7 +2,6 @@ import React from "react";
 import {
   Text,
   Card,
-  Caption1,
 } from "@fluentui/react-components";
 import { SettingsHeader } from "../../common";
 import { useContainerStyles, useSettingsStyles } from "../../../styles/commonStyles";

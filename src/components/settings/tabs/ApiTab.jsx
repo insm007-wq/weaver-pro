@@ -21,7 +21,6 @@ import {
   CheckmarkCircleRegular,
   DismissCircleRegular,
   ClockRegular,
-  FolderRegular,
 } from "@fluentui/react-icons";
 import { SettingsHeader } from "../../common";
 import { useContainerStyles, useCardStyles } from "../../../styles/commonStyles";

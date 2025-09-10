@@ -1,7 +1,6 @@
 import React, { useEffect, useState, memo, useCallback } from "react";
 import { ErrorBoundary } from "../../common/ErrorBoundary";
 import { 
-  Body1, 
   Body2, 
   Caption1, 
   Textarea, 
@@ -12,15 +11,15 @@ import {
   Divider, 
   tokens
 } from "@fluentui/react-components";
-import { SaveRegular, ArrowResetRegular, SparkleRegular, InfoRegular, SettingsRegular } from "@fluentui/react-icons";
+import { SaveRegular, ArrowResetRegular, InfoRegular } from "@fluentui/react-icons";
 import { DEFAULT_TEMPLATE } from "../../scriptgen/constants";
-// 새로운 공통 컴포넌트 import  
-import { StandardCard, SettingsHeader, FormSection, ActionButton, StatusBadge, LoadingSpinner } from "../../common";
-import { useContainerStyles, useUtilityStyles } from "../../../styles/commonStyles";
+import { StandardCard, SettingsHeader, ActionButton, StatusBadge, LoadingSpinner } from "../../common";
+import { useContainerStyles, useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
 
 function ThumbnailTab() {
   const containerStyles = useContainerStyles();
-  const utilityStyles = useUtilityStyles();
+  const cardStyles = useCardStyles();
+  const settingsStyles = useSettingsStyles();
 
   // 상태
   const [template, setTemplate] = useState("");
@@ -154,11 +153,10 @@ function ThumbnailTab() {
       />
 
       {/* 메인 설정 */}
-      <FormSection icon={<SettingsRegular />} title="기본 설정" description="썸네일 생성의 기본 설정을 관리합니다." card>
+      <StandardCard className={cardStyles.settingsCard}>
         {/* 기본 생성 엔진 설정 */}
         <Field style={{ marginBottom: "24px" }}>
           <Label weight="semibold" size="large">
-            <SettingsRegular style={{ marginRight: tokens.spacingHorizontalXS }} />
             기본 생성 엔진
           </Label>
           <Dropdown
@@ -191,7 +189,6 @@ function ThumbnailTab() {
         {/* 이미지 분석 AI 설정 */}
         <Field style={{ marginBottom: tokens.spacingVerticalL }}>
           <Label weight="semibold" size="large">
-            <InfoRegular style={{ marginRight: tokens.spacingHorizontalXS }} />
             이미지 분석 AI
           </Label>
           <Dropdown
@@ -229,7 +226,6 @@ function ThumbnailTab() {
         <Field>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tokens.spacingVerticalS }}>
             <Label weight="semibold" size="large">
-              <SparkleRegular style={{ marginRight: tokens.spacingHorizontalXS }} />
               프롬프트 템플릿
             </Label>
             <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
@@ -291,7 +287,7 @@ function ThumbnailTab() {
             </StatusBadge>
           </div>
         )}
-      </FormSection>
+      </StandardCard>
     </div>
   );
 }

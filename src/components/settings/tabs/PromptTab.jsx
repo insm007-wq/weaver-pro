@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import {
-  tokens,
   Text,
   Button,
   Dropdown,
@@ -9,7 +8,6 @@ import {
   Input,
   Textarea,
   Card,
-  Caption1,
 } from "@fluentui/react-components";
 import { AddRegular, DeleteRegular, SaveRegular, ArrowResetRegular, DocumentTextRegular } from "@fluentui/react-icons";
 import { useToast } from "../../../hooks/useToast";
@@ -20,7 +18,7 @@ import { SettingsHeader } from "../../common";
 import { useContainerStyles, useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
 
 
-export default function PromptTab() {
+function PromptTab() {
   const containerStyles = useContainerStyles();
   const cardStyles = useCardStyles();
   const settingsStyles = useSettingsStyles();
@@ -238,8 +236,7 @@ export default function PromptTab() {
   }
 
   return (
-    <ErrorBoundary>
-      <div className={containerStyles.container}>
+    <div className={containerStyles.container}>
         {/* Header (그대로) */}
         <SettingsHeader
           icon="🧠"
@@ -381,7 +378,14 @@ export default function PromptTab() {
             </div>
           </div>
         </Card>
-      </div>
+    </div>
+  );
+}
+
+export default function PromptTabWithErrorBoundary() {
+  return (
+    <ErrorBoundary>
+      <PromptTab />
     </ErrorBoundary>
   );
 }

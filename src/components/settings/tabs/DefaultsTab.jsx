@@ -12,8 +12,6 @@ import {
 } from "@fluentui/react-components";
 import {
   FolderRegular,
-  VideoRegular,
-  SettingsRegular,
   InfoRegular,
 } from "@fluentui/react-icons";
 import { SettingsHeader } from "../../common";
