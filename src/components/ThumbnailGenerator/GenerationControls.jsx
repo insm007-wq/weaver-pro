@@ -1,7 +1,7 @@
 import { Field, Label, Dropdown, Option, Caption1 } from "@fluentui/react-components";
 import { SettingsRegular } from "@fluentui/react-icons";
 import { QUALITY_PRESETS } from "../../constants/thumbnailConstants";
-import GlassCard from "../ui/GlassCard";
+import { StandardCard } from "../common";
 
 const GenerationControls = ({ 
   count, 
@@ -27,7 +27,7 @@ const GenerationControls = ({
   };
 
   return (
-    <GlassCard title="생성 설정" icon={<SettingsRegular />}>
+    <StandardCard variant="glass" title="생성 설정" icon={<SettingsRegular />}>
       <div style={controlsStyle}>
         <div style={inputGroupStyle}>
           <Label weight="semibold">생성 개수</Label>
@@ -76,7 +76,7 @@ const GenerationControls = ({
           )}
         </div>
       </div>
-    </GlassCard>
+    </StandardCard>
   );
 };
 

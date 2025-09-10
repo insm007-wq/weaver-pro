@@ -8,7 +8,7 @@
 // ============================================================================
 
 import { useEffect, useState, useCallback } from "react";
-import SectionCard from "../parts/SectionCard";
+import { StandardCard } from "../../common";
 import { setSetting } from "../../../utils/ipcSafe";
 
 /* -------------------------------------------------------------------------- */
@@ -335,7 +335,7 @@ export default function SetupTab({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* 자막 / 오디오 연결 */}
-      <SectionCard
+      <StandardCard
         title="자막 / 오디오 연결"
         right={
           <div className="flex items-center gap-2">
@@ -400,10 +400,10 @@ export default function SetupTab({
             />
           </div>
         </div>
-      </SectionCard>
+      </StandardCard>
 
       {/* 자동 매칭 */}
-      <SectionCard
+      <StandardCard
         title="자동 매칭"
         right={
           <span className="text-xs text-slate-500">신규 에셋 자동 배치</span>
@@ -435,7 +435,7 @@ export default function SetupTab({
             배치합니다. 실패 시 자동으로 OFF 됩니다.
           </div>
         </div>
-      </SectionCard>
+      </StandardCard>
     </div>
   );
 }

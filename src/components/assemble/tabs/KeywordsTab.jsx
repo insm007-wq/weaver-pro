@@ -7,7 +7,7 @@
 // - 🔧 변경점: 다운로드 완료한 에셋을 addAssets로 상위에 올려 자동배치가 돌도록 함
 // ----------------------------------------------------------------------------
 import { useEffect, useMemo, useReducer, useRef, useState, useCallback } from "react";
-import SectionCard from "../parts/SectionCard";
+import { StandardCard } from "../../common";
 
 // 유틸들
 import { extractKeywords as fallbackExtract } from "../../../utils/extractKeywords";
@@ -369,7 +369,7 @@ export default function KeywordsTab({ addAssets }) {
     <div className="w-full max-w-screen-xl mx-auto px-4">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch [&>*]:min-w-0">
         {/* 옵션 */}
-        <SectionCard
+        <StandardCard
           className="h-full"
           title="다운로드 옵션"
           right={
@@ -510,10 +510,10 @@ export default function KeywordsTab({ addAssets }) {
               {msg && <div className="mt-2 text-[12px] text-slate-600">{msg}</div>}
             </div>
           </div>
-        </SectionCard>
+        </StandardCard>
 
         {/* 진행/키워드 표시 */}
-        <SectionCard
+        <StandardCard
           className="h-full"
           title="진행 상황"
           right={
@@ -602,7 +602,7 @@ export default function KeywordsTab({ addAssets }) {
               </div>
             </div>
           </div>
-        </SectionCard>
+        </StandardCard>
       </div>
     </div>
   );

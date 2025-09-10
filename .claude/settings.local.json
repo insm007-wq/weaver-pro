@@ -184,7 +184,10 @@
       "Read(//d/ai-video-generator/**)",
       "Bash(find:*)",
       "WebFetch(domain:ai.google.dev)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(git reset:*)",
+      "Bash(git rm:*)",
+      "Bash(del /f nul)"
     ],
     "deny": [],
     "ask": []

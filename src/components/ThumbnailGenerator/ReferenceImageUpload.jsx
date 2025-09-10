@@ -4,7 +4,7 @@ import { ImageRegular, DeleteRegular, DismissCircleRegular } from "@fluentui/rea
 import { tokens } from "@fluentui/react-components";
 import { MAX_UPLOAD_MB } from "../../constants/thumbnailConstants";
 import { validateImageFile, createImagePreview, safeRevokeObjectURL } from "../../utils/fileUtils";
-import GlassCard from "../ui/GlassCard";
+import { StandardCard } from "../common";
 
 const ReferenceImageUpload = ({ 
   imageFile, 
@@ -32,7 +32,7 @@ const ReferenceImageUpload = ({
   const onPickFile = () => fileInputRef.current?.click();
 
   return (
-    <GlassCard title="참고 이미지 (선택사항)" icon={<ImageRegular />}>
+    <StandardCard variant="glass" title="참고 이미지 (선택사항)" icon={<ImageRegular />}>
       <Field>
         
         <div
@@ -309,7 +309,7 @@ const ReferenceImageUpload = ({
           )}
         </div>
       )}
-    </GlassCard>
+    </StandardCard>
   );
 };
 

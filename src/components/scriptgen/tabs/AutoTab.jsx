@@ -6,12 +6,12 @@ import {
   shorthands,
   Text,
   Divider,
-  Card,
   Field,
   Input,
   Dropdown,
   Option,
 } from "@fluentui/react-components";
+import { StandardCard } from "../../common";
 import { DUR_OPTIONS, MAX_SCENE_OPTIONS, LLM_OPTIONS } from "../constants";
 import TtsPanel from "../parts/TtsPanel";
 
@@ -65,7 +65,7 @@ export default function AutoTab({
   );
 
   return (
-    <Card>
+    <StandardCard>
       <div className={styles.container}>
         {/* 기본 설정 섹션 */}
         <div>
@@ -139,6 +139,6 @@ export default function AutoTab({
         {/* TTS 설정 섹션 */}
         <TtsPanel form={form} onChange={onChange} voices={voices} disabled={disabled} />
       </div>
-    </Card>
+    </StandardCard>
   );
 }

@@ -1,7 +1,7 @@
 import { Body1, Caption1 } from "@fluentui/react-components";
 import { TimerRegular } from "@fluentui/react-icons";
 import { tokens } from "@fluentui/react-components";
-import CircularProgress from "../ui/CircularProgress";
+import { ProgressIndicator } from "./";
 
 const ProgressDisplay = ({ 
   loading, 
@@ -26,7 +26,8 @@ const ProgressDisplay = ({
       backdropFilter: "blur(10px)",
       border: "1px solid rgba(255, 255, 255, 0.2)",
     }}>
-      <CircularProgress 
+      <ProgressIndicator 
+        variant="circular"
         percentage={progress?.percentage || 0} 
         color={fxLoading ? "#10a37f" : "#0078d4"}
       />

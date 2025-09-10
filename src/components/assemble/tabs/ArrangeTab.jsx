@@ -7,7 +7,7 @@
 //   - ♻️ 리팩토링: 훅/유틸 분리 (기능 변경 없음)
 // -----------------------------------------------------------------------------
 import { useCallback, useMemo, useState } from "react";
-import SectionCard from "../parts/SectionCard";
+import { StandardCard } from "../../common";
 import TimelineView from "../parts/TimelineView";
 import SceneList from "../parts/SceneList";
 import PropertiesDrawer from "../parts/PropertiesDrawer";
@@ -131,7 +131,7 @@ export default function ArrangeTab({ scenes: propScenes, onChangeScenes, selecte
           onScrub={handleTimelineScrub} // ✅ 타임라인 → 비디오
         />
 
-        <SectionCard title="씬 미리보기" className="mt-3" bodyClass="relative">
+        <StandardCard title="씬 미리보기" className="mt-3" bodyClass="relative">
           <div
             onDragOver={(e) => e.preventDefault()}
             onDrop={onDropFile}
@@ -158,7 +158,7 @@ export default function ArrangeTab({ scenes: propScenes, onChangeScenes, selecte
               <div className="text-slate-500 text-sm">배경 소스를 선택하거나 파일을 드롭하세요</div>
             )}
           </div>
-        </SectionCard>
+        </StandardCard>
       </div>
 
       {/* 속성 패널 */}

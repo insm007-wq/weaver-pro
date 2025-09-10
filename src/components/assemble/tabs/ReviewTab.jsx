@@ -1,6 +1,6 @@
 // src/components/assemble/tabs/ReviewTab.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import SectionCard from "../parts/SectionCard";
+import { StandardCard } from "../../common";
 import SubtitlePreview from "../parts/SubtitlePreview";
 import SubtitleControls, { PRESETS } from "../parts/SubtitleControls";
 
@@ -302,7 +302,7 @@ export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnec
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {/* ⬅ 왼쪽: 미리보기 + 자막 설정 */}
       <div ref={leftColRef} className="lg:col-span-2 space-y-4">
-        <SectionCard title="미리보기" right={<div className="text-xs text-slate-500">{status}</div>} bodyClass="space-y-3">
+        <StandardCard title="미리보기" right={<div className="text-xs text-slate-500">{status}</div>} bodyClass="space-y-3">
           <div
             ref={previewRef}
             className="relative aspect-video w-full bg-black border border-slate-200 rounded-lg overflow-hidden"
@@ -413,7 +413,7 @@ export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnec
           </div>
 
           <audio ref={audioRef} src={mp3Url || undefined} preload="auto" />
-        </SectionCard>
+        </StandardCard>
 
         <div ref={leftBottomRef}>
           <SubtitleControls value={styleOpt} onChange={setStyleOpt} />
@@ -422,7 +422,7 @@ export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnec
 
       {/* ➡ 오른쪽: 자막 미리보기(문장 cue 기준) */}
       <div ref={rightWrapRef} className="lg:sticky lg:top-4 min-h-0">
-        <SectionCard title="자막 미리보기" className="flex flex-col min-h-[200px]" bodyClass="flex-1 p-0 flex flex-col min-h-0">
+        <StandardCard title="자막 미리보기" className="flex flex-col min-h-[200px]" bodyClass="flex-1 p-0 flex flex-col min-h-0">
           <div ref={rightBodyRef} className="flex-1 min-h-0">
             <SubtitlePreview
               embedded
@@ -432,7 +432,7 @@ export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnec
               maxHeight={rightInnerH}
             />
           </div>
-        </SectionCard>
+        </StandardCard>
       </div>
     </div>
   );

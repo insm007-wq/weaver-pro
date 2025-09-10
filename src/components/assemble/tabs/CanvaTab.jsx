@@ -28,7 +28,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 
 // Components
-import SectionCard from "../parts/SectionCard";
+import { StandardCard } from "../../common";
 import { ErrorBoundary } from "../../common/ErrorBoundary";
 import { LoadingSpinner } from "../../common/LoadingSpinner";
 
@@ -831,7 +831,7 @@ function CanvaTab({ addAssets }) {
       <div className="w-full max-w-screen-xl mx-auto px-4 force-text-dark">
       {/* 키워드 입력 섹션 */}
       <div className="mb-4">
-        <SectionCard
+        <StandardCard
           title="🧪 테스트 키워드 입력"
           right={
             <div className="text-xs text-neutral-500">
@@ -887,12 +887,12 @@ function CanvaTab({ addAssets }) {
               현재 키워드: <span className="font-medium">{keywords.join(', ')}</span>
             </div>
           )}
-        </SectionCard>
+        </StandardCard>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch [&>*]:min-w-0">
         {/* 옵션 */}
-        <SectionCard
+        <StandardCard
           className="h-full"
           title="Canva 세션 기반 다운로드"
           right={
@@ -1053,10 +1053,10 @@ function CanvaTab({ addAssets }) {
           <div className="mt-2 text-[12px] text-neutral-600">
             예상 다운로드: <b>{Math.min(keywords.length || maxKeywordsToUse, maxKeywordsToUse) * perKeyword}</b>개
           </div>
-        </SectionCard>
+        </StandardCard>
 
         {/* 진행/키워드 표시 */}
-        <SectionCard
+        <StandardCard
           className="h-full"
           title="진행 상황"
           right={
@@ -1136,7 +1136,7 @@ function CanvaTab({ addAssets }) {
               </div>
             </div>
           </div>
-        </SectionCard>
+        </StandardCard>
       </div>
       </div>
     </ErrorBoundary>

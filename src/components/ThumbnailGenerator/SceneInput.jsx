@@ -1,11 +1,11 @@
 import { Field, Label, Textarea, Caption1 } from "@fluentui/react-components";
 import { SparkleRegular } from "@fluentui/react-icons";
 import { tokens } from "@fluentui/react-components";
-import GlassCard from "../ui/GlassCard";
+import { StandardCard } from "../common";
 
 const SceneInput = ({ prompt, setPrompt, provider }) => {
   return (
-    <GlassCard title="장면 설명" icon={<SparkleRegular />}>
+    <StandardCard variant="glass" title="장면 설명" icon={<SparkleRegular />}>
       <Field>
         <Textarea
           rows={6}
@@ -33,7 +33,7 @@ const SceneInput = ({ prompt, setPrompt, provider }) => {
           □ 장면 설명이 템플릿의 {"{content}"} 변수에 삽입되어 프롬프트가 생성됩니다.
         </Caption1>
       </Field>
-    </GlassCard>
+    </StandardCard>
   );
 };
 

@@ -152,7 +152,28 @@ const useStyles = makeStyles({
   // 클릭 불가
   nonInteractive: {
     cursor: 'default',
-  }
+  },
+  
+  // SectionCard 스타일 헤더
+  sectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL}`,
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    backgroundColor: tokens.colorNeutralBackground2,
+  },
+  
+  sectionTitle: {
+    fontSize: tokens.fontSizeBase300,
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground1,
+  },
+  
+  // SectionCard 스타일일 때의 콘텐츠
+  sectionContent: {
+    padding: tokens.spacingVerticalL,
+  },
 });
 
 /**
@@ -178,6 +199,7 @@ function StandardCard({
   icon,
   title,
   description,
+  right,
   children,
   hover = true,
   interactive = true,
@@ -227,8 +249,19 @@ function StandardCard({
 
   // 헤더 렌더링
   const renderHeader = () => {
-    if (!icon && !title && !description) return null;
+    if (!icon && !title && !description && !right) return null;
 
+    // SectionCard 스타일 (title과 right가 있을 때)
+    if ((title || right) && !icon && !description) {
+      return (
+        <div className={styles.sectionHeader}>
+          <Text className={styles.sectionTitle}>{title}</Text>
+          {right}
+        </div>
+      );
+    }
+
+    // 기존 스타일
     return (
       <div className={styles.cardHeader}>
         {icon && (
@@ -252,6 +285,9 @@ function StandardCard({
     );
   };
 
+  // SectionCard 스타일인지 확인
+  const isSectionCard = (title || right) && !icon && !description;
+
   return (
     <Card
       className={`${getCardStyles()} ${className}`}
@@ -259,8 +295,8 @@ function StandardCard({
       onClick={interactive ? onClick : undefined}
       {...props}
     >
-      <div className={styles.content}>
-        {renderHeader()}
+      {renderHeader()}
+      <div className={isSectionCard ? styles.sectionContent : styles.content}>
         {children}
       </div>
     </Card>

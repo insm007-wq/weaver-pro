@@ -1,5 +1,5 @@
 // src/components/draftexport/parts/RenderOptions.jsx
-import SectionCard from "../../assemble/parts/SectionCard";
+import { StandardCard } from "../../common";
 
 const PRESETS = [
   { id: "540p", label: "540p · 1.5Mbps", w: 960, h: 540, bitrateK: 1500 },
@@ -41,7 +41,7 @@ export default function RenderOptions({
   const chosen = PRESETS.find((p) => p.id === preset.id) || PRESETS[1];
 
   return (
-    <SectionCard
+    <StandardCard
       className="lg:col-span-4"
       title="초안 옵션"
       right={<span className="text-xs text-slate-500">빠른 렌더</span>}
@@ -181,6 +181,6 @@ export default function RenderOptions({
           </div>
         </div>
       </div>
-    </SectionCard>
+    </StandardCard>
   );
 }

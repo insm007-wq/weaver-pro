@@ -13,7 +13,7 @@ import ReferenceImageUpload from "./ReferenceImageUpload";
 import GenerationControls from "./GenerationControls";
 import ProgressDisplay from "./ProgressDisplay";
 import ResultsDisplay from "./ResultsDisplay";
-import GlassCard from "../ui/GlassCard";
+import { StandardCard } from "../common";
 
 // Hooks
 import { useThumbnailGeneration } from "./hooks/useThumbnailGeneration";
@@ -222,7 +222,7 @@ function ThumbnailGenerator() {
           />
 
           {/* Generate Button */}
-          <GlassCard hover={false}>
+          <StandardCard variant="glass" hover={false}>
             <div style={{ 
               display: "flex", 
               alignItems: "center", 
@@ -290,7 +290,7 @@ function ThumbnailGenerator() {
                 </>
               )}
             </Button>
-          </GlassCard>
+          </StandardCard>
         </div>
 
         {/* Canvas Area */}
