@@ -1,3 +1,6 @@
+// 전역 토스트 함수 import
+import { showGlobalToast } from '../components/common/GlobalToast';
+
 /**
  * 에러 코드별 상세 메시지 매핑
  */
@@ -345,6 +348,11 @@ export const handleError = (error, context = '', options = {}) => {
   
   // 토스트 객체 생성
   const toast = createErrorToast(friendlyMessage);
+  
+  // 전역 토스트 표시
+  if (showToast && toast) {
+    showGlobalToast(toast);
+  }
   
   return {
     toast: showToast ? toast : null,

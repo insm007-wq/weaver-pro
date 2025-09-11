@@ -2,46 +2,34 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ErrorBoundary } from "../common/ErrorBoundary";
 
-// Hooks - 중앙화된 훅 사용
-import { useThumbnailGeneration, useImageAnalysis, useProgressTracking } from "@hooks";
-
 // Utils - 중앙화된 에러 처리
 import { handleError, handleApiError } from "@utils";
+import { showGlobalToast } from "../common/GlobalToast";
 import {
   Button,
   Card,
-  Text,
   Title1,
-  Title2,
   Title3,
   Body1,
-  Body2,
   Caption1,
-  Caption2,
   Textarea,
   Dropdown,
   Option,
-  Divider,
   makeStyles,
   shorthands,
   tokens,
   Spinner,
-  MessageBar,
-  MessageBarBody,
   Badge,
   Field,
   Label,
-  ProgressBar,
   mergeClasses,
 } from "@fluentui/react-components";
 import {
-  LightbulbRegular,
   DeleteRegular,
   ArrowDownloadRegular,
   ImageRegular,
   SparkleRegular,
   DismissCircleRegular,
-  InfoRegular,
   TimerRegular,
   SettingsRegular,
 } from "@fluentui/react-icons";
@@ -55,12 +43,6 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     ...shorthands.gap(tokens.spacingVerticalL),
-  },
-  toastContainer: {
-    position: "fixed",
-    top: tokens.spacingVerticalL,
-    right: tokens.spacingHorizontalL,
-    zIndex: 1000,
   },
   pageHeader: {
     ...shorthands.margin(0, 0, tokens.spacingVerticalL),
@@ -250,7 +232,6 @@ function ThumbnailGenerator() {
   const [provider, setProvider] = useState("replicate"); // 'replicate' | 'gemini' - 전역 설정에서 로드
   const [metaTemplate, setMetaTemplate] = useState("");
   const [templateLoading, setTemplateLoading] = useState(true);
-  const [toast, setToast] = useState(null);
 
   /** 프로그레스 상태 */
   const [progress, setProgress] = useState({
@@ -365,13 +346,6 @@ function ThumbnailGenerator() {
     };
   }, []);
 
-  /** Toast 자동 숨김 */
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 1600);
-    return () => clearTimeout(t);
-  }, [toast]);
-
   /** 실시간 카운트다운 계산 */
   useEffect(() => {
     if ((!loading && !fxLoading) || !startTime || !estimatedTime) return;
@@ -423,7 +397,7 @@ function ThumbnailGenerator() {
       // 전체 텍스트 받기
       const fullText = res.raw || res.text || "";
 
-      // 전체 분석 결과를 그대로 사용 (협력업체처럼)
+      // 전체 분석 결과를 그대로 사용
       setFxAnalysis(fullText);
 
       // 영어와 한국어 프롬프트는 무시 (필요없음)
@@ -570,26 +544,23 @@ function ThumbnailGenerator() {
   const onGenerate = async () => {
     // 템플릿 로딩 중인 경우 대기
     if (templateLoading) {
-      const { toast } = handleError(new Error("template_loading"), "thumbnail_generation", {
+      handleError(new Error("template_loading"), "thumbnail_generation", {
         customMessage: "템플릿을 로딩 중입니다. 잠시 후 다시 시도하세요.",
       });
-      setToast(toast);
       return;
     }
 
     // 각 프로바이더별 필수 필드 가드
     if (provider === "replicate" && !prompt.trim() && !fxEn.trim() && !metaTemplate.trim()) {
-      const { toast } = handleError(new Error("validation_failed"), "thumbnail_generation", {
+      handleError(new Error("validation_failed"), "thumbnail_generation", {
         customMessage: "장면 설명 또는 템플릿/분석 결과 중 하나는 필요합니다.",
       });
-      setToast(toast);
       return;
     }
     if (provider === "gemini" && !prompt.trim() && !metaTemplate.trim() && !fxEn.trim()) {
-      const { toast } = handleError(new Error("validation_failed"), "thumbnail_generation", {
+      handleError(new Error("validation_failed"), "thumbnail_generation", {
         customMessage: "장면 설명, 템플릿, 또는 분석 결과 중 하나는 필요합니다.",
       });
-      setToast(toast);
       return;
     }
 
@@ -597,17 +568,15 @@ function ThumbnailGenerator() {
     const hasReplicate = !!window?.api?.generateThumbnails;
     const hasGemini = !!window?.api?.generateThumbnailsGemini;
     if (provider === "replicate" && !hasReplicate) {
-      const { toast } = handleError(new Error("service_unavailable"), "thumbnail_generation", {
+      handleError(new Error("service_unavailable"), "thumbnail_generation", {
         customMessage: "Replicate 서비스를 사용할 수 없습니다. 설정을 확인하세요.",
       });
-      setToast(toast);
       return;
     }
     if (provider === "gemini" && !hasGemini) {
-      const { toast } = handleError(new Error("service_unavailable"), "thumbnail_generation", {
+      handleError(new Error("service_unavailable"), "thumbnail_generation", {
         customMessage: "Gemini 서비스를 사용할 수 없습니다. 설정을 확인하세요.",
       });
-      setToast(toast);
       return;
     }
 
@@ -683,15 +652,13 @@ function ThumbnailGenerator() {
       console.error("썸네일 생성 실패:", e);
 
       // Use centralized error handling with context-aware error processing
-      const { toast } = handleApiError(e, "thumbnail_generation", {
+      handleApiError(e, "thumbnail_generation", {
         metadata: {
           provider: provider,
           count: count,
           hasPrompt: !!prompt.trim(),
         },
       });
-
-      setToast(toast);
     } finally {
       setLoading(false);
       setRemainingTime(null); // 카운트다운 리셋
@@ -717,17 +684,6 @@ function ThumbnailGenerator() {
           : {}
       }
     >
-      {/* Toast 알림 */}
-      <div className={styles.toastContainer}>
-        {toast && (
-          <MessageBar intent={toast.type === "success" ? "success" : "error"}>
-            <MessageBarBody>
-              {toast.type === "success" ? "✅" : "❌"} {toast.text}
-            </MessageBarBody>
-          </MessageBar>
-        )}
-      </div>
-
       <div className={styles.pageHeader}>
         <div className={styles.pageTitle}>
           <SparkleRegular />
@@ -956,7 +912,7 @@ function ThumbnailGenerator() {
                             {sectionTitle}
                           </div>
                         )}
-                        <Body2
+                        <Body1
                           style={{
                             whiteSpace: "pre-wrap",
                             lineHeight: "1.5",
@@ -966,7 +922,7 @@ function ThumbnailGenerator() {
                           }}
                         >
                           {sectionContent}
-                        </Body2>
+                        </Body1>
                       </div>
                     );
                   })}
@@ -1127,9 +1083,9 @@ function ThumbnailGenerator() {
                           suggestedName: `thumbnail-${i + 1}.jpg`,
                         });
                         if (!res?.ok && res?.message !== "canceled") {
-                          setToast({ type: "error", text: `저장 실패: ${res?.message || "알 수 없는 오류"}` });
+                          showGlobalToast({ type: "error", text: `저장 실패: ${res?.message || "알 수 없는 오류"}` });
                         } else if (res?.ok) {
-                          setToast({ type: "success", text: "썸네일이 성공적으로 저장되었습니다!" });
+                          showGlobalToast({ type: "success", text: "썸네일이 성공적으로 저장되었습니다!" });
                         }
                       }}
                     >

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, useEffect, Suspense, lazy, memo } from "react";
 import { makeStyles, shorthands, tokens, Card, CardHeader, Body1, Title1, Subtitle1, Text, mergeClasses } from "@fluentui/react-components";
 import KeepAlivePane from "./components/common/KeepAlivePane";
-import { LoadingSpinner } from "./components/common";
+import { LoadingSpinner, GlobalToast } from "./components/common";
 
 const Sidebar = lazy(() => import("./components/Sidebar"));
 const ProjectInit = lazy(() => import("./components/ProjectInit"));
@@ -212,6 +212,9 @@ function App() {
           </Suspense>
         </main>
       </div>
+      
+      {/* 전역 토스트 */}
+      <GlobalToast />
     </div>
   );
 }

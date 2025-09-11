@@ -114,3 +114,6 @@ export {
 export { default as ErrorBoundary } from './ErrorBoundary';
 export { default as KeepAlivePane } from './KeepAlivePane';
 export { default as ProgressDonut } from './ProgressDonut';
+
+// 토스트 컴포넌트
+export { default as GlobalToast, showGlobalToast, hideGlobalToast } from './GlobalToast';
