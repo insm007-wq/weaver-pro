@@ -13,6 +13,7 @@ import {
 } from "@fluentui/react-components";
 import { SaveRegular, ArrowResetRegular, InfoRegular } from "@fluentui/react-icons";
 import { DEFAULT_TEMPLATE } from "../../scriptgen/constants";
+import { handleError, handleApiError } from "@utils";
 import { StandardCard, SettingsHeader, ActionButton, StatusBadge, LoadingSpinner } from "../../common";
 import { useContainerStyles, useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
 
@@ -69,7 +70,10 @@ function ThumbnailTab() {
       setAnalysisEngine(analysisEngineToUse);
       setOriginalAnalysisEngine(analysisEngineToUse);
     } catch (error) {
-      console.error("템플릿 로드 실패:", error);
+      const { message } = handleError(error, "thumbnail_settings_load", {
+        metadata: { action: "load_template" }
+      });
+      console.error("템플릿 로드 실패:", message);
       setMessage({
         type: "error",
         text: "템플릿을 불러오는데 실패했습니다. 기본 템플릿을 사용합니다.",
@@ -114,10 +118,13 @@ function ThumbnailTab() {
       setOriginalAnalysisEngine(analysisEngine);
       setMessage({ type: "success", text: "설정이 성공적으로 저장되었습니다!" });
     } catch (error) {
-      console.error("설정 저장 실패:", error);
+      const { message } = handleError(error, "thumbnail_settings_save", {
+        metadata: { action: "save_settings", hasTemplate: !!template.trim() }
+      });
+      console.error("설정 저장 실패:", message);
       setMessage({
         type: "error",
-        text: `설정 저장에 실패했습니다: ${error?.message || "알 수 없는 오류"}`,
+        text: `설정 저장에 실패했습니다: ${message}`,
       });
     } finally {
       setSaveLoading(false);
@@ -172,7 +179,10 @@ function ThumbnailTab() {
                 setOriginalEngine(newEngine);
                 setMessage({ type: "success", text: "기본 생성 엔진이 자동 저장되었습니다." });
               } catch (error) {
-                console.error("엔진 설정 저장 실패:", error);
+                const { message } = handleError(error, "thumbnail_engine_save", {
+                  metadata: { action: "save_default_engine", engine: newEngine }
+                });
+                console.error("엔진 설정 저장 실패:", message);
                 setMessage({ type: "error", text: "엔진 설정 저장에 실패했습니다." });
               }
             }}
@@ -204,7 +214,10 @@ function ThumbnailTab() {
                 setOriginalAnalysisEngine(newAnalysisEngine);
                 setMessage({ type: "success", text: "이미지 분석 AI가 자동 저장되었습니다." });
               } catch (error) {
-                console.error("분석 AI 설정 저장 실패:", error);
+                const { message } = handleError(error, "thumbnail_analysis_engine_save", {
+                  metadata: { action: "save_analysis_engine", engine: newAnalysisEngine }
+                });
+                console.error("분석 AI 설정 저장 실패:", message);
                 setMessage({ type: "error", text: "분석 AI 설정 저장에 실패했습니다." });
               }
             }}

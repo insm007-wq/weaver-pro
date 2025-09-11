@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { validateImageFile, createImagePreview } from "../../../utils/fileUtils";
+import { validateImageFile, createImagePreview } from "@utils";
+import { handleError, handleApiError } from "@utils";
 
 export const useImageAnalysis = () => {
   const [imageFile, setImageFile] = useState(null);
@@ -30,7 +31,12 @@ export const useImageAnalysis = () => {
     // 파일 유효성 검사
     const validation = validateImageFile(file);
     if (!validation.isValid) {
-      alert(validation.error);
+      const { message } = handleError(
+        new Error("file_validation_failed"), 
+        "image_analysis",
+        { customMessage: validation.error }
+      );
+      alert(message);
       return;
     }
 
@@ -59,26 +65,55 @@ export const useImageAnalysis = () => {
       setFxAnalysis("");
       setAnalysisEngine("");
 
+      // 분석 전에 현재 설정된 엔진 확인 및 표시
+      let currentEngine = "Claude Sonnet 4"; // 기본값
+      try {
+        const savedAnalysisEngine = await window.api.getSetting("thumbnailAnalysisEngine");
+        console.log("[이미지 분석] 설정된 엔진:", savedAnalysisEngine);
+        
+        if (savedAnalysisEngine === "gemini") {
+          currentEngine = "Google Gemini 2.5 Flash";
+        } else if (savedAnalysisEngine === "gemini-pro") {
+          currentEngine = "Google Gemini 2.5 Pro";
+        } else if (savedAnalysisEngine === "gemini-lite") {
+          currentEngine = "Google Gemini 2.5 Flash Lite";
+        } else {
+          currentEngine = "Claude Sonnet 4";
+        }
+      } catch (settingError) {
+        console.warn("[이미지 분석] 설정 읽기 실패:", settingError);
+      }
+      
+      setAnalysisEngine(currentEngine);
+
       const filePath = file.path || file.name;
+      console.log("[이미지 분석] 분석 시작:", { filePath, engine: currentEngine });
+      
       const res = await window.api.imagefxAnalyze({
         filePath,
         description: prompt.trim() || undefined,
       });
       
+      console.log("[이미지 분석] 결과:", res?.ok ? "성공" : "실패", res?.message);
+      
       if (!res?.ok) throw new Error(res?.message || "analysis_failed");
 
       const fullText = res.raw || res.text || "";
       setFxAnalysis(fullText);
-
-      try {
-        const savedAnalysisEngine = await window.api.getSetting("thumbnailAnalysisEngine");
-        const engineName = savedAnalysisEngine === "gemini" ? "Google Gemini 2.5" : "Claude Sonnet 4";
-        setAnalysisEngine(engineName);
-      } catch (settingError) {
-        setAnalysisEngine("Claude Sonnet 4");
-      }
+      
     } catch (e) {
-      setFxErr(String(e?.message || e));
+      console.error("[이미지 분석] 오류:", e);
+      
+      // Use centralized error handling for image analysis
+      const { message } = handleApiError(e, "image_analysis", {
+        metadata: { 
+          engine: currentEngine,
+          filePath: filePath || "unknown",
+          hasPrompt: !!prompt.trim()
+        }
+      });
+      
+      setFxErr(message);
     } finally {
       setFxLoading(false);
     }

@@ -2,6 +2,6 @@
 export { useToast } from '../useToast';
 export { useProgress } from '../useProgress';
 export { useProgressTracking } from '../useProgressTracking';
-export { useFullscreen } from '../useFullscreen';
-export { useAutoHeight } from '../useAutoHeight';
+export { default as useFullscreen } from '../useFullscreen';
+export { default as useAutoHeight } from '../useAutoHeight';
 export { usePreviewSync } from '../usePreviewSync';

@@ -48,6 +48,7 @@ import { parseSrtToScenes } from "../../utils/parseSrt";
 import { getSetting, readTextAny, getMp3DurationSafe } from "../../utils/ipcSafe";
 import { runAutoMatch } from "../../utils/autoMatchEngine";
 import { clampSelectedIndex } from "../../utils/sceneIndex";
+import { handleError, handleApiError } from "@utils";
 import { useFluentTheme } from "../providers/FluentThemeProvider";
 
 // Styles using Fluent Design tokens
@@ -206,7 +207,12 @@ export default function AssembleEditor() {
           console.log("[assemble] SRT scenes:", parsed.length);
         }
       } catch (e) {
-        if (!cancelled) console.warn("SRT loading failed:", e);
+        if (!cancelled) {
+          const { message } = handleError(e, "assemble_srt_loading", {
+            metadata: { action: "load_srt", cancelled }
+          });
+          console.warn("SRT loading failed:", message);
+        }
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -242,7 +248,12 @@ export default function AssembleEditor() {
           console.log("[assemble] MP3 duration:", dur);
         }
       } catch (e) {
-        if (!cancelled) console.warn("MP3 duration query failed:", e);
+        if (!cancelled) {
+          const { message } = handleError(e, "assemble_audio_loading", {
+            metadata: { action: "load_audio_duration", cancelled }
+          });
+          console.warn("MP3 duration query failed:", message);
+        }
       }
     })();
     

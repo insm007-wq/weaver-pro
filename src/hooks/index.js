@@ -19,15 +19,15 @@ export { useAsyncOperation } from './useAsyncOperation';
 
 // ===== 스토리지 관련 훅들 =====
 export { useLocalStorage } from './useLocalStorage';
-export { usePersistentState } from './usePersistentState';
+export { default as usePersistentState } from './usePersistentState';
 export { usePersistProject } from './usePersistProject';
 
 // ===== UI 상태 관련 훅들 =====
 export { useToast } from './useToast';
 export { useProgress } from './useProgress';
 export { useProgressTracking } from './useProgressTracking';
-export { useFullscreen } from './useFullscreen';
-export { useAutoHeight } from './useAutoHeight';
+export { default as useFullscreen } from './useFullscreen';
+export { default as useAutoHeight } from './useAutoHeight';
 export { usePreviewSync } from './usePreviewSync';
 
 // ===== 폼 상태 관련 훅들 =====
@@ -36,6 +36,8 @@ export { useAutoMatch } from './useAutoMatch';
 
 // ===== 비즈니스 로직 훅들 =====
 export { default as usePrompts } from './usePrompts';
+export { useThumbnailGeneration } from './useThumbnailGeneration';
+export { useImageAnalysis } from './useImageAnalysis';
 
 // ===== 카테고리별 네임스페이스 export =====
 export * as api from './api';

@@ -515,7 +515,10 @@ const CanvaSessionTab = () => {
                 return (
                   <Card
                     key={video.id}
-                    className={mergeClasses(\n                      styles.videoCard,\n                      isSelected && styles.selectedVideoCard\n                    )}
+                    className={mergeClasses(
+                      styles.videoCard,
+                      isSelected && styles.selectedVideoCard
+                    )}
                     onClick={() => toggleVideoSelection(video.id)}
                   >
                     <div className={styles.videoThumbnail}>

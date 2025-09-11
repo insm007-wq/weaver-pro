@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { QUALITY_PRESETS, DEFAULT_PROMPT_KEYWORDS } from "../../../constants/thumbnailConstants";
+import { QUALITY_PRESETS, DEFAULT_PROMPT_KEYWORDS } from "@constants";
 
 export const useThumbnailGeneration = () => {
   const [provider, setProvider] = useState("replicate");

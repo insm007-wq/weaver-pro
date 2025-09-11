@@ -7,7 +7,7 @@ const Sidebar = lazy(() => import("./components/Sidebar"));
 const ProjectInit = lazy(() => import("./components/ProjectInit"));
 const SettingsPage = lazy(() => import("./components/SettingsPage"));
 const HeaderBar = lazy(() => import("./components/HeaderBar"));
-const ThumbnailGenerator = lazy(() => import("./components/ThumbnailGenerator"));
+const ThumbnailGenerator = lazy(() => import("./components/ThumbnailGenerator/ThumbnailGenerator"));
 const ScriptVoiceGenerator = lazy(() => import("./components/scriptgen/ScriptVoiceGenerator"));
 const AssembleEditor = lazy(() => import("./components/assemble/AssembleEditor"));
 const DraftExportPage = lazy(() => import("./components/draftexport/DraftExportPage"));

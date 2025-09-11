@@ -34,6 +34,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
+import { handleError, handleApiError } from '@utils';
 
 /**
  * API 호출 결과 타입
@@ -207,7 +208,7 @@ export function useApi(options = {}) {
     }
 
     // 모든 재시도 실패
-    const errorMsg = lastError?.message || '알 수 없는 오류';
+    const { message: errorMsg } = handleError(lastError, 'api_status_check');
     
     if (!suppressErrors) {
       setError(errorMsg);
@@ -253,7 +254,7 @@ export function useApi(options = {}) {
         success: true
       };
     } catch (error) {
-      const errorMsg = error?.message || '알 수 없는 오류';
+      const { message: errorMsg } = handleApiError(error, 'api_call');
       log('error', `API 전송 실패: ${channel}`, { error: errorMsg, payload });
       
       setError(errorMsg);

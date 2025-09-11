@@ -29,6 +29,7 @@ import {
   VOICES_BY_ENGINE,
   DEFAULT_GENERATE_PROMPT,
 } from "../constants";
+import { handleError, handleApiError } from "@utils";
 
 // 간단 slugify
 function slugify(name = "") {
@@ -155,7 +156,10 @@ export default function ScriptPromptTab({
         }
       }
     } catch (error) {
-      console.error("Failed to load prompts:", error);
+      const { message } = handleApiError(error, "prompt_loading", {
+        metadata: { category: "script", action: "load" }
+      });
+      console.error("Failed to load prompts:", message);
     }
   };
 
@@ -178,7 +182,10 @@ export default function ScriptPromptTab({
         }
       }
     } catch (error) {
-      console.error("Failed to load prompt:", error);
+      const { message } = handleApiError(error, "prompt_loading", {
+        metadata: { action: "load_by_id", promptId: id }
+      });
+      console.error("Failed to load prompt:", message);
       setTemplate(DEFAULT_GENERATE_PROMPT);
     }
   };
@@ -215,7 +222,10 @@ export default function ScriptPromptTab({
         }
       }
     } catch (error) {
-      console.error("Save error:", error);
+      const { message } = handleApiError(error, "prompt_save", {
+        metadata: { action: "save", promptId: currentId }
+      });
+      console.error("Save error:", message);
     }
   };
 
@@ -230,7 +240,10 @@ export default function ScriptPromptTab({
         setTemplate(DEFAULT_GENERATE_PROMPT);
       }
     } catch (error) {
-      console.error("Reset error:", error);
+      const { message } = handleApiError(error, "prompt_reset", {
+        metadata: { action: "reset", category: "script" }
+      });
+      console.error("Reset error:", message);
       setTemplate(DEFAULT_GENERATE_PROMPT);
     }
   };
@@ -256,7 +269,10 @@ export default function ScriptPromptTab({
         console.error("Failed to create prompt:", result?.message);
       }
     } catch (error) {
-      console.error("Create error:", error);
+      const { message } = handleApiError(error, "prompt_create", {
+        metadata: { action: "create", name, category: "script" }
+      });
+      console.error("Create error:", message);
     }
   };
 
@@ -282,7 +298,10 @@ export default function ScriptPromptTab({
         console.error("Failed to delete prompt:", result?.message);
       }
     } catch (error) {
-      console.error("Delete error:", error);
+      const { message } = handleApiError(error, "prompt_delete", {
+        metadata: { action: "delete", promptId: currentId }
+      });
+      console.error("Delete error:", message);
     }
   };
 

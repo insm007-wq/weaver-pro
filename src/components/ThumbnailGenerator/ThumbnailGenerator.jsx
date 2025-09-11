@@ -1,6 +1,12 @@
-// src/pages/ThumbnailGenerator.jsx
+// src/components/ThumbnailGenerator.jsx
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ErrorBoundary } from "./common/ErrorBoundary";
+import { ErrorBoundary } from "../common/ErrorBoundary";
+
+// Hooks - 중앙화된 훅 사용
+import { useThumbnailGeneration, useImageAnalysis, useProgressTracking } from "@hooks";
+
+// Utils - 중앙화된 에러 처리
+import { handleError, handleApiError } from "@utils";
 import {
   Button,
   Card,
@@ -39,7 +45,7 @@ import {
   TimerRegular,
   SettingsRegular,
 } from "@fluentui/react-icons";
-import { DEFAULT_TEMPLATE as IMPORTED_DEFAULT_TEMPLATE } from "./scriptgen/constants";
+import { DEFAULT_TEMPLATE as IMPORTED_DEFAULT_TEMPLATE } from "../scriptgen/constants";
 
 const useStyles = makeStyles({
   container: {
@@ -428,7 +434,7 @@ function ThumbnailGenerator() {
       try {
         const savedAnalysisEngine = await window.api.getSetting("thumbnailAnalysisEngine");
         let engineName = "Claude Sonnet 4"; // 기본값
-        
+
         if (savedAnalysisEngine === "gemini") {
           engineName = "Google Gemini 2.5 Flash";
         } else if (savedAnalysisEngine === "gemini-pro") {
@@ -438,7 +444,7 @@ function ThumbnailGenerator() {
         } else if (savedAnalysisEngine === "anthropic") {
           engineName = "Claude Sonnet 4";
         }
-        
+
         setAnalysisEngine(engineName);
         console.log(`이미지 분석 완료 - 사용된 엔진: ${engineName} (설정값: ${savedAnalysisEngine})`);
       } catch (settingError) {
@@ -564,17 +570,26 @@ function ThumbnailGenerator() {
   const onGenerate = async () => {
     // 템플릿 로딩 중인 경우 대기
     if (templateLoading) {
-      setToast({ type: "error", text: "템플릿을 로딩 중입니다. 잠시 후 다시 시도하세요." });
+      const { toast } = handleError(new Error("template_loading"), "thumbnail_generation", {
+        customMessage: "템플릿을 로딩 중입니다. 잠시 후 다시 시도하세요.",
+      });
+      setToast(toast);
       return;
     }
 
     // 각 프로바이더별 필수 필드 가드
     if (provider === "replicate" && !prompt.trim() && !fxEn.trim() && !metaTemplate.trim()) {
-      setToast({ type: "error", text: "장면 설명 또는 템플릿/분석 결과 중 하나는 필요합니다." });
+      const { toast } = handleError(new Error("validation_failed"), "thumbnail_generation", {
+        customMessage: "장면 설명 또는 템플릿/분석 결과 중 하나는 필요합니다.",
+      });
+      setToast(toast);
       return;
     }
     if (provider === "gemini" && !prompt.trim() && !metaTemplate.trim() && !fxEn.trim()) {
-      setToast({ type: "error", text: "장면 설명, 템플릿, 또는 분석 결과 중 하나는 필요합니다." });
+      const { toast } = handleError(new Error("validation_failed"), "thumbnail_generation", {
+        customMessage: "장면 설명, 템플릿, 또는 분석 결과 중 하나는 필요합니다.",
+      });
+      setToast(toast);
       return;
     }
 
@@ -582,11 +597,17 @@ function ThumbnailGenerator() {
     const hasReplicate = !!window?.api?.generateThumbnails;
     const hasGemini = !!window?.api?.generateThumbnailsGemini;
     if (provider === "replicate" && !hasReplicate) {
-      setToast({ type: "error", text: "Replicate 서비스를 사용할 수 없습니다. 설정을 확인하세요." });
+      const { toast } = handleError(new Error("service_unavailable"), "thumbnail_generation", {
+        customMessage: "Replicate 서비스를 사용할 수 없습니다. 설정을 확인하세요.",
+      });
+      setToast(toast);
       return;
     }
     if (provider === "gemini" && !hasGemini) {
-      setToast({ type: "error", text: "Gemini 서비스를 사용할 수 없습니다. 설정을 확인하세요." });
+      const { toast } = handleError(new Error("service_unavailable"), "thumbnail_generation", {
+        customMessage: "Gemini 서비스를 사용할 수 없습니다. 설정을 확인하세요.",
+      });
+      setToast(toast);
       return;
     }
 
@@ -661,25 +682,16 @@ function ThumbnailGenerator() {
     } catch (e) {
       console.error("썸네일 생성 실패:", e);
 
-      // 특정 오류 타입에 따른 사용자 친화적 메시지
-      let errorMessage = e?.message || "알 수 없는 오류가 발생했습니다.";
-
-      if (errorMessage.includes("402") && errorMessage.includes("Insufficient credit")) {
-        errorMessage = "💳 Replicate 크레딧이 부족합니다. 크레딧을 충전하거나 설정에서 다른 AI 엔진을 선택해주세요.";
-      } else if (errorMessage.includes("404") && errorMessage.includes("gemini")) {
-        errorMessage = "🤖 Gemini 모델을 찾을 수 없습니다. 최신 모델로 업데이트가 필요할 수 있습니다.";
-      } else if (errorMessage.includes("API_KEY") || errorMessage.includes("401") || errorMessage.includes("403")) {
-        errorMessage = "🔑 API 키가 유효하지 않습니다. 설정에서 API 키를 확인해주세요.";
-      } else if (errorMessage.includes("rate limit") || errorMessage.includes("429")) {
-        errorMessage = "⏱️ API 사용 한도를 초과했습니다. 잠시 후 다시 시도해주세요.";
-      } else if (errorMessage.includes("network") || errorMessage.includes("ENOTFOUND")) {
-        errorMessage = "🌐 네트워크 연결을 확인해주세요. 인터넷 연결이 불안정할 수 있습니다.";
-      }
-
-      setToast({
-        type: "error",
-        text: `생성 실패: ${errorMessage}`,
+      // Use centralized error handling with context-aware error processing
+      const { toast } = handleApiError(e, "thumbnail_generation", {
+        metadata: {
+          provider: provider,
+          count: count,
+          hasPrompt: !!prompt.trim(),
+        },
       });
+
+      setToast(toast);
     } finally {
       setLoading(false);
       setRemainingTime(null); // 카운트다운 리셋
@@ -715,16 +727,6 @@ function ThumbnailGenerator() {
           </MessageBar>
         )}
       </div>
-
-      {/* 헤더 */}
-      {/* <div className={styles.sectionLead}>
-        <Title2 style={{ fontSize: tokens.fontSizeBase500, marginBottom: tokens.spacingVerticalXXS }}>
-          🎨 썸네일 생성기
-        </Title2>
-        <Body1 style={{ color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase300 }}>
-          AI를 활용한 YouTube 썸네일 생성 도구 · PNG, JPG, JPEG 지원 · 최대 {MAX_UPLOAD_MB}MB (WEBP 불가)
-        </Body1>
-      </div> */}
 
       <div className={styles.pageHeader}>
         <div className={styles.pageTitle}>
@@ -777,10 +779,7 @@ function ThumbnailGenerator() {
             }}
             onDragLeave={() => setDragOver(false)}
             onDrop={onDrop}
-            className={mergeClasses(
-              styles.uploadArea,
-              dragOver && styles.uploadAreaDragOver
-            )}
+            className={mergeClasses(styles.uploadArea, dragOver && styles.uploadAreaDragOver)}
             onClick={onPickFile}
           >
             {imagePreview ? (
@@ -825,11 +824,15 @@ function ThumbnailGenerator() {
                           <Spinner size="extra-small" />
                           분석 중…
                           {remainingTime !== null && (
-                            <span style={{ 
-                              marginLeft: tokens.spacingHorizontalXS,
-                              color: tokens.colorNeutralForegroundOnBrand,
-                              fontWeight: tokens.fontWeightSemibold
-                            }}>(약 {Math.ceil(remainingTime)}초 남음)</span>
+                            <span
+                              style={{
+                                marginLeft: tokens.spacingHorizontalXS,
+                                color: tokens.colorNeutralForegroundOnBrand,
+                                fontWeight: tokens.fontWeightSemibold,
+                              }}
+                            >
+                              (약 {Math.ceil(remainingTime)}초 남음)
+                            </span>
                           )}
                         </>
                       ) : (
@@ -1046,10 +1049,12 @@ function ThumbnailGenerator() {
               {provider === "replicate" ? "Replicate (Flux)" : "Google Gemini (Imagen 3)"}
             </Badge>
             {(loading || fxLoading) && remainingTime !== null && (
-              <Caption1 style={{ 
-                color: fxLoading ? tokens.colorBrandForeground1 : tokens.colorNeutralForeground1,
-                fontWeight: tokens.fontWeightSemibold 
-              }}>
+              <Caption1
+                style={{
+                  color: fxLoading ? tokens.colorBrandForeground1 : tokens.colorNeutralForeground1,
+                  fontWeight: tokens.fontWeightSemibold,
+                }}
+              >
                 <TimerRegular style={{ marginRight: tokens.spacingHorizontalXXS }} />
                 {fxLoading
                   ? remainingTime > 1

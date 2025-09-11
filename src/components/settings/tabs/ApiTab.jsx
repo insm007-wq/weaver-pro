@@ -25,6 +25,7 @@ import {
 } from "@fluentui/react-icons";
 import { SettingsHeader } from "../../common";
 import { useContainerStyles, useCardStyles } from "../../../styles/commonStyles";
+import { handleApiError } from "@utils";
 
 const useStyles = makeStyles({
 
@@ -282,7 +283,10 @@ export default function ApiTab() {
         ? setStat("openai", true, `연결 성공 (model: ${res?.model ?? "gpt-4"})`)
         : setStat("openai", false, `실패: ${stringifyErr(res?.message)}`);
     } catch (e) {
-      setStat("openai", false, `오류: ${e?.message || e}`);
+      const { message } = handleApiError(e, "api_test", {
+        metadata: { service: "openai", action: "test_connection" }
+      });
+      setStat("openai", false, `오류: ${message}`);
     } finally {
       setBusy("openai", false);
     }
@@ -296,7 +300,10 @@ export default function ApiTab() {
       const res = await window.api.testAnthropic?.(anthropicKey.trim());
       res?.ok ? setStat("anthropic", true, "연결 성공") : setStat("anthropic", false, `실패: ${stringifyErr(res?.message)}`);
     } catch (e) {
-      setStat("anthropic", false, `오류: ${e?.message || e}`);
+      const { message } = handleApiError(e, "api_test", {
+        metadata: { service: "anthropic", action: "test_connection" }
+      });
+      setStat("anthropic", false, `오류: ${message}`);
     } finally {
       setBusy("anthropic", false);
     }
@@ -311,7 +318,10 @@ export default function ApiTab() {
         ? setStat("replicate", true, `연결 성공 (models: ${res.count})`)
         : setStat("replicate", false, `실패: ${stringifyErr(res?.message)}`);
     } catch (e) {
-      setStat("replicate", false, `오류: ${e?.message || e}`);
+      const { message } = handleApiError(e, "api_test", {
+        metadata: { service: "replicate", action: "test_connection" }
+      });
+      setStat("replicate", false, `오류: ${message}`);
     } finally {
       setBusy("replicate", false);
     }
@@ -331,7 +341,10 @@ export default function ApiTab() {
           )
         : setStat("pexels", false, `실패: ${stringifyErr(res?.message)}`);
     } catch (e) {
-      setStat("pexels", false, `오류: ${e?.message || e}`);
+      const { message } = handleApiError(e, "api_test", {
+        metadata: { service: "pexels", action: "test_connection" }
+      });
+      setStat("pexels", false, `오류: ${message}`);
     } finally {
       setBusy("pexels", false);
     }
@@ -347,7 +360,10 @@ export default function ApiTab() {
         ? setStat("pixabay", true, `연결 성공 (${res?.endpoint ?? "photos"})${res?.hits != null ? `, 샘플 히트 ${res.hits}` : ""}`)
         : setStat("pixabay", false, `실패: ${stringifyErr(res?.message)}`);
     } catch (e) {
-      setStat("pixabay", false, `오류: ${e?.message || e}`);
+      const { message } = handleApiError(e, "api_test", {
+        metadata: { service: "pixabay", action: "test_connection" }
+      });
+      setStat("pixabay", false, `오류: ${message}`);
     } finally {
       setBusy("pixabay", false);
     }
@@ -362,7 +378,10 @@ export default function ApiTab() {
         ? setStat("googleTts", true, `연결 성공 (voices: ${res.voices})`)
         : setStat("googleTts", false, `실패: ${stringifyErr(res?.message)}`);
     } catch (e) {
-      setStat("googleTts", false, `오류: ${e?.message || e}`);
+      const { message } = handleApiError(e, "api_test", {
+        metadata: { service: "googleTts", action: "test_connection" }
+      });
+      setStat("googleTts", false, `오류: ${message}`);
     } finally {
       setBusy("googleTts", false);
     }
@@ -376,7 +395,10 @@ export default function ApiTab() {
       const res = await window.api.testGemini?.(geminiKey.trim());
       res?.ok ? setStat("gemini", true, "연결 성공") : setStat("gemini", false, `실패: ${stringifyErr(res?.message)}`);
     } catch (e) {
-      setStat("gemini", false, `오류: ${e?.message || e}`);
+      const { message } = handleApiError(e, "api_test", {
+        metadata: { service: "gemini", action: "test_connection" }
+      });
+      setStat("gemini", false, `오류: ${message}`);
     } finally {
       setBusy("gemini", false);
     }
