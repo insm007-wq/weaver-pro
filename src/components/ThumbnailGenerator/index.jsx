@@ -1,11 +1,8 @@
 import React from "react";
 import { MessageBar, MessageBarBody, Title1, Body1, Button, Badge, Caption1 } from "@fluentui/react-components";
-import { SparkleRegular, TimerRegular } from "@fluentui/react-icons";
+import { SparkleRegular } from "@fluentui/react-icons";
 import { tokens } from "@fluentui/react-components";
 import { ErrorBoundary } from "../common/ErrorBoundary";
-import { useToast } from "../../hooks/useToast";
-import { useApi } from "../../hooks/useApi";
-import { formatMs } from "../../utils/common";
 
 // Components
 import SceneInput from "./SceneInput";
@@ -20,7 +17,8 @@ import { useThumbnailGeneration } from "./hooks/useThumbnailGeneration";
 import { useImageAnalysis } from "./hooks/useImageAnalysis";
 import { useProgressTracking } from "../../hooks/useProgressTracking";
 
-// Utils (removed - using common toast now)
+// Utils
+const createErrorToast = (text, type = 'error') => ({ type: 'error', text });
 
 // Styles
 import styles from "./ThumbnailGenerator.module.css";

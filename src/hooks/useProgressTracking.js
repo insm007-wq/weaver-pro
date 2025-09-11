@@ -38,7 +38,7 @@ export const useProgressTracking = (options = {}) => {
   }, [startTime, estimatedTime]);
 
   const updateProgress = (phase, current = 0, total = 0, message = "") => {
-    const phaseMessages = {
+    const phaseMessages = options.phaseMessages || {
       idle: "대기 중...",
       analyzing: "분석 중...",
       generating: "생성 중...",

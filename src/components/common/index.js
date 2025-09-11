@@ -113,3 +113,4 @@ export {
 // 기존 컴포넌트들 (유지)
 export { default as ErrorBoundary } from './ErrorBoundary';
 export { default as KeepAlivePane } from './KeepAlivePane';
+export { default as ProgressDonut } from './ProgressDonut';

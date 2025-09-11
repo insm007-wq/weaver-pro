@@ -38,7 +38,6 @@ import { getSetting, readTextAny, aiExtractKeywords, getSecret } from "../../../
 import { formatMs, debounce } from "../../../utils/common";
 import { useToast } from "../../../hooks/useToast";
 import { useApi } from "../../../hooks/useApi";
-import { useProgress } from "../../../hooks/useProgress";
 
 // =========================== 상수 정의 ===========================
 
@@ -182,7 +181,6 @@ function buildResolutionLabel(w, h) {
 function CanvaTab({ addAssets }) {
   const toast = useToast();
   const api = useApi();
-  const progress = useProgress();
   
   // =========================== 기본 상태 관리 ===========================
   

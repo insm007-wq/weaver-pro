@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Text, Button, Dropdown, Option, Field, Input, Textarea, Card, tokens } from "@fluentui/react-components";
+import { Text, Button, Dropdown, Option, Field, Input, Textarea, Card } from "@fluentui/react-components";
 import { AddRegular, DeleteRegular, SaveRegular, ArrowResetRegular, DocumentTextRegular } from "@fluentui/react-icons";
 import { useToast } from "../../../hooks/useToast";
 import { useApi } from "../../../hooks/useApi";
@@ -143,7 +143,6 @@ function PromptTab() {
 
   /* ============ dropdown options ============ */
   const nameOptions = React.useMemo(() => uniqueUserNames(prompts), [prompts]);
-  const canDelete = React.useMemo(() => !!selectedName && nameOptions.includes(selectedName), [nameOptions, selectedName]);
 
   /* ============ CRUD ============ */
   const handleCreateInline = async () => {
