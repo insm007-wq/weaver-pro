@@ -190,15 +190,16 @@ function PromptTab() {
 
   const handleReset = async (category) => {
     try {
+      // constants.js의 기본값으로 초기화
       if (category === "script") {
         setScriptPrompt(DEFAULT_GENERATE_PROMPT);
-        // selectedScriptId는 그대로 유지 (현재 선택된 프롬프트의 내용만 초기화)
-      } else if (category === "reference") {
+      } else {
         setReferencePrompt(DEFAULT_REFERENCE_PROMPT);
-        // selectedReferenceId는 그대로 유지 (현재 선택된 프롬프트의 내용만 초기화)
       }
+      toast.success("프롬프트가 기본값으로 초기화되었습니다.");
     } catch (e) {
       console.error(e);
+      toast.error("초기화 중 오류가 발생했습니다.");
     }
   };
 
@@ -338,7 +339,7 @@ function PromptTab() {
                   value={scriptPrompt}
                   onChange={(_, data) => setScriptPrompt(data.value)}
                   disabled={loading}
-                  resize="none"
+                  resize="vertical"
                 />
               </Field>
               <div className={settingsStyles.charCount}>
@@ -367,7 +368,7 @@ function PromptTab() {
                   value={referencePrompt}
                   onChange={(_, data) => setReferencePrompt(data.value)}
                   disabled={loading}
-                  resize="none"
+                  resize="vertical"
                 />
               </Field>
               <div className={settingsStyles.charCount}>
