@@ -647,6 +647,13 @@ function ThumbnailGenerator() {
       setTookMs(Date.now() - started);
 
       updateProgress("completed", count, count);
+      
+      // 성공 토스트 표시
+      showGlobalToast({ 
+        type: "success", 
+        text: `썸네일 ${count}개가 성공적으로 생성되었습니다!` 
+      });
+      
       setTimeout(() => updateProgress("idle"), 3000);
     } catch (e) {
       console.error("썸네일 생성 실패:", e);
