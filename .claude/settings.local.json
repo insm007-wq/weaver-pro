@@ -187,7 +187,8 @@
       "mcp__ide__getDiagnostics",
       "Bash(git reset:*)",
       "Bash(git rm:*)",
-      "Bash(del /f nul)"
+      "Bash(del /f nul)",
+      "Bash(npm run electron:dev:*)"
     ],
     "deny": [],
     "ask": []
