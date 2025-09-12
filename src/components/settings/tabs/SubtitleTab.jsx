@@ -33,7 +33,7 @@ import {
 } from "@fluentui/react-icons";
 import { SettingsHeader, FormSection } from "../../common";
 import { useContainerStyles, useSettingsStyles } from "../../../styles/commonStyles";
-import { useToast } from "../../../hooks/useToast";
+import { showGlobalToast } from "../../common/GlobalToast";
 
 // 폰트 옵션
 const FONT_FAMILIES = [
@@ -74,10 +74,9 @@ export default function SubtitleTab() {
   const containerStyles = useContainerStyles();
   const settingsStyles = useSettingsStyles();
   const previewRef = useRef(null);
-  const toast = useToast();
 
-  // 자막 설정 상태
-  const [subtitleSettings, setSubtitleSettings] = useState({
+  // 기본 자막 설정
+  const defaultSettings = {
     // 기본 텍스트 설정
     fontFamily: "noto-sans",
     fontSize: 24,
@@ -119,7 +118,23 @@ export default function SubtitleTab() {
     maxLines: 2,
     wordBreak: "keep-all",
     enableRichText: false,
-  });
+  };
+
+  // 자막 설정 상태
+  const [subtitleSettings, setSubtitleSettings] = useState(defaultSettings);
+
+  // 컴포넌트 마운트 시 저장된 설정 불러오기
+  React.useEffect(() => {
+    try {
+      const savedSettings = localStorage.getItem('subtitleSettings');
+      if (savedSettings) {
+        const parsedSettings = JSON.parse(savedSettings);
+        setSubtitleSettings({ ...defaultSettings, ...parsedSettings });
+      }
+    } catch (error) {
+      console.error('저장된 자막 설정 로드 실패:', error);
+    }
+  }, []);
 
   // 설정 업데이트 헬퍼
   const updateSetting = (key, value) => {
@@ -164,39 +179,40 @@ export default function SubtitleTab() {
     return fontMap[key] || fontMap['noto-sans'];
   };
 
+  // 설정 저장
+  const saveSettings = async () => {
+    console.log('saveSettings 함수 호출됨');
+    console.log('현재 자막 설정:', subtitleSettings);
+    
+    try {
+      // API로 자막 설정 저장 (향후 구현될 API)
+      // const result = await api.invoke('settings:saveSubtitleSettings', subtitleSettings);
+      
+      // 현재는 localStorage에 저장
+      localStorage.setItem('subtitleSettings', JSON.stringify(subtitleSettings));
+      console.log('localStorage에 저장 완료');
+      
+      showGlobalToast({ 
+        type: 'success', 
+        text: '자막 설정이 저장되었습니다! 🎉' 
+      });
+    } catch (error) {
+      console.error('자막 설정 저장 실패:', error);
+      showGlobalToast({ 
+        type: 'error', 
+        text: '자막 설정 저장에 실패했습니다.' 
+      });
+    }
+  };
+
   // 설정 초기화
   const resetSettings = () => {
-    setSubtitleSettings({
-      fontFamily: "noto-sans",
-      fontSize: 24,
-      fontWeight: 600,
-      lineHeight: 1.4,
-      letterSpacing: 0,
-      textColor: "#FFFFFF",
-      backgroundColor: "#000000", 
-      backgroundOpacity: 80,
-      outlineColor: "#000000",
-      outlineWidth: 2,
-      shadowColor: "#000000",
-      shadowOffset: 2,
-      shadowBlur: 4,
-      position: "bottom",
-      horizontalAlign: "center",
-      verticalPadding: 40,
-      horizontalPadding: 20,
-      maxWidth: 80,
-      finePositionOffset: 0,
-      useBackground: true,
-      backgroundRadius: 8,
-      useOutline: true,
-      useShadow: true,
-      animation: "fade",
-      animationDuration: 0.3,
-      displayDuration: 3.0,
-      autoWrap: true,
-      maxLines: 2,
-      wordBreak: "keep-all",
-      enableRichText: false,
+    setSubtitleSettings(defaultSettings);
+    // localStorage에서도 제거
+    localStorage.removeItem('subtitleSettings');
+    showGlobalToast({ 
+      type: 'success', 
+      text: '자막 설정이 기본값으로 초기화되었습니다!' 
     });
   };
 
@@ -654,10 +670,22 @@ export default function SubtitleTab() {
 
       {/* 하단 액션 버튼 */}
       <div style={{ display: "flex", gap: "16px", marginTop: "24px" }}>
-        <Button appearance="primary">
+        <Button 
+          appearance="primary" 
+          onClick={() => {
+            console.log('설정 저장 버튼 클릭됨');
+            saveSettings();
+          }}
+        >
           설정 저장
         </Button>
-        <Button appearance="secondary" onClick={resetSettings}>
+        <Button 
+          appearance="secondary" 
+          onClick={() => {
+            console.log('초기화 버튼 클릭됨');
+            resetSettings();
+          }}
+        >
           기본값으로 초기화
         </Button>
       </div>
