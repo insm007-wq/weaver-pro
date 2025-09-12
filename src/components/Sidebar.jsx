@@ -191,10 +191,11 @@ const useStyles = makeStyles({
   },
   footer: {
     ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalL),
-    ...shorthands.borderTop("1px", "solid", tokens.colorNeutralStroke2),
-    backgroundColor: "rgba(0, 0, 0, 0.02)",
+    ...shorthands.borderTop("1px", "solid", tokens.colorNeutralStroke1),
+    backgroundColor: tokens.colorNeutralBackground2,
     backdropFilter: "blur(10px)",
     WebkitBackdropFilter: "blur(10px)",
+    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.1)",
   },
   
   footerContent: {
