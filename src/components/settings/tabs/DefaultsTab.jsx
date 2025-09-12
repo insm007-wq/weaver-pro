@@ -71,13 +71,23 @@ export default function DefaultsTab() {
   // 폴더 선택
   const selectFolder = async () => {
     try {
+      console.log('폴더 선택 시작...');
       // Electron의 dialog API를 사용하여 폴더 선택
       const result = await api.invoke('dialog:selectFolder');
-      if (result && !result.canceled && result.filePaths.length > 0) {
-        setSettings(prev => ({ ...prev, videoSaveFolder: result.filePaths[0] }));
+      console.log('폴더 선택 결과:', result);
+      
+      if (result && result.success && result.data && !result.data.canceled && result.data.filePaths && result.data.filePaths.length > 0) {
+        console.log('선택된 폴더:', result.data.filePaths[0]);
+        setSettings(prev => ({ ...prev, videoSaveFolder: result.data.filePaths[0] }));
         showGlobalToast({ 
           type: 'success', 
           text: '폴더가 선택되었습니다!' 
+        });
+      } else {
+        console.log('폴더 선택이 취소되었습니다.');
+        showGlobalToast({ 
+          type: 'info', 
+          text: '폴더 선택이 취소되었습니다.' 
         });
       }
     } catch (error) {

@@ -142,7 +142,7 @@ export default function GlobalToast() {
     <div className={`${styles.container} ${isVisible ? styles.containerVisible : ''}`}>
       <MessageBar 
         intent={isSuccess ? 'success' : 'error'}
-        className={`${styles.messageBar} ${isSuccess ? styles.successBar : styles.errorBar}`}
+        className={isSuccess ? `${styles.messageBar} ${styles.successBar}` : `${styles.messageBar} ${styles.errorBar}`}
       >
         <MessageBarBody>
           <div className={styles.messageContent}>
