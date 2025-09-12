@@ -78,29 +78,29 @@ const IMAGE_STYLE_OPTIONS = [
 ];
 
 const AI_ENGINE_OPTIONS = [
-  { 
-    key: "openai-gpt5mini", 
-    text: "🤖 OpenAI GPT-5 Mini", 
+  {
+    key: "openai-gpt5mini",
+    text: "🤖 OpenAI GPT-5 Mini",
     desc: "최신 GPT-5 모델, 롱폼 대본 최적화",
     processingTime: "2-5분",
     features: ["📝 긴 대본 생성", "🎯 정확성", "🔄 일관성"],
-    rating: 4.8
+    rating: 4.8,
   },
-  { 
-    key: "anthropic", 
-    text: "🧠 Anthropic Claude", 
+  {
+    key: "anthropic",
+    text: "🧠 Anthropic Claude",
     desc: "Claude Sonnet/Haiku, 정확하고 자연스러운 문체",
     processingTime: "1-3분",
     features: ["✨ 자연스런 문체", "🎪 창의성", "📚 교육적"],
-    rating: 4.9
+    rating: 4.9,
   },
-  { 
-    key: "minimax", 
-    text: "🚀 Minimax Abab", 
+  {
+    key: "minimax",
+    text: "🚀 Minimax Abab",
     desc: "중국 Minimax API, 빠른 처리 속도",
     processingTime: "30초-2분",
     features: ["⚡ 빠른 처리", "💰 저렴함", "🔧 효율성"],
-    rating: 4.6
+    rating: 4.6,
   },
 ];
 
@@ -113,8 +113,8 @@ const ADVANCED_PRESETS = [
       durationMin: 8,
       maxScenes: 12,
       temperature: 1.1,
-      imageStyle: "cinematic"
-    }
+      imageStyle: "cinematic",
+    },
   },
   {
     name: "📚 교육 컨텐츠",
@@ -124,8 +124,8 @@ const ADVANCED_PRESETS = [
       durationMin: 5,
       maxScenes: 8,
       temperature: 0.9,
-      imageStyle: "illustration"
-    }
+      imageStyle: "illustration",
+    },
   },
   {
     name: "💼 비즈니스 프레젠테이션",
@@ -135,8 +135,8 @@ const ADVANCED_PRESETS = [
       durationMin: 3,
       maxScenes: 6,
       temperature: 0.8,
-      imageStyle: "photo"
-    }
+      imageStyle: "photo",
+    },
   },
   {
     name: "🎪 엔터테인먼트",
@@ -146,9 +146,9 @@ const ADVANCED_PRESETS = [
       durationMin: 2,
       maxScenes: 10,
       temperature: 1.2,
-      imageStyle: "cinematic"
-    }
-  }
+      imageStyle: "cinematic",
+    },
+  },
 ];
 
 /* --------------------------- 기본 폼 --------------------------- */
@@ -189,29 +189,29 @@ function ScriptVoiceGenerator() {
   const [formValidation, setFormValidation] = useState({
     topicValid: true,
     promptValid: true,
-    engineValid: true
+    engineValid: true,
   });
 
   // 완전 자동화 상태
   const [fullVideoState, setFullVideoState] = useState({
     isGenerating: false,
-    currentStep: 'idle', // 'script', 'audio', 'images', 'video', 'complete', 'error'
+    currentStep: "idle", // 'script', 'audio', 'images', 'video', 'complete', 'error'
     progress: {
       script: 0,
       audio: 0,
       images: 0,
-      video: 0
+      video: 0,
     },
     results: {
       script: null,
       audio: null,
       images: [],
-      video: null
+      video: null,
     },
-    streamingScript: '',
+    streamingScript: "",
     error: null,
     startTime: null,
-    logs: []
+    logs: [],
   });
 
   // 프롬프트/음성
@@ -225,16 +225,16 @@ function ScriptVoiceGenerator() {
   const onChange = (k, v) => {
     setForm((p) => ({ ...p, [k]: v }));
     // 실시간 폼 검증
-    if (k === 'topic') {
-      setFormValidation(prev => ({ ...prev, topicValid: v?.trim().length > 0 }));
+    if (k === "topic") {
+      setFormValidation((prev) => ({ ...prev, topicValid: v?.trim().length > 0 }));
     }
   };
 
   // 프리셋 적용 함수
   const applyPreset = (presetName) => {
-    const preset = ADVANCED_PRESETS.find(p => p.name === presetName);
+    const preset = ADVANCED_PRESETS.find((p) => p.name === presetName);
     if (preset) {
-      setForm(prev => ({ ...prev, ...preset.settings }));
+      setForm((prev) => ({ ...prev, ...preset.settings }));
       setSelectedPreset(presetName);
       toast.success(`${presetName} 프리셋을 적용했습니다.`);
     }
@@ -242,17 +242,17 @@ function ScriptVoiceGenerator() {
 
   // 배치 주제 관리
   const addBatchTopic = () => {
-    setBatchTopics(prev => [...prev, ""]);
+    setBatchTopics((prev) => [...prev, ""]);
   };
 
   const removeBatchTopic = (index) => {
     if (batchTopics.length > 1) {
-      setBatchTopics(prev => prev.filter((_, i) => i !== index));
+      setBatchTopics((prev) => prev.filter((_, i) => i !== index));
     }
   };
 
   const updateBatchTopic = (index, value) => {
-    setBatchTopics(prev => prev.map((topic, i) => i === index ? value : topic));
+    setBatchTopics((prev) => prev.map((topic, i) => (i === index ? value : topic)));
   };
 
   // 목소리 미리듣기 함수
@@ -261,42 +261,40 @@ function ScriptVoiceGenerator() {
       console.log(`🎵 목소리 미리듣기 시작: ${voiceName} (${voiceId})`);
       console.log(`🔧 현재 TTS 엔진: ${form.ttsEngine}`);
       console.log(`⚙️ API 사용 가능:`, api.isApiAvailable());
-      
+
       // TTS API로 샘플 텍스트 음성 합성
       const sampleText = "안녕하세요. 이것은 목소리 미리듣기 샘플입니다. 자연스럽고 명확한 발음으로 한국어를 읽어드립니다.";
-      
+
       const payload = {
         doc: { scenes: [{ text: sampleText }] },
-        tts: { 
+        tts: {
           engine: form.ttsEngine,
           voiceId: voiceId,
           voiceName: voiceName,
           speakingRate: form.speed || "1.0",
-          provider: form.ttsEngine === "elevenlabs" ? "ElevenLabs" : "Google"
-        }
+          provider: form.ttsEngine === "elevenlabs" ? "ElevenLabs" : "Google",
+        },
       };
-      
+
       console.log(`📤 TTS 요청:`, payload);
-      
+
       const res = await api.invoke("tts/synthesizeByScenes", payload);
 
       console.log("📥 TTS 응답:", res);
-      
+
       if (res?.success && res?.data?.parts?.length > 0) {
         // Base64 오디오를 재생
-        const audioBlob = new Blob([
-          Uint8Array.from(atob(res.data.parts[0].base64), c => c.charCodeAt(0))
-        ], { type: 'audio/mpeg' });
-        
+        const audioBlob = new Blob([Uint8Array.from(atob(res.data.parts[0].base64), (c) => c.charCodeAt(0))], { type: "audio/mpeg" });
+
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
-        
+
         audio.onended = () => URL.revokeObjectURL(audioUrl);
-        audio.play().catch(err => {
+        audio.play().catch((err) => {
           console.error("오디오 재생 실패:", err);
           toast.error("목소리 미리듣기 재생에 실패했습니다.");
         });
-        
+
         console.log("✅ 목소리 미리듣기 재생 성공");
       } else {
         throw new Error(res?.error || res?.data?.message || "음성 합성 실패");
@@ -312,7 +310,7 @@ function ScriptVoiceGenerator() {
     const validation = {
       topicValid: form.topic?.trim().length > 0,
       promptValid: !!form.promptName,
-      engineValid: !!form.aiEngine
+      engineValid: !!form.aiEngine,
     };
     setFormValidation(validation);
     return Object.values(validation).every(Boolean);
@@ -320,30 +318,30 @@ function ScriptVoiceGenerator() {
 
   // 완전 자동화 헬퍼 함수들
   const updateFullVideoState = (updates) => {
-    setFullVideoState(prev => ({
+    setFullVideoState((prev) => ({
       ...prev,
       ...updates,
-      logs: updates.logs ? [...prev.logs, ...updates.logs] : prev.logs
+      logs: updates.logs ? [...prev.logs, ...updates.logs] : prev.logs,
     }));
   };
 
-  const addLog = (message, type = 'info') => {
+  const addLog = (message, type = "info") => {
     const timestamp = new Date().toLocaleTimeString();
     updateFullVideoState({
-      logs: [{ timestamp, message, type }]
+      logs: [{ timestamp, message, type }],
     });
   };
 
   const resetFullVideoState = () => {
     setFullVideoState({
       isGenerating: false,
-      currentStep: 'idle',
+      currentStep: "idle",
       progress: { script: 0, audio: 0, images: 0, video: 0 },
       results: { script: null, audio: null, images: [], video: null },
-      streamingScript: '',
+      streamingScript: "",
       error: null,
       startTime: null,
-      logs: []
+      logs: [],
     });
   };
 
@@ -354,7 +352,7 @@ function ScriptVoiceGenerator() {
       if ((res?.ok || res?.success) && res.data) {
         return {
           script: res.data.script?.content || "",
-          reference: res.data.reference?.content || ""
+          reference: res.data.reference?.content || "",
         };
       }
     } catch (error) {
@@ -378,12 +376,12 @@ function ScriptVoiceGenerator() {
         if ((res?.ok || res?.success) && Array.isArray(res.data)) {
           const list = res.data;
           // 사용자가 저장한 프롬프트 이름만 추출 (isDefault가 아닌 것들)
-          const names = Array.from(new Set(
-            list.filter((p) => !p.isDefault && p.name?.trim()).map((p) => p.name.trim())
-          )).sort((a, b) => a.localeCompare(b, "ko"));
-          
+          const names = Array.from(new Set(list.filter((p) => !p.isDefault && p.name?.trim()).map((p) => p.name.trim()))).sort((a, b) =>
+            a.localeCompare(b, "ko")
+          );
+
           setPromptNames(names);
-          
+
           // 첫 번째 사용자 프롬프트를 기본으로 선택
           if (!form.promptName && names.length > 0) {
             onChange("promptName", names[0]);
@@ -400,41 +398,45 @@ function ScriptVoiceGenerator() {
       setVoiceLoading(true);
       setVoiceError(null);
       console.log("🎤 Frontend: TTS 목소리 로드 시작...");
-      
+
       try {
         // 실제 TTS API 호출 (현재 설정된 엔진에 따라)
         const res = await api.invoke("tts:listVoices", { engine: form.ttsEngine });
         console.log("📋 Frontend: TTS API 응답:", res);
-        
+
         if (res?.ok || res?.success) {
           const allItems = Array.isArray(res.data) ? res.data : [];
           console.log(`✅ Frontend: ${allItems.length}개 목소리 로드 성공`);
-          
+
           let filteredItems;
           if (form.ttsEngine === "elevenlabs") {
             // ElevenLabs 추천 목소리만 표시 (10개로 제한)
-            filteredItems = allItems.filter(voice => voice.provider === 'ElevenLabs');
-            console.log("🔍 ElevenLabs 전체 목소리:", filteredItems.map(v => v.name));
-            
+            filteredItems = allItems.filter((voice) => voice.provider === "ElevenLabs");
+            console.log(
+              "🔍 ElevenLabs 전체 목소리:",
+              filteredItems.map((v) => v.name)
+            );
+
             // 추천 목소리 우선 정렬 후 10개로 제한
-            const recommendedNames = ['alice', 'bella', 'dorothy', 'elli', 'josh', 'sam', 'rachel', 'domi', 'fin', 'sarah'];
-            const recommendedVoices = filteredItems.filter(voice => 
-              recommendedNames.some(name => voice.name.toLowerCase().includes(name))
+            const recommendedNames = ["alice", "bella", "dorothy", "elli", "josh", "sam", "rachel", "domi", "fin", "sarah"];
+            const recommendedVoices = filteredItems.filter((voice) =>
+              recommendedNames.some((name) => voice.name.toLowerCase().includes(name))
             );
-            const otherVoices = filteredItems.filter(voice => 
-              !recommendedNames.some(name => voice.name.toLowerCase().includes(name))
-            );
+            const otherVoices = filteredItems.filter((voice) => !recommendedNames.some((name) => voice.name.toLowerCase().includes(name)));
             filteredItems = [...recommendedVoices, ...otherVoices].slice(0, 10);
             console.log(`🎯 총 ${filteredItems.length}개 목소리 (추천 ${Math.min(recommendedVoices.length, 10)}개 우선)`);
           } else {
             // Google TTS 고품질 목소리들 (Neural2 우선, Wavenet 보완)
-            filteredItems = allItems.filter(voice => 
-              voice.provider === 'Google' && (voice.type === 'Neural2' || voice.type === 'Wavenet')
-            ).slice(0, 8);
-            console.log("🎯 Google TTS 고품질 목소리:", filteredItems.map(v => `${v.id} (${v.type})`));
+            filteredItems = allItems
+              .filter((voice) => voice.provider === "Google" && (voice.type === "Neural2" || voice.type === "Wavenet"))
+              .slice(0, 8);
+            console.log(
+              "🎯 Google TTS 고품질 목소리:",
+              filteredItems.map((v) => `${v.id} (${v.type})`)
+            );
           }
           console.log(`🔥 Frontend: ${filteredItems.length}개 목소리 필터링`);
-          
+
           if (filteredItems.length > 0) {
             console.log("🎯 Frontend: 첫 번째 목소리:", filteredItems[0]);
           }
@@ -472,44 +474,48 @@ function ScriptVoiceGenerator() {
       setVoiceLoading(true);
       setVoiceError(null);
       console.log("🔄 TTS 엔진 변경 - 목소리 다시 로드:", form.ttsEngine);
-      
+
       try {
         // 실제 TTS API 호출 (엔진별 필터링)
         const res = await api.invoke("tts:listVoices", { engine: form.ttsEngine });
-        
+
         if (res?.ok || res?.success) {
           const allItems = Array.isArray(res.data) ? res.data : [];
           let filteredItems;
-          
+
           if (form.ttsEngine === "elevenlabs") {
             // ElevenLabs 추천 목소리만 표시 (10개로 제한)
-            filteredItems = allItems.filter(voice => voice.provider === 'ElevenLabs');
-            console.log("🔍 ElevenLabs 전체 목소리:", filteredItems.map(v => v.name));
-            
+            filteredItems = allItems.filter((voice) => voice.provider === "ElevenLabs");
+            console.log(
+              "🔍 ElevenLabs 전체 목소리:",
+              filteredItems.map((v) => v.name)
+            );
+
             // 추천 목소리 우선 정렬 후 10개로 제한
-            const recommendedNames = ['alice', 'bella', 'dorothy', 'elli', 'josh', 'sam', 'rachel', 'domi', 'fin', 'sarah'];
-            const recommendedVoices = filteredItems.filter(voice => 
-              recommendedNames.some(name => voice.name.toLowerCase().includes(name))
+            const recommendedNames = ["alice", "bella", "dorothy", "elli", "josh", "sam", "rachel", "domi", "fin", "sarah"];
+            const recommendedVoices = filteredItems.filter((voice) =>
+              recommendedNames.some((name) => voice.name.toLowerCase().includes(name))
             );
-            const otherVoices = filteredItems.filter(voice => 
-              !recommendedNames.some(name => voice.name.toLowerCase().includes(name))
-            );
+            const otherVoices = filteredItems.filter((voice) => !recommendedNames.some((name) => voice.name.toLowerCase().includes(name)));
             filteredItems = [...recommendedVoices, ...otherVoices].slice(0, 10);
             console.log(`🎯 총 ${filteredItems.length}개 목소리 (추천 ${Math.min(recommendedVoices.length, 10)}개 우선)`);
           } else {
             // Google TTS 고품질 목소리들 (Neural2 우선, Wavenet 보완)
-            filteredItems = allItems.filter(voice => 
-              voice.provider === 'Google' && (voice.type === 'Neural2' || voice.type === 'Wavenet')
-            ).slice(0, 8);
-            console.log("🎯 Google TTS 고품질 목소리:", filteredItems.map(v => `${v.id} (${v.type})`));
+            filteredItems = allItems
+              .filter((voice) => voice.provider === "Google" && (voice.type === "Neural2" || voice.type === "Wavenet"))
+              .slice(0, 8);
+            console.log(
+              "🎯 Google TTS 고품질 목소리:",
+              filteredItems.map((v) => `${v.id} (${v.type})`)
+            );
           }
-          
+
           console.log(`🔥 Frontend: ${filteredItems.length}개 ${form.ttsEngine} 목소리 필터링`);
           setVoices(filteredItems);
-          
+
           // 엔진 변경 시 첫 번째 목소리로 자동 선택
           if (filteredItems[0]?.id) {
-            setForm(prev => ({ ...prev, voiceId: filteredItems[0].id }));
+            setForm((prev) => ({ ...prev, voiceId: filteredItems[0].id }));
           }
         } else {
           setVoiceError({
@@ -537,46 +543,45 @@ function ScriptVoiceGenerator() {
     resetFullVideoState();
     updateFullVideoState({
       isGenerating: true,
-      currentStep: 'script',
-      startTime: new Date()
+      currentStep: "script",
+      startTime: new Date(),
     });
-    addLog('🎬 완전 자동화 영상 생성을 시작합니다...');
+    addLog("🎬 완전 자동화 영상 생성을 시작합니다...");
 
     try {
       // 1단계: 대본 생성
-      addLog('📝 AI 대본 생성 중...');
+      addLog("📝 AI 대본 생성 중...");
       const script = await generateScriptStep();
-      
+
       // 2단계: 음성 생성
-      updateFullVideoState({ currentStep: 'audio', progress: { script: 100 } });
-      addLog('🎤 음성 생성 중...');
+      updateFullVideoState({ currentStep: "audio", progress: { script: 100 } });
+      addLog("🎤 음성 생성 중...");
       const audio = await generateAudioStep(script);
-      
+
       // 3단계: 이미지 생성
-      updateFullVideoState({ currentStep: 'images', progress: { audio: 100 } });
-      addLog('🖼️ 이미지 생성 중...');
+      updateFullVideoState({ currentStep: "images", progress: { audio: 100 } });
+      addLog("🖼️ 이미지 생성 중...");
       const images = await generateImagesStep(script);
-      
+
       // 4단계: 영상 합성
-      updateFullVideoState({ currentStep: 'video', progress: { images: 100 } });
-      addLog('🎬 영상 합성 중...');
+      updateFullVideoState({ currentStep: "video", progress: { images: 100 } });
+      addLog("🎬 영상 합성 중...");
       const video = await generateVideoStep(script, audio, images);
-      
+
       // 완료
       updateFullVideoState({
-        currentStep: 'complete',
+        currentStep: "complete",
         progress: { video: 100 },
-        results: { script, audio, images, video }
+        results: { script, audio, images, video },
       });
-      addLog('✅ 완전 자동화 영상 생성이 완료되었습니다!', 'success');
-      toast.success('🎉 완전 자동화 영상 생성 완료! 출력 폴더를 확인해보세요.');
-      
+      addLog("✅ 완전 자동화 영상 생성이 완료되었습니다!", "success");
+      toast.success("🎉 완전 자동화 영상 생성 완료! 출력 폴더를 확인해보세요.");
     } catch (error) {
       updateFullVideoState({
-        currentStep: 'error',
-        error: error.message
+        currentStep: "error",
+        error: error.message,
       });
-      addLog(`❌ 오류 발생: ${error.message}`, 'error');
+      addLog(`❌ 오류 발생: ${error.message}`, "error");
       toast.error(`영상 생성 실패: ${error.message}`);
     }
   };
@@ -607,21 +612,21 @@ ${form.topic}의 핵심은 바로 이것입니다...
 오늘 영상 어떠셨나요? 
 구독과 좋아요는 저에게 큰 힘이 됩니다!`;
 
-    let currentText = '';
+    let currentText = "";
     let index = 0;
-    
+
     const typeInterval = setInterval(() => {
       if (index < fullScript.length) {
         currentText += fullScript[index];
-        updateFullVideoState({ 
+        updateFullVideoState({
           streamingScript: currentText,
-          progress: { script: Math.round((index / fullScript.length) * 100) }
+          progress: { script: Math.round((index / fullScript.length) * 100) },
         });
         index++;
       } else {
         clearInterval(typeInterval);
-        updateFullVideoState({ 
-          progress: { script: 100 }
+        updateFullVideoState({
+          progress: { script: 100 },
         });
       }
     }, 30); // 30ms마다 한 글자씩 타이핑
@@ -633,7 +638,7 @@ ${form.topic}의 핵심은 바로 이것입니다...
   const generateScriptStep = async () => {
     // 스트리밍 효과 시작
     const stopStreaming = simulateStreamingScript();
-    
+
     try {
       let promptContent = { script: "", reference: "" };
       if (form.promptName) {
@@ -655,7 +660,7 @@ ${form.topic}의 핵심은 바로 이것입니다...
       };
 
       // 스트리밍 완료까지 기다림 (시뮬레이션)
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise((resolve) => setTimeout(resolve, 3000));
 
       const res = await api.invoke("llm/generateScript", payload);
       if (res && res.scenes) {
@@ -664,7 +669,7 @@ ${form.topic}의 핵심은 바로 이것입니다...
         updateFullVideoState({
           results: { script: res },
           progress: { script: 100 },
-          streamingScript: '' // 스트리밍 텍스트 초기화
+          streamingScript: "", // 스트리밍 텍스트 초기화
         });
         return res;
       } else {
@@ -679,32 +684,32 @@ ${form.topic}의 핵심은 바로 이것입니다...
   // 2단계: 음성 생성 (미래 구현)
   const generateAudioStep = async (script) => {
     // TODO: TTS API 호출 구현
-    addLog('🎤 음성 생성 API 연동 준비 중...');
-    await new Promise(resolve => setTimeout(resolve, 2000)); // 임시 지연
-    return { audioPath: '/path/to/audio.mp3' };
+    addLog("🎤 음성 생성 API 연동 준비 중...");
+    await new Promise((resolve) => setTimeout(resolve, 2000)); // 임시 지연
+    return { audioPath: "/path/to/audio.mp3" };
   };
 
   // 3단계: 이미지 생성 (미래 구현)
   const generateImagesStep = async (script) => {
     // TODO: 이미지 생성 API 호출 구현
-    addLog('🖼️ 이미지 생성 API 연동 준비 중...');
-    await new Promise(resolve => setTimeout(resolve, 3000)); // 임시 지연
-    return [{ imagePath: '/path/to/image1.jpg' }, { imagePath: '/path/to/image2.jpg' }];
+    addLog("🖼️ 이미지 생성 API 연동 준비 중...");
+    await new Promise((resolve) => setTimeout(resolve, 3000)); // 임시 지연
+    return [{ imagePath: "/path/to/image1.jpg" }, { imagePath: "/path/to/image2.jpg" }];
   };
 
   // 4단계: 영상 합성 (미래 구현)
   const generateVideoStep = async (script, audio, images) => {
     // TODO: 영상 합성 API 호출 구현
-    addLog('🎬 영상 합성 API 연동 준비 중...');
-    await new Promise(resolve => setTimeout(resolve, 4000)); // 임시 지연
-    return { videoPath: '/path/to/final-video.mp4' };
+    addLog("🎬 영상 합성 API 연동 준비 중...");
+    await new Promise((resolve) => setTimeout(resolve, 4000)); // 임시 지연
+    return { videoPath: "/path/to/final-video.mp4" };
   };
 
   /* --------------------------- 실행(선택된 AI 엔진) --------------------------- */
   const runGenerate = async () => {
     setError("");
     setIsLoading(true);
-    
+
     try {
       // 선택된 프롬프트 내용 가져오기
       let promptContent = { script: "", reference: "" };
@@ -713,8 +718,8 @@ ${form.topic}의 핵심은 바로 이것입니다...
       }
 
       // 선택된 엔진 정보
-      const selectedEngine = AI_ENGINE_OPTIONS.find(engine => engine.key === form.aiEngine);
-      
+      const selectedEngine = AI_ENGINE_OPTIONS.find((engine) => engine.key === form.aiEngine);
+
       // llm/generateScript API에 맞는 payload 구성
       const payload = {
         llm: form.aiEngine, // "openai-gpt5mini", "anthropic", "minimax"
@@ -724,13 +729,13 @@ ${form.topic}의 핵심은 바로 이것입니다...
         duration: form.durationMin,
         maxScenes: form.maxScenes,
         temperature: form.temperature,
-        
+
         // 프롬프트 내용 (설정에서 가져온 것)
         prompt: promptContent.script || form.customPrompt,
-        
+
         // 레퍼런스 텍스트
         referenceText: form.referenceScript,
-        
+
         // cpm 설정 (분당 글자수)
         cpmMin: 300,
         cpmMax: 400,
@@ -740,7 +745,7 @@ ${form.topic}의 핵심은 바로 이것입니다...
 
       // 실제 API 호출
       const res = await api.invoke("llm/generateScript", payload);
-      
+
       if (res && res.scenes) {
         setDoc(res);
         const engineName = selectedEngine?.text || form.aiEngine;
@@ -749,7 +754,6 @@ ${form.topic}의 핵심은 바로 이것입니다...
       } else {
         throw new Error("API 응답이 올바르지 않습니다.");
       }
-      
     } catch (e) {
       const errorMessage = e?.message || "대본 생성 중 오류가 발생했습니다.";
       setError(errorMessage);
@@ -763,8 +767,10 @@ ${form.topic}의 핵심은 바로 이것입니다...
   /* ---------------------------- 진행률 UI 컴포넌트 ---------------------------- */
   const ProgressStepComponent = ({ step, currentStep, progress, title, icon, isCompleted, hasError }) => {
     const isActive = currentStep === step;
-    const isPast = ['script', 'audio', 'images', 'video', 'complete'].indexOf(currentStep) > ['script', 'audio', 'images', 'video', 'complete'].indexOf(step);
-    
+    const isPast =
+      ["script", "audio", "images", "video", "complete"].indexOf(currentStep) >
+      ["script", "audio", "images", "video", "complete"].indexOf(step);
+
     const getStepColor = () => {
       if (hasError) return tokens.colorPaletteRedBackground1;
       if (isCompleted || isPast) return tokens.colorPaletteLightGreenBackground1;
@@ -782,27 +788,31 @@ ${form.topic}의 핵심은 바로 이것입니다...
     const stepProgress = progress[step] || 0;
 
     return (
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
-        gap: 8,
-        opacity: isActive || isPast || isCompleted ? 1 : 0.6
-      }}>
-        <div style={{
-          width: 60,
-          height: 60,
-          borderRadius: '50%',
-          backgroundColor: getStepColor(),
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          border: `2px solid ${getIconColor()}`,
-          position: 'relative'
-        }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 8,
+          opacity: isActive || isPast || isCompleted ? 1 : 0.6,
+        }}
+      >
+        <div
+          style={{
+            width: 60,
+            height: 60,
+            borderRadius: "50%",
+            backgroundColor: getStepColor(),
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: `2px solid ${getIconColor()}`,
+            position: "relative",
+          }}
+        >
           {hasError ? (
             <DismissCircleRegular style={{ fontSize: 24, color: getIconColor() }} />
-          ) : (isCompleted || isPast) ? (
+          ) : isCompleted || isPast ? (
             <CheckmarkCircleRegular style={{ fontSize: 24, color: getIconColor() }} />
           ) : isActive ? (
             <Spinner size="medium" />
@@ -810,8 +820,8 @@ ${form.topic}의 핵심은 바로 이것입니다...
             React.createElement(icon, { style: { fontSize: 24, color: getIconColor() } })
           )}
         </div>
-        
-        <div style={{ textAlign: 'center' }}>
+
+        <div style={{ textAlign: "center" }}>
           <Text size={300} weight={isActive ? "semibold" : "regular"} style={{ color: getIconColor() }}>
             {title}
           </Text>
@@ -829,17 +839,17 @@ ${form.topic}의 핵심은 바로 이것입니다...
   };
 
   const FullVideoProgressPanel = () => {
-    if (!fullVideoState.isGenerating && fullVideoState.currentStep === 'idle') return null;
+    if (!fullVideoState.isGenerating && fullVideoState.currentStep === "idle") return null;
 
     const steps = [
-      { key: 'script', title: '대본 생성', icon: DocumentEditRegular },
-      { key: 'audio', title: '음성 생성', icon: MicRegular },
-      { key: 'images', title: '이미지 생성', icon: ImageRegular },
-      { key: 'video', title: '영상 합성', icon: VideoRegular },
+      { key: "script", title: "대본 생성", icon: DocumentEditRegular },
+      { key: "audio", title: "음성 생성", icon: MicRegular },
+      { key: "images", title: "이미지 생성", icon: ImageRegular },
+      { key: "video", title: "영상 합성", icon: VideoRegular },
     ];
 
     const getElapsedTime = () => {
-      if (!fullVideoState.startTime) return '0초';
+      if (!fullVideoState.startTime) return "0초";
       const elapsed = Math.floor((new Date() - fullVideoState.startTime) / 1000);
       const minutes = Math.floor(elapsed / 60);
       const seconds = elapsed % 60;
@@ -847,39 +857,37 @@ ${form.topic}의 핵심은 바로 이것입니다...
     };
 
     return (
-      <Card style={{
-        background: fullVideoState.currentStep === 'complete' 
-          ? tokens.colorPaletteLightGreenBackground1 
-          : fullVideoState.currentStep === 'error' 
-            ? tokens.colorPaletteRedBackground1 
-            : "#fff",
-        border: "1px solid rgba(0,0,0,0.06)",
-        boxShadow: "0 6px 24px rgba(0,0,0,0.06)",
-        borderRadius: 14,
-        padding: tokens.spacingVerticalL,
-        marginBottom: tokens.spacingVerticalL
-      }}>
+      <Card
+        style={{
+          background:
+            fullVideoState.currentStep === "complete"
+              ? tokens.colorPaletteLightGreenBackground1
+              : fullVideoState.currentStep === "error"
+              ? tokens.colorPaletteRedBackground1
+              : "#fff",
+          border: "1px solid rgba(0,0,0,0.06)",
+          boxShadow: "0 6px 24px rgba(0,0,0,0.06)",
+          borderRadius: 14,
+          padding: tokens.spacingVerticalL,
+          marginBottom: tokens.spacingVerticalL,
+        }}
+      >
         <CardHeader style={{ paddingBottom: tokens.spacingVerticalM }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <Text size={500} weight="semibold">
                 🎬 완전 자동화 영상 생성
               </Text>
               <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
-                {fullVideoState.currentStep === 'complete' 
+                {fullVideoState.currentStep === "complete"
                   ? `✅ 완료! (총 소요시간: ${getElapsedTime()})`
-                  : fullVideoState.currentStep === 'error'
-                    ? `❌ 오류 발생 (${getElapsedTime()} 경과)`
-                    : `🔄 진행 중... (${getElapsedTime()} 경과)`
-                }
+                  : fullVideoState.currentStep === "error"
+                  ? `❌ 오류 발생 (${getElapsedTime()} 경과)`
+                  : `🔄 진행 중... (${getElapsedTime()} 경과)`}
               </Text>
             </div>
             {fullVideoState.isGenerating && (
-              <Button 
-                appearance="secondary" 
-                size="small"
-                onClick={resetFullVideoState}
-              >
+              <Button appearance="secondary" size="small" onClick={resetFullVideoState}>
                 취소
               </Button>
             )}
@@ -887,15 +895,17 @@ ${form.topic}의 핵심은 바로 이것입니다...
         </CardHeader>
 
         {/* 단계별 진행률 */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          marginBottom: tokens.spacingVerticalL,
-          padding: tokens.spacingVerticalM,
-          backgroundColor: tokens.colorNeutralBackground1,
-          borderRadius: 12
-        }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: tokens.spacingVerticalL,
+            padding: tokens.spacingVerticalM,
+            backgroundColor: tokens.colorNeutralBackground1,
+            borderRadius: 12,
+          }}
+        >
           {steps.map((step, index) => (
             <React.Fragment key={step.key}>
               <ProgressStepComponent
@@ -905,27 +915,31 @@ ${form.topic}의 핵심은 바로 이것입니다...
                 title={step.title}
                 icon={step.icon}
                 isCompleted={
-                  ['script', 'audio', 'images', 'video'].indexOf(fullVideoState.currentStep) > 
-                  ['script', 'audio', 'images', 'video'].indexOf(step.key) ||
-                  fullVideoState.currentStep === 'complete'
+                  ["script", "audio", "images", "video"].indexOf(fullVideoState.currentStep) >
+                    ["script", "audio", "images", "video"].indexOf(step.key) || fullVideoState.currentStep === "complete"
                 }
-                hasError={fullVideoState.currentStep === 'error'}
+                hasError={fullVideoState.currentStep === "error"}
               />
               {index < steps.length - 1 && (
-                <div style={{ 
-                  flex: 1, 
-                  height: 2, 
-                  backgroundColor: tokens.colorNeutralStroke2,
-                  margin: '0 16px',
-                  position: 'relative'
-                }}>
-                  <div style={{
-                    height: '100%',
-                    backgroundColor: ['script', 'audio', 'images', 'video'].indexOf(fullVideoState.currentStep) > index
-                      ? tokens.colorPaletteLightGreenForeground1
-                      : tokens.colorNeutralStroke2,
-                    transition: 'all 0.3s ease'
-                  }} />
+                <div
+                  style={{
+                    flex: 1,
+                    height: 2,
+                    backgroundColor: tokens.colorNeutralStroke2,
+                    margin: "0 16px",
+                    position: "relative",
+                  }}
+                >
+                  <div
+                    style={{
+                      height: "100%",
+                      backgroundColor:
+                        ["script", "audio", "images", "video"].indexOf(fullVideoState.currentStep) > index
+                          ? tokens.colorPaletteLightGreenForeground1
+                          : tokens.colorNeutralStroke2,
+                      transition: "all 0.3s ease",
+                    }}
+                  />
                 </div>
               )}
             </React.Fragment>
@@ -934,25 +948,31 @@ ${form.topic}의 핵심은 바로 이것입니다...
 
         {/* 실시간 로그 */}
         {fullVideoState.logs.length > 0 && (
-          <div style={{
-            backgroundColor: tokens.colorNeutralBackground2,
-            borderRadius: 8,
-            padding: tokens.spacingVerticalS,
-            maxHeight: 120,
-            overflowY: 'auto'
-          }}>
+          <div
+            style={{
+              backgroundColor: tokens.colorNeutralBackground2,
+              borderRadius: 8,
+              padding: tokens.spacingVerticalS,
+              maxHeight: 120,
+              overflowY: "auto",
+            }}
+          >
             <Text size={300} weight="semibold" style={{ marginBottom: 8 }}>
               📋 진행 로그
             </Text>
             {fullVideoState.logs.slice(-5).map((log, index) => (
               <div key={index} style={{ marginBottom: 4 }}>
-                <Text size={200} style={{ 
-                  color: log.type === 'error' 
-                    ? tokens.colorPaletteRedForeground1 
-                    : log.type === 'success' 
-                      ? tokens.colorPaletteLightGreenForeground1
-                      : tokens.colorNeutralForeground2 
-                }}>
+                <Text
+                  size={200}
+                  style={{
+                    color:
+                      log.type === "error"
+                        ? tokens.colorPaletteRedForeground1
+                        : log.type === "success"
+                        ? tokens.colorPaletteLightGreenForeground1
+                        : tokens.colorNeutralForeground2,
+                  }}
+                >
                   [{log.timestamp}] {log.message}
                 </Text>
               </div>
@@ -961,28 +981,30 @@ ${form.topic}의 핵심은 바로 이것입니다...
         )}
 
         {/* 완료시 결과 */}
-        {fullVideoState.currentStep === 'complete' && fullVideoState.results.video && (
-          <div style={{
-            marginTop: tokens.spacingVerticalM,
-            display: 'flex',
-            gap: tokens.spacingHorizontalM
-          }}>
-            <Button 
-              appearance="primary" 
+        {fullVideoState.currentStep === "complete" && fullVideoState.results.video && (
+          <div
+            style={{
+              marginTop: tokens.spacingVerticalM,
+              display: "flex",
+              gap: tokens.spacingHorizontalM,
+            }}
+          >
+            <Button
+              appearance="primary"
               icon={<FolderOpenRegular />}
               onClick={() => {
                 // TODO: 출력 폴더 열기 구현
-                toast.success('출력 폴더 열기 기능 구현 예정');
+                toast.success("출력 폴더 열기 기능 구현 예정");
               }}
             >
               출력 폴더 열기
             </Button>
-            <Button 
+            <Button
               appearance="secondary"
               icon={<PlayRegular />}
               onClick={() => {
                 // TODO: 영상 재생 구현
-                toast.success('영상 재생 기능 구현 예정');
+                toast.success("영상 재생 기능 구현 예정");
               }}
             >
               영상 재생
@@ -995,19 +1017,21 @@ ${form.topic}의 핵심은 바로 이것입니다...
 
   // 스트리밍 대본 생성 컴포넌트
   const StreamingScriptViewer = () => {
-    if (!fullVideoState.isGenerating || fullVideoState.currentStep !== 'script') return null;
+    if (!fullVideoState.isGenerating || fullVideoState.currentStep !== "script") return null;
 
     return (
-      <Card style={{
-        background: "#f8f9fa",
-        border: "1px solid rgba(0,0,0,0.06)",
-        borderRadius: 14,
-        padding: tokens.spacingVerticalL,
-        marginBottom: tokens.spacingVerticalL,
-        minHeight: 300
-      }}>
+      <Card
+        style={{
+          background: "#f8f9fa",
+          border: "1px solid rgba(0,0,0,0.06)",
+          borderRadius: 14,
+          padding: tokens.spacingVerticalL,
+          marginBottom: tokens.spacingVerticalL,
+          minHeight: 300,
+        }}
+      >
         <CardHeader style={{ paddingBottom: tokens.spacingVerticalM }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Spinner size="small" />
             <Text size={500} weight="semibold">
               📝 실시간 대본 생성 중...
@@ -1018,25 +1042,31 @@ ${form.topic}의 핵심은 바로 이것입니다...
           </Text>
         </CardHeader>
 
-        <div style={{
-          backgroundColor: "#fff",
-          borderRadius: 8,
-          padding: tokens.spacingVerticalM,
-          border: "1px solid rgba(0,0,0,0.04)",
-          fontFamily: "monospace",
-          fontSize: "14px",
-          lineHeight: 1.6,
-          minHeight: 200,
-          maxHeight: 400,
-          overflowY: "auto",
-          whiteSpace: "pre-wrap"
-        }}>
+        <div
+          style={{
+            backgroundColor: "#fff",
+            borderRadius: 8,
+            padding: tokens.spacingVerticalM,
+            border: "1px solid rgba(0,0,0,0.04)",
+            fontFamily: "monospace",
+            fontSize: "14px",
+            lineHeight: 1.6,
+            minHeight: 200,
+            maxHeight: 400,
+            overflowY: "auto",
+            whiteSpace: "pre-wrap",
+          }}
+        >
           {fullVideoState.streamingScript || "대본 생성을 시작합니다..."}
-          <span style={{ 
-            animation: "blink 1s infinite",
-            marginLeft: 2,
-            fontSize: "16px"
-          }}>|</span>
+          <span
+            style={{
+              animation: "blink 1s infinite",
+              marginLeft: 2,
+              fontSize: "16px",
+            }}
+          >
+            |
+          </span>
         </div>
 
         <style>
@@ -1324,95 +1354,99 @@ ${form.topic}의 핵심은 바로 이것입니다...
                     <Option key={v.id} value={v.id}>
                       {v.name || v.id}
                       {v.type && (
-                        <Badge size="small" appearance="tint" style={{ marginLeft: '8px' }}>
+                        <Badge size="small" appearance="tint" style={{ marginLeft: "8px" }}>
                           {v.type}
                         </Badge>
                       )}
                     </Option>
                   ))}
                 </Dropdown>
-                
+
                 {/* 선택된 목소리 정보 */}
-                {form.voiceId && (() => {
-                  const selectedVoice = voices.find(v => v.id === form.voiceId);
-                  return selectedVoice ? (
-                    <div style={{
-                      marginTop: 12,
-                      padding: 12,
-                      background: "#f8f9fa",
-                      borderRadius: 8,
-                      border: "1px solid rgba(0,0,0,0.06)"
-                    }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                        <Text weight="semibold" size={300}>
-                          🎤 {selectedVoice.name}
-                        </Text>
-                        <Badge appearance="tint" color="brand">
-                          {form.ttsEngine === "elevenlabs" ? "ElevenLabs" : "Google TTS"}
-                        </Badge>
-                      </div>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-                        <Badge appearance="outline" size="small">
-                          {selectedVoice.gender === 'MALE' ? '👨 남성' : 
-                           selectedVoice.gender === 'FEMALE' ? '👩 여성' : '🧑 중성'}
-                        </Badge>
-                        <Badge appearance="outline" size="small">
-                          {selectedVoice.type}
-                        </Badge>
-                        <Badge appearance="outline" size="small">
-                          {selectedVoice.language}
-                        </Badge>
-                      </div>
-                      
-                      {/* 목소리 추천 정보 */}
-                      <div style={{ 
-                        marginBottom: 8, 
-                        padding: 8, 
-                        background: "#f8f9fa", 
-                        borderRadius: 6, 
-                        border: "1px solid rgba(0,0,0,0.06)" 
-                      }}>
-                        <Text size={200} style={{ color: "#666", lineHeight: 1.4 }}>
-                          {(() => {
-                            const voiceName = selectedVoice.name.toLowerCase();
-                            if (voiceName.includes('alice')) {
-                              return "💬 친근한 대화형 - 리뷰, 브이로그에 적합한 자연스러운 톤";
-                            } else if (voiceName.includes('bella') || voiceName.includes('rachel')) {
-                              return "📰 뉴스/설명형 - 튜토리얼, 가이드에 적합한 중립적 톤";
-                            } else if (voiceName.includes('dorothy') || voiceName.includes('elli')) {
-                              return "🎓 교육/강의형 - 온라인 강의, 학습에 최적화 (가장 추천)";
-                            } else if (voiceName.includes('josh')) {
-                              return "🏢 차분/전문형 - B2B, 기업 소개에 적합한 안정적 톤";
-                            } else if (voiceName.includes('sam')) {
-                              return "⚡ 에너지 광고형 - 프로모션, 광고에 적합한 역동적 톤";
-                            } else if (voiceName.includes('domi')) {
-                              return "📚 스토리텔링 - 다큐멘터리, 힐링 콘텐츠에 적합한 감성적 톤";
-                            } else if (voiceName.includes('fin')) {
-                              return "🎭 다양한 표현형 - 창의적 콘텐츠, 엔터테인먼트에 적합";
-                            } else if (voiceName.includes('sarah')) {
-                              return "🌟 프리미엄 여성형 - 고급스러운 브랜드, 럭셔리 콘텐츠용";
-                            } else {
-                              return "🎓 교육/강의형 - 한국어 콘텐츠에 가장 적합한 범용 목소리";
-                            }
-                          })()}
-                        </Text>
-                      </div>
-                      <div>
-                        <Button 
-                          appearance="subtle" 
-                          size="small"
-                          icon={<PlayRegular />}
-                          onClick={() => {
-                            console.log("🔊 선택된 목소리 미리듣기 버튼 클릭됨:", selectedVoice.name, selectedVoice.id);
-                            previewVoice(selectedVoice.id, selectedVoice.name);
+                {form.voiceId &&
+                  (() => {
+                    const selectedVoice = voices.find((v) => v.id === form.voiceId);
+                    return selectedVoice ? (
+                      <div
+                        style={{
+                          marginTop: 12,
+                          padding: 12,
+                          background: "#f8f9fa",
+                          borderRadius: 8,
+                          border: "1px solid rgba(0,0,0,0.06)",
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                          <Text weight="semibold" size={300}>
+                            🎤 {selectedVoice.name}
+                          </Text>
+                          <Badge appearance="tint" color="brand">
+                            {form.ttsEngine === "elevenlabs" ? "ElevenLabs" : "Google TTS"}
+                          </Badge>
+                        </div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                          <Badge appearance="outline" size="small">
+                            {selectedVoice.gender === "MALE" ? "👨 남성" : selectedVoice.gender === "FEMALE" ? "👩 여성" : "🧑 중성"}
+                          </Badge>
+                          <Badge appearance="outline" size="small">
+                            {selectedVoice.type}
+                          </Badge>
+                          <Badge appearance="outline" size="small">
+                            {selectedVoice.language}
+                          </Badge>
+                        </div>
+
+                        {/* 목소리 추천 정보 */}
+                        <div
+                          style={{
+                            marginBottom: 8,
+                            padding: 8,
+                            background: "#f8f9fa",
+                            borderRadius: 6,
+                            border: "1px solid rgba(0,0,0,0.06)",
                           }}
                         >
-                          미리듣기
-                        </Button>
+                          <Text size={200} style={{ color: "#666", lineHeight: 1.4 }}>
+                            {(() => {
+                              const voiceName = selectedVoice.name.toLowerCase();
+                              if (voiceName.includes("alice")) {
+                                return "💬 친근한 대화형 - 리뷰, 브이로그에 적합한 자연스러운 톤";
+                              } else if (voiceName.includes("bella") || voiceName.includes("rachel")) {
+                                return "📰 뉴스/설명형 - 튜토리얼, 가이드에 적합한 중립적 톤";
+                              } else if (voiceName.includes("dorothy") || voiceName.includes("elli")) {
+                                return "🎓 교육/강의형 - 온라인 강의, 학습에 최적화 (가장 추천)";
+                              } else if (voiceName.includes("josh")) {
+                                return "🏢 차분/전문형 - B2B, 기업 소개에 적합한 안정적 톤";
+                              } else if (voiceName.includes("sam")) {
+                                return "⚡ 에너지 광고형 - 프로모션, 광고에 적합한 역동적 톤";
+                              } else if (voiceName.includes("domi")) {
+                                return "📚 스토리텔링 - 다큐멘터리, 힐링 콘텐츠에 적합한 감성적 톤";
+                              } else if (voiceName.includes("fin")) {
+                                return "🎭 다양한 표현형 - 창의적 콘텐츠, 엔터테인먼트에 적합";
+                              } else if (voiceName.includes("sarah")) {
+                                return "🌟 프리미엄 여성형 - 고급스러운 브랜드, 럭셔리 콘텐츠용";
+                              } else {
+                                return "🎓 교육/강의형 - 한국어 콘텐츠에 가장 적합한 범용 목소리";
+                              }
+                            })()}
+                          </Text>
+                        </div>
+                        <div>
+                          <Button
+                            appearance="subtle"
+                            size="small"
+                            icon={<PlayRegular />}
+                            onClick={() => {
+                              console.log("🔊 선택된 목소리 미리듣기 버튼 클릭됨:", selectedVoice.name, selectedVoice.id);
+                              previewVoice(selectedVoice.id, selectedVoice.name);
+                            }}
+                          >
+                            미리듣기
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ) : null;
-                })()}
+                    ) : null;
+                  })()}
               </Field>
             </div>
 
@@ -1430,41 +1464,48 @@ ${form.topic}의 핵심은 바로 이것입니다...
                     </Option>
                   ))}
                 </Dropdown>
-                
+
                 {/* AI 엔진 세부 정보 */}
-                {form.aiEngine && (() => {
-                  const selectedEngine = AI_ENGINE_OPTIONS.find(engine => engine.key === form.aiEngine);
-                  return selectedEngine ? (
-                    <div style={{
-                      marginTop: 12,
-                      padding: 12,
-                      background: "#f8f9fa",
-                      borderRadius: 8,
-                      border: "1px solid rgba(0,0,0,0.06)"
-                    }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                        <Text weight="semibold" size={300}>{selectedEngine.text}</Text>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                          <Text size={200}>평점:</Text>
-                          <Badge appearance="tint" color="success">{selectedEngine.rating}/5.0</Badge>
+                {form.aiEngine &&
+                  (() => {
+                    const selectedEngine = AI_ENGINE_OPTIONS.find((engine) => engine.key === form.aiEngine);
+                    return selectedEngine ? (
+                      <div
+                        style={{
+                          marginTop: 12,
+                          padding: 12,
+                          background: "#f8f9fa",
+                          borderRadius: 8,
+                          border: "1px solid rgba(0,0,0,0.06)",
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                          <Text weight="semibold" size={300}>
+                            {selectedEngine.text}
+                          </Text>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <Text size={200}>평점:</Text>
+                            <Badge appearance="tint" color="success">
+                              {selectedEngine.rating}/5.0
+                            </Badge>
+                          </div>
                         </div>
+                        <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginBottom: 8 }}>
+                          {selectedEngine.desc}
+                        </Text>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {selectedEngine.features.map((feature, index) => (
+                            <Badge key={index} appearance="outline" size="small">
+                              {feature}
+                            </Badge>
+                          ))}
+                        </div>
+                        <Text size={100} style={{ color: tokens.colorNeutralForeground3, marginTop: 6 }}>
+                          예상 처리 시간: {selectedEngine.processingTime}
+                        </Text>
                       </div>
-                      <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginBottom: 8 }}>
-                        {selectedEngine.desc}
-                      </Text>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        {selectedEngine.features.map((feature, index) => (
-                          <Badge key={index} appearance="outline" size="small">
-                            {feature}
-                          </Badge>
-                        ))}
-                      </div>
-                      <Text size={100} style={{ color: tokens.colorNeutralForeground3, marginTop: 6 }}>
-                        예상 처리 시간: {selectedEngine.processingTime}
-                      </Text>
-                    </div>
-                  ) : null;
-                })()}
+                    ) : null;
+                  })()}
               </Field>
             </div>
           </div>
@@ -1485,7 +1526,7 @@ ${form.topic}의 핵심은 바로 이것입니다...
                 <Text weight="semibold">TTS 음성 목록 로드 실패</Text>
               </div>
               <Body1 style={{ marginBottom: 8 }}>
-                Google TTS 음성 목록을 불러올 수 없습니다. API 키를 확인해주세요. 
+                Google TTS 음성 목록을 불러올 수 없습니다. API 키를 확인해주세요.
                 <br />
                 <strong>현재 지원 TTS:</strong> Google Cloud Text-to-Speech
                 <br />
@@ -1526,7 +1567,7 @@ ${form.topic}의 핵심은 바로 이것입니다...
                   appearance="outline"
                   onClick={() => {
                     // 설정 탭으로 이동하는 기능 (추후 구현)
-                    toast.success('설정 탭에서 API 키를 설정할 수 있습니다');
+                    toast.success("설정 탭에서 API 키를 설정할 수 있습니다");
                   }}
                 >
                   API 키 설정
@@ -1534,16 +1575,18 @@ ${form.topic}의 핵심은 바로 이것입니다...
               </div>
             </div>
           )}
-          
+
           {/* TTS 엔진 상태 표시 */}
           {!voiceError && voices.length > 0 && (
-            <div style={{
-              marginTop: tokens.spacingVerticalM,
-              padding: 12,
-              background: tokens.colorPaletteLightGreenBackground1,
-              borderRadius: 8,
-              border: "1px solid rgba(0,0,0,0.06)"
-            }}>
+            <div
+              style={{
+                marginTop: tokens.spacingVerticalM,
+                padding: 12,
+                background: tokens.colorPaletteLightGreenBackground1,
+                borderRadius: 8,
+                border: "1px solid rgba(0,0,0,0.06)",
+              }}
+            >
               <Text size={300} weight="semibold" style={{ color: tokens.colorPaletteLightGreenForeground1 }}>
                 🎤 Google TTS 연결됨
               </Text>
@@ -1551,14 +1594,14 @@ ${form.topic}의 핵심은 바로 이것입니다...
                 <Badge appearance="tint" color="brand">
                   Google TTS: {voices.length}개 음성
                 </Badge>
-                {voices.some(v => v.type === 'Neural2') && (
+                {voices.some((v) => v.type === "Neural2") && (
                   <Badge appearance="outline" color="success">
                     Neural2 지원
                   </Badge>
                 )}
-                {voices.some(v => v.type === 'Wavenet') && (
+                {voices.some((v) => v.type === "Wavenet") && (
                   <Badge appearance="outline" color="brand">
-                    Wavenet 지원  
+                    Wavenet 지원
                   </Badge>
                 )}
               </div>
@@ -1590,36 +1633,42 @@ ${form.topic}의 핵심은 바로 이것입니다...
           {showAdvanced && (
             <div style={{ marginTop: tokens.spacingVerticalM }}>
               {/* 프리셋 섹션 */}
-              <div style={{
-                background: "#fff",
-                border: "1px solid rgba(0,0,0,0.06)",
-                borderRadius: 12,
-                padding: tokens.spacingVerticalL,
-                marginBottom: tokens.spacingVerticalM
-              }}>
+              <div
+                style={{
+                  background: "#fff",
+                  border: "1px solid rgba(0,0,0,0.06)",
+                  borderRadius: 12,
+                  padding: tokens.spacingVerticalL,
+                  marginBottom: tokens.spacingVerticalM,
+                }}
+              >
                 <div style={{ marginBottom: tokens.spacingVerticalM }}>
-                  <Text weight="semibold" size={400}>🎯 설정 프리셋</Text>
+                  <Text weight="semibold" size={400}>
+                    🎯 설정 프리셋
+                  </Text>
                   <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
                     용도별 최적화된 설정을 한 번에 적용할 수 있습니다.
                   </Text>
                 </div>
-                
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: tokens.spacingHorizontalM }}>
+
+                <div
+                  style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: tokens.spacingHorizontalM }}
+                >
                   {ADVANCED_PRESETS.map((preset) => (
-                    <Card key={preset.name} style={{
-                      padding: tokens.spacingVerticalM,
-                      cursor: "pointer",
-                      border: selectedPreset === preset.name 
-                        ? `2px solid ${tokens.colorBrandBackground}` 
-                        : "1px solid rgba(0,0,0,0.08)",
-                      background: selectedPreset === preset.name 
-                        ? tokens.colorBrandBackground2 
-                        : "#fff",
-                      transition: "all 0.2s ease"
-                    }}
-                    onClick={() => applyPreset(preset.name)}
+                    <Card
+                      key={preset.name}
+                      style={{
+                        padding: tokens.spacingVerticalM,
+                        cursor: "pointer",
+                        border: selectedPreset === preset.name ? `2px solid ${tokens.colorBrandBackground}` : "1px solid rgba(0,0,0,0.08)",
+                        background: selectedPreset === preset.name ? tokens.colorBrandBackground2 : "#fff",
+                        transition: "all 0.2s ease",
+                      }}
+                      onClick={() => applyPreset(preset.name)}
                     >
-                      <Text weight="semibold" size={300}>{preset.name}</Text>
+                      <Text weight="semibold" size={300}>
+                        {preset.name}
+                      </Text>
                       <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
                         {preset.description}
                       </Text>
@@ -1634,16 +1683,22 @@ ${form.topic}의 핵심은 바로 이것입니다...
               </div>
 
               {/* 배치 처리 섹션 */}
-              <div style={{
-                background: "#fff",
-                border: "1px solid rgba(0,0,0,0.06)",
-                borderRadius: 12,
-                padding: tokens.spacingVerticalL,
-                marginBottom: tokens.spacingVerticalM
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tokens.spacingVerticalM }}>
+              <div
+                style={{
+                  background: "#fff",
+                  border: "1px solid rgba(0,0,0,0.06)",
+                  borderRadius: 12,
+                  padding: tokens.spacingVerticalL,
+                  marginBottom: tokens.spacingVerticalM,
+                }}
+              >
+                <div
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tokens.spacingVerticalM }}
+                >
                   <div>
-                    <Text weight="semibold" size={400}>📦 배치 처리 모드</Text>
+                    <Text weight="semibold" size={400}>
+                      📦 배치 처리 모드
+                    </Text>
                     <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
                       여러 주제를 한 번에 처리하여 대량 생산이 가능합니다.
                     </Text>
@@ -1654,7 +1709,7 @@ ${form.topic}의 핵심은 바로 이것입니다...
                 {showBatchMode && (
                   <div>
                     <Text size={300} weight="semibold" style={{ marginBottom: 8 }}>
-                      처리할 주제 목록 ({batchTopics.filter(t => t.trim()).length}개)
+                      처리할 주제 목록 ({batchTopics.filter((t) => t.trim()).length}개)
                     </Text>
                     {batchTopics.map((topic, index) => (
                       <div key={index} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
@@ -1672,11 +1727,7 @@ ${form.topic}의 핵심은 바로 이것입니다...
                         />
                       </div>
                     ))}
-                    <Button
-                      appearance="outline"
-                      icon={<CircleRegular />}
-                      onClick={addBatchTopic}
-                    >
+                    <Button appearance="outline" icon={<CircleRegular />} onClick={addBatchTopic}>
                       주제 추가
                     </Button>
                   </div>
@@ -1684,21 +1735,25 @@ ${form.topic}의 핵심은 바로 이것입니다...
               </div>
 
               {/* 기존 세부 설정 */}
-              <div style={{
-                background: "#fff",
-                border: "1px solid rgba(0,0,0,0.06)",
-                borderRadius: 12,
-                padding: tokens.spacingVerticalL
-              }}>
+              <div
+                style={{
+                  background: "#fff",
+                  border: "1px solid rgba(0,0,0,0.06)",
+                  borderRadius: 12,
+                  padding: tokens.spacingVerticalL,
+                }}
+              >
                 <Text weight="semibold" size={400} style={{ marginBottom: tokens.spacingVerticalM }}>
                   🔧 세부 설정
                 </Text>
-                
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: tokens.spacingHorizontalXL,
-                }}>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: tokens.spacingHorizontalXL,
+                  }}
+                >
                   <Field label="최대 장면 수">
                     <Input
                       type="number"
@@ -1756,14 +1811,17 @@ ${form.topic}의 핵심은 바로 이것입니다...
               {statTile("예상 장면 수", `${estimatedScenes}개`)}
               {statTile("예상 글자 수", `${avgChars.toLocaleString()}자`)}
               {statTile("음성 시간", `약 ${duration}분`)}
-              {statTile("AI 엔진", 
+              {statTile(
+                "AI 엔진",
                 (() => {
-                  const selectedEngine = AI_ENGINE_OPTIONS.find(engine => engine.key === form.aiEngine);
+                  const selectedEngine = AI_ENGINE_OPTIONS.find((engine) => engine.key === form.aiEngine);
                   return selectedEngine ? (
                     <Badge appearance="tint" color="brand" style={{ fontWeight: 600 }}>
                       {selectedEngine.text}
                     </Badge>
-                  ) : "미선택";
+                  ) : (
+                    "미선택"
+                  );
                 })()
               )}
             </div>
@@ -1771,23 +1829,27 @@ ${form.topic}의 핵심은 바로 이것입니다...
         </div>
 
         {/* 완전 자동화 영상 생성 */}
-        <div style={{
-          ...card,
-          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-          color: "#fff",
-          position: "relative",
-          overflow: "hidden"
-        }}>
-          <div style={{
-            position: "absolute",
-            top: -20,
-            right: -20,
-            width: 100,
-            height: 100,
-            background: "rgba(255,255,255,0.1)",
-            borderRadius: "50%"
-          }} />
-          
+        <div
+          style={{
+            ...card,
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            color: "#fff",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              top: -20,
+              right: -20,
+              width: 100,
+              height: 100,
+              background: "rgba(255,255,255,0.1)",
+              borderRadius: "50%",
+            }}
+          />
+
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", position: "relative", zIndex: 1 }}>
             <div>
               <Text weight="bold" size={600} style={{ color: "#fff", marginBottom: 8 }}>
@@ -1811,13 +1873,13 @@ ${form.topic}의 핵심은 바로 이것입니다...
                 border: "none",
                 padding: "16px 24px",
                 fontWeight: "bold",
-                fontSize: "16px"
+                fontSize: "16px",
               }}
             >
               {fullVideoState.isGenerating ? "생성 중..." : "🚀 완전 자동화 시작"}
             </Button>
           </div>
-          
+
           {(!form.topic?.trim() || !form.promptName || !form.aiEngine) && (
             <div style={{ marginTop: 16, background: "rgba(255,255,255,0.1)", padding: 12, borderRadius: 8 }}>
               {!form.topic?.trim() && (
@@ -1854,8 +1916,8 @@ ${form.topic}의 핵심은 바로 이것입니다...
               <br />
               <Text size={200} color="secondary">
                 {(() => {
-                  const selectedEngine = AI_ENGINE_OPTIONS.find(engine => engine.key === form.aiEngine);
-                  return selectedEngine 
+                  const selectedEngine = AI_ENGINE_OPTIONS.find((engine) => engine.key === form.aiEngine);
+                  return selectedEngine
                     ? `${selectedEngine.text}로 대본만 생성합니다 (예상 시간: ${selectedEngine.processingTime})`
                     : "AI 엔진을 선택해 대본을 생성합니다";
                 })()}

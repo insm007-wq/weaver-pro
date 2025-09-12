@@ -20,7 +20,6 @@ import {
   BrainCircuitRegular,
   ImageRegular,
   SubtitlesRegular,
-  PaintBrushRegular,
   ChevronLeftRegular,
 } from "@fluentui/react-icons";
 
@@ -30,7 +29,6 @@ const ApiTab = lazy(() => import("./settings/tabs/ApiTab"));
 const PromptTab = lazy(() => import("./settings/tabs/PromptTab"));
 const ThumbnailTab = lazy(() => import("./settings/tabs/ThumbnailTab"));
 const SubtitleTab = lazy(() => import("./settings/tabs/SubtitleTab"));
-const AppearanceTab = lazy(() => import("./settings/tabs/AppearanceTab"));
 
 const useStyles = makeStyles({
   root: {
@@ -103,7 +101,6 @@ const tabs = [
   { key: "prompt", name: "프롬프트", icon: <BrainCircuitRegular />, Comp: PromptTab, description: "AI 프롬프트 템플릿 관리" },
   { key: "thumbnail", name: "썸네일", icon: <ImageRegular />, Comp: ThumbnailTab, description: "썸네일 생성 설정" },
   { key: "subtitle", name: "자막", icon: <SubtitlesRegular />, Comp: SubtitleTab, description: "자막 및 텍스트 설정" },
-  { key: "appearance", name: "외관", icon: <PaintBrushRegular />, Comp: AppearanceTab, description: "테마 및 UI 설정" },
 ];
 
 export default function SettingsPage({ onBack }) {
