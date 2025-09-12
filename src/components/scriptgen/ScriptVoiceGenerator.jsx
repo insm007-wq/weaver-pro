@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   Body1,
   Text,
@@ -28,7 +28,7 @@ import {
   Card,
   CardHeader,
 } from "@fluentui/react-components";
-import { useHeaderStyles, useCardStyles, useSettingsStyles, useLayoutStyles } from "../../styles/commonStyles";
+import { useHeaderStyles, useCardStyles, useSettingsStyles, useLayoutStyles, useContainerStyles } from "../../styles/commonStyles";
 import {
   DocumentEditRegular,
   SparkleRegular,
@@ -175,6 +175,7 @@ function ScriptVoiceGenerator() {
   const cardStyles = useCardStyles();
   const settingsStyles = useSettingsStyles();
   const layoutStyles = useLayoutStyles();
+  const containerStyles = useContainerStyles();
 
   const [form, setForm] = useState(makeDefaultForm());
   const [doc, setDoc] = useState(null);
@@ -218,12 +219,12 @@ function ScriptVoiceGenerator() {
   const [voiceLoading, setVoiceLoading] = useState(true);
   const [voiceError, setVoiceError] = useState(null);
 
-  const onChange = (k, v) => {
+  const onChange = useCallback((k, v) => {
     setForm((p) => ({ ...p, [k]: v }));
     if (k === "topic") {
       setFormValidation((prev) => ({ ...prev, topicValid: v?.trim().length > 0 }));
     }
-  };
+  }, []);
 
   const applyPreset = (presetName) => {
     const preset = ADVANCED_PRESETS.find((p) => p.name === presetName);
@@ -869,16 +870,156 @@ ${form.topic}의 핵심은 바로 이것입니다...
   const avgChars = Math.floor((duration * 300 + duration * 400) / 2);
   const estimatedScenes = Math.min(form.maxScenes || 15, Math.max(3, Math.ceil(duration * 2)));
 
+  // 초기 데이터 로드 (마운트 시 한 번만)
+  useEffect(() => {
+    let isMounted = true;
+    
+    const loadInitialData = async () => {
+      // 프롬프트 로드
+      try {
+        const res = await api.invoke("prompts:getAll");
+        if (isMounted && (res?.ok || res?.success) && Array.isArray(res.data)) {
+          const list = res.data;
+          const names = Array.from(new Set(list.filter((p) => !p.isDefault && p.name?.trim()).map((p) => p.name.trim()))).sort((a, b) =>
+            a.localeCompare(b, "ko")
+          );
+          setPromptNames(names);
+        }
+      } catch (error) {
+        console.error("프롬프트 로딩 실패:", error);
+      } finally {
+        if (isMounted) setPromptLoading(false);
+      }
+
+      // 목소리 로드
+      if (form.ttsEngine) {
+        try {
+          setVoiceLoading(true);
+          setVoiceError(null);
+          console.log("🔄 목소리 로드:", form.ttsEngine);
+
+          const res = await api.invoke("tts:listVoices", { engine: form.ttsEngine });
+
+          if (isMounted && (res?.ok || res?.success)) {
+            const allItems = Array.isArray(res.data) ? res.data : [];
+            let filteredItems;
+
+            if (form.ttsEngine === "elevenlabs") {
+              filteredItems = allItems.filter((voice) => voice.provider === "ElevenLabs");
+              const recommendedNames = ["alice", "bella", "dorothy", "elli", "josh", "sam", "rachel", "domi", "fin", "sarah"];
+              const recommendedVoices = filteredItems.filter((voice) =>
+                recommendedNames.some((name) => voice.name.toLowerCase().includes(name))
+              );
+              const otherVoices = filteredItems.filter((voice) => !recommendedNames.some((name) => voice.name.toLowerCase().includes(name)));
+              filteredItems = [...recommendedVoices, ...otherVoices].slice(0, 10);
+            } else {
+              filteredItems = allItems
+                .filter((voice) => voice.provider === "Google" && (voice.type === "Neural2" || voice.type === "Wavenet"))
+                .slice(0, 8);
+            }
+
+            setVoices(filteredItems);
+          } else if (isMounted) {
+            setVoiceError({
+              code: res?.code ?? res?.errorCode ?? 1004,
+              message: res?.message ?? "TTS API 키를 확인해주세요.",
+            });
+          }
+        } catch (e) {
+          if (isMounted) {
+            setVoiceError({
+              code: e?.code ?? e?.status ?? 1004,
+              message: e?.message ?? "TTS API 연결에 실패했습니다.",
+            });
+          }
+        } finally {
+          if (isMounted) setVoiceLoading(false);
+        }
+      }
+    };
+
+    loadInitialData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // TTS 엔진 변경 시 목소리 다시 로드
+  useEffect(() => {
+    if (!form.ttsEngine) return;
+    
+    let isMounted = true;
+    
+    const reloadVoices = async () => {
+      try {
+        setVoiceLoading(true);
+        setVoiceError(null);
+        console.log("🔄 TTS 엔진 변경 - 목소리 다시 로드:", form.ttsEngine);
+
+        const res = await api.invoke("tts:listVoices", { engine: form.ttsEngine });
+
+        if (isMounted && (res?.ok || res?.success)) {
+          const allItems = Array.isArray(res.data) ? res.data : [];
+          let filteredItems;
+
+          if (form.ttsEngine === "elevenlabs") {
+            filteredItems = allItems.filter((voice) => voice.provider === "ElevenLabs");
+            const recommendedNames = ["alice", "bella", "dorothy", "elli", "josh", "sam", "rachel", "domi", "fin", "sarah"];
+            const recommendedVoices = filteredItems.filter((voice) =>
+              recommendedNames.some((name) => voice.name.toLowerCase().includes(name))
+            );
+            const otherVoices = filteredItems.filter((voice) => !recommendedNames.some((name) => voice.name.toLowerCase().includes(name)));
+            filteredItems = [...recommendedVoices, ...otherVoices].slice(0, 10);
+          } else {
+            filteredItems = allItems
+              .filter((voice) => voice.provider === "Google" && (voice.type === "Neural2" || voice.type === "Wavenet"))
+              .slice(0, 8);
+          }
+
+          setVoices(filteredItems);
+        } else if (isMounted) {
+          setVoiceError({
+            code: res?.code ?? res?.errorCode ?? 1004,
+            message: res?.message ?? "TTS API 키를 확인해주세요.",
+          });
+        }
+      } catch (e) {
+        if (isMounted) {
+          setVoiceError({
+            code: e?.code ?? e?.status ?? 1004,
+            message: e?.message ?? "TTS API 연결에 실패했습니다.",
+          });
+        }
+      } finally {
+        if (isMounted) setVoiceLoading(false);
+      }
+    };
+
+    reloadVoices();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [form.ttsEngine]);
+
+  // 프롬프트 자동 선택 (프롬프트 목록이 로드된 후)
+  useEffect(() => {
+    if (promptNames.length > 0 && !form.promptName) {
+      setForm(prev => ({ ...prev, promptName: promptNames[0] }));
+    }
+  }, [promptNames, form.promptName]);
+
+  // 목소리 자동 선택 (목소리 목록이 로드된 후)
+  useEffect(() => {
+    if (voices.length > 0 && !form.voiceId) {
+      setForm(prev => ({ ...prev, voiceId: voices[0].id }));
+    }
+  }, [voices, form.voiceId]);
+
   return (
     <ErrorBoundary>
-      <div
-        className={layoutStyles.verticalStack}
-        style={{
-          maxWidth: "1400px",
-          margin: "0 auto",
-          padding: `${tokens.spacingVerticalXL} ${tokens.spacingHorizontalL}`,
-        }}
-      >
+      <div className={containerStyles.container}>
         {/* 헤더 */}
         <div className={headerStyles.pageHeader}>
           <div className={headerStyles.pageTitleWithIcon}>
@@ -890,6 +1031,12 @@ ${form.topic}의 핵심은 바로 이것입니다...
           </div>
           <div className={headerStyles.divider} />
         </div>
+
+        {/* 진행률 패널 */}
+        <FullVideoProgressPanel />
+
+        {/* 스트리밍 뷰어 */}
+        <StreamingScriptViewer />
 
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: tokens.spacingHorizontalXL }}>
           {/* 좌측: 메인 설정 영역 */}
@@ -1133,6 +1280,210 @@ ${form.topic}의 핵심은 바로 이것입니다...
               </div>
             </Card>
 
+            {/* TTS 및 보이스 설정 카드 (복원) */}
+            <Card className={cardStyles.settingsCard}>
+              <div className={settingsStyles.sectionHeader}>
+                <div className={settingsStyles.sectionTitle}>
+                  <MicRegular />
+                  <Text size={400} weight="semibold">
+                    음성 설정
+                  </Text>
+                </div>
+              </div>
+              <div className={layoutStyles.gridTwo}>
+                <Field label="TTS 엔진">
+                  <Dropdown
+                    value={form.ttsEngine === "google" ? "Google Cloud TTS" : "ElevenLabs"}
+                    selectedOptions={[form.ttsEngine]}
+                    onOptionSelect={(_, d) => onChange("ttsEngine", d.optionValue)}
+                    size="large"
+                  >
+                    <Option value="google">Google Cloud TTS</Option>
+                    <Option value="elevenlabs">ElevenLabs</Option>
+                  </Dropdown>
+                </Field>
+                <Field label="말하기 속도">
+                  <Dropdown
+                    value={form.speed === "0.9" ? "느림 (0.9x)" : form.speed === "1.1" ? "빠름 (1.1x)" : "보통 (1.0x)"}
+                    selectedOptions={[form.speed]}
+                    onOptionSelect={(_, d) => onChange("speed", d.optionValue)}
+                    size="large"
+                  >
+                    <Option value="0.9">느림 (0.9x)</Option>
+                    <Option value="1.0">보통 (1.0x)</Option>
+                    <Option value="1.1">빠름 (1.1x)</Option>
+                  </Dropdown>
+                </Field>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <Field label="목소리">
+                    <Dropdown
+                      value={voices.find((v) => v.id === form.voiceId)?.name || (voiceLoading ? "불러오는 중…" : "목소리 선택")}
+                      selectedOptions={form.voiceId ? [form.voiceId] : []}
+                      onOptionSelect={(_, d) => onChange("voiceId", d.optionValue)}
+                      size="large"
+                      disabled={voiceLoading || !!voiceError}
+                    >
+                      {voices.map((v) => (
+                        <Option key={v.id} value={v.id}>
+                          {v.name || v.id}
+                          {v.type && (
+                            <Badge size="small" appearance="tint" style={{ marginLeft: "8px" }}>
+                              {v.type}
+                            </Badge>
+                          )}
+                        </Option>
+                      ))}
+                    </Dropdown>
+                    {form.voiceId &&
+                      (() => {
+                        const selectedVoice = voices.find((v) => v.id === form.voiceId);
+                        return selectedVoice ? (
+                          <div
+                            style={{
+                              marginTop: 12,
+                              padding: 12,
+                              background: "#f8f9fa",
+                              borderRadius: 8,
+                              border: "1px solid rgba(0,0,0,0.06)",
+                            }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                              <Text weight="semibold" size={300}>
+                                🎤 {selectedVoice.name}
+                              </Text>
+                              <Badge appearance="tint" color="brand">
+                                {form.ttsEngine === "elevenlabs" ? "ElevenLabs" : "Google TTS"}
+                              </Badge>
+                            </div>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                              <Badge appearance="outline" size="small">
+                                {selectedVoice.gender === "MALE" ? "👨 남성" : selectedVoice.gender === "FEMALE" ? "👩 여성" : "🧑 중성"}
+                              </Badge>
+                              <Badge appearance="outline" size="small">
+                                {selectedVoice.type}
+                              </Badge>
+                              <Badge appearance="outline" size="small">
+                                {selectedVoice.language}
+                              </Badge>
+                            </div>
+                            <div
+                              style={{
+                                marginBottom: 8,
+                                padding: 8,
+                                background: "#f8f9fa",
+                                borderRadius: 6,
+                                border: "1px solid rgba(0,0,0,0.06)",
+                              }}
+                            >
+                              <Text size={200} style={{ color: "#666", lineHeight: 1.4 }}>
+                                {(() => {
+                                  const voiceName = selectedVoice.name.toLowerCase();
+                                  if (voiceName.includes("alice")) {
+                                    return "💬 친근한 대화형 - 리뷰, 브이로그에 적합한 자연스러운 톤";
+                                  } else if (voiceName.includes("bella") || voiceName.includes("rachel")) {
+                                    return "📰 뉴스/설명형 - 튜토리얼, 가이드에 적합한 중립적 톤";
+                                  } else if (voiceName.includes("dorothy") || voiceName.includes("elli")) {
+                                    return "🎓 교육/강의형 - 온라인 강의, 학습에 최적화 (가장 추천)";
+                                  } else if (voiceName.includes("josh")) {
+                                    return "🏢 차분/전문형 - B2B, 기업 소개에 적합한 안정적 톤";
+                                  } else if (voiceName.includes("sam")) {
+                                    return "⚡ 에너지 광고형 - 프로모션, 광고에 적합한 역동적 톤";
+                                  } else if (voiceName.includes("domi")) {
+                                    return "📚 스토리텔링 - 다큐멘터리, 힐링 콘텐츠에 적합한 감성적 톤";
+                                  } else if (voiceName.includes("fin")) {
+                                    return "🎭 다양한 표현형 - 창의적 콘텐츠, 엔터테인먼트에 적합";
+                                  } else if (voiceName.includes("sarah")) {
+                                    return "🌟 프리미엄 여성형 - 고급스러운 브랜드, 럭셔리 콘텐츠용";
+                                  } else {
+                                    return "🎓 교육/강의형 - 한국어 콘텐츠에 가장 적합한 범용 목소리";
+                                  }
+                                })()}
+                              </Text>
+                            </div>
+                            <div>
+                              <Button
+                                appearance="subtle"
+                                size="small"
+                                icon={<PlayRegular />}
+                                onClick={() => {
+                                  console.log("🔊 선택된 목소리 미리듣기 버튼 클릭됨:", selectedVoice.name, selectedVoice.id);
+                                  previewVoice(selectedVoice.id, selectedVoice.name);
+                                }}
+                              >
+                                미리듣기
+                              </Button>
+                            </div>
+                          </div>
+                        ) : null;
+                      })()}
+                  </Field>
+                </div>
+              </div>
+              {voiceError && (
+                <div
+                  style={{
+                    marginTop: tokens.spacingVerticalM,
+                    border: `1px solid ${tokens.colorPaletteRedBorder2}`,
+                    background: "#fff5f5",
+                    borderRadius: 12,
+                    padding: tokens.spacingVerticalM,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                    <ShieldError24Regular />
+                    <Text weight="semibold">TTS 음성 목록 로드 실패</Text>
+                  </div>
+                  <Body1 style={{ marginBottom: 8 }}>
+                    Google TTS 음성 목록을 불러올 수 없습니다. API 키를 확인해주세요.
+                    <br />
+                    <strong>현재 지원 TTS:</strong> Google Cloud Text-to-Speech
+                    <br />
+                    API 오류 ({voiceError.code}): {voiceError.message || "Google TTS API 키가 설정되지 않았습니다."}
+                  </Body1>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Button
+                      appearance="secondary"
+                      onClick={async () => {
+                        try {
+                          setVoiceLoading(true);
+                          setVoiceError(null);
+                          const res = await api.invoke("tts:listVoices");
+                          if (res?.ok || res?.success) {
+                            const items = Array.isArray(res.data) ? res.data : [];
+                            setVoices(items);
+                            if (!form.voiceId && items[0]?.id) setForm(prev => ({ ...prev, voiceId: items[0].id }));
+                            toast.success(`✅ ${items.length}개의 목소리를 로드했습니다!`);
+                          } else {
+                            setVoiceError({
+                              code: res?.code ?? res?.errorCode ?? 1004,
+                              message: res?.message ?? "API 키가 올바르지 않거나 설정되지 않았습니다.",
+                            });
+                          }
+                        } catch (e) {
+                          setVoiceError({
+                            code: e?.code ?? 1004,
+                            message: e?.message ?? "API 연결에 실패했습니다.",
+                          });
+                        } finally {
+                          setVoiceLoading(false);
+                        }
+                      }}
+                    >
+                      다시 시도
+                    </Button>
+                    <Button
+                      appearance="outline"
+                      onClick={() => {
+                        toast.success("설정 탭에서 API 키를 설정할 수 있습니다");
+                      }}
+                    >
+                      API 키 설정
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </Card>
+
             {/* 고급 설정 & 배치 처리 카드 */}
             <Card className={cardStyles.settingsCard}>
               <div
@@ -1197,39 +1548,6 @@ ${form.topic}의 핵심은 바로 이것입니다...
                   </div>
                 </div>
               )}
-            </Card>
-
-            {/* 대본만 생성 카드 */}
-            <Card className={cardStyles.settingsCard}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <Text weight="semibold">📝 대본만 생성하기</Text>
-                  <br />
-                  <Text size={200} color="secondary">
-                    {(() => {
-                      const selectedEngine = AI_ENGINE_OPTIONS.find((engine) => engine.key === form.aiEngine);
-                      return selectedEngine
-                        ? `${selectedEngine.text}로 대본만 생성합니다 (예상 시간: ${selectedEngine.processingTime})`
-                        : "AI 엔진을 선택해 대본을 생성합니다";
-                    })()}
-                  </Text>
-                </div>
-                <Button
-                  appearance="outline"
-                  icon={<SparkleRegular />}
-                  onClick={runGenerate}
-                  disabled={isLoading || !form.topic?.trim() || !form.promptName || !form.aiEngine || fullVideoState.isGenerating}
-                  style={{
-                    background: "#111827",
-                    color: "#fff",
-                    border: "1px solid #111827",
-                    padding: "12px 18px",
-                    borderRadius: 10,
-                  }}
-                >
-                  {isLoading ? "생성 중..." : "대본만 생성"}
-                </Button>
-              </div>
             </Card>
           </div>
 
@@ -1339,6 +1657,80 @@ ${form.topic}의 핵심은 바로 이것입니다...
                 <MessageBar intent="error" style={{ marginTop: tokens.spacingVerticalM }}>
                   <MessageBarBody>{error}</MessageBarBody>
                 </MessageBar>
+              )}
+            </Card>
+
+            {/* 대본만 생성 카드 */}
+            <Card className={cardStyles.settingsCard}>
+              <div className={settingsStyles.sectionHeader}>
+                <div className={settingsStyles.sectionTitle}>
+                  <SparkleRegular />
+                  <Text size={400} weight="semibold">
+                    대본 생성 (기본 모드)
+                  </Text>
+                </div>
+              </div>
+              
+              <div style={{ marginBottom: tokens.spacingVerticalM }}>
+                <Text size={300} color="secondary" style={{ lineHeight: 1.4 }}>
+                  {(() => {
+                    const selectedEngine = AI_ENGINE_OPTIONS.find((engine) => engine.key === form.aiEngine);
+                    return selectedEngine
+                      ? `${selectedEngine.text.replace(/🤖|🧠|🚀/g, '').trim()}로 대본을 생성합니다`
+                      : "AI 엔진을 선택해 대본을 생성합니다";
+                  })()}
+                </Text>
+                {(() => {
+                  const selectedEngine = AI_ENGINE_OPTIONS.find((engine) => engine.key === form.aiEngine);
+                  return selectedEngine ? (
+                    <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
+                      예상 처리 시간: {selectedEngine.processingTime}
+                    </Text>
+                  ) : null;
+                })()}
+              </div>
+
+              <Button
+                appearance="primary"
+                icon={<SparkleRegular />}
+                onClick={runGenerate}
+                disabled={isLoading || !form.topic?.trim() || !form.promptName || !form.aiEngine || fullVideoState.isGenerating}
+                style={{
+                  width: "100%",
+                  padding: "14px",
+                  fontSize: "16px",
+                  fontWeight: "600",
+                }}
+              >
+                {isLoading ? "대본 생성 중..." : "📝 대본 생성 시작"}
+              </Button>
+
+              {(!form.topic?.trim() || !form.promptName || !form.aiEngine) && (
+                <div style={{ 
+                  marginTop: tokens.spacingVerticalS, 
+                  padding: tokens.spacingVerticalS,
+                  backgroundColor: tokens.colorNeutralBackground2,
+                  borderRadius: 8 
+                }}>
+                  <Text size={200} style={{ color: tokens.colorNeutralForeground3, fontWeight: "500" }}>
+                    완료해야 할 설정:
+                  </Text>
+                  {!form.topic?.trim() && (
+                    <Text size={200} style={{ display: "block", color: tokens.colorPaletteRedForeground1, marginTop: 2 }}>
+                      • 영상 주제 입력
+                    </Text>
+                  )}
+                  {!form.promptName && (
+                    <Text size={200} style={{ display: "block", color: tokens.colorPaletteRedForeground1, marginTop: 2 }}>
+                      • 대본 생성 프롬프트 선택
+                    </Text>
+                  )}
+                  {!form.aiEngine && (
+                    <Text size={200} style={{ display: "block", color: tokens.colorPaletteRedForeground1, marginTop: 2 }}>
+                      • AI 엔진 선택
+                    </Text>
+                  )}
+                </div>
               )}
             </Card>
           </div>
