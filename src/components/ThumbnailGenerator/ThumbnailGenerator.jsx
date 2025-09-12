@@ -9,6 +9,7 @@ import {
   Button,
   Card,
   Title1,
+  Title2,
   Title3,
   Body1,
   Caption1,
@@ -691,12 +692,33 @@ function ThumbnailGenerator() {
           : {}
       }
     >
-      <div className={styles.pageHeader}>
-        <div className={styles.pageTitle}>
+      <div style={{ textAlign: "center", marginBottom: "32px" }}>
+        <div style={{ 
+          display: "flex", 
+          alignItems: "center", 
+          justifyContent: "center",
+          gap: "12px",
+          fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif",
+          fontWeight: 600,
+          fontSize: "24px",
+          lineHeight: "1.2",
+          letterSpacing: "-0.01em",
+          textRendering: "optimizeLegibility",
+          WebkitFontSmoothing: "antialiased",
+          MozOsxFontSmoothing: "grayscale",
+          marginBottom: "8px",
+          transform: "translateX(-16px)"
+        }}>
           <SparkleRegular />
-          <Title1>썸네일 생성기</Title1>
+          썸네일 생성기
         </div>
-        <Body1 className={styles.pageDesc}>AI를 활용한 YouTube 썸네일 생성 도구</Body1>
+        <div style={{ 
+          color: tokens.colorNeutralForeground3, 
+          textAlign: "center",
+          fontSize: tokens.fontSizeBase300,
+          lineHeight: "1.5",
+          marginBottom: "16px"
+        }}>AI를 활용한 YouTube 썸네일 생성 도구</div>
         <div className={styles.hairline} />
       </div>
 

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, useEffect, Suspense, lazy, memo } from "react";
-import { makeStyles, shorthands, tokens, Card, CardHeader, Body1, Title1, Subtitle1, Text, mergeClasses } from "@fluentui/react-components";
+import { makeStyles, shorthands, tokens, Card, CardHeader, Body1, Title1, Title2, Subtitle1, Text, mergeClasses } from "@fluentui/react-components";
 import KeepAlivePane from "./components/common/KeepAlivePane";
 import { LoadingSpinner, GlobalToast } from "./components/common";
 
@@ -155,7 +155,7 @@ function App() {
                         <div className={styles.welcomeHeader}>
                           <div className={styles.logoBox}>🎥</div>
                           <div>
-                            <Title1>{projectName || "Weaver Pro"}</Title1>
+                            <Title2>{projectName || "Weaver Pro"}</Title2>
                             <Subtitle1>AI 기반 영상 제작 솔루션에 오신 것을 환영합니다</Subtitle1>
                           </div>
                         </div>

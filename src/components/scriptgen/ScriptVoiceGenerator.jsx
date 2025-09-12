@@ -4,6 +4,7 @@ import {
   Body1,
   Text,
   Title1,
+  Title2,
   Badge,
   Field,
   Input,
@@ -28,6 +29,7 @@ import {
   Card,
   CardHeader,
 } from "@fluentui/react-components";
+import { useHeaderStyles } from "../../styles/commonStyles";
 import {
   DocumentEditRegular,
   SparkleRegular,
@@ -1145,12 +1147,33 @@ ${form.topic}의 핵심은 바로 이것입니다...
       <div style={page}>
         {/* 헤더 (제목 고정) */}
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalM }}>
+          <div style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            justifyContent: "center",
+            gap: "12px",
+            fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif",
+            fontWeight: 600,
+            fontSize: "24px",
+            lineHeight: "1.2",
+            letterSpacing: "-0.01em",
+            textRendering: "optimizeLegibility",
+            WebkitFontSmoothing: "antialiased",
+            MozOsxFontSmoothing: "grayscale",
+            marginBottom: "8px",
+            transform: "translateX(-16px)"
+          }}>
             <DocumentEditRegular />
-            <Title1>대본 & 음성 생성</Title1>
+            대본 & 음성 생성
           </div>
-          <Body1 style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>SRT 자막 + MP3 내레이션을 한 번에 생성합니다</Body1>
-          <div style={{ borderBottom: "1px solid rgba(0,0,0,0.08)", marginTop: 12 }} />
+          <div style={{ 
+            color: tokens.colorNeutralForeground3, 
+            textAlign: "center",
+            fontSize: tokens.fontSizeBase300,
+            lineHeight: "1.5",
+            marginBottom: "16px"
+          }}>SRT 자막 + MP3 내레이션을 한 번에 생성합니다</div>
+          <div style={{ borderBottom: "1px solid rgba(0,0,0,0.08)", marginBottom: "16px" }} />
         </div>
 
         {/* 완전 자동화 진행률 패널 */}

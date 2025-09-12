@@ -8,6 +8,7 @@ import {
   CardFooter,
   Title1,
   Title2,
+  Title2,
   Body1,
   Input,
   Button,
@@ -141,7 +142,16 @@ export default function ProjectInit({ onCreate }) {
               <VideoRegular />
             </div>
           </div>
-          <Title1 className={styles.title}>새 프로젝트 시작</Title1>
+          <div style={{ 
+            fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif",
+            fontWeight: 600,
+            fontSize: "24px",
+            lineHeight: "1.2",
+            letterSpacing: "-0.01em",
+            textRendering: "optimizeLegibility",
+            WebkitFontSmoothing: "antialiased",
+            MozOsxFontSmoothing: "grayscale",
+          }}>새 프로젝트 시작</div>
           <Body1 className={styles.subtitle}>
             AI 기반 영상 제작 여정을 시작해보세요
           </Body1>

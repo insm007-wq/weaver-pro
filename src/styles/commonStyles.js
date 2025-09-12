@@ -102,13 +102,28 @@ export const useHeaderStyles = makeStyles({
   /** 페이지 헤더 */
   pageHeader: {
     margin: `0 0 ${tokens.spacingVerticalL}`,
+    textAlign: "center",
   },
   
-  /** 페이지 타이틀 (아이콘과 함께) */
+  /** 통일된 페이지 타이틀 (아이콘과 함께) */
   pageTitle: {
     display: "flex",
     alignItems: "center",
+    justifyContent: "center",
     columnGap: tokens.spacingHorizontalM,
+    fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif",
+    fontWeight: 600,
+    fontSize: "24px",
+    lineHeight: "1.2",
+    letterSpacing: "-0.01em",
+    textRendering: "optimizeLegibility",
+    WebkitFontSmoothing: "antialiased",
+    MozOsxFontSmoothing: "grayscale",
+    marginBottom: tokens.spacingVerticalS,
+    position: "relative",
+    
+    // 전체 컨테이너를 왼쪽으로 이동해서 텍스트가 중앙에 오도록 조정
+    transform: "translateX(-16px)",
   },
   
   /** 페이지 설명 */
@@ -117,6 +132,9 @@ export const useHeaderStyles = makeStyles({
     marginTop: tokens.spacingVerticalXS,
     fontSize: tokens.fontSizeBase300,
     lineHeight: "1.5",
+    textAlign: "center",
+    maxWidth: "600px",
+    margin: "0 auto",
   },
   
   /** 섹션 헤더 */

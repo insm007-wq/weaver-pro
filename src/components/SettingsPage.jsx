@@ -14,6 +14,7 @@ import {
   Spinner,
   Divider,
 } from "@fluentui/react-components";
+import { useHeaderStyles } from "../styles/commonStyles";
 import {
   SettingsRegular,
   KeyRegular,
@@ -105,6 +106,7 @@ const tabs = [
 
 export default function SettingsPage({ onBack }) {
   const styles = useStyles();
+  const headerStyles = useHeaderStyles();
   const [selectedTab, setSelectedTab] = useState("api");
   const active = tabs.find((t) => t.key === selectedTab) ?? tabs[0];
 
@@ -127,12 +129,12 @@ export default function SettingsPage({ onBack }) {
       )}
 
       {/* 페이지 헤더 */}
-      <div className={styles.pageHeader}>
-        <div className={styles.pageTitle}>
+      <div className={headerStyles.pageHeader}>
+        <div className={headerStyles.pageTitle}>
           <SettingsRegular />
-          <Title1>전역 설정</Title1>
+          전역 설정
         </div>
-        <Body1 className={styles.pageDesc}>애플리케이션 전반의 설정을 관리합니다.</Body1>
+        <div className={headerStyles.pageDescription}>애플리케이션 전반의 설정을 관리합니다.</div>
         <div className={styles.hairline} />
       </div>
 
@@ -149,7 +151,6 @@ export default function SettingsPage({ onBack }) {
         </div>
 
         <div className={styles.tabContent}>
-
           <div className={styles.scroll}>
             <Suspense
               fallback={
