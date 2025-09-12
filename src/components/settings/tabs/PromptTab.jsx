@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Text, Button, Dropdown, Option, Field, Input, Textarea, Card } from "@fluentui/react-components";
-import { AddRegular, DeleteRegular, SaveRegular, ArrowResetRegular, DocumentTextRegular } from "@fluentui/react-icons";
+import { Text, Button, Dropdown, Option, Field, Input, Textarea, Card, tokens, Divider } from "@fluentui/react-components";
+import {
+  AddRegular,
+  DeleteRegular,
+  SaveRegular,
+  ArrowResetRegular,
+  DocumentTextRegular,
+  DismissCircleRegular,
+  EditRegular,
+  BrainCircuitRegular,
+} from "@fluentui/react-icons";
 import { useToast } from "../../../hooks/useToast";
 import { useApi } from "../../../hooks/useApi";
 import { LoadingSpinner } from "../../common/LoadingSpinner";
@@ -30,6 +39,7 @@ function PromptTab() {
   // store snapshot
   const [prompts, setPrompts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
   // editor states
   const [scriptPrompt, setScriptPrompt] = useState("");
@@ -53,7 +63,6 @@ function PromptTab() {
 
   useEffect(() => {
     if (!didInitRef.current && Array.isArray(prompts)) {
-      // 에디터 초기값은 "최초 1회"만 시스템 기본으로 채움
       const dScript = prompts.find((p) => p.isDefault && p.category === "script");
       const dRef = prompts.find((p) => p.isDefault && p.category === "reference");
       setScriptPrompt(dScript?.content?.trim() ?? catDefault("script"));
@@ -61,10 +70,8 @@ function PromptTab() {
 
       const names = uniqueUserNames(prompts);
       if (names.length) {
-        // 첫 진입: 사용자 프롬프트가 있으면 그 첫 번째로 로딩
         activatePair(names[0]);
       } else {
-        // 없으면 "기본쌍" 상태(저장 전까지는 기본값만 화면에 표시)
         setSelectedName(DEFAULT_PAIR_NAME);
         setSelectedScriptId("");
         setSelectedReferenceId("");
@@ -77,8 +84,11 @@ function PromptTab() {
 
   const loadPrompts = async () => {
     try {
+      setLoading(true);
       const res = await api.invoke("prompts:getAll");
-      if (isOk(res) && Array.isArray(res.data)) setPrompts(res.data.slice());
+      if (isOk(res) && Array.isArray(res.data)) {
+        setPrompts(res.data.slice());
+      }
       setLoading(false);
     } catch {
       setLoading(false);
@@ -86,7 +96,6 @@ function PromptTab() {
   };
 
   /* ============ pair load/save helpers ============ */
-  // 이름으로 script/reference 함께 불러오기 (저장된 항목만 에디터에 반영)
   const activatePair = async (name) => {
     try {
       setSelectedName(name);
@@ -101,44 +110,45 @@ function PromptTab() {
       if (script) setScriptPrompt(script.content?.trim() ?? "");
       if (reference) setReferencePrompt(reference.content?.trim() ?? "");
 
-      // 둘 다 없고 "기본쌍"을 선택한 경우만 기본값 주입
       if (!script && !reference && name === DEFAULT_PAIR_NAME) {
         setScriptPrompt(catDefault("script"));
         setReferencePrompt(catDefault("reference"));
       }
     } catch (e) {
       console.error(e);
-      // 실패해도 현재 에디터 텍스트는 유지 (덮어쓰지 않음)
     }
   };
 
-  // 원자적 저장: 두 카테고리 동시 저장 → 저장된 항목으로 즉시 재로딩
   const savePair = async (name, scriptText, referenceText) => {
+    setIsSaving(true);
     const nm = (name || "").trim();
     if (!nm) throw new Error("name is empty");
 
-    const res = await api.invoke("prompts:savePair", {
-      name: nm,
-      scriptContent: scriptText,
-      referenceContent: referenceText,
-    });
-    if (!isOk(res)) throw new Error(res?.message || "save failed");
+    try {
+      const res = await api.invoke("prompts:savePair", {
+        name: nm,
+        scriptContent: scriptText,
+        referenceContent: referenceText,
+      });
+      if (!isOk(res)) throw new Error(res?.message || "save failed");
 
-    // 저장 직후 정확히 그 결과로 재로딩
-    const sId = res.data?.script?.id || "";
-    const rId = res.data?.reference?.id || "";
+      const sId = res.data?.script?.id || "";
+      const rId = res.data?.reference?.id || "";
 
-    // 스토어 스냅샷 갱신
-    await loadPrompts();
+      await loadPrompts();
 
-    // 방금 저장된 내용으로 고정
-    setSelectedName(nm);
-    setSelectedScriptId(sId);
-    setSelectedReferenceId(rId);
+      setSelectedName(nm);
+      setSelectedScriptId(sId);
+      setSelectedReferenceId(rId);
 
-    // 화면 텍스트는 서버가 가진 결과에 맞춰 확정
-    if (res.data?.script) setScriptPrompt(res.data.script.content ?? "");
-    if (res.data?.reference) setReferencePrompt(res.data.reference.content ?? "");
+      setScriptPrompt(res.data?.script?.content ?? "");
+      setReferencePrompt(res.data?.reference?.content ?? "");
+      setIsSaving(false);
+      return res;
+    } catch (e) {
+      setIsSaving(false);
+      throw e;
+    }
   };
 
   /* ============ dropdown options ============ */
@@ -149,10 +159,8 @@ function PromptTab() {
     const base = newName.trim();
     if (!base) return toast.warning("프롬프트 이름을 입력해주세요.");
 
-    const nm = base; // 중복 이름 체크는 백엔드가 (name,category) 기준으로 정리/업서트
     try {
-      // 요구사항: 새로 생성 시 두 탭 모두 기본값으로 생성 & 에디터 채움
-      await savePair(nm, catDefault("script"), catDefault("reference"));
+      await savePair(base, catDefault("script"), catDefault("reference"));
       setShowInlineCreate(false);
       setNewName("");
       toast.success("프롬프트가 생성되었습니다.");
@@ -191,16 +199,15 @@ function PromptTab() {
     try {
       let name = selectedName;
       if (!name || name === DEFAULT_PAIR_NAME) {
-        // 기본쌍 상태에서 저장하면, 현재 텍스트로 새 이름 저장 요구 → 간단히 자동 이름
-        name = "새 프롬프트";
         let suffix = 1;
+        const baseName = "새 프롬프트";
         const exists = new Set(nameOptions);
-        while (exists.has(suffix === 1 ? name : `${name} ${suffix}`)) suffix += 1;
-        name = suffix === 1 ? name : `${name} ${suffix}`;
+        while (exists.has(suffix === 1 ? baseName : `${baseName} ${suffix}`)) suffix += 1;
+        name = suffix === 1 ? baseName : `${baseName} ${suffix}`;
       }
 
       await savePair(name, scriptPrompt, referencePrompt);
-      toast.success("대본/레퍼런스 모두 저장 완료");
+      toast.success("성공적으로 저장되었습니다.");
     } catch (e) {
       console.error(e);
       toast.error("저장 중 오류가 발생했습니다.");
@@ -228,139 +235,207 @@ function PromptTab() {
   return (
     <div className={containerStyles.container}>
       <SettingsHeader
-        icon="🧠"
+        icon={<BrainCircuitRegular />}
         title="프롬프트 템플릿 관리"
-        description={
-          <>
-            AI 대본 생성과 레퍼런스 분석에 사용할 프롬프트 템플릿을 관리합니다.
-            <br />
-            카테고리별로 프롬프트를 생성하고 편집하여 더 나은 결과를 얻으세요.
-          </>
-        }
+        description="AI 대본 생성과 레퍼런스 분석에 사용할 프롬프트 템플릿을 관리합니다. 카테고리별로 프롬프트를 생성하고 편집하여 더 나은 결과를 얻으세요."
       />
 
-      {/* ===== 상단 관리 바 (UI 그대로) ===== */}
-      <Card className={settingsStyles.manageCard}>
-        <div className={settingsStyles.manageRow}>
-          <div className={settingsStyles.manageLabel}>
-            <DocumentTextRegular />
-            <Text weight="semibold">프롬프트</Text>
+      {/* ===== 상단 관리 바 (Dropdown과 액션 통합) ===== */}
+      <Card
+        className={cardStyles.settingsCard}
+        style={{
+          boxShadow: tokens.shadow8,
+          borderRadius: 12,
+          padding: tokens.spacingHorizontalXL,
+          marginBottom: tokens.spacingVerticalL,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "flex-end", gap: tokens.spacingHorizontalM, flexWrap: "wrap" }}>
+          {/* 프롬프트 선택 드롭다운 */}
+          <div style={{ flex: "1 1 auto", minWidth: "200px" }}>
+            <Field label="사용자 프롬프트 선택">
+              <Dropdown
+                selectedOptions={selectedName && nameOptions.includes(selectedName) ? [selectedName] : []}
+                value={selectedName || (nameOptions[0] ?? "")}
+                onOptionSelect={async (_, d) => {
+                  const name = d?.optionValue;
+                  if (name) await activatePair(name);
+                }}
+                placeholder="프롬프트를 선택하세요"
+              >
+                {nameOptions.map((nm) => (
+                  <Option key={nm} value={nm}>
+                    {nm}
+                  </Option>
+                ))}
+              </Dropdown>
+            </Field>
           </div>
 
-          <Dropdown
-            className={settingsStyles.manageDropdown}
-            selectedOptions={selectedName && nameOptions.includes(selectedName) ? [selectedName] : []}
-            value={selectedName || (nameOptions[0] ?? "")}
-            onOptionSelect={async (_, d) => {
-              const name = d?.optionValue;
-              if (name) await activatePair(name);
+          {/* 인라인 생성 UI */}
+          {showInlineCreate && (
+            <div
+              style={{
+                display: "flex",
+                gap: tokens.spacingHorizontalS,
+                alignItems: "flex-end",
+                flex: "1 1 auto",
+                minWidth: "200px",
+              }}
+            >
+              <Field label="새 이름 입력" style={{ flex: 1 }}>
+                <Input value={newName} onChange={(_, d) => setNewName(d.value)} placeholder="새 프롬프트 이름" autoFocus />
+              </Field>
+              <Button appearance="primary" icon={<SaveRegular />} onClick={handleCreateInline} disabled={!newName.trim()}>
+                생성
+              </Button>
+              <Button
+                appearance="subtle"
+                icon={<DismissCircleRegular />}
+                onClick={() => {
+                  setShowInlineCreate(false);
+                  setNewName("");
+                }}
+              >
+                취소
+              </Button>
+            </div>
+          )}
+
+          {/* 관리 액션 버튼 */}
+          <div
+            style={{
+              display: "flex",
+              gap: tokens.spacingHorizontalS,
+              alignItems: "flex-end",
+              flexShrink: 0,
+              flexGrow: 0,
             }}
           >
-            {nameOptions.map((nm) => (
-              <Option key={nm} value={nm}>
-                {nm}
-              </Option>
-            ))}
-          </Dropdown>
-
-          <div className={settingsStyles.manageActions}>
-            <Button icon={<AddRegular />} appearance="primary" size="small" onClick={() => setShowInlineCreate((v) => !v)}>
+            <Button appearance="secondary" icon={<AddRegular />} onClick={() => setShowInlineCreate((v) => !v)}>
               새 프롬프트
             </Button>
             <Button
               appearance="secondary"
               icon={<DeleteRegular />}
-              size="small"
               onClick={handleDelete}
               disabled={!selectedName || !nameOptions.includes(selectedName)}
             >
               삭제
             </Button>
-            <Button appearance="primary" icon={<SaveRegular />} size="small" onClick={handleSaveAll}>
-              모두 저장
-            </Button>
-          </div>
-        </div>
-
-        {showInlineCreate && (
-          <div className={settingsStyles.inlineCreate}>
-            <Input value={newName} onChange={(_, d) => setNewName(d.value)} placeholder="새 프롬프트 이름을 입력하세요" autoFocus />
-            <Button appearance="primary" icon={<SaveRegular />} onClick={handleCreateInline} disabled={!newName.trim()}>
-              생성
-            </Button>
             <Button
-              appearance="secondary"
-              onClick={() => {
-                setShowInlineCreate(false);
-                setNewName("");
-              }}
+              appearance="primary"
+              icon={isSaving ? <LoadingSpinner size="tiny" /> : <SaveRegular />}
+              onClick={handleSaveAll}
+              disabled={isSaving || !scriptPrompt || !referencePrompt}
             >
-              취소
+              저장하기
             </Button>
-          </div>
-        )}
-      </Card>
-
-      {/* ===== 에디터 영역 (UI 그대로) ===== */}
-      <Card className={cardStyles.settingsCard}>
-        <div className={settingsStyles.sectionsGrid}>
-          {/* script */}
-          <div className={settingsStyles.sectionCard}>
-            <div className={settingsStyles.sectionHeader}>
-              <div className={settingsStyles.sectionTitle}>
-                <Text weight="semibold" size={500}>
-                  📝 대본 생성
-                </Text>
-              </div>
-              <div>
-                <Button size="small" icon={<ArrowResetRegular />} onClick={() => handleReset("script")}>
-                  초기화
-                </Button>
-              </div>
-            </div>
-
-            <Field>
-              <Textarea
-                className={settingsStyles.editor}
-                value={scriptPrompt}
-                onChange={(_, d) => setScriptPrompt(d.value)}
-                resize="vertical"
-              />
-            </Field>
-            <div className={settingsStyles.charCount}>
-              {scriptCount.toLocaleString()} 글자 | 변수: {"{topic}, {duration}, {style}"}
-            </div>
-          </div>
-
-          {/* reference */}
-          <div className={settingsStyles.sectionCard}>
-            <div className={settingsStyles.sectionHeader}>
-              <div className={settingsStyles.sectionTitle}>
-                <Text weight="semibold" size={500}>
-                  🔍 레퍼런스 분석
-                </Text>
-              </div>
-              <div>
-                <Button size="small" icon={<ArrowResetRegular />} onClick={() => handleReset("reference")}>
-                  초기화
-                </Button>
-              </div>
-            </div>
-
-            <Field>
-              <Textarea
-                className={settingsStyles.editor}
-                value={referencePrompt}
-                onChange={(_, d) => setReferencePrompt(d.value)}
-                resize="vertical"
-              />
-            </Field>
-            <div className={settingsStyles.charCount}>
-              {referenceCount.toLocaleString()} 글자 | 변수: {"{referenceScript}, {topic}"}
-            </div>
           </div>
         </div>
       </Card>
+
+      {/* ===== 에디터 영역 (2단 그리드) ===== */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: tokens.spacingHorizontalXL,
+          height: "calc(100vh - 400px)", // 화면 높이에 맞춰 조정
+        }}
+      >
+        {/* script */}
+        <Card
+          className={cardStyles.settingsCard}
+          style={{
+            boxShadow: tokens.shadow8, // 그림자 추가
+            border: `1px solid ${tokens.colorNeutralStroke2}`, // 얇은 테두리
+            borderRadius: 16,
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tokens.spacingVerticalM }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <EditRegular style={{ color: tokens.colorPaletteBlueForeground1 }} />
+              <Text weight="semibold" size={500}>
+                대본 생성 프롬프트
+              </Text>
+            </div>
+            <Button size="small" icon={<ArrowResetRegular />} onClick={() => handleReset("script")}>
+              기본값
+            </Button>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto" }}>
+            <Textarea
+              value={scriptPrompt}
+              onChange={(_, d) => setScriptPrompt(d.value)}
+              resize="none"
+              style={{
+                height: "100%",
+                width: "100%",
+                fontSize: tokens.fontSizeBase300,
+                fontFamily: "monospace",
+                lineHeight: 1.6,
+                border: "none",
+                boxShadow: "none",
+                background: "transparent",
+                padding: 0,
+              }}
+            />
+          </div>
+          <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM }}>
+            {scriptCount.toLocaleString()} 글자 | 변수: {"{topic}, {duration}, {style}"}
+          </Text>
+        </Card>
+
+        {/* reference */}
+        <Card
+          className={cardStyles.settingsCard}
+          style={{
+            boxShadow: tokens.shadow8, // 그림자 추가
+            border: `1px solid ${tokens.colorNeutralStroke2}`, // 얇은 테두리
+            borderRadius: 16,
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tokens.spacingVerticalM }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <DocumentTextRegular style={{ color: tokens.colorPalettePurpleForeground1 }} />
+              <Text weight="semibold" size={500}>
+                레퍼런스 분석 프롬프트
+              </Text>
+            </div>
+            <Button size="small" icon={<ArrowResetRegular />} onClick={() => handleReset("reference")}>
+              기본값
+            </Button>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto" }}>
+            <Textarea
+              value={referencePrompt}
+              onChange={(_, d) => setReferencePrompt(d.value)}
+              resize="none"
+              style={{
+                height: "100%",
+                width: "100%",
+                fontSize: tokens.fontSizeBase300,
+                fontFamily: "monospace",
+                lineHeight: 1.6,
+                border: "none",
+                boxShadow: "none",
+                background: "transparent",
+                padding: 0,
+              }}
+            />
+          </div>
+          <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM }}>
+            {referenceCount.toLocaleString()} 글자 | 변수: {"{referenceScript}, {topic}"}
+          </Text>
+        </Card>
+      </div>
     </div>
   );
 }
