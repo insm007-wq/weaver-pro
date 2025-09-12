@@ -41,14 +41,16 @@ const useStyles = makeStyles({
     backdropFilter: 'blur(10px)',
   },
   successBar: {
-    background: 'linear-gradient(135deg, rgba(16, 124, 16, 0.95) 0%, rgba(16, 124, 16, 0.9) 100%) !important',
-    borderLeft: `4px solid ${tokens.colorPaletteGreenForeground1}`,
+    background: 'linear-gradient(135deg, rgba(21, 128, 61, 1) 0%, rgba(16, 100, 48, 1) 100%) !important',
+    borderLeft: `4px solid #22c55e`,
     color: 'white !important',
+    boxShadow: '0 4px 20px rgba(21, 128, 61, 0.4)',
   },
   errorBar: {
-    background: 'linear-gradient(135deg, rgba(160, 20, 15, 0.98) 0%, rgba(140, 15, 10, 0.95) 100%) !important',
-    borderLeft: `4px solid ${tokens.colorPaletteRedForeground1}`,
+    background: 'linear-gradient(135deg, rgba(180, 15, 10, 1) 0%, rgba(160, 10, 5, 1) 100%) !important',
+    borderLeft: `4px solid #ff3333`,
     color: 'white !important',
+    boxShadow: '0 4px 20px rgba(180, 15, 10, 0.4)',
   },
   messageContent: {
     display: 'flex',

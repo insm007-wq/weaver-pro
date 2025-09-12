@@ -22,6 +22,20 @@ function registerFilePickers() {
     }
     return { canceled: false, filePath: result.filePaths[0] };
   });
+
+  // 폴더 선택 다이얼로그
+  ipcMain.handle("dialog:selectFolder", async () => {
+    const win = getMainWin();
+    const result = await dialog.showOpenDialog(win, {
+      title: "영상 저장 폴더 선택",
+      properties: ["openDirectory", "createDirectory"],
+    });
+
+    if (result.canceled || !result.filePaths?.length) {
+      return { canceled: true };
+    }
+    return { canceled: false, filePaths: result.filePaths };
+  });
 }
 
 module.exports = { registerFilePickers };
