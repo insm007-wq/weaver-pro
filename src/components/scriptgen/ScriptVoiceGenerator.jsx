@@ -41,7 +41,11 @@ import { safeCharCount } from "../../utils/safeChars";
 
 // 새로운 모듈들 import
 import ScriptGenerationCard from "./parts/ScriptGenerationCard";
+import BasicSettingsCard from "./parts/BasicSettingsCard";
 import VoiceSettingsCard from "./parts/VoiceSettingsCard";
+import GenerationPreviewCard from "./parts/GenerationPreviewCard";
+import ScenePreviewCard from "./parts/ScenePreviewCard";
+import AdvancedSettingsCard from "./parts/AdvancedSettingsCard";
 import { useScriptGeneration } from "../../hooks/useScriptGeneration";
 import { useVoiceSettings } from "../../hooks/useVoiceSettings";
 import { usePromptSettings } from "../../hooks/usePromptSettings";
@@ -203,6 +207,12 @@ function ScriptVoiceGenerator() {
   const { promptNames, promptLoading } = usePromptSettings();
   const { doc, isLoading, error, runGenerate } = useScriptGeneration();
   const { voices, voiceLoading, voiceError, previewVoice, retryVoiceLoad } = useVoiceSettings(form);
+  
+  // Toast 추가 (applyPreset에서 사용)
+  const toast = {
+    success: (message) => console.log('Success:', message),
+    error: (message) => console.error('Error:', message)
+  };
 
   const onChange = useCallback((k, v) => {
     setForm((p) => ({ ...p, [k]: v }));
@@ -875,139 +885,13 @@ ${form.topic}의 핵심은 바로 이것입니다...
               )}
             </Card>
 
-            {/* 기본 옵션 카드 */}
-            <Card className={cardStyles.settingsCard}>
-              <div className={settingsStyles.sectionHeader}>
-                <div className={settingsStyles.sectionTitle}>
-                  <SettingsRegular />
-                  <Text size={400} weight="semibold">
-                    기본 설정
-                  </Text>
-                </div>
-              </div>
-              <div className={layoutStyles.gridTwo}>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <Field label="영상 주제" required>
-                    <Input
-                      value={form.topic}
-                      onChange={(_, d) => onChange("topic", d.value)}
-                      placeholder="예: 건강한 아침 루틴 만들기"
-                      size="large"
-                      appearance={!formValidation.topicValid && form.topic.length > 0 ? "filled-darker" : "outline"}
-                    />
-                    {form.topic.length > 0 && (
-                      <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
-                        {formValidation.topicValid ? (
-                          <>
-                            <CheckmarkCircleRegular style={{ color: tokens.colorPaletteGreenForeground2, fontSize: 14 }} />
-                            <Text size={200} style={{ color: tokens.colorPaletteGreenForeground2 }}>
-                              주제가 적절합니다 ({form.topic.length}자)
-                            </Text>
-                          </>
-                        ) : (
-                          <>
-                            <DismissCircleRegular style={{ color: tokens.colorPaletteRedForeground1, fontSize: 14 }} />
-                            <Text size={200} style={{ color: tokens.colorPaletteRedForeground1 }}>
-                              주제를 입력해주세요
-                            </Text>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </Field>
-                </div>
-                <Field label="영상 길이">
-                  <Dropdown
-                    value={DURATION_OPTIONS.find((o) => o.key === form.durationMin)?.text || "3분 (표준)"}
-                    selectedOptions={[String(form.durationMin)]}
-                    onOptionSelect={(_, d) => onChange("durationMin", Number(d.optionValue))}
-                    size="large"
-                  >
-                    {DURATION_OPTIONS.map((o) => (
-                      <Option key={o.key} value={String(o.key)}>
-                        {o.text}
-                      </Option>
-                    ))}
-                  </Dropdown>
-                </Field>
-                <Field label="영상 스타일">
-                  <Dropdown
-                    value={STYLE_OPTIONS.find((o) => o.key === form.style)?.text || "📚 정보 전달형"}
-                    selectedOptions={[form.style]}
-                    onOptionSelect={(_, d) => onChange("style", d.optionValue)}
-                    size="large"
-                  >
-                    {STYLE_OPTIONS.map((o) => (
-                      <Option key={o.key} value={o.key} text={o.desc}>
-                        {o.text}
-                      </Option>
-                    ))}
-                  </Dropdown>
-                </Field>
-                <Field label="이미지 스타일">
-                  <Dropdown
-                    value={IMAGE_STYLE_OPTIONS.find((o) => o.key === form.imageStyle)?.text || "실사"}
-                    selectedOptions={[form.imageStyle]}
-                    onOptionSelect={(_, d) => onChange("imageStyle", d.optionValue)}
-                    size="large"
-                  >
-                    {IMAGE_STYLE_OPTIONS.map((o) => (
-                      <Option key={o.key} value={o.key}>
-                        {o.text}
-                      </Option>
-                    ))}
-                  </Dropdown>
-                </Field>
-                <Field label="AI 엔진">
-                  <Dropdown
-                    value={AI_ENGINE_OPTIONS.find((o) => o.key === form.aiEngine)?.text || "🧠 Anthropic Claude"}
-                    selectedOptions={[form.aiEngine]}
-                    onOptionSelect={(_, d) => onChange("aiEngine", d.optionValue)}
-                    size="large"
-                  >
-                    {AI_ENGINE_OPTIONS.map((o) => (
-                      <Option key={o.key} value={o.key} text={o.desc}>
-                        {o.text}
-                      </Option>
-                    ))}
-                  </Dropdown>
-                </Field>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <Field label="대본 생성 프롬프트">
-                    <Dropdown
-                      placeholder={promptLoading ? "불러오는 중…" : "프롬프트를 선택하세요"}
-                      value={form.promptName}
-                      selectedOptions={form.promptName ? [form.promptName] : []}
-                      onOptionSelect={(_, d) => onChange("promptName", d.optionValue)}
-                      size="large"
-                    >
-                      {promptNames.map((nm) => (
-                        <Option key={nm} value={nm}>
-                          {nm}
-                        </Option>
-                      ))}
-                    </Dropdown>
-                    {promptLoading ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, color: tokens.colorNeutralForeground3, marginTop: 4 }}>
-                        <Spinner size="tiny" />
-                        <Text>프롬프트 목록을 불러오는 중…</Text>
-                      </div>
-                    ) : form.promptName ? (
-                      <div
-                        style={{ display: "flex", alignItems: "center", gap: 6, color: tokens.colorPaletteGreenForeground2, marginTop: 4 }}
-                      >
-                        <CheckmarkCircleRegular />
-                        <Text>선택됨: {form.promptName}</Text>
-                      </div>
-                    ) : (
-                      <Text style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
-                        설정 탭에서 프롬프트를 먼저 저장하세요. (대본 생성 프롬프트가 필요합니다)
-                      </Text>
-                    )}
-                  </Field>
-                </div>
-              </div>
-            </Card>
+            {/* 기본 설정 카드 */}
+            <BasicSettingsCard
+              form={form}
+              onChange={onChange}
+              promptNames={promptNames}
+              promptLoading={promptLoading}
+            />
 
             {/* TTS 및 보이스 설정 카드 */}
             <VoiceSettingsCard
@@ -1020,71 +904,14 @@ ${form.topic}의 핵심은 바로 이것입니다...
               onRetryVoiceLoad={retryVoiceLoad}
             />
 
-            {/* 고급 설정 & 배치 처리 카드 */}
-            <Card className={cardStyles.settingsCard}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: tokens.spacingVerticalM,
-                }}
-              >
-                <div>
-                  <Text weight="semibold" size={400}>
-                    🔧 고급 설정 & 자동화
-                  </Text>
-                  <div style={{ color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 }}>
-                    프리셋, 배치 처리, 실시간 검증 등 전문 기능을 사용할 수 있습니다.
-                  </div>
-                </div>
-                <Switch checked={showAdvanced} onChange={(_, d) => setShowAdvanced(d.checked)} />
-              </div>
-
-              {showAdvanced && (
-                <div style={{ marginTop: tokens.spacingVerticalM }}>
-                  <div style={{ marginBottom: tokens.spacingVerticalM }}>
-                    <Text weight="semibold" size={300}>
-                      🎯 설정 프리셋
-                    </Text>
-                    <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
-                      용도별 최적화된 설정을 한 번에 적용할 수 있습니다.
-                    </Text>
-                  </div>
-
-                  <div
-                    style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: tokens.spacingHorizontalS }}
-                  >
-                    {ADVANCED_PRESETS.map((preset) => (
-                      <Card
-                        key={preset.name}
-                        style={{
-                          padding: tokens.spacingVerticalM,
-                          cursor: "pointer",
-                          border:
-                            selectedPreset === preset.name ? `2px solid ${tokens.colorBrandBackground}` : "1px solid rgba(0,0,0,0.08)",
-                          background: selectedPreset === preset.name ? tokens.colorBrandBackground2 : "#fff",
-                          transition: "all 0.2s ease",
-                        }}
-                        onClick={() => applyPreset(preset.name)}
-                      >
-                        <Text weight="semibold" size={200}>
-                          {preset.name}
-                        </Text>
-                        <Text size={100} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
-                          {preset.description}
-                        </Text>
-                        {selectedPreset === preset.name && (
-                          <Badge appearance="tint" color="brand" style={{ marginTop: 8 }}>
-                            적용됨
-                          </Badge>
-                        )}
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </Card>
+            {/* 고급 설정 & 자동화 카드 */}
+            <AdvancedSettingsCard
+              showAdvanced={showAdvanced}
+              onToggleAdvanced={setShowAdvanced}
+              selectedPreset={selectedPreset}
+              onApplyPreset={applyPreset}
+              presets={ADVANCED_PRESETS}
+            />
           </div>
 
           {/* 우측: 상태 및 결과 패널 */}
@@ -1096,105 +923,16 @@ ${form.topic}의 핵심은 바로 이것입니다...
             <StreamingScriptViewer />
 
             {/* 예상 결과 카드 */}
-            <Card className={cardStyles.settingsCard}>
-              <div className={settingsStyles.sectionHeader}>
-                <div className={settingsStyles.sectionTitle}>
-                  <Badge appearance="outline" style={{ border: `1px solid ${tokens.colorNeutralStroke2}` }}>
-                    📊
-                  </Badge>
-                  <Text size={400} weight="semibold">
-                    예상 생성 결과
-                  </Text>
-                </div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: tokens.spacingHorizontalM }}>
-                {statTile("예상 장면 수", `${estimatedScenes}개`)}
-                {statTile("예상 글자 수", `${avgChars.toLocaleString()}자`)}
-                {statTile("음성 시간", `약 ${duration}분`)}
-                {statTile(
-                  "AI 엔진",
-                  (() => {
-                    const selectedEngine = AI_ENGINE_OPTIONS.find((engine) => engine.key === form.aiEngine);
-                    return selectedEngine ? (
-                      <Badge appearance="tint" color="brand" style={{ fontWeight: 600 }}>
-                        {selectedEngine.text.split(" ")[1]}
-                      </Badge>
-                    ) : (
-                      "미선택"
-                    );
-                  })()
-                )}
-              </div>
-            </Card>
+            <GenerationPreviewCard
+              form={form}
+              aiEngineOptions={AI_ENGINE_OPTIONS}
+            />
 
-            {/* 결과 미리보기 카드 */}
-            <Card className={cardStyles.resultCard}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                <Text weight="semibold">씬 미리보기</Text>
-                <Badge appearance="tint">{doc?.scenes?.length ? `${doc.scenes.length}개 씬` : "대본 없음"}</Badge>
-              </div>
-
-              {(doc?.scenes || []).length > 0 ? (
-                <DataGrid
-                  items={doc.scenes}
-                  columns={[
-                    createTableColumn({
-                      columnId: "scene_number",
-                      renderHeaderCell: () => "#",
-                      renderCell: (item, index) => (
-                        <DataGridCell>
-                          <Text>{item.scene_number ?? index + 1}</Text>
-                        </DataGridCell>
-                      ),
-                    }),
-                    createTableColumn({
-                      columnId: "duration",
-                      renderHeaderCell: () => "지속 시간",
-                      renderCell: (item) => (
-                        <DataGridCell>
-                          <Text>{item.duration}초</Text>
-                        </DataGridCell>
-                      ),
-                    }),
-                    createTableColumn({
-                      columnId: "charCount",
-                      renderHeaderCell: () => "글자수",
-                      renderCell: (item) => (
-                        <DataGridCell>
-                          <Text>{safeCharCount(item.text)}</Text>
-                        </DataGridCell>
-                      ),
-                    }),
-                    createTableColumn({
-                      columnId: "text",
-                      renderHeaderCell: () => "텍스트",
-                      renderCell: (item) => (
-                        <DataGridCell>
-                          <Text>{item.text}</Text>
-                        </DataGridCell>
-                      ),
-                    }),
-                  ]}
-                >
-                  <DataGridHeader>
-                    <DataGridRow>{({ renderHeaderCell }) => <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>}</DataGridRow>
-                  </DataGridHeader>
-                  <DataGridBody>
-                    {({ item, rowId }) => <DataGridRow key={rowId}>{({ renderCell }) => renderCell(item)}</DataGridRow>}
-                  </DataGridBody>
-                </DataGrid>
-              ) : (
-                <div style={{ textAlign: "center", padding: 36 }}>
-                  <Body1>대본을 생성하거나 SRT를 불러오면 씬 목록이 표시됩니다.</Body1>
-                </div>
-              )}
-
-              {error && (
-                <MessageBar intent="error" style={{ marginTop: tokens.spacingVerticalM }}>
-                  <MessageBarBody>{error}</MessageBarBody>
-                </MessageBar>
-              )}
-            </Card>
+            {/* 씬 미리보기 카드 */}
+            <ScenePreviewCard
+              doc={doc}
+              error={error}
+            />
 
             {/* 대본만 생성 카드 */}
             <ScriptGenerationCard
