@@ -15,11 +15,9 @@
 
 // ===== API 관련 훅들 =====
 export { useApi } from './useApi';
-export { useAsyncOperation } from './useAsyncOperation';
 
 // ===== 스토리지 관련 훅들 =====
 export { useLocalStorage } from './useLocalStorage';
-export { default as usePersistentState } from './usePersistentState';
 export { usePersistProject } from './usePersistProject';
 
 // ===== UI 상태 관련 훅들 =====
@@ -38,6 +36,11 @@ export { useAutoMatch } from './useAutoMatch';
 export { default as usePrompts } from './usePrompts';
 export { useThumbnailGeneration } from './useThumbnailGeneration';
 export { useImageAnalysis } from './useImageAnalysis';
+
+// ===== 스크립트 생성 관련 훅들 =====
+export { useScriptGeneration } from './useScriptGeneration';
+export { useVoiceSettings } from './useVoiceSettings';
+export { usePromptSettings } from './usePromptSettings';
 
 // ===== 카테고리별 네임스페이스 export =====
 export * as api from './api';

@@ -8,7 +8,6 @@ import {
   CardFooter,
   Title1,
   Title2,
-  Title2,
   Body1,
   Input,
   Button,
