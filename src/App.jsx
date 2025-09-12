@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState, useEffect, Suspense, lazy, memo } from 
 import { makeStyles, shorthands, tokens, Card, CardHeader, Body1, Title1, Title2, Subtitle1, Text, mergeClasses } from "@fluentui/react-components";
 import KeepAlivePane from "./components/common/KeepAlivePane";
 import { LoadingSpinner, GlobalToast } from "./components/common";
+import { useFontOverrideStyles } from "./styles/commonStyles";
 
 const Sidebar = lazy(() => import("./components/Sidebar"));
 const ProjectInit = lazy(() => import("./components/ProjectInit"));
@@ -98,6 +99,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState(null);
   const canOpenWithoutProject = true;
   const styles = useStyles();
+  const fontStyles = useFontOverrideStyles();
 
   const handleCreateProject = useCallback((name) => {
     setProjectName(name);
@@ -130,7 +132,7 @@ function App() {
   }, []);
 
   return (
-    <div className={styles.root}>
+    <div className={mergeClasses(styles.root, fontStyles.globalFont)}>
       <Suspense fallback={<MemoizedLoadingFallback label="헤더 로딩 중..." />}>
         <div className={styles.header}>
           <HeaderBar onOpenSettings={handleOpenSettings} />

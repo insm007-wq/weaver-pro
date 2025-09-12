@@ -880,22 +880,15 @@ ${form.topic}의 핵심은 바로 이것입니다...
         }}
       >
         {/* 헤더 */}
-        <div style={{ textAlign: "center", marginBottom: tokens.spacingVerticalL }}>
-          <Title1
-            style={{
-              fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif",
-              fontWeight: 600,
-              letterSpacing: "-0.01em",
-              lineHeight: 1.2,
-              marginBottom: tokens.spacingVerticalS,
-            }}
-          >
+        <div className={headerStyles.pageHeader}>
+          <div className={headerStyles.pageTitleWithIcon}>
+            <DocumentEditRegular />
             대본 & 음성 생성
-          </Title1>
-          <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>
+          </div>
+          <div className={headerStyles.pageDescription}>
             SRT 자막 + MP3 내레이션을 한 번에 생성합니다
-          </Text>
-          <Divider style={{ marginTop: tokens.spacingVerticalL }} />
+          </div>
+          <div className={headerStyles.divider} />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: tokens.spacingHorizontalXL }}>

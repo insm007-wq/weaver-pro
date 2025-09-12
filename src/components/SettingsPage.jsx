@@ -130,7 +130,7 @@ export default function SettingsPage({ onBack }) {
 
       {/* 페이지 헤더 */}
       <div className={headerStyles.pageHeader}>
-        <div className={headerStyles.pageTitle}>
+        <div className={headerStyles.pageTitleWithIcon}>
           <SettingsRegular />
           전역 설정
         </div>

@@ -5,6 +5,7 @@ import { ErrorBoundary } from "../common/ErrorBoundary";
 // Utils - 중앙화된 에러 처리
 import { handleError, handleApiError } from "@utils";
 import { showGlobalToast } from "../common/GlobalToast";
+import { useHeaderStyles } from "../../styles/commonStyles";
 import {
   Button,
   Card,
@@ -223,6 +224,7 @@ const QUALITY_PRESETS = [
 
 function ThumbnailGenerator() {
   const styles = useStyles();
+  const headerStyles = useHeaderStyles();
   const fileInputRef = useRef(null);
 
   /** 🔒 고정 폭 측정/저장 (리플리케이트 기준) */
@@ -692,34 +694,15 @@ function ThumbnailGenerator() {
           : {}
       }
     >
-      <div style={{ textAlign: "center", marginBottom: "32px" }}>
-        <div style={{ 
-          display: "flex", 
-          alignItems: "center", 
-          justifyContent: "center",
-          gap: "12px",
-          fontFamily: "system-ui, -apple-system, 'Segoe UI', 'Malgun Gothic', sans-serif",
-          fontWeight: 600,
-          fontSize: "24px",
-          lineHeight: "1.2",
-          letterSpacing: "-0.01em",
-          textRendering: "optimizeLegibility",
-          WebkitFontSmoothing: "antialiased",
-          MozOsxFontSmoothing: "grayscale",
-          marginBottom: "8px",
-          transform: "translateX(-16px)"
-        }}>
+      <div className={headerStyles.pageHeader}>
+        <div className={headerStyles.pageTitleWithIcon}>
           <SparkleRegular />
           썸네일 생성기
         </div>
-        <div style={{ 
-          color: tokens.colorNeutralForeground3, 
-          textAlign: "center",
-          fontSize: tokens.fontSizeBase300,
-          lineHeight: "1.5",
-          marginBottom: "16px"
-        }}>AI를 활용한 YouTube 썸네일 생성 도구</div>
-        <div className={styles.hairline} />
+        <div className={headerStyles.pageDescription}>
+          AI를 활용한 YouTube 썸네일 생성 도구
+        </div>
+        <div className={headerStyles.divider} />
       </div>
 
       {/* 장면 설명 — 둘 모드 모두에서 표시 */}
