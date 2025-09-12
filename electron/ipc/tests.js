@@ -110,6 +110,82 @@ ipcMain.handle("testGoogleTTS", async (_e, apiKey) => {
   }
 });
 
+/** ✅ ElevenLabs */
+ipcMain.handle("testElevenLabs", async (_e, apiKey) => {
+  try {
+    console.log("🔍 ElevenLabs 테스트 시작, API Key:", apiKey ? `${apiKey.substring(0, 10)}...` : "null/undefined");
+    
+    if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
+      console.log("❌ ElevenLabs API 키가 비어있음:", { apiKey, type: typeof apiKey });
+      return fail(400, "ElevenLabs API 키를 입력하세요.");
+    }
+    
+    const trimmedKey = apiKey.trim();
+    console.log("🔑 ElevenLabs API 키 길이:", trimmedKey.length);
+    console.log("🔑 ElevenLabs API 키 형식:", trimmedKey.startsWith('sk_') ? 'New format (sk_)' : 'Legacy format (hex)');
+    
+    // 키 유효성 검사
+    if (!trimmedKey.startsWith('sk_') && trimmedKey.length !== 64) {
+      console.log("❌ ElevenLabs API 키 형식 오류: sk_로 시작하거나 64자리 hex여야 함");
+      return fail(400, "ElevenLabs API 키 형식이 올바르지 않습니다. sk_로 시작하거나 64자리 문자열이어야 합니다.");
+    }
+    
+    // 먼저 목소리 목록부터 시도 (권한이 적게 필요)
+    console.log("📞 ElevenLabs /v1/voices API 호출 중...");
+    const voicesResponse = await axios.get("https://api.elevenlabs.io/v1/voices", {
+      headers: { 
+        "xi-api-key": trimmedKey,
+        "Content-Type": "application/json"
+      },
+      timeout: 15000
+    });
+    
+    console.log("✅ ElevenLabs 목소리 목록 응답:", voicesResponse.status);
+    const voices = voicesResponse.data?.voices || [];
+    
+    let userInfo = null;
+    // 사용자 정보는 선택적으로 시도 (권한 문제 시 무시)
+    try {
+      console.log("📞 ElevenLabs /v1/user API 호출 중...");
+      const userResponse = await axios.get("https://api.elevenlabs.io/v1/user", {
+        headers: { 
+          "xi-api-key": trimmedKey,
+          "Content-Type": "application/json"
+        },
+        timeout: 15000
+      });
+      console.log("✅ ElevenLabs 사용자 정보 응답:", userResponse.status);
+      userInfo = userResponse.data;
+    } catch (userErr) {
+      console.log("⚠️ ElevenLabs 사용자 정보 접근 실패 (권한 부족 가능성):", userErr.response?.data?.detail?.message || userErr.message);
+    }
+    
+    const subscription = userInfo?.subscription || {};
+    const result = {
+      voices: voices.length,
+      subscription: userInfo ? (subscription.tier || "free") : "권한 부족으로 확인 불가", 
+      charactersUsed: subscription.character_count || 0,
+      charactersLimit: subscription.character_limit || 10000,
+      canTrain: subscription.can_train_voice || false,
+      hasUserPermission: !!userInfo
+    };
+    
+    console.log("🎯 ElevenLabs 테스트 결과:", result);
+    return ok(result);
+  } catch (err) {
+    console.error("❌ ElevenLabs 테스트 실패:", err.response?.status, err.response?.data || err.message);
+    
+    // 권한 오류에 대한 특별 처리
+    if (err.response?.data?.detail?.status === "missing_permissions") {
+      const missingPermission = err.response.data.detail.message;
+      return fail(403, `ElevenLabs API 키 권한 부족: ${missingPermission}. 목소리 생성은 가능하지만 계정 정보 확인이 제한됩니다.`);
+    }
+    
+    const { status, message } = normalizeError(err);
+    return fail(status, message);
+  }
+});
+
 /** ✅ Pexels */
 ipcMain.handle("pexels:test", async (_e, arg) => {
   const key = (typeof arg === "string" ? arg : arg?.key || "").trim();
