@@ -24,6 +24,7 @@ const DEFAULT_SETTINGS = {
   videoModel: "veo-3",
   imageResolution: "1024x1024",
   videoQuality: "1080p",
+  llmModel: "gpt-4o",
 };
 
 // AI 모델 관련 옵션을 구조화하여 관리합니다.
@@ -53,6 +54,14 @@ const AI_OPTIONS = {
     { value: "1080p", text: "1080p", speed: "표준" },
     { value: "4k", text: "4K", speed: "느림" },
   ],
+  llmModels: [
+    { value: "gpt-4o", text: "GPT-4o (최신)", provider: "OpenAI", cost: "고비용" },
+    { value: "gpt-4o-mini", text: "GPT-4o Mini (경제적)", provider: "OpenAI", cost: "저비용" },
+    { value: "claude-3-5-sonnet", text: "Claude 3.5 Sonnet", provider: "Anthropic", cost: "고비용" },
+    { value: "claude-3-haiku", text: "Claude 3 Haiku (빠름)", provider: "Anthropic", cost: "저비용" },
+    { value: "gemini-1.5-pro", text: "Gemini 1.5 Pro", provider: "Google", cost: "중비용" },
+    { value: "gemini-1.5-flash", text: "Gemini 1.5 Flash (빠름)", provider: "Google", cost: "저비용" },
+  ],
 };
 
 export default function DefaultsTab() {
@@ -62,6 +71,7 @@ export default function DefaultsTab() {
   const api = useApi();
 
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [displayFolder, setDisplayFolder] = useState("");
 
   useEffect(() => {
     try {
@@ -73,6 +83,43 @@ export default function DefaultsTab() {
     } catch (error) {
       console.error("기본 설정 로드 실패:", error);
     }
+
+    // 프로젝트 관리에서 저장한 경로 로드
+    const loadProjectRootFolder = async () => {
+      try {
+        const projectRootFolder = await window.api.getSetting("projectRootFolder");
+        const defaultProjectName = await window.api.getSetting("defaultProjectName");
+
+        if (projectRootFolder && defaultProjectName) {
+          const today = new Date().toISOString().split('T')[0];
+          // 경로 정리 (이중 백슬래시 제거)
+          const cleanRootFolder = projectRootFolder.replace(/\\+/g, '\\').replace(/\\$/, '');
+          const folderPath = `${cleanRootFolder}\\${today}\\${defaultProjectName}`;
+
+          setDisplayFolder(folderPath);
+          // videoSaveFolder도 업데이트
+          setSettings(prev => ({ ...prev, videoSaveFolder: folderPath }));
+        } else {
+          setDisplayFolder("프로젝트 관리에서 경로를 설정해주세요");
+        }
+      } catch (error) {
+        console.error("프로젝트 경로 로드 실패:", error);
+        setDisplayFolder("프로젝트 경로를 불러올 수 없습니다");
+      }
+    };
+
+    loadProjectRootFolder();
+
+    // 프로젝트 설정 업데이트 이벤트 리스너
+    const handleProjectSettingsUpdate = () => {
+      loadProjectRootFolder();
+    };
+
+    window.addEventListener('projectSettings:updated', handleProjectSettingsUpdate);
+
+    return () => {
+      window.removeEventListener('projectSettings:updated', handleProjectSettingsUpdate);
+    };
   }, []);
 
   const saveSettings = async () => {
@@ -129,6 +176,38 @@ export default function DefaultsTab() {
     });
   };
 
+  const openVideoFolder = async () => {
+    try {
+      const folderPath = displayFolder || settings.videoSaveFolder;
+      if (!folderPath) {
+        showGlobalToast({
+          type: "error",
+          text: "폴더 경로가 설정되지 않았습니다.",
+        });
+        return;
+      }
+
+      const result = await api.invoke("shell:openPath", folderPath);
+      if (result.success) {
+        showGlobalToast({
+          type: "success",
+          text: "폴더를 열었습니다.",
+        });
+      } else {
+        showGlobalToast({
+          type: "error",
+          text: result.message || "폴더 열기에 실패했습니다.",
+        });
+      }
+    } catch (error) {
+      console.error("폴더 열기 오류:", error);
+      showGlobalToast({
+        type: "error",
+        text: "폴더 열기에 실패했습니다.",
+      });
+    }
+  };
+
   // 스타일 관련 상수
   const sectionGap = tokens.spacingVerticalXXL;
   const itemGap = tokens.spacingHorizontalXL;
@@ -159,16 +238,37 @@ export default function DefaultsTab() {
             <VideoRegular /> 일반 설정
           </Text>
           <div style={{ display: "grid", gridTemplateColumns: gridTemplate, gap: itemGap }}>
-            <Field label="영상 저장 폴더" hint="생성된 영상 파일이 저장될 경로입니다.">
-              <div className={settingsStyles.folderSection}>
-                <Input
-                  className={settingsStyles.folderInput}
-                  value={settings.videoSaveFolder}
-                  onChange={(_, data) => setSettings((prev) => ({ ...prev, videoSaveFolder: data.value }))}
-                  contentBefore={<FolderRegular />}
-                />
-                <Button appearance="secondary" onClick={selectFolder}>
-                  폴더 선택
+            <Field label="영상 저장 폴더" hint="프로젝트 관리에서 설정한 경로 기반으로 자동 생성됩니다.">
+              <div style={{ display: "flex", gap: "8px", alignItems: "stretch", maxWidth: "100%" }}>
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    backgroundColor: tokens.colorNeutralBackground3,
+                    border: `1px solid ${tokens.colorNeutralStroke1}`,
+                    borderRadius: tokens.borderRadiusMedium,
+                    color: tokens.colorNeutralForeground2,
+                    fontFamily: "monospace",
+                    fontSize: "13px",
+                    width: "220px",
+                    display: "flex",
+                    alignItems: "center",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                    cursor: "default"
+                  }}
+                  title={displayFolder || settings.videoSaveFolder}
+                >
+                  {displayFolder || settings.videoSaveFolder}
+                </div>
+                <Button
+                  appearance="secondary"
+                  icon={<FolderRegular />}
+                  onClick={openVideoFolder}
+                  disabled={!displayFolder && !settings.videoSaveFolder}
+                >
+                  폴더 열기
                 </Button>
               </div>
             </Field>
@@ -263,6 +363,21 @@ export default function DefaultsTab() {
                 {AI_OPTIONS.videoQualities.map((quality) => (
                   <Option key={quality.value} value={quality.value}>
                     {quality.text} <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>({quality.speed})</Caption1>
+                  </Option>
+                ))}
+              </Dropdown>
+            </Field>
+
+            {/* LLM 모델 */}
+            <Field label="대본 생성 LLM 모델" hint="대본 생성에 사용할 AI 언어모델입니다.">
+              <Dropdown
+                value={getDropdownValue(AI_OPTIONS.llmModels, settings.llmModel)}
+                selectedOptions={[settings.llmModel]}
+                onOptionSelect={(_, data) => setSettings((prev) => ({ ...prev, llmModel: data.optionValue }))}
+              >
+                {AI_OPTIONS.llmModels.map((model) => (
+                  <Option key={model.value} value={model.value}>
+                    {model.text} <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>({model.provider} - {model.cost})</Caption1>
                   </Option>
                 ))}
               </Dropdown>

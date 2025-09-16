@@ -83,28 +83,14 @@ class ProjectManager {
     }
   }
 
-  // 프로젝트 ID 생성 (주제 기반 + 전역 설정)
+  // 프로젝트 ID 생성 (사용자 입력 이름 그대로 사용)
   generateProjectId(topic) {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    
-    // 전역 설정에서 기본 프로젝트 이름 가져오기
-    let defaultName = 'WeaverPro-Project';
-    try {
-      const globalDefaultName = store.get('defaultProjectName');
-      console.log('📝 ProjectManager - 저장된 defaultProjectName:', globalDefaultName);
-      if (globalDefaultName && typeof globalDefaultName === 'string' && globalDefaultName.trim()) {
-        defaultName = globalDefaultName.trim();
-        console.log('📝 ProjectManager - 사용할 기본 이름:', defaultName);
-      }
-    } catch (error) {
-      console.warn('기본 프로젝트 이름 설정 읽기 실패:', error.message);
-    }
-    
+    // 사용자가 입력한 주제를 그대로 사용 (특수문자만 제거)
     const sanitizedTopic = topic
-      ? topic.replace(/[^가-힣a-zA-Z0-9\s]/g, '').replace(/\s+/g, '-').substring(0, 20)
-      : defaultName;
-    
-    return `${sanitizedTopic}-${timestamp}`.toLowerCase();
+      ? topic.replace(/[\\/:*?"<>|]/g, '').trim() // 파일/폴더명에 사용할 수 없는 문자만 제거
+      : 'WeaverPro-Project';
+
+    return sanitizedTopic;
   }
 
   // 프로젝트 폴더 구조 생성

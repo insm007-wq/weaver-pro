@@ -535,6 +535,14 @@ export default function ProjectManager() {
                     ...prev,
                     defaultProjectName: project.topic
                   }));
+
+                  // 즉시 전역 이벤트 발생으로 DefaultsTab에 실시간 반영
+                  window.dispatchEvent(new CustomEvent('projectSettings:updated', {
+                    detail: {
+                      projectRootFolder: settings.projectRootFolder,
+                      defaultProjectName: project.topic
+                    }
+                  }));
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -602,7 +610,6 @@ export default function ProjectManager() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: itemGap, marginBottom: tokens.spacingVerticalL }}>
           <Field label="프로젝트 루트 폴더" hint="모든 프로젝트가 생성될 기본 폴더입니다.">
             <Input
-              className={settingsStyles.folderInput}
               value={settings.projectRootFolder}
               onChange={(_, data) => setSettings((prev) => ({ ...prev, projectRootFolder: data.value }))}
               contentBefore={<FolderRegular />}
@@ -647,7 +654,7 @@ export default function ProjectManager() {
               <br />
               └── 📁 {selectedProject ? new Date(selectedProject.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}/
               <br />
-              &nbsp;&nbsp;&nbsp;&nbsp;└── 📁 {selectedProject ? `${selectedProject.topic.replace(/[^a-zA-Z0-9가-힣]/g, '-')}_${selectedProject.id.slice(-3)}` : `${settings.defaultProjectName}_1`}/
+              &nbsp;&nbsp;&nbsp;&nbsp;└── 📁 {selectedProject ? selectedProject.topic : settings.defaultProjectName}/
               <br />
               &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── 📁 scripts/ (대본 파일)
               <br />
