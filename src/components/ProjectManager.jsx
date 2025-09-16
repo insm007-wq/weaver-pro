@@ -58,6 +58,7 @@ export default function ProjectManager() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentProject, setCurrentProject] = useState(null);
+  const [selectedProject, setSelectedProject] = useState(null); // 구조 표시용 선택된 프로젝트
 
   // 새 프로젝트 생성 상태
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -148,16 +149,29 @@ export default function ProjectManager() {
 
   const saveSettings = async () => {
     try {
+      console.log("💾 프로젝트 설정 저장 시작:", settings);
+
       await window.api.setSetting({
         key: "projectRootFolder",
         value: settings.projectRootFolder,
       });
       await window.api.setSetting({
-        key: "defaultProjectName", 
+        key: "defaultProjectName",
         value: settings.defaultProjectName,
       });
 
       setOriginalSettings(settings);
+
+      console.log("✅ 프로젝트 설정 저장 완료");
+
+      // 설정 페이지에도 반영되도록 전역 이벤트 발생
+      window.dispatchEvent(new CustomEvent('projectSettings:updated', {
+        detail: {
+          projectRootFolder: settings.projectRootFolder,
+          defaultProjectName: settings.defaultProjectName
+        }
+      }));
+
       showGlobalToast({
         type: "success",
         text: "프로젝트 설정이 저장되었습니다! 🎉",
@@ -193,23 +207,19 @@ export default function ProjectManager() {
 
   const resetSettings = async () => {
     setSettings(DEFAULT_PROJECT_SETTINGS);
-    setOriginalSettings(DEFAULT_PROJECT_SETTINGS);
-    
-    try {
-      await window.api.setSetting({ key: "projectRootFolder", value: DEFAULT_PROJECT_SETTINGS.projectRootFolder });
-      await window.api.setSetting({ key: "defaultProjectName", value: DEFAULT_PROJECT_SETTINGS.defaultProjectName });
-      
-      showGlobalToast({
-        type: "success",
-        text: "프로젝트 설정이 초기화되었습니다!",
-      });
-    } catch (error) {
-      console.error("설정 초기화 실패:", error);
-      showGlobalToast({
-        type: "error",
-        text: "설정 초기화에 실패했습니다.",
-      });
-    }
+    // 선택된 프로젝트 초기화
+    setSelectedProject(null);
+    // 강제로 originalSettings를 다른 값으로 설정해서 isModified가 true가 되도록 함
+    setOriginalSettings({
+      projectRootFolder: "temp_different_value",
+      defaultProjectName: "temp_different_value",
+      autoCreateFolders: true,
+    });
+
+    showGlobalToast({
+      type: "success",
+      text: "기본값으로 초기화되었습니다. 저장 버튼을 눌러 적용하세요.",
+    });
   };
 
   const createNewProject = async () => {
@@ -232,13 +242,15 @@ export default function ProjectManager() {
 
       if (result.success) {
         console.log("✅ 프로젝트 생성 성공, UI 업데이트 시작...");
+
+
         showGlobalToast({
           type: "success",
           text: `프로젝트 "${newProjectTopic}"가 생성되었습니다!`,
         });
         setNewProjectTopic("");
         setShowCreateForm(false);
-        
+
         console.log("🔄 프로젝트 목록 새로고침 중...");
         await loadProjects();
         console.log("🔄 현재 프로젝트 새로고침 중...");
@@ -277,6 +289,18 @@ export default function ProjectManager() {
 
         // 상태 초기화 (입력 필드 문제 해결을 위해)
         console.log("🔄 상태 초기화...");
+
+        // 삭제된 프로젝트가 선택된 프로젝트라면 초기화
+        if (selectedProject?.id === projectId) {
+          console.log("🔄 선택된 프로젝트 초기화...");
+          setSelectedProject(null);
+          // 기본 프로젝트 이름도 원래 설정값으로 되돌리기
+          setSettings(prev => ({
+            ...prev,
+            defaultProjectName: originalSettings.defaultProjectName
+          }));
+        }
+
         setNewProjectTopic("");
         setShowCreateForm(false);
         setCreating(false);
@@ -492,7 +516,27 @@ export default function ProjectManager() {
         ) : (
           <div style={{ display: "grid", gap: tokens.spacingVerticalM }}>
             {projects.map((project) => (
-              <Card key={project.id} style={{ padding: tokens.spacingVerticalM, backgroundColor: tokens.colorNeutralBackground2 }}>
+              <Card
+                key={project.id}
+                style={{
+                  padding: tokens.spacingVerticalM,
+                  backgroundColor: selectedProject?.id === project.id
+                    ? tokens.colorBrandBackground2
+                    : tokens.colorNeutralBackground2,
+                  cursor: "pointer",
+                  border: selectedProject?.id === project.id
+                    ? `2px solid ${tokens.colorBrandStroke1}`
+                    : `1px solid ${tokens.colorNeutralStroke2}`
+                }}
+                onClick={() => {
+                  setSelectedProject(project);
+                  // 선택된 프로젝트의 이름으로 기본 프로젝트 이름 변경 (저장은 사용자가 직접)
+                  setSettings(prev => ({
+                    ...prev,
+                    defaultProjectName: project.topic
+                  }));
+                }}
+              >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
@@ -500,6 +544,11 @@ export default function ProjectManager() {
                       {currentProject?.id === project.id && (
                         <Badge appearance="filled" color="success" icon={<CheckmarkCircleRegular />}>
                           활성
+                        </Badge>
+                      )}
+                      {selectedProject?.id === project.id && (
+                        <Badge appearance="filled" color="brand">
+                          선택됨
                         </Badge>
                       )}
                     </div>
@@ -552,25 +601,22 @@ export default function ProjectManager() {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: itemGap, marginBottom: tokens.spacingVerticalL }}>
           <Field label="프로젝트 루트 폴더" hint="모든 프로젝트가 생성될 기본 폴더입니다.">
-            <div className={settingsStyles.folderSection}>
-              <Input
-                className={settingsStyles.folderInput}
-                value={settings.projectRootFolder}
-                onChange={(_, data) => setSettings((prev) => ({ ...prev, projectRootFolder: data.value }))}
-                contentBefore={<FolderRegular />}
-              />
-              <Button appearance="secondary" onClick={selectFolder}>
-                폴더 선택
-              </Button>
-            </div>
+            <Input
+              className={settingsStyles.folderInput}
+              value={settings.projectRootFolder}
+              onChange={(_, data) => setSettings((prev) => ({ ...prev, projectRootFolder: data.value }))}
+              contentBefore={<FolderRegular />}
+              disabled={true}
+            />
           </Field>
 
-          <Field label="기본 프로젝트 이름" hint="새 프로젝트 생성 시 기본으로 사용될 이름입니다.">
+          <Field label="기본 프로젝트 이름" hint="프로젝트 목록에서 선택하면 자동으로 업데이트됩니다.">
             <Input
               value={settings.defaultProjectName}
               onChange={(_, data) => setSettings((prev) => ({ ...prev, defaultProjectName: data.value }))}
               contentBefore={<DocumentRegular />}
               placeholder="프로젝트 이름을 입력하세요"
+              disabled={true}
             />
           </Field>
         </div>
@@ -599,9 +645,9 @@ export default function ProjectManager() {
             <Caption1 style={{ color: tokens.colorNeutralForeground3, lineHeight: 1.4, fontFamily: "monospace" }}>
               📁 {settings.projectRootFolder}
               <br />
-              └── 📁 {new Date().toISOString().split('T')[0]}/
+              └── 📁 {selectedProject ? new Date(selectedProject.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}/
               <br />
-              &nbsp;&nbsp;&nbsp;&nbsp;└── 📁 {settings.defaultProjectName}-{new Date().toISOString().replace(/[:.]/g, '-')}/
+              &nbsp;&nbsp;&nbsp;&nbsp;└── 📁 {selectedProject ? `${selectedProject.topic.replace(/[^a-zA-Z0-9가-힣]/g, '-')}_${selectedProject.id.slice(-3)}` : `${settings.defaultProjectName}_1`}/
               <br />
               &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├── 📁 scripts/ (대본 파일)
               <br />
@@ -618,9 +664,9 @@ export default function ProjectManager() {
 
         {/* 하단 액션 버튼 */}
         <div style={{ display: "flex", gap: "16px" }}>
-          <Button 
-            appearance="primary" 
-            icon={<SaveRegular />} 
+          <Button
+            appearance="primary"
+            icon={<SaveRegular />}
             onClick={saveSettings}
             disabled={!isModified}
           >
