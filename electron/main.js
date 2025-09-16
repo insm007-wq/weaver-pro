@@ -142,6 +142,10 @@ if (!gotLock) {
     safeRequire("ipc/tts", () => require("./ipc/tts"));
     safeRequire("ipc/audio", () => require("./ipc/audio"));
 
+    // FFmpeg 영상 합성
+    const ffmpeg = safeRequire("ipc/ffmpeg", () => require("./ipc/ffmpeg"));
+    await tryRegister("ffmpeg", ffmpeg, "register");
+
     console.log("[main] All basic IPC modules loaded, starting startup-cleanup...");
 
     // 시작 시 정리 모듈
@@ -187,6 +191,10 @@ if (!gotLock) {
     // ✅ 비디오 서비스 (downloaded_canva 폴더 스캔 및 통합 관리)
     const videoService = safeRequire("ipc/videoService", () => require("./ipc/videoService"));
     await tryRegister("video-service", videoService, "register");
+    
+    // ✅ 프로젝트 관리 서비스 (출력 폴더 및 파일 경로 관리)
+    const projectManager = safeRequire("ipc/projectManager", () => require("./ipc/projectManager"));
+    await tryRegister("project-manager", projectManager, "register");
     
     // ✅ Shell 기능 (폴더 열기 등)
     const { shell } = require("electron");

@@ -71,11 +71,17 @@ ipcMain.handle("replicate:generate", async (_e, payload = {}) => {
     }
 
     // --- 요청 실행 + 폴링 ---
+    console.log(`🎨 Replicate 요청 시작: ${slug}`);
+    console.log(`📝 프롬프트: ${promptText}`);
+    console.log(`⚙️ 입력 파라미터:`, JSON.stringify(input, null, 2));
+    
     const replicate = createReplicate(auth);
     let prediction = await replicate.predictions.create({
       version: versionId,
       input,
     });
+    
+    console.log(`🔄 Replicate prediction 생성: ${prediction.id}`);
 
     // 최대 2분(120 * 1초) 폴링
     const maxTries = 120;
@@ -85,16 +91,23 @@ ipcMain.handle("replicate:generate", async (_e, payload = {}) => {
       ["starting", "processing", "queued"].includes(prediction.status) &&
       tries < maxTries
     ) {
+      if (tries % 10 === 0) {
+        console.log(`⏳ Replicate 대기 중: ${prediction.status} (${tries}/${maxTries})`);
+      }
       await new Promise((r) => setTimeout(r, 1000));
       prediction = await replicate.predictions.get(prediction.id);
       tries++;
     }
 
     if (tries >= maxTries) {
+      console.error("❌ Replicate 타임아웃: 2분 초과");
       return { ok: false, message: "timeout" };
     }
 
+    console.log(`🎯 Replicate 최종 상태: ${prediction.status}`);
+    
     if (prediction.status !== "succeeded") {
+      console.error("❌ Replicate 실패:", prediction);
       const errMsg =
         (prediction && (prediction.error || prediction.status)) ||
         "replicate_failed";
@@ -103,11 +116,15 @@ ipcMain.handle("replicate:generate", async (_e, payload = {}) => {
 
     // --- 결과 정규화 ---
     const out = prediction.output;
+    console.log(`📤 Replicate 출력:`, out);
+    
     const images = Array.isArray(out)
       ? out.filter((x) => typeof x === "string")
       : typeof out === "string"
       ? [out]
       : [];
+
+    console.log(`🖼️ 추출된 이미지 URL:`, images);
 
     // ✅ 순수 JSON만 반환 (prompt 제거해서 루프 차단)
     return { ok: true, images };

@@ -190,7 +190,11 @@
       "Bash(del /f nul)",
       "Bash(npm run electron:dev:*)",
       "Bash(del \"D:\\project\\weaver-pro\\src\\components\\scriptgen\\parts\\GenerationPreviewCard.jsx\")",
-      "Bash(del \"D:\\project\\weaver-pro\\electron\\ipc\\llm\\providers\\minimax.js\")"
+      "Bash(del \"D:\\project\\weaver-pro\\electron\\ipc\\llm\\providers\\minimax.js\")",
+      "Bash(del \"D:\\project\\weaver-pro\\electron\\services\\partnerManager.js\")",
+      "Bash(del \"D:\\project\\weaver-pro\\src\\components\\settings\\tabs\\ProjectTab.jsx\")",
+      "Bash(npm run:*)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []

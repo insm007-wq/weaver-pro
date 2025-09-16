@@ -203,6 +203,7 @@ function ScriptVoiceGenerator() {
   const { doc, setDoc, isLoading, error, runGenerate, getSelectedPromptContent } = useScriptGeneration();
   const { voices, voiceLoading, voiceError, previewVoice, retryVoiceLoad } = useVoiceSettings(form);
   
+  
   // Toast 추가 (applyPreset에서 사용)
   const toast = {
     success: (message) => console.log('Success:', message),
@@ -243,6 +244,7 @@ function ScriptVoiceGenerator() {
     });
   };
 
+
   const resetFullVideoState = () => {
     setFullVideoState({
       isGenerating: false,
@@ -266,6 +268,39 @@ function ScriptVoiceGenerator() {
     });
     addLog("🎬 완전 자동화 영상 생성을 시작합니다...");
 
+    // 프로젝트 생성
+    try {
+      addLog("📁 프로젝트 생성 중...");
+      
+      const projectResult = await api.invoke("project:create", { 
+        topic: form.topic, 
+        options: { 
+          style: form.style, 
+          duration: form.durationMin,
+          aiEngine: form.aiEngine 
+        } 
+      });
+      
+      if (!projectResult.success) {
+        throw new Error(`프로젝트 생성 실패: ${projectResult.message}`);
+      }
+      
+      // 프로젝트 데이터 안전한 접근 (중첩 구조 처리)
+      const project = projectResult.data?.project || projectResult.project;
+      if (!project || !project.id) {
+        throw new Error('프로젝트 데이터가 올바르지 않습니다: ' + JSON.stringify(projectResult));
+      }
+      
+      addLog(`✅ 프로젝트 생성 완료: ${project.id}`);
+    } catch (error) {
+      addLog(`❌ 프로젝트 생성 실패: ${error.message}`, "error");
+      updateFullVideoState({
+        currentStep: "error",
+        error: error.message,
+      });
+      return;
+    }
+
     try {
       addLog("📝 AI 대본 생성 중...");
       const script = await generateScriptStep();
@@ -286,16 +321,38 @@ function ScriptVoiceGenerator() {
         currentStep: "complete",
         progress: { video: 100 },
         results: { script, audio, images, video },
+        isGenerating: false, // 생성 완료 시 false로 설정
       });
       addLog("✅ 완전 자동화 영상 생성이 완료되었습니다!", "success");
+      addLog(`📁 영상 파일: ${video.videoPath}`, "info");
+      
+      // 출력 폴더 자동 열기
+      try {
+        await window.electronAPI.project.openOutputFolder();
+        addLog("📂 출력 폴더를 열었습니다.", "success");
+      } catch (error) {
+        addLog("❌ 출력 폴더 열기 실패: " + error.message, "error");
+      }
+      
       toast.success("🎉 완전 자동화 영상 생성 완료! 출력 폴더를 확인해보세요.");
+      
+      // 5초 후 자동으로 초기화 상태로 돌아가기
+      setTimeout(() => {
+        resetFullVideoState();
+      }, 5000);
     } catch (error) {
       updateFullVideoState({
         currentStep: "error",
         error: error.message,
+        isGenerating: false, // 에러 발생 시에도 false로 설정
       });
       addLog(`❌ 오류 발생: ${error.message}`, "error");
       toast.error(`영상 생성 실패: ${error.message}`);
+      
+      // 에러 상태에서도 10초 후 초기화
+      setTimeout(() => {
+        resetFullVideoState();
+      }, 10000);
     }
   };
 
@@ -389,15 +446,15 @@ ${form.topic}의 핵심은 바로 이것입니다...
         console.log("- content:", res.content);
       }
       
-      if (res && res.scenes && Array.isArray(res.scenes) && res.scenes.length > 0) {
-        setDoc(res);
+      if (res && res.data && res.data.scenes && Array.isArray(res.data.scenes) && res.data.scenes.length > 0) {
+        setDoc(res.data);
         stopStreaming();
         updateFullVideoState({
-          results: { script: res },
+          results: { script: res.data },
           progress: { script: 100 },
           streamingScript: "",
         });
-        return res;
+        return res.data;
       } else {
         console.error("❌ 대본 생성 실패 상세:");
         console.error("- res가 존재하는가?", !!res);
@@ -414,22 +471,283 @@ ${form.topic}의 핵심은 바로 이것입니다...
     }
   };
 
-  const generateAudioStep = async () => {
-    addLog("🎤 음성 생성 API 연동 준비 중...");
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    return { audioPath: "/path/to/audio.mp3" };
+  const generateAudioStep = async (scriptData) => {
+    addLog("🎤 음성 생성 중...");
+    
+    try {
+      if (!scriptData || !scriptData.scenes || scriptData.scenes.length === 0) {
+        throw new Error("대본 데이터가 없습니다.");
+      }
+
+      // TTS 엔진과 음성 설정 확인
+      const ttsEngine = form.ttsEngine || "elevenlabs";
+      const voiceId = form.voiceId;
+      
+      if (!voiceId) {
+        throw new Error("음성을 선택해주세요.");
+      }
+
+      addLog(`🎙️ ${ttsEngine} 엔진으로 음성 생성 시작...`);
+      
+      // 각 장면별로 음성 생성 (긴 타임아웃 설정)
+      addLog(`🔄 ${scriptData.scenes.length}개 장면의 음성 생성 중... (예상 시간: ${Math.ceil(scriptData.scenes.length * 2)}초)`);
+      
+      // TTS 진행률 리스너 설정 (단순화)
+      let ttsProgressListener = null;
+      try {
+        ttsProgressListener = (data) => {
+          const { current, total, progress } = data;
+          setFullVideoState(prev => ({
+            ...prev,
+            progress: { ...prev.progress, audio: progress }
+          }));
+          addLog(`🎤 음성 생성 진행률: ${current + 1}/${total} (${progress}%)`);
+        };
+        
+        if (window.electronAPI?.on) {
+          window.electronAPI.on('tts:progress', ttsProgressListener);
+        }
+      } catch (listenerError) {
+        console.warn('TTS 진행률 리스너 설정 실패:', listenerError);
+      }
+      
+      let audioResult;
+      try {
+        audioResult = await api.invoke("tts:synthesize", {
+          scenes: scriptData.scenes,
+          ttsEngine: ttsEngine,
+          voiceId: voiceId,
+          speed: form.speed || "1.0"
+        }, {
+          timeout: Math.max(60000, scriptData.scenes.length * 10000) // 최소 60초, 장면당 10초 추가
+        });
+        
+        // 중첩된 응답 구조 처리
+        const ttsData = audioResult.data || audioResult;
+        
+        if (!ttsData.ok) {
+          console.error('TTS 응답 상세:', audioResult);
+          const errorMsg = ttsData.error || audioResult.error || audioResult.message || "알 수 없는 오류";
+          throw new Error(`음성 생성 실패: ${errorMsg}`);
+        }
+        
+        console.log('TTS 성공 응답:', audioResult);
+        console.log('TTS 데이터:', ttsData);
+        
+        addLog(`✅ 음성 생성 완료: ${ttsData.audioFiles?.length || 0}개 파일`);
+        
+        // TTS에서 이미 파일 저장이 완료되었으므로 바로 audioFiles 반환
+        const audioFiles = ttsData.audioFiles || [];
+        
+        if (audioFiles.length === 0) {
+          throw new Error("생성된 음성 파일이 없습니다.");
+        }
+        
+        addLog(`💾 음성 파일들: ${audioFiles.map(f => f.fileName).join(', ')}`);
+        
+        return audioFiles;
+        
+      } catch (ttsError) {
+        throw ttsError;
+      } finally {
+        // 진행률 리스너 제거 (성공/실패 관계없이)
+        try {
+          if (ttsProgressListener && window.electronAPI?.off) {
+            window.electronAPI.off('tts:progress', ttsProgressListener);
+          }
+        } catch (cleanupError) {
+          console.warn('TTS 진행률 리스너 정리 실패:', cleanupError);
+        }
+      }
+      
+    } catch (error) {
+      addLog(`❌ 음성 생성 실패: ${error.message}`, "error");
+      throw error;
+    }
   };
 
-  const generateImagesStep = async () => {
-    addLog("🖼️ 이미지 생성 API 연동 준비 중...");
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-    return [{ imagePath: "/path/to/image1.jpg" }, { imagePath: "/path/to/image2.jpg" }];
+  const generateImagesStep = async (scriptData) => {
+    addLog("🖼️ 이미지 생성 중...");
+    
+    try {
+      if (!scriptData || !scriptData.scenes || scriptData.scenes.length === 0) {
+        throw new Error("대본 데이터가 없습니다.");
+      }
+
+      const images = [];
+      const total = scriptData.scenes.length;
+      
+      for (let i = 0; i < scriptData.scenes.length; i++) {
+        const scene = scriptData.scenes[i];
+        const sceneNum = i + 1;
+        
+        addLog(`🎨 이미지 ${sceneNum}/${total} 생성 중...`);
+        
+        // visual_description이 있으면 사용, 없으면 text 기반으로 프롬프트 생성
+        const imagePrompt = scene.visual_description || 
+          `${scene.text.substring(0, 100)}을 표현하는 ${form.imageStyle || 'photo'} 스타일 이미지`;
+        
+        try {
+          // Replicate API를 사용한 이미지 생성
+          addLog(`🎨 Replicate로 이미지 생성: "${imagePrompt}"`);
+          
+          const imageResult = await api.invoke("replicate:generate", {
+            prompt: imagePrompt,
+            style: form.imageStyle || "photo",
+            width: 1920,
+            height: 1080,
+            aspectRatio: "16:9"
+          });
+          
+          console.log(`🔍 Replicate 응답 (장면 ${sceneNum}):`, imageResult);
+
+          // Replicate 응답 구조 확인
+          const isSuccess = imageResult.ok || imageResult.success;
+          const imageUrls = imageResult.images || [];
+          
+          if (isSuccess && imageUrls.length > 0) {
+            const imageUrl = imageUrls[0]; // 첫 번째 이미지 사용
+            // 프로젝트 폴더에 이미지 파일명 생성
+            const imageFileName = `scene_${String(sceneNum).padStart(3, '0')}.jpg`;
+            const imagePathResult = await api.invoke("project:getFilePath", { 
+              category: "images", 
+              filename: imageFileName 
+            });
+            
+            if (imagePathResult.success) {
+              images.push({
+                sceneIndex: i,
+                sceneNumber: sceneNum,
+                imagePath: imagePathResult.filePath,
+                imageUrl: imageUrl, // Replicate에서 받은 실제 URL
+                prompt: imagePrompt,
+                fileName: imageFileName,
+                provider: 'Replicate'
+              });
+              
+              addLog(`✅ 이미지 ${sceneNum} 생성 완료: ${imageUrl}`);
+            } else {
+              addLog(`❌ 이미지 ${sceneNum} 경로 생성 실패: ${imagePathResult.message}`, "error");
+            }
+          } else {
+            const errorMsg = imageResult.message || "알 수 없는 오류";
+            addLog(`❌ 이미지 ${sceneNum} 생성 실패: ${errorMsg}`, "error");
+            console.error(`Replicate 실패 상세 (장면 ${sceneNum}):`, {
+              success: isSuccess,
+              imageCount: imageUrls.length,
+              fullResponse: imageResult
+            });
+          }
+        } catch (error) {
+          addLog(`⚠️ 이미지 ${sceneNum} 생성 오류: ${error.message}`, "warning");
+          images.push({
+            sceneIndex: i,
+            sceneNumber: sceneNum,
+            imagePath: null,
+            imageUrl: null,
+            prompt: imagePrompt,
+            error: error.message
+          });
+        }
+        
+        // 진행률 업데이트
+        const progress = Math.round((sceneNum / total) * 100);
+        updateFullVideoState({
+          progress: { ...fullVideoState.progress, images: progress }
+        });
+      }
+
+      addLog(`✅ 이미지 생성 완료: ${images.filter(img => img.imageUrl).length}/${total}개 성공`);
+      return images;
+      
+    } catch (error) {
+      addLog(`❌ 이미지 생성 실패: ${error.message}`, "error");
+      throw error;
+    }
   };
 
-  const generateVideoStep = async () => {
-    addLog("🎬 영상 합성 API 연동 준비 중...");
-    await new Promise((resolve) => setTimeout(resolve, 4000));
-    return { videoPath: "/path/to/final-video.mp4" };
+  const generateVideoStep = async (scriptData, audioFiles, imageFiles) => {
+    try {
+      addLog("🎬 FFmpeg 영상 합성 시작...");
+      
+      // 프로젝트 매니저에서 출력 파일 경로 생성
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const videoFileName = `video_${timestamp}.mp4`;
+      const videoPathResult = await api.invoke('project:getFilePath', {
+        category: 'output',
+        filename: videoFileName
+      });
+      
+      if (!videoPathResult.success) {
+        throw new Error('출력 파일 경로 생성 실패: ' + videoPathResult.message);
+      }
+      
+      const outputPath = videoPathResult.filePath;
+      addLog(`📁 출력 경로: ${outputPath}`);
+      
+      // 유효한 파일들만 필터링
+      const validAudioFiles = audioFiles
+        .filter(audio => audio.audioUrl && audio.audioUrl !== 'pending')
+        .map(audio => audio.audioUrl);
+      
+      const validImageFiles = imageFiles
+        .filter(img => img.imageUrl && img.imageUrl !== 'pending')
+        .map(img => img.imageUrl);
+      
+      if (validAudioFiles.length === 0) {
+        throw new Error('생성된 음성 파일이 없습니다.');
+      }
+      
+      if (validImageFiles.length === 0) {
+        throw new Error('생성된 이미지 파일이 없습니다.');
+      }
+      
+      addLog(`🎵 음성 파일: ${validAudioFiles.length}개`);
+      addLog(`🖼️ 이미지 파일: ${validImageFiles.length}개`);
+      
+      // FFmpeg 진행률 리스너 설정
+      const removeProgressListener = window.electronAPI.onceAny('ffmpeg:progress', (progress) => {
+        setFullVideoState(prev => ({
+          ...prev,
+          progress: { ...prev.progress, video: Math.round(progress) }
+        }));
+        addLog(`📹 영상 합성 진행률: ${Math.round(progress)}%`);
+      });
+      
+      // FFmpeg 영상 합성 실행
+      const result = await window.electronAPI.ffmpeg.compose({
+        audioFiles: validAudioFiles,
+        imageFiles: validImageFiles,
+        outputPath: outputPath,
+        options: {
+          fps: 24,
+          videoCodec: 'libx264',
+          audioCodec: 'aac',
+          crf: 18,
+          preset: 'medium'
+        }
+      });
+      
+      // 진행률 리스너 제거
+      if (removeProgressListener) removeProgressListener();
+      
+      if (!result.success) {
+        throw new Error(result.message || '영상 합성 실패');
+      }
+      
+      addLog(`✅ 영상 합성 완료: ${result.videoPath}`);
+      addLog(`📊 영상 정보: ${result.duration ? Math.round(result.duration) + '초' : '정보 없음'}`);
+      
+      return {
+        videoPath: result.videoPath,
+        duration: result.duration,
+        size: result.size
+      };
+      
+    } catch (error) {
+      addLog(`❌ 영상 합성 실패: ${error.message}`, "error");
+      throw error;
+    }
   };
 
 
@@ -657,8 +975,17 @@ ${form.topic}의 핵심은 바로 이것입니다...
             <Button
               appearance="primary"
               icon={<FolderOpenRegular />}
-              onClick={() => {
-                toast.success("출력 폴더 열기 기능 구현 예정");
+              onClick={async () => {
+                try {
+                  const result = await api.invoke("project:openOutputFolder");
+                  if (result.success) {
+                    toast.success("출력 폴더를 열었습니다.");
+                  } else {
+                    toast.error(`폴더 열기 실패: ${result.message}`);
+                  }
+                } catch (error) {
+                  toast.error(`오류: ${error.message}`);
+                }
               }}
             >
               출력 폴더 열기
@@ -777,6 +1104,25 @@ ${form.topic}의 핵심은 바로 이것입니다...
       setForm((prev) => ({ ...prev, voiceId: voices[0].id }));
     }
   }, [voices, form.voiceId]);
+
+  // FFmpeg 설치 확인
+  useEffect(() => {
+    const checkFFmpeg = async () => {
+      try {
+        const result = await window.electronAPI.ffmpeg.check();
+        if (!result.installed) {
+          addLog("⚠️ FFmpeg가 설치되지 않았습니다. 영상 합성이 불가능할 수 있습니다.", "warning");
+          addLog("💡 FFmpeg 설치 방법: https://ffmpeg.org/download.html", "info");
+        } else {
+          addLog("✅ FFmpeg 설치 확인됨", "success");
+        }
+      } catch (error) {
+        addLog("❌ FFmpeg 확인 실패: " + error.message, "error");
+      }
+    };
+    
+    checkFFmpeg();
+  }, []);
 
   return (
     <ErrorBoundary>
@@ -936,12 +1282,6 @@ ${form.topic}의 핵심은 바로 이것입니다...
 
           {/* 우측: 상태 및 결과 패널 */}
           <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL }}>
-            {/* 진행률 패널 */}
-            <FullVideoProgressPanel />
-
-            {/* 스트리밍 뷰어 */}
-            <StreamingScriptViewer />
-
             {/* 예상 결과 카드 */}
             <GenerationPreviewCard
               form={form}

@@ -7,6 +7,7 @@ import { useFontOverrideStyles } from "./styles/commonStyles";
 const Sidebar = lazy(() => import("./components/Sidebar"));
 const ProjectInit = lazy(() => import("./components/ProjectInit"));
 const SettingsPage = lazy(() => import("./components/SettingsPage"));
+const ProjectManager = lazy(() => import("./components/ProjectManager"));
 const HeaderBar = lazy(() => import("./components/HeaderBar"));
 const ThumbnailGenerator = lazy(() => import("./components/ThumbnailGenerator/ThumbnailGenerator"));
 const ScriptVoiceGenerator = lazy(() => import("./components/scriptgen/ScriptVoiceGenerator"));
@@ -208,6 +209,10 @@ function App() {
 
                 <KeepAlivePane active={currentPage === "settings"}>
                   <SettingsPage onBack={() => setCurrentPage(null)} />
+                </KeepAlivePane>
+
+                <KeepAlivePane active={currentPage === "projects"}>
+                  <ProjectManager />
                 </KeepAlivePane>
               </>
             )}

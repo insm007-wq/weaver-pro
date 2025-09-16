@@ -214,7 +214,7 @@ export default function Sidebar({ onSelectMenu }) {
       icon: <FolderOpenRegular />,
       label: "프로젝트 관리",
       desc: "새 프로젝트 생성 및 관리",
-      key: "project",
+      key: "projects",
       color: tokens.colorPaletteBlueForeground1,
     },
     {

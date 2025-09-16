@@ -7,6 +7,93 @@ const GOOGLE_VOICES_URL = "https://texttospeech.googleapis.com/v1/voices";
 const ELEVENLABS_TTS_URL = "https://api.elevenlabs.io/v1/text-to-speech";
 const ELEVENLABS_VOICES_URL = "https://api.elevenlabs.io/v1/voices";
 
+// 새로운 tts:synthesize 핸들러 (ScriptVoiceGenerator에서 사용)
+ipcMain.handle("tts:synthesize", async (event, { scenes, ttsEngine, voiceId, speed }) => {
+  try {
+    console.log(`🎤 TTS 합성 요청: ${ttsEngine} 엔진, ${scenes?.length || 0}개 장면`);
+    
+    if (!scenes || scenes.length === 0) {
+      throw new Error("장면 데이터가 없습니다.");
+    }
+
+    // 엔진별 처리
+    const provider = ttsEngine === 'elevenlabs' ? 'ElevenLabs' : 'Google';
+    const speakingRate = parseFloat(speed) || 1.0;
+    
+    // 진행률 콜백 함수
+    const progressCallback = (current, total) => {
+      const progress = Math.round((current / total) * 100);
+      event.sender.send('tts:progress', { current, total, progress });
+    };
+    
+    let result;
+    switch (provider) {
+      case 'Google':
+        result = await synthesizeWithGoogle(scenes, { voiceId, speakingRate }, progressCallback);
+        break;
+      
+      case 'ElevenLabs':
+        result = await synthesizeWithElevenLabs(scenes, { voiceId, speakingRate }, progressCallback);
+        break;
+      
+      default:
+        throw new Error(`지원하지 않는 TTS 엔진입니다: ${provider}`);
+    }
+
+    // 파일 저장 처리
+    if (result.ok && result.parts) {
+      const { getProjectManager } = require("../services/projectManager");
+      const projectManager = getProjectManager();
+      const currentProject = projectManager.getCurrentProject();
+      
+      console.log("🔍 현재 프로젝트 상태:", currentProject ? currentProject.id : "없음");
+      
+      if (!currentProject) {
+        console.error("❌ 현재 활성 프로젝트가 없습니다.");
+        throw new Error("현재 활성 프로젝트가 없습니다. 먼저 프로젝트를 생성해주세요.");
+      }
+      
+      console.log("📁 프로젝트 경로들:", currentProject.paths);
+
+      const path = require('path');
+      const fs = require('fs').promises;
+      
+      const audioFiles = [];
+      
+      for (let i = 0; i < result.parts.length; i++) {
+        const part = result.parts[i];
+        const audioFilePath = path.join(currentProject.paths.audio, part.fileName);
+        
+        // base64를 Buffer로 변환하여 파일 저장
+        const audioBuffer = Buffer.from(part.base64, 'base64');
+        await fs.writeFile(audioFilePath, audioBuffer);
+        
+        audioFiles.push({
+          sceneIndex: i,
+          audioUrl: audioFilePath,
+          fileName: part.fileName,
+          provider: result.provider
+        });
+        
+        console.log(`💾 음성 파일 저장: ${audioFilePath}`);
+      }
+      
+      return { ok: true, audioFiles, provider: result.provider };
+    }
+    
+    return result;
+  } catch (error) {
+    console.error("❌ TTS 합성 실패:", error);
+    console.error("❌ 오류 스택:", error.stack);
+    console.error("❌ 오류 상세:", {
+      message: error.message,
+      name: error.name,
+      code: error.code
+    });
+    return { ok: false, error: error.message, details: error.toString() };
+  }
+});
+
 ipcMain.handle("tts/synthesizeByScenes", async (_evt, { doc, tts }) => {
   const { engine, voiceId, voiceName, speakingRate, pitch, provider } = tts || {};
   const scenes = doc?.scenes || [];
@@ -40,10 +127,15 @@ function detectProviderFromVoice(voiceId) {
 }
 
 // Google TTS 음성 합성
-async function synthesizeWithGoogle(scenes, options) {
+async function synthesizeWithGoogle(scenes, options, progressCallback = null) {
+  console.log("🔑 Google TTS API 키 확인 중...");
   const apiKey = await getSecret("googleTtsApiKey");
-  if (!apiKey) throw new Error("Google TTS API Key가 설정되지 않았습니다.");
-
+  if (!apiKey) {
+    console.error("❌ Google TTS API Key가 없습니다");
+    throw new Error("Google TTS API Key가 설정되지 않았습니다. 설정 > API 키에서 설정해주세요.");
+  }
+  
+  console.log(`✅ Google TTS API 키 확인됨: ${apiKey.substring(0, 10)}...`);
   const { voiceId, speakingRate, pitch } = options;
   console.log("🔍 Google TTS 설정 (원본):", { voiceId, speakingRate, pitch });
   console.log("🔍 Google TTS options 전체:", JSON.stringify(options, null, 2));
@@ -56,11 +148,24 @@ async function synthesizeWithGoogle(scenes, options) {
   console.log("🎤 Google TTS 사용할 목소리:", { lang, voiceId, finalVoiceName: voiceId || "ko-KR-Neural2-A" });
 
   const parts = [];
+  console.log(`🎤 Google TTS: ${scenes.length}개 장면을 순차 처리합니다...`);
+  
   for (let i = 0; i < scenes.length; i++) {
     const sc = scenes[i];
     const finalVoiceName = voiceId || "ko-KR-Neural2-A";
     
-    console.log(`🎵 장면 ${i + 1} - 사용할 목소리: ${finalVoiceName}, 언어: ${lang}`);
+    console.log(`🎵 장면 ${i + 1}/${scenes.length} - 사용할 목소리: ${finalVoiceName}, 언어: ${lang}`);
+    
+    // 진행률 업데이트
+    if (progressCallback) {
+      progressCallback(i, scenes.length);
+    }
+    
+    // 요청 전 대기 (API 안정성을 위해)
+    if (i > 0) {
+      console.log(`⏳ ${i + 1}번째 요청 전 500ms 대기...`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
     
     const body = {
       input: { text: String(sc.text || "") },
@@ -102,19 +207,33 @@ async function synthesizeWithGoogle(scenes, options) {
   return { ok: true, partsCount: parts.length, parts, provider: 'Google' };
 }
 
-// ElevenLabs TTS 음성 합성
-async function synthesizeWithElevenLabs(scenes, options) {
+// ElevenLabs TTS 음성 합성 (순차 처리로 동시 요청 제한 회피)
+async function synthesizeWithElevenLabs(scenes, options, progressCallback = null) {
+  console.log("🔑 ElevenLabs API 키 확인 중...");
   const apiKey = await getSecret("elevenlabsApiKey");
-  if (!apiKey) throw new Error("ElevenLabs API Key가 설정되지 않았습니다.");
-
+  if (!apiKey) {
+    console.error("❌ ElevenLabs API Key가 없습니다");
+    throw new Error("ElevenLabs API Key가 설정되지 않았습니다. 설정 > API 키에서 설정해주세요.");
+  }
+  
+  console.log(`✅ ElevenLabs API 키 확인됨: ${apiKey.substring(0, 10)}...`);
   const { voiceId, speakingRate } = options;
   const parts = [];
+  
+  console.log(`🎤 ElevenLabs TTS: ${scenes.length}개 장면을 순차 처리합니다...`);
   
   for (let i = 0; i < scenes.length; i++) {
     const sc = scenes[i];
     // 한국어 텍스트 감지
     const text = String(sc.text || "");
     const hasKorean = /[가-힣]/.test(text);
+    
+    console.log(`🎵 장면 ${i + 1}/${scenes.length} 처리 중: "${text.substring(0, 50)}..."`);
+    
+    // 진행률 업데이트
+    if (progressCallback) {
+      progressCallback(i, scenes.length);
+    }
     
     const body = {
       text,
@@ -128,6 +247,12 @@ async function synthesizeWithElevenLabs(scenes, options) {
       output_format: "mp3_44100_128" // 고품질 오디오 포맷
     };
 
+    // 요청 전 대기 (동시 요청 제한 회피)
+    if (i > 0) {
+      console.log(`⏳ ${i + 1}번째 요청 전 1초 대기...`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
     const res = await fetch(`${ELEVENLABS_TTS_URL}/${voiceId}`, {
       method: "POST",
       headers: { 
@@ -139,6 +264,7 @@ async function synthesizeWithElevenLabs(scenes, options) {
     
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
+      console.error(`❌ ElevenLabs 요청 실패 (장면 ${i + 1}):`, res.status, txt);
       throw new Error(`ElevenLabs TTS 실패(${i + 1}): ${res.status} ${txt}`);
     }
     

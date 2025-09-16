@@ -475,4 +475,23 @@ contextBridge.exposeInMainWorld("electron", {
     cleanupDirs: () => ipcRenderer.invoke("video:cleanupDirs"),
     getPaths: () => ipcRenderer.invoke("video:getPaths"),
   },
+
+  // 프로젝트 관리
+  project: {
+    create: ({ topic, options }) => ipcRenderer.invoke("project:create", { topic, options }),
+    list: () => ipcRenderer.invoke("project:list"),
+    load: (projectId) => ipcRenderer.invoke("project:load", projectId),
+    current: () => ipcRenderer.invoke("project:current"),
+    delete: (projectId) => ipcRenderer.invoke("project:delete", projectId),
+    openOutputFolder: () => ipcRenderer.invoke("project:openOutputFolder"),
+    getFilePath: ({ category, filename }) => ipcRenderer.invoke("project:getFilePath", { category, filename }),
+    update: (updates) => ipcRenderer.invoke("project:update", updates),
+  },
+
+  // FFmpeg 영상 합성
+  ffmpeg: {
+    compose: ({ audioFiles, imageFiles, outputPath, options }) => 
+      ipcRenderer.invoke("ffmpeg:compose", { audioFiles, imageFiles, outputPath, options }),
+    check: () => ipcRenderer.invoke("ffmpeg:check"),
+  },
 });

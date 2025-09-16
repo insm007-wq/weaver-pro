@@ -126,8 +126,8 @@ export function useScriptGeneration() {
 
       const res = await api.invoke("llm/generateScript", payload, { timeout: 120000 }); // 2분 타임아웃
 
-      if (res && res.scenes) {
-        setDoc(res);
+      if (res && res.data && res.data.scenes) {
+        setDoc(res.data);
         const engineName = selectedEngine?.text || form.aiEngine;
         const promptName = form.promptName || "기본";
         toast.success(`${engineName}로 "${promptName}" 프롬프트를 사용해 대본을 생성했습니다.`);
