@@ -124,6 +124,16 @@ export function useScriptGeneration() {
         cpmMax: 400,
       };
 
+      console.log("🔧 Template substitution payload:", payload);
+      if (promptContent.script) {
+        console.log("📝 Original prompt:", promptContent.script);
+        console.log("📝 Variables to substitute:");
+        console.log("  - {topic}:", form.topic);
+        console.log("  - {style}:", form.style);
+        console.log("  - {duration}:", form.durationMin);
+        console.log("  - {maxScenes}:", form.maxScenes);
+      }
+
       const res = await api.invoke("llm/generateScript", payload, { timeout: 120000 }); // 2분 타임아웃
 
       if (res && res.data && res.data.scenes) {
@@ -148,7 +158,9 @@ export function useScriptGeneration() {
     doc,
     setDoc,
     isLoading,
+    setIsLoading,
     error,
+    setError,
     runGenerate,
     getSelectedPromptContent,
     AI_ENGINE_OPTIONS,

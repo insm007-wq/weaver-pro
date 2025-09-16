@@ -35,7 +35,7 @@ import {
   TimerRegular,
   SettingsRegular,
 } from "@fluentui/react-icons";
-import { DEFAULT_TEMPLATE as IMPORTED_DEFAULT_TEMPLATE } from "../scriptgen/constants";
+import { DEFAULT_TEMPLATE as IMPORTED_DEFAULT_TEMPLATE } from "../../constants/prompts";
 
 const useStyles = makeStyles({
   container: {

@@ -1,33 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
-import {
-  Body1,
-  Text,
-  Badge,
-  Field,
-  Input,
-  Dropdown,
-  Option,
-  Switch,
-  DataGrid,
-  DataGridHeader,
-  DataGridRow,
-  DataGridHeaderCell,
-  DataGridCell,
-  DataGridBody,
-  createTableColumn,
-  MessageBar,
-  MessageBarBody,
-  tokens,
-  Button,
-  Spinner,
-  ProgressBar,
-  Card,
-  CardHeader,
-} from "@fluentui/react-components";
-import { useHeaderStyles, useCardStyles, useSettingsStyles, useLayoutStyles, useContainerStyles } from "../../styles/commonStyles";
+import { Text, tokens, Button, Spinner, ProgressBar, Card, CardHeader } from "@fluentui/react-components";
+import { useHeaderStyles, useCardStyles, useContainerStyles } from "../../styles/commonStyles";
 import {
   DocumentEditRegular,
-  SettingsRegular,
   VideoRegular,
   MicRegular,
   ImageRegular,
@@ -37,144 +12,30 @@ import {
   FolderOpenRegular,
 } from "@fluentui/react-icons";
 import { ErrorBoundary } from "../common";
-import { safeCharCount } from "../../utils/safeChars";
 
 // 새로운 모듈들 import
 import ScriptGenerationCard from "./parts/ScriptGenerationCard";
 import BasicSettingsCard from "./parts/BasicSettingsCard";
 import VoiceSettingsCard from "./parts/VoiceSettingsCard";
 import GenerationPreviewCard from "./parts/GenerationPreviewCard";
-import ScenePreviewCard from "./parts/ScenePreviewCard";
 import AdvancedSettingsCard from "./parts/AdvancedSettingsCard";
 import { useScriptGeneration } from "../../hooks/useScriptGeneration";
 import { useVoiceSettings } from "../../hooks/useVoiceSettings";
 import { usePromptSettings } from "../../hooks/usePromptSettings";
 import { useApi } from "../../hooks/useApi";
 
-// 옵션 데이터는 기존 코드를 그대로 사용
-const STYLE_OPTIONS = [
-  { key: "informative", text: "📚 정보 전달형", desc: "교육적이고 명확한 설명" },
-  { key: "engaging", text: "🎯 매력적인", desc: "흥미롭고 재미있는 톤" },
-  { key: "professional", text: "💼 전문적인", desc: "비즈니스에 적합한 스타일" },
-  { key: "casual", text: "😊 캐주얼한", desc: "친근하고 편안한 분위기" },
-  { key: "dramatic", text: "🎭 극적인", desc: "강렬하고 임팩트 있는 전개" },
-  { key: "storytelling", text: "📖 스토리텔링", desc: "이야기 형식의 구성" },
-];
-
-const DURATION_OPTIONS = [
-  { key: 1, text: "1분 (초단편)" },
-  { key: 2, text: "2분 (단편)" },
-  { key: 3, text: "3분 (표준)" },
-  { key: 5, text: "5분 (중편)" },
-  { key: 8, text: "8분 (장편)" },
-  { key: 10, text: "10분 (긴편)" },
-];
-
-const IMAGE_STYLE_OPTIONS = [
-  { key: "photo", text: "실사" },
-  { key: "illustration", text: "일러스트" },
-  { key: "cinematic", text: "시네마틱" },
-  { key: "sketch", text: "스케치" },
-];
-
-const AI_ENGINE_OPTIONS = [
-  {
-    key: "openai-gpt5mini",
-    text: "🤖 OpenAI GPT-5 Mini",
-    desc: "최신 GPT-5 모델, 롱폼 대본 최적화",
-    processingTime: "2-5분",
-    features: ["📝 긴 대본 생성", "🎯 정확성", "🔄 일관성"],
-    rating: 4.8,
-  },
-  {
-    key: "anthropic",
-    text: "🧠 Anthropic Claude",
-    desc: "Claude Sonnet/Haiku, 정확하고 자연스러운 문체",
-    processingTime: "1-3분",
-    features: ["✨ 자연스런 문체", "🎪 창의성", "📚 교육적"],
-    rating: 4.9,
-  },
-];
-
-const ADVANCED_PRESETS = [
-  {
-    name: "🎯 유튜브 최적화",
-    description: "유튜브 알고리즘에 최적화된 설정",
-    settings: {
-      style: "engaging",
-      durationMin: 8,
-      maxScenes: 12,
-      temperature: 1.1,
-      imageStyle: "cinematic",
-    },
-  },
-  {
-    name: "📚 교육 컨텐츠",
-    description: "교육용 영상에 최적화된 설정",
-    settings: {
-      style: "informative",
-      durationMin: 5,
-      maxScenes: 8,
-      temperature: 0.9,
-      imageStyle: "illustration",
-    },
-  },
-  {
-    name: "💼 비즈니스 프레젠테이션",
-    description: "기업 발표용 영상 설정",
-    settings: {
-      style: "professional",
-      durationMin: 3,
-      maxScenes: 6,
-      temperature: 0.8,
-      imageStyle: "photo",
-    },
-  },
-  {
-    name: "🎪 엔터테인먼트",
-    description: "재미있고 매력적인 콘텐츠 설정",
-    settings: {
-      style: "dramatic",
-      durationMin: 2,
-      maxScenes: 10,
-      temperature: 1.2,
-      imageStyle: "cinematic",
-    },
-  },
-];
-
-const makeDefaultForm = () => ({
-  topic: "",
-  style: "informative",
-  durationMin: 3,
-  maxScenes: 15,
-  temperature: 1.0,
-  customPrompt: "",
-  referenceScript: "",
-  showReferenceScript: false,
-  imageStyle: "photo",
-  speed: "1.0",
-  voiceId: "",
-  promptName: "",
-  aiEngine: "anthropic",
-  ttsEngine: "elevenlabs",
-});
+// 상수들을 별도 파일에서 import
+import { ADVANCED_PRESETS, makeDefaultForm } from "../../constants/scriptSettings";
 
 function ScriptVoiceGenerator() {
   const headerStyles = useHeaderStyles();
   const cardStyles = useCardStyles();
-  const settingsStyles = useSettingsStyles();
-  const layoutStyles = useLayoutStyles();
   const containerStyles = useContainerStyles();
 
   const [form, setForm] = useState(makeDefaultForm());
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState("");
-  const [formValidation, setFormValidation] = useState({
-    topicValid: true,
-    promptValid: true,
-    engineValid: true,
-  });
+  const [globalSettings, setGlobalSettings] = useState({ llmModel: "anthropic" });
 
   const [fullVideoState, setFullVideoState] = useState({
     isGenerating: false,
@@ -197,10 +58,17 @@ function ScriptVoiceGenerator() {
     logs: [],
   });
 
+  // 실시간 타이핑 시뮬레이션 상태
+  const [typingState, setTypingState] = useState({
+    currentText: "",
+    isTyping: false,
+    fullText: "",
+  });
+
   // 커스텀 훅 사용
   const api = useApi();
   const { promptNames, promptLoading } = usePromptSettings();
-  const { doc, setDoc, isLoading, error, runGenerate, getSelectedPromptContent } = useScriptGeneration();
+  const { doc, setDoc, isLoading, error, setIsLoading, setError, getSelectedPromptContent } = useScriptGeneration();
   const { voices, voiceLoading, voiceError, previewVoice, retryVoiceLoad } = useVoiceSettings(form);
 
   // Toast 추가 (applyPreset에서 사용)
@@ -211,9 +79,41 @@ function ScriptVoiceGenerator() {
 
   const onChange = useCallback((k, v) => {
     setForm((p) => ({ ...p, [k]: v }));
-    if (k === "topic") {
-      setFormValidation((prev) => ({ ...prev, topicValid: v?.trim().length > 0 }));
-    }
+  }, []);
+
+  // 실시간 타이핑 시뮬레이션 함수
+  const startTypingSimulation = useCallback((text) => {
+    setTypingState({
+      currentText: "",
+      isTyping: true,
+      fullText: text,
+    });
+
+    let currentIndex = 0;
+    const typingInterval = setInterval(() => {
+      if (currentIndex >= text.length) {
+        clearInterval(typingInterval);
+        setTypingState(prev => ({ ...prev, isTyping: false }));
+        return;
+      }
+
+      setTypingState(prev => ({
+        ...prev,
+        currentText: text.substring(0, currentIndex + 1),
+      }));
+
+      currentIndex++;
+    }, 30); // 30ms마다 글자 추가 (ChatGPT와 비슷한 속도)
+
+    return () => clearInterval(typingInterval);
+  }, []);
+
+  const stopTypingSimulation = useCallback(() => {
+    setTypingState({
+      currentText: "",
+      isTyping: false,
+      fullText: "",
+    });
   }, []);
 
   const applyPreset = (presetName) => {
@@ -222,6 +122,120 @@ function ScriptVoiceGenerator() {
       setForm((prev) => ({ ...prev, ...preset.settings }));
       setSelectedPreset(presetName);
       toast.success(`${presetName} 프리셋을 적용했습니다.`);
+    }
+  };
+
+  // 로컬 runGenerate 함수 (전역 설정 사용)
+  const runGenerate = useCallback(async (formData) => {
+    console.log("🚀 runGenerate 함수 시작!");
+    console.log("🚀 formData:", formData);
+    console.log("🚀 globalSettings:", globalSettings);
+
+    setError("");
+    setIsLoading(true);
+
+    // 타이핑 시뮬레이션 시작
+    const simulationText = `📝 대본 생성을 시작합니다...
+
+주제: ${formData.topic || "미정"}
+스타일: ${formData.style || "기본"}
+길이: ${formData.durationMin || 3}분
+AI 모델: ${globalSettings.llmModel || "Anthropic Claude"}
+
+🤖 AI가 대본을 분석하고 생성 중입니다...
+📊 구조를 설계하고 있습니다...
+✨ 내용을 다듬고 있습니다...
+
+잠시만 기다려주세요...`;
+
+    startTypingSimulation(simulationText);
+
+    try {
+      let promptContent = { script: "", reference: "" };
+      if (formData.promptName) {
+        promptContent = await getSelectedPromptContent(formData.promptName);
+      }
+
+      // 유효한 LLM 모델인지 확인 후 설정
+      const validLlmModels = ["anthropic", "openai-gpt5mini"];
+      const selectedLlm = globalSettings.llmModel && validLlmModels.includes(globalSettings.llmModel)
+        ? globalSettings.llmModel
+        : "anthropic"; // 기본값
+
+      console.log("🔍 Original LLM:", globalSettings.llmModel);
+      console.log("🔍 Valid LLM used:", selectedLlm);
+
+      // 모델이 변경된 경우 사용자에게 알림
+      if (globalSettings.llmModel && globalSettings.llmModel !== selectedLlm) {
+        toast.success(`지원하지 않는 모델(${globalSettings.llmModel})이 감지되어 ${selectedLlm} 모델로 변경되었습니다.`);
+      }
+
+      const payload = {
+        llm: selectedLlm,
+        type: "auto",
+        topic: formData.topic,
+        style: formData.style,
+        duration: formData.durationMin,
+        maxScenes: formData.maxScenes,
+        temperature: formData.temperature,
+        prompt: promptContent.script || formData.customPrompt,
+        referenceText: formData.referenceScript,
+        cpmMin: 300,
+        cpmMax: 400,
+      };
+
+      console.log("🔍 Manual Generation - globalSettings:", globalSettings);
+      console.log("🔍 Manual Generation - LLM Model:", globalSettings.llmModel);
+      console.log("Manual Generation payload:", payload);
+
+      const res = await api.invoke("llm/generateScript", payload, { timeout: 120000 });
+      console.log("Manual Generation API 응답:", res);
+
+      if (res && res.data && res.data.scenes && Array.isArray(res.data.scenes) && res.data.scenes.length > 0) {
+        setDoc(res.data);
+        toast.success("대본 생성이 완료되었습니다!");
+
+        // 대본 생성 후 음성과 자막 생성
+        await generateAudioAndSubtitles(res.data);
+      } else {
+        throw new Error(`대본 생성 실패: ${JSON.stringify(res)}`);
+      }
+    } catch (error) {
+      console.error("대본 생성 오류:", error);
+      setError(error.message);
+      toast.error(`대본 생성 실패: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+      stopTypingSimulation(); // 타이핑 시뮬레이션 종료
+    }
+  }, [globalSettings, api, getSelectedPromptContent, setDoc, setError, setIsLoading, toast, startTypingSimulation, stopTypingSimulation]);
+
+  // 대본 생성 후 음성과 자막을 생성하는 함수
+  const generateAudioAndSubtitles = async (scriptData) => {
+    try {
+      console.log("🎤 음성 및 자막 생성 시작...");
+
+      // TTS 생성
+      const audioResult = await api.invoke("tts:synthesize", {
+        scenes: scriptData.scenes,
+        ttsEngine: form.ttsEngine || "google",
+        voiceId: form.voiceId || voices[0]?.id,
+        speed: form.speed || "1.0",
+      });
+
+      if (audioResult && audioResult.data && audioResult.data.ok) {
+        console.log("✅ 음성 생성 완료:", audioResult.data.audioFiles);
+        toast.success("음성 파일이 생성되었습니다!");
+      }
+
+      // SRT 자막 생성 (필요한 경우)
+      // const subtitleResult = await api.invoke("subtitle:generate", {
+      //   scenes: scriptData.scenes
+      // });
+
+    } catch (error) {
+      console.error("음성/자막 생성 오류:", error);
+      toast.error(`음성/자막 생성 실패: ${error.message}`);
     }
   };
 
@@ -271,7 +285,6 @@ function ScriptVoiceGenerator() {
         options: {
           style: form.style,
           duration: form.durationMin,
-          aiEngine: form.aiEngine,
         },
       });
 
@@ -350,64 +363,22 @@ function ScriptVoiceGenerator() {
     }
   };
 
-  const simulateStreamingScript = () => {
-    const fullScript = `# ${form.topic}
-
-🎬 영상 대본 생성 중...
-
-## 장면 1: 오프닝
-안녕하세요! 오늘은 "${form.topic}"에 대해서 알아보겠습니다. 
-이 영상을 끝까지 보시면 많은 도움이 될 거예요.
-
-## 장면 2: 메인 내용
-${form.topic}의 핵심은 바로 이것입니다...
-실제로 많은 사람들이 이런 방법으로 성공을 거두고 있어요.
-
-## 장면 3: 구체적 예시
-예를 들어서 설명드리면...
-이런 경우에는 어떻게 해야 할지 함께 알아보죠.
-
-## 장면 4: 실용적 팁
-지금 바로 적용할 수 있는 실용적인 팁을 알려드릴게요.
-첫 번째 팁은...
-
-## 장면 5: 마무리
-오늘 영상 어떠셨나요? 
-구독과 좋아요는 저에게 큰 힘이 됩니다!`;
-
-    let currentText = "";
-    let index = 0;
-
-    const typeInterval = setInterval(() => {
-      if (index < fullScript.length) {
-        currentText += fullScript[index];
-        updateFullVideoState({
-          streamingScript: currentText,
-          progress: { script: Math.round((index / fullScript.length) * 100) },
-        });
-        index++;
-      } else {
-        clearInterval(typeInterval);
-        updateFullVideoState({
-          progress: { script: 100 },
-        });
-      }
-    }, 30);
-
-    return () => clearInterval(typeInterval);
-  };
 
   const generateScriptStep = async () => {
-    const stopStreaming = simulateStreamingScript();
-
     try {
       let promptContent = { script: "", reference: "" };
       if (form.promptName) {
         promptContent = await getSelectedPromptContent(form.promptName);
       }
 
+      // 유효한 LLM 모델인지 확인 후 설정
+      const validLlmModels = ["anthropic", "openai-gpt5mini"];
+      const selectedLlm = globalSettings.llmModel && validLlmModels.includes(globalSettings.llmModel)
+        ? globalSettings.llmModel
+        : "anthropic"; // 기본값
+
       const payload = {
-        llm: form.aiEngine,
+        llm: selectedLlm,
         type: "auto",
         topic: form.topic,
         style: form.style,
@@ -420,6 +391,8 @@ ${form.topic}의 핵심은 바로 이것입니다...
         cpmMax: 400,
       };
 
+      console.log("🔍 globalSettings:", globalSettings);
+      console.log("🔍 LLM Model:", globalSettings.llmModel);
       console.log("전송할 payload:", payload); // 디버그 로그 추가
 
       await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -442,7 +415,6 @@ ${form.topic}의 핵심은 바로 이것입니다...
 
       if (res && res.data && res.data.scenes && Array.isArray(res.data.scenes) && res.data.scenes.length > 0) {
         setDoc(res.data);
-        stopStreaming();
         updateFullVideoState({
           results: { script: res.data },
           progress: { script: 100 },
@@ -460,7 +432,6 @@ ${form.topic}의 핵심은 바로 이것입니다...
         throw new Error(`대본 생성 API 응답이 올바르지 않습니다. 응답: ${JSON.stringify(res)}`);
       }
     } catch (error) {
-      stopStreaming();
       throw error;
     }
   };
@@ -995,87 +966,134 @@ ${form.topic}의 핵심은 바로 이것입니다...
   };
 
   const StreamingScriptViewer = () => {
-    if (!fullVideoState.isGenerating || fullVideoState.currentStep !== "script") return null;
+    // 대본 생성 중이거나 완성된 대본이 있을 때 표시
+    const shouldShow = (fullVideoState.isGenerating && fullVideoState.currentStep === "script") || isLoading || typingState.isTyping || doc;
+    if (!shouldShow) return null;
 
     return (
       <Card
         style={{
-          background: "#f8f9fa",
+          background: "linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)",
           border: "1px solid rgba(0,0,0,0.06)",
           borderRadius: 14,
           padding: tokens.spacingVerticalL,
           marginBottom: tokens.spacingVerticalL,
-          minHeight: 300,
+          minHeight: doc ? 600 : 300, // 대본 완성 시 더 큰 높이
+          maxHeight: doc ? 700 : 450, // 대본 완성 시 최대 높이 증가
+          boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
         }}
       >
         <CardHeader style={{ paddingBottom: tokens.spacingVerticalM }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Spinner size="small" />
-            <Text size={500} weight="semibold">
-              📝 실시간 대본 생성 중...
+            {(isLoading || typingState.isTyping) ? (
+              <Spinner size="small" appearance="primary" />
+            ) : doc ? (
+              <CheckmarkCircleRegular style={{ color: tokens.colorPaletteLightGreenForeground1, fontSize: 20 }} />
+            ) : null}
+            <Text size={500} weight="semibold" style={{ color: doc ? tokens.colorPaletteLightGreenForeground1 : tokens.colorBrandForeground1 }}>
+              {doc ? "✅ 대본 생성 완료" : "📝 AI 대본 생성 중..."}
             </Text>
           </div>
           <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
-            ChatGPT 스타일로 실시간 타이핑 효과를 보여줍니다
+            {doc
+              ? `총 ${doc.scenes?.length || 0}개 장면으로 구성된 대본이 생성되었습니다`
+              : `${globalSettings.llmModel === "anthropic" ? "🧠 Anthropic Claude" : "🤖 OpenAI GPT-5 Mini"} 모델이 실시간으로 대본을 생성하고 있습니다`
+            }
           </Text>
         </CardHeader>
 
         <div
           style={{
-            backgroundColor: "#fff",
-            borderRadius: 8,
-            padding: tokens.spacingVerticalM,
+            backgroundColor: "#ffffff",
+            borderRadius: 12,
+            padding: tokens.spacingVerticalL,
             border: "1px solid rgba(0,0,0,0.04)",
-            fontFamily: "monospace",
-            fontSize: "14px",
-            lineHeight: 1.6,
-            minHeight: 200,
-            maxHeight: 400,
+            fontFamily: doc ? "inherit" : "'Consolas', 'Monaco', 'Courier New', monospace",
+            fontSize: doc ? "15px" : "14px",
+            lineHeight: 1.7,
+            minHeight: doc ? 400 : 200, // 대본 완성 시 더 큰 최소 높이
+            maxHeight: doc ? 550 : 450, // 대본 완성 시 더 큰 최대 높이
             overflowY: "auto",
-            whiteSpace: "pre-wrap",
+            whiteSpace: doc ? "normal" : "pre-wrap",
+            boxShadow: "inset 0 2px 4px rgba(0,0,0,0.02)",
           }}
         >
-          {fullVideoState.streamingScript || "대본 생성을 시작합니다..."}
-          <span
-            style={{
-              animation: "blink 1s infinite",
-              marginLeft: 2,
-              fontSize: "16px",
-            }}
-          >
-            |
-          </span>
+          {doc ? (
+            // 완성된 대본 표시
+            <div>
+              <div style={{ marginBottom: tokens.spacingVerticalL }}>
+                <Text size={400} weight="semibold" style={{ color: tokens.colorBrandForeground1 }}>
+                  📖 {doc.title || "생성된 대본"}
+                </Text>
+              </div>
+              {doc.scenes?.map((scene, index) => (
+                <div key={index} style={{
+                  marginBottom: tokens.spacingVerticalM,
+                  paddingBottom: tokens.spacingVerticalM,
+                  borderBottom: index < doc.scenes.length - 1 ? `1px solid ${tokens.colorNeutralStroke3}` : 'none'
+                }}>
+                  <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    marginBottom: tokens.spacingVerticalXS,
+                    gap: 8
+                  }}>
+                    <Text size={300} weight="semibold" style={{ color: tokens.colorPaletteBlueForeground1 }}>
+                      🎬 장면 {index + 1}
+                    </Text>
+                    {scene.duration && (
+                      <Text size={200} style={{
+                        color: tokens.colorNeutralForeground3,
+                        backgroundColor: tokens.colorNeutralBackground2,
+                        padding: "2px 8px",
+                        borderRadius: 4
+                      }}>
+                        {scene.duration}초
+                      </Text>
+                    )}
+                  </div>
+                  <Text style={{ lineHeight: 1.6 }}>
+                    {scene.text}
+                  </Text>
+                </div>
+              ))}
+            </div>
+          ) : (
+            // 생성 중 표시
+            <>
+              {typingState.currentText || `대본 생성 준비 중...\n\n주제: ${form.topic || "미정"}\n스타일: ${form.style || "기본"}\n길이: ${form.durationMin || 3}분\n\n🤖 AI가 곧 대본 생성을 시작합니다...`}
+              {(isLoading || typingState.isTyping) && (
+                <span
+                  style={{
+                    animation: "blink 1s infinite",
+                    marginLeft: 2,
+                    fontSize: "16px",
+                    color: tokens.colorBrandForeground1,
+                    fontWeight: "bold",
+                  }}
+                >
+                  █
+                </span>
+              )}
+            </>
+          )}
         </div>
       </Card>
     );
   };
 
-  const statTile = (label, value) => (
-    <div
-      style={{
-        textAlign: "center",
-        padding: tokens.spacingVerticalM,
-        background: "#fff",
-        border: "1px solid rgba(0,0,0,0.08)",
-        borderRadius: 12,
-      }}
-    >
-      <Text size={200} color="secondary" style={{ display: "block", marginBottom: 6 }}>
-        {label}
-      </Text>
-      {typeof value === "string" || typeof value === "number" ? (
-        <Text weight="semibold" size={400}>
-          {value}
-        </Text>
-      ) : (
-        value
-      )}
-    </div>
-  );
-
-  const duration = form.durationMin || 3;
-  const avgChars = Math.floor((duration * 300 + duration * 400) / 2);
-  const estimatedScenes = Math.min(form.maxScenes || 15, Math.max(3, Math.ceil(duration * 2)));
+  // 전역 설정 로드
+  useEffect(() => {
+    try {
+      const savedSettings = localStorage.getItem("defaultSettings");
+      if (savedSettings) {
+        const parsedSettings = JSON.parse(savedSettings);
+        setGlobalSettings((prev) => ({ ...prev, ...parsedSettings }));
+      }
+    } catch (error) {
+      console.error("전역 설정 로드 실패:", error);
+    }
+  }, []);
 
   // 프롬프트 자동 선택 (프롬프트 목록이 로드된 후)
   useEffect(() => {
@@ -1192,7 +1210,7 @@ ${form.topic}의 핵심은 바로 이것입니다...
                   size="large"
                   icon={<VideoRegular />}
                   onClick={runFullVideoGeneration}
-                  disabled={fullVideoState.isGenerating || !form.topic?.trim() || !form.promptName || !form.aiEngine}
+                  disabled={fullVideoState.isGenerating || !form.topic?.trim() || !form.promptName}
                   style={{
                     backgroundColor: "#fff",
                     color: "#667eea",
@@ -1206,7 +1224,7 @@ ${form.topic}의 핵심은 바로 이것입니다...
                 </Button>
               </div>
 
-              {(!form.topic?.trim() || !form.promptName || !form.aiEngine) && (
+              {(!form.topic?.trim() || !form.promptName) && (
                 <div
                   style={{
                     marginTop: 16,
@@ -1225,11 +1243,6 @@ ${form.topic}의 핵심은 바로 이것입니다...
                   {!form.promptName && (
                     <Text size={200} style={{ display: "block", color: "rgba(255,255,255,0.9)" }}>
                       ⚠️ 대본 생성 프롬프트를 선택해주세요.
-                    </Text>
-                  )}
-                  {!form.aiEngine && (
-                    <Text size={200} style={{ display: "block", color: "rgba(255,255,255,0.9)" }}>
-                      ⚠️ AI 엔진을 선택해주세요.
                     </Text>
                   )}
                 </div>
@@ -1263,13 +1276,21 @@ ${form.topic}의 핵심은 바로 이것입니다...
           {/* 우측: 상태 및 결과 패널 */}
           <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL }}>
             {/* 예상 결과 카드 */}
-            <GenerationPreviewCard form={form} aiEngineOptions={AI_ENGINE_OPTIONS} />
-
-            {/* 씬 미리보기 카드 */}
-            <ScenePreviewCard doc={doc} error={error} />
+            <GenerationPreviewCard form={form} globalSettings={globalSettings} doc={doc} />
 
             {/* 대본만 생성 카드 */}
-            <ScriptGenerationCard form={form} isLoading={isLoading} fullVideoState={fullVideoState} onGenerate={() => runGenerate(form)} />
+            <ScriptGenerationCard
+              form={form}
+              isLoading={isLoading}
+              fullVideoState={fullVideoState}
+              globalSettings={globalSettings}
+              onGenerate={() => {
+                console.log("🔥 대본 생성 버튼 클릭됨!");
+                console.log("🔥 Form data:", form);
+                console.log("🔥 Global settings:", globalSettings);
+                runGenerate(form);
+              }}
+            />
           </div>
         </div>
       </div>
@@ -1278,5 +1299,9 @@ ${form.topic}의 핵심은 바로 이것입니다...
 }
 
 export default function ScriptVoiceGeneratorWithBoundary() {
-  return <ScriptVoiceGenerator />;
+  return (
+    <ErrorBoundary>
+      <ScriptVoiceGenerator />
+    </ErrorBoundary>
+  );
 }

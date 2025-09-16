@@ -78,51 +78,7 @@ import {
 } from "@fluentui/react-components";
 import { SettingsRegular } from "@fluentui/react-icons";
 import { useCardStyles, useSettingsStyles, useLayoutStyles } from "../../../styles/commonStyles";
-
-/**
- * AI 엔진 옵션 설정
- * 각 엔진별 특성과 예상 처리 시간 포함
- */
-const AI_ENGINE_OPTIONS = [
-  {
-    key: "openai-gpt5mini",
-    text: "🤖 OpenAI GPT-5 Mini",
-    desc: "최신 GPT-5 모델, 롱폼 대본 최적화",
-    processingTime: "2-5분",
-  },
-  {
-    key: "anthropic", 
-    text: "🧠 Anthropic Claude",
-    desc: "Claude Sonnet/Haiku, 정확하고 자연스러운 문체",
-    processingTime: "1-3분",
-  },
-];
-
-/**
- * 스타일 옵션 설정
- * 각 스타일별 특성과 사용 용도 설명
- */
-const STYLE_OPTIONS = [
-  { key: "informative", text: "📚 정보 전달형", desc: "교육적이고 명확한 설명" },
-  { key: "engaging", text: "🎯 매력적인", desc: "흥미롭고 재미있는 톤" },
-  { key: "professional", text: "💼 전문적인", desc: "비즈니스에 적합한 스타일" },
-  { key: "casual", text: "😊 캐주얼한", desc: "친근하고 편안한 분위기" },
-  { key: "dramatic", text: "🎭 극적인", desc: "강렬하고 임팩트 있는 전개" },
-  { key: "storytelling", text: "📖 스토리텔링", desc: "이야기 형식의 구성" },
-];
-
-/**
- * 길이 옵션 설정
- * 영상 길이별 분류 (초단편~롱폼)
- */
-const DURATION_OPTIONS = [
-  { key: 1, text: "1분 (초단편)" },
-  { key: 2, text: "2분 (단편)" },
-  { key: 3, text: "3분 (표준)" },
-  { key: 5, text: "5분 (중편)" },
-  { key: 8, text: "8분 (장편)" },
-  { key: 10, text: "10분+ (롱폼)" },
-];
+import { STYLE_OPTIONS, DURATION_OPTIONS } from "../../../constants/scriptSettings";
 
 /**
  * 기본 설정 카드 컴포넌트
@@ -196,30 +152,6 @@ function BasicSettingsCard({
           </Dropdown>
         </Field>
 
-        {/* AI 엔진 선택 */}
-        <Field label="AI 엔진">
-          <Dropdown
-            value={AI_ENGINE_OPTIONS.find((e) => e.key === form.aiEngine)?.text || "AI 엔진 선택"}
-            selectedOptions={[form.aiEngine]}
-            onOptionSelect={(_, d) => onChange("aiEngine", d.optionValue)}
-            size="large"
-          >
-            {AI_ENGINE_OPTIONS.map((engine) => (
-              <Option key={engine.key} value={engine.key}>
-                {engine.text}
-              </Option>
-            ))}
-          </Dropdown>
-          {/* 선택된 AI 엔진 정보 표시 */}
-          {form.aiEngine && (() => {
-            const selectedEngine = AI_ENGINE_OPTIONS.find((e) => e.key === form.aiEngine);
-            return selectedEngine ? (
-              <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
-                {selectedEngine.desc} (예상 시간: {selectedEngine.processingTime})
-              </Text>
-            ) : null;
-          })()}
-        </Field>
 
         {/* 프롬프트 선택 */}
         <Field label="대본 생성 프롬프트">

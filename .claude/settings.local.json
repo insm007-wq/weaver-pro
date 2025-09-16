@@ -194,7 +194,8 @@
       "Bash(del \"D:\\project\\weaver-pro\\electron\\services\\partnerManager.js\")",
       "Bash(del \"D:\\project\\weaver-pro\\src\\components\\settings\\tabs\\ProjectTab.jsx\")",
       "Bash(npm run:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(del \"D:\\project\\weaver-pro\\src\\components\\scriptgen\\constants.js\")"
     ],
     "deny": [],
     "ask": []

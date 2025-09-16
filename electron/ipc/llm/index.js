@@ -17,6 +17,41 @@ function ensureNumber(v, name) {
   return n;
 }
 
+/* ---------------- 템플릿 변수 치환 ---------------- */
+function substituteTemplateVariables(prompt, payload = {}) {
+  const topic = String(payload.topic || "");
+  const style = String(payload.style || "");
+  const duration = Number(payload.duration || 5);
+  const maxScenes = Number(payload.maxScenes || 10);
+  const referenceText = String(payload.referenceText || "");
+
+  // 분당 글자수 목표 계산
+  const cpmMin = Number.isFinite(Number(payload.cpmMin))
+    ? Number(payload.cpmMin)
+    : 300;
+  const cpmMax = Number.isFinite(Number(payload.cpmMax))
+    ? Number(payload.cpmMax)
+    : 400;
+
+  const minChars = Math.round(duration * cpmMin);
+  const maxChars = Math.round(duration * cpmMax);
+  const avgCharsPerScene = Math.round((minChars + maxChars) / 2 / maxScenes);
+
+  // 템플릿 변수 치환
+  return prompt
+    .replace(/\{topic\}/g, topic)
+    .replace(/\{style\}/g, style)
+    .replace(/\{duration\}/g, duration.toString())
+    .replace(/\{maxScenes\}/g, maxScenes.toString())
+    .replace(/\{minCharacters\}/g, minChars.toString())
+    .replace(/\{maxCharacters\}/g, maxChars.toString())
+    .replace(/\{avgCharactersPerScene\}/g, avgCharsPerScene.toString())
+    .replace(/\{referenceScript\}/g, referenceText)
+    .replace(/\{referenceText\}/g, referenceText)
+    .replace(/\{cpmMin\}/g, cpmMin.toString())
+    .replace(/\{cpmMax\}/g, cpmMax.toString());
+}
+
 /* ---------------- 프롬프트 fallback ---------------- */
 function buildPromptFallback(payload = {}) {
   const type = (payload.type || "auto").toLowerCase();
@@ -79,7 +114,8 @@ ipcMain.handle("llm/generateScript", async (_evt, payload) => {
     typeof payload.prompt === "string" && payload.prompt.trim().length > 0;
 
   if (hasUserPrompt) {
-    payload.compiledPrompt = payload.prompt.trim();
+    // 사용자 프롬프트에 템플릿 변수 치환 적용
+    payload.compiledPrompt = substituteTemplateVariables(payload.prompt.trim(), payload);
     payload.customPrompt = true; // 프로바이더에 "사용자 프롬프트 우선" 힌트
   } else {
     // 프롬프트 없으면 안전한 fallback 생성 (자동/레퍼런스 탭)

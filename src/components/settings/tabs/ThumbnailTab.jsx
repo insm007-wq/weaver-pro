@@ -16,7 +16,7 @@ import {
   Button,
 } from "@fluentui/react-components";
 import { SaveRegular, ArrowResetRegular, InfoRegular, PuzzlePieceRegular, EditRegular } from "@fluentui/react-icons";
-import { DEFAULT_TEMPLATE } from "../../scriptgen/constants";
+import { DEFAULT_TEMPLATE } from "../../../constants/prompts";
 import { handleError, handleApiError } from "@utils";
 import { StandardCard, SettingsHeader, ActionButton, StatusBadge, LoadingSpinner } from "../../common";
 import { useContainerStyles, useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";

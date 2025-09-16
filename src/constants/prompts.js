@@ -1,25 +1,4 @@
-// src/constants.js
-export const DUR_OPTIONS = [1, 3, 5, 7, 10, 15, 20, 25, 30];
-export const MAX_SCENE_OPTIONS = [6, 8, 10, 12, 15, 20, 25, 30];
-
-export const LLM_OPTIONS = [
-  { label: "Anthropic Claude 3.5/3.7", value: "anthropic" },
-  { label: "OpenAI GPT-5 mini", value: "openai-gpt5mini" },
-];
-
-export const TTS_ENGINES = [
-  { label: "Google Cloud TTS", value: "google" },
-  { label: "Azure Speech", value: "azure" },
-  { label: "Amazon Polly", value: "polly" },
-  { label: "OpenAI TTS", value: "openai" },
-];
-
-export const VOICES_BY_ENGINE = {
-  google: ["ko-KR-Wavenet-A", "ko-KR-Wavenet-B", "ko-KR-Standard-A", "ko-KR-Standard-B"],
-  azure: ["ko-KR-SunHiNeural", "ko-KR-InJoonNeural"],
-  polly: ["Seoyeon"],
-  openai: ["alloy", "nova", "verse"],
-};
+// 프롬프트 템플릿 관련 상수들
 
 // ✅ 대본 프롬프트(원문 그대로 전송). 필요시 사용자가 직접 템플릿을 편집함.
 export const DEFAULT_GENERATE_PROMPT = `다음 조건에 맞는 {duration}분 길이의 영상 대본을 작성해주세요:
@@ -38,7 +17,7 @@ export const DEFAULT_GENERATE_PROMPT = `다음 조건에 맞는 {duration}분 �
 
 **장면별 분량 계산:**
 - 5초 = 25-35자
-- 10초 = 50-70자  
+- 10초 = 50-70자
 - 30초 = 150-200자
 - 60초 = 300-400자
 
@@ -107,8 +86,7 @@ export const DEFAULT_GENERATE_PROMPT = `다음 조건에 맞는 {duration}분 �
 ✅ 너무 긴 텍스트에 짧은 duration 설정 금지`;
 
 // ✅ 레퍼런스 프롬프트 — {referenceText}, {duration}, {topic}, {maxScenes}만 치환
-export const DEFAULT_REFERENCE_PROMPT = `
-## 레퍼런스 대본 분석 및 적용
+export const DEFAULT_REFERENCE_PROMPT = `## 레퍼런스 대본 분석 및 적용
 
 요청 사양:
 - 분량: {duration}분
@@ -141,10 +119,9 @@ export const DEFAULT_REFERENCE_PROMPT = `
       "visual_description": "화면에 보여줄 내용"
     }
   ]
-}
-`.trim();
+}`.trim();
 
-const DEFAULT_TEMPLATE = `당신은 "Imagen-3 프롬프트 제너레이터"입니다.
+export const DEFAULT_TEMPLATE = `당신은 "Imagen-3 프롬프트 제너레이터"입니다.
 사용자가 **장면 설명**을 제공하면, 그 내용을 바탕으로 상세하고 예술적인 이미지 생성 프롬프트를 출력해야 합니다.
 
 ### 장면 설명: {content}{referenceAnalysis}
@@ -161,12 +138,10 @@ const DEFAULT_TEMPLATE = `당신은 "Imagen-3 프롬프트 제너레이터"입�
 3. **중요한 제약사항 (반드시 포함):**
 - **Korean person** 또는 **Asian person** 명시
 - **no text, no words, no letters** 포함
-- **16:9 aspect ratio** 명시  
+- **16:9 aspect ratio** 명시
 - **ultra-realistic, cinematic style** 포함
 - **dramatic lighting** 포함
 
 4. 원본 설명의 의도를 정확히 반영하되, 성별이나 인물 특성을 임의로 변경하지 마세요.
 
 영문 Imagen-3 생성 프롬프트만 응답해주세요:`;
-
-export { DEFAULT_TEMPLATE };

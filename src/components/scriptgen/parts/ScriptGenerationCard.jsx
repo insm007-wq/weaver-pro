@@ -7,40 +7,26 @@ import {
 } from "@fluentui/react-components";
 import { SparkleRegular } from "@fluentui/react-icons";
 import { useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
+import { AI_ENGINE_OPTIONS } from "../../../constants/scriptSettings";
 
-const AI_ENGINE_OPTIONS = [
-  {
-    key: "openai-gpt5mini",
-    text: "🤖 OpenAI GPT-5 Mini",
-    desc: "최신 GPT-5 모델, 롱폼 대본 최적화",
-    processingTime: "2-5분",
-  },
-  {
-    key: "anthropic", 
-    text: "🧠 Anthropic Claude",
-    desc: "Claude Sonnet/Haiku, 정확하고 자연스러운 문체",
-    processingTime: "1-3분",
-  },
-];
-
-function ScriptGenerationCard({ 
-  form, 
-  isLoading, 
-  fullVideoState, 
-  onGenerate 
+function ScriptGenerationCard({
+  form,
+  isLoading,
+  fullVideoState,
+  globalSettings = {},
+  onGenerate
 }) {
   const cardStyles = useCardStyles();
   const settingsStyles = useSettingsStyles();
 
-  const isDisabled = isLoading || !form.topic?.trim() || !form.promptName || !form.aiEngine || fullVideoState.isGenerating;
-  
-  const selectedEngine = AI_ENGINE_OPTIONS.find((engine) => engine.key === form.aiEngine);
+  const isDisabled = isLoading || !form.topic?.trim() || !form.promptName || fullVideoState.isGenerating;
+
+  const selectedEngine = AI_ENGINE_OPTIONS.find((engine) => engine.key === globalSettings.llmModel);
 
   const getValidationErrors = () => {
     const errors = [];
     if (!form.topic?.trim()) errors.push("• 영상 주제 입력");
     if (!form.promptName) errors.push("• 대본 생성 프롬프트 선택");
-    if (!form.aiEngine) errors.push("• AI 엔진 선택");
     return errors;
   };
 
@@ -61,11 +47,16 @@ function ScriptGenerationCard({
         <Text size={300} color="secondary" style={{ lineHeight: 1.4 }}>
           {selectedEngine
             ? `${selectedEngine.text.replace(/🤖|🧠|🚀/g, "").trim()}로 대본을 생성합니다`
-            : "AI 엔진을 선택해 대본을 생성합니다"}
+            : "전역 설정의 LLM 모델로 대본을 생성합니다"}
         </Text>
         {selectedEngine && (
           <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
             예상 처리 시간: {selectedEngine.processingTime}
+          </Text>
+        )}
+        {!selectedEngine && globalSettings.llmModel && (
+          <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
+            현재 모델: {globalSettings.llmModel} (전역 설정)
           </Text>
         )}
       </div>
