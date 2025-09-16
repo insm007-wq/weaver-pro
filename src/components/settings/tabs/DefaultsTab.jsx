@@ -20,7 +20,7 @@ import { useApi } from "../../../hooks/useApi";
 const DEFAULT_SETTINGS = {
   videoSaveFolder: "C:\\weaverPro\\",
   defaultResolution: "1080p",
-  imageModel: "flux-dev",
+  imageModel: "sdxl",
   videoModel: "veo-3",
   imageResolution: "1024x1024",
   videoQuality: "1080p",
@@ -30,11 +30,11 @@ const DEFAULT_SETTINGS = {
 // AI 모델 관련 옵션을 구조화하여 관리합니다.
 const AI_OPTIONS = {
   imageModels: [
-    { value: "flux-dev", text: "Flux Dev (고품질)", cost: "35원/장" },
-    { value: "flux-schnell", text: "Flux Schnell (속도 우선)", cost: "15원/장" },
-    { value: "dall-e-3", text: "DALL-E 3 (고품질)", cost: "별도 요금" },
-    { value: "midjourney", text: "Midjourney (예술적)", cost: "별도 요금" },
-    { value: "stable-diffusion", text: "Stable Diffusion", cost: "무료" },
+    { value: "flux-dev", text: "Flux Dev (고품질)", cost: "35원/장", provider: "Replicate", status: "available" },
+    { value: "flux-schnell", text: "Flux Schnell (속도 우선)", cost: "15원/장", provider: "Replicate", status: "available" },
+    { value: "sdxl", text: "Stable Diffusion XL", cost: "무료", provider: "Replicate", status: "available" },
+    { value: "dall-e-3", text: "DALL-E 3 (고품질)", cost: "53~160원/장", provider: "OpenAI", status: "준비 중" },
+    { value: "midjourney", text: "Midjourney (예술적)", cost: "별도 요금", provider: "Midjourney", status: "준비 중" },
   ],
   imageResolutions: [
     { value: "512x512", text: "512x512", speed: "빠름" },
@@ -43,11 +43,11 @@ const AI_OPTIONS = {
     { value: "2048x2048", text: "2048x2048", speed: "최고화질" },
   ],
   videoModels: [
-    { value: "veo-3", text: "Google Veo 3", length: "8초", status: "추천" },
-    { value: "kling", text: "Kling AI", length: "5초", status: "준비 중" },
-    { value: "runway", text: "Runway ML", length: "4초", status: "준비 중" },
-    { value: "pika", text: "Pika Labs", length: "3초", status: "준비 중" },
-    { value: "stable-video", text: "Stable Video", length: "4초", status: "무료" },
+    { value: "veo-3", text: "Google Veo 3", length: "8초", provider: "Google", status: "추천" },
+    { value: "kling", text: "Kling AI", length: "5초", provider: "Kuaishou", status: "준비 중" },
+    { value: "runway", text: "Runway ML", length: "4초", provider: "Runway", status: "준비 중" },
+    { value: "pika", text: "Pika Labs", length: "3초", provider: "Pika", status: "준비 중" },
+    { value: "stable-video", text: "Stable Video", length: "4초", provider: "Stability AI", status: "무료" },
   ],
   videoQualities: [
     { value: "720p", text: "720p", speed: "빠름" },
@@ -304,8 +304,8 @@ export default function DefaultsTab() {
           >
             <PuzzlePieceRegular /> AI 모델 설정
           </Text>
-          <div style={{ display: "grid", gridTemplateColumns: gridTemplate, gap: itemGap }}>
-            {/* 이미지 생성 모델 */}
+          {/* 이미지 생성 설정 */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: itemGap, marginBottom: tokens.spacingVerticalL }}>
             <Field label="이미지 생성 모델" hint="썸네일 및 이미지 생성에 사용할 AI 모델입니다.">
               <Dropdown
                 value={getDropdownValue(AI_OPTIONS.imageModels, settings.imageModel)}
@@ -313,32 +313,23 @@ export default function DefaultsTab() {
                 onOptionSelect={(_, data) => setSettings((prev) => ({ ...prev, imageModel: data.optionValue }))}
               >
                 {AI_OPTIONS.imageModels.map((model) => (
-                  <Option key={model.value} value={model.value} text={model.text}>
-                    {model.text} <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>({model.cost})</Caption1>
+                  <Option
+                    key={model.value}
+                    value={model.value}
+                    text={model.text}
+                    disabled={model.status === "준비 중"}
+                  >
+                    {model.text} <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>({model.provider}) - {model.cost}</Caption1>
+                    {model.status === "준비 중" && (
+                      <Caption1 style={{ color: tokens.colorPaletteDarkOrangeBackground3, marginLeft: "4px" }}>
+                        - 준비 중
+                      </Caption1>
+                    )}
                   </Option>
                 ))}
               </Dropdown>
             </Field>
 
-            {/* 비디오 생성 모델 */}
-            <Field label="비디오 생성 모델" hint="동영상 생성에 사용할 AI 모델입니다.">
-              <Dropdown
-                value={getDropdownValue(AI_OPTIONS.videoModels, settings.videoModel)}
-                selectedOptions={[settings.videoModel]}
-                onOptionSelect={(_, data) => setSettings((prev) => ({ ...prev, videoModel: data.optionValue }))}
-              >
-                {AI_OPTIONS.videoModels.map((model) => (
-                  <Option key={model.value} value={model.value} disabled={model.status === "준비 중"}>
-                    {model.text}{" "}
-                    <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-                      ({model.status === "추천" ? `⭐ ${model.status}` : model.status})
-                    </Caption1>
-                  </Option>
-                ))}
-              </Dropdown>
-            </Field>
-
-            {/* 이미지 생성 해상도 */}
             <Field label="이미지 생성 해상도" hint="생성될 이미지의 기본 해상도입니다.">
               <Dropdown
                 value={getDropdownValue(AI_OPTIONS.imageResolutions, settings.imageResolution)}
@@ -352,8 +343,27 @@ export default function DefaultsTab() {
                 ))}
               </Dropdown>
             </Field>
+          </div>
 
-            {/* 비디오 생성 품질 */}
+          {/* 비디오 생성 설정 */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: itemGap, marginBottom: tokens.spacingVerticalL }}>
+            <Field label="비디오 생성 모델" hint="동영상 생성에 사용할 AI 모델입니다.">
+              <Dropdown
+                value={getDropdownValue(AI_OPTIONS.videoModels, settings.videoModel)}
+                selectedOptions={[settings.videoModel]}
+                onOptionSelect={(_, data) => setSettings((prev) => ({ ...prev, videoModel: data.optionValue }))}
+              >
+                {AI_OPTIONS.videoModels.map((model) => (
+                  <Option key={model.value} value={model.value} disabled={model.status === "준비 중"}>
+                    {model.text} <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>({model.provider})</Caption1>
+                    <Caption1 style={{ color: tokens.colorNeutralForeground3, marginLeft: "4px" }}>
+                      {model.status === "추천" ? ` - ⭐ ${model.status}` : ` - ${model.status}`}
+                    </Caption1>
+                  </Option>
+                ))}
+              </Dropdown>
+            </Field>
+
             <Field label="비디오 생성 품질" hint="생성될 비디오의 기본 품질입니다.">
               <Dropdown
                 value={getDropdownValue(AI_OPTIONS.videoQualities, settings.videoQuality)}
@@ -367,8 +377,10 @@ export default function DefaultsTab() {
                 ))}
               </Dropdown>
             </Field>
+          </div>
 
-            {/* LLM 모델 */}
+          {/* LLM 모델 설정 */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: itemGap, maxWidth: "50%" }}>
             <Field label="대본 생성 LLM 모델" hint="대본 생성에 사용할 AI 언어모델입니다.">
               <Dropdown
                 value={getDropdownValue(AI_OPTIONS.llmModels, settings.llmModel)}
