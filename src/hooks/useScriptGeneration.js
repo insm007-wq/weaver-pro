@@ -124,23 +124,57 @@ export function useScriptGeneration() {
         cpmMax: 400,
       };
 
-      console.log("🔧 Template substitution payload:", payload);
+      // 협력업체 수준의 상세 로깅 (디버깅 강화)
+      console.log("🔧 Enhanced Template substitution payload:", payload);
+      console.log("🎯 MaxScenes validation:", {
+        formValue: form.maxScenes,
+        payloadValue: payload.maxScenes,
+        isValid: payload.maxScenes >= 4 && payload.maxScenes <= 20,
+        recommendation: payload.maxScenes < 4 ? "Too few scenes" : payload.maxScenes > 20 ? "Too many scenes" : "Optimal range"
+      });
+
       if (promptContent.script) {
         console.log("📝 Original prompt:", promptContent.script);
-        console.log("📝 Variables to substitute:");
+        console.log("📝 Variables to substitute (협력업체 방식):");
         console.log("  - {topic}:", form.topic);
         console.log("  - {style}:", form.style);
         console.log("  - {duration}:", form.durationMin);
-        console.log("  - {maxScenes}:", form.maxScenes);
+        console.log("  - {maxScenes}:", form.maxScenes, "(설정값 적용됨)");
+
+        // 계산된 값들도 로그로 표시 (협력업체 방식)
+        const minChars = form.durationMin * 300;
+        const maxChars = form.durationMin * 400;
+        const avgCharsPerScene = Math.floor((minChars + maxChars) / 2 / form.maxScenes);
+        console.log("📊 Calculated values (협력업체 방식):");
+        console.log("  - minCharacters:", minChars);
+        console.log("  - maxCharacters:", maxChars);
+        console.log("  - avgCharsPerScene:", avgCharsPerScene);
       }
 
       const res = await api.invoke("llm/generateScript", payload, { timeout: 120000 }); // 2분 타임아웃
 
       if (res && res.data && res.data.scenes) {
+        // 협력업체 방식: 실제 생성된 장면 수 검증
+        const actualScenes = res.data.scenes.length;
+        const requestedScenes = form.maxScenes;
+
+        console.log("✅ Script generation validation (협력업체 방식):");
+        console.log(`  - 요청 장면 수: ${requestedScenes}개`);
+        console.log(`  - 실제 생성 장면 수: ${actualScenes}개`);
+        console.log(`  - 일치도: ${actualScenes === requestedScenes ? '완전일치' : `차이 ${Math.abs(actualScenes - requestedScenes)}개`}`);
+
+        // 실제 대본 분량 분석
+        const totalChars = res.data.scenes.reduce((sum, scene) => sum + (scene.text || '').length, 0);
+        const avgCharsPerScene = Math.round(totalChars / actualScenes);
+        console.log(`  - 총 글자 수: ${totalChars}자`);
+        console.log(`  - 장면당 평균: ${avgCharsPerScene}자`);
+
         setDoc(res.data);
         const engineName = selectedEngine?.text || form.aiEngine;
         const promptName = form.promptName || "기본";
-        toast.success(`${engineName}로 "${promptName}" 프롬프트를 사용해 대본을 생성했습니다.`);
+
+        // 향상된 성공 메시지 (협력업체보다 상세함)
+        toast.success(`${engineName}로 "${promptName}" 프롬프트를 사용해 ${actualScenes}개 장면의 대본을 생성했습니다. (${totalChars}자)`);
       } else {
         throw new Error("API 응답이 올바르지 않습니다.");
       }

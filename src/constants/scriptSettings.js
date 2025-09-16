@@ -1,6 +1,5 @@
 // 대본 생성 설정 관련 상수들
 export const DUR_OPTIONS = [1, 3, 5, 7, 10, 15, 20, 25, 30];
-export const MAX_SCENE_OPTIONS = [6, 8, 10, 12, 15, 20, 25, 30];
 
 export const STYLE_OPTIONS = [
   { key: "informative", text: "📚 정보 전달형", desc: "교육적이고 명확한 설명" },
@@ -12,13 +11,19 @@ export const STYLE_OPTIONS = [
 ];
 
 export const DURATION_OPTIONS = [
-  { key: 1, text: "1분 (초단편)" },
-  { key: 2, text: "2분 (단편)" },
   { key: 3, text: "3분 (표준)" },
   { key: 5, text: "5분 (중편)" },
   { key: 8, text: "8분 (장편)" },
   { key: 10, text: "10분 (긴편)" },
+  { key: 15, text: "15분 (중간편)" },
+  { key: 20, text: "20분 (장시간)" },
+  { key: 30, text: "30분 (장편)" },
+  { key: 45, text: "45분 (긴편)" },
+  { key: 60, text: "60분 (1시간)" },
 ];
+
+// 영상 길이별 최적 장면 수를 자동 계산하여 제공하므로 MAX_SCENE_OPTIONS는 사용하지 않음
+// 대신 getRecommendedScenes 함수에서 동적으로 계산됨
 
 export const IMAGE_STYLE_OPTIONS = [
   { key: "photo", text: "실사" },
@@ -115,8 +120,8 @@ export const LLM_OPTIONS = [
 export const makeDefaultForm = () => ({
   topic: "",
   style: "informative",
-  durationMin: 3,
-  maxScenes: 8,
+  durationMin: null, // 초기값을 null로 변경
+  maxScenes: null,   // 초기값을 null로 변경
   llm: "openai-gpt5mini",
   temperature: 1.0,
   imageStyle: "cinematic",

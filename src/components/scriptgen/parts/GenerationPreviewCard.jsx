@@ -96,14 +96,56 @@ function GenerationPreviewCard({ form, globalSettings = {}, doc = null }) {
   const settingsStyles = useSettingsStyles();
 
   /**
-   * 예상 값들 계산
+   * 초기화 및 유효성 검사
    */
-  const duration = form.durationMin || 3;
-  const avgChars = Math.floor((duration * 300 + duration * 400) / 2); // 분당 300-400자 기준
-  const estimatedScenes = Math.min(
-    form.maxScenes || 10,
-    Math.max(3, Math.ceil(duration * 1.5)) // 분당 1.5개 장면 기준으로 조정
-  );
+  // 필수 값들이 없으면 빈 상태로 표시 (null, undefined, 0 모두 체크)
+  if (!form.durationMin || !form.maxScenes || form.durationMin <= 0 || form.maxScenes <= 0) {
+    return (
+      <Card className={cardStyles.settingsCard}>
+        <div className={settingsStyles.sectionHeader}>
+          <div className={settingsStyles.sectionTitle}>
+            <Badge appearance="outline" style={{ border: `1px solid ${tokens.colorNeutralStroke2}` }}>
+              📊
+            </Badge>
+            <Text size={400} weight="semibold">
+              예상 생성 결과
+            </Text>
+          </div>
+          <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+            영상 길이와 장면 수를 설정하면 예상 결과가 표시됩니다
+          </Text>
+        </div>
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "120px",
+          color: tokens.colorNeutralForeground3,
+          fontStyle: "italic"
+        }}>
+          설정을 완료해주세요
+        </div>
+      </Card>
+    );
+  }
+
+  /**
+   * 협력업체보다 향상된 예상 값 계산
+   */
+  const duration = form.durationMin;
+  const maxScenes = form.maxScenes;
+
+  // 더 정확한 글자 수 계산 (한국어 TTS 기준)
+  const minChars = duration * 300; // 최소 글자 수
+  const maxChars = duration * 400; // 최대 글자 수
+  const avgChars = Math.floor((minChars + maxChars) / 2);
+
+  // 실제 설정된 장면 수 사용 (협력업체 방식)
+  const estimatedScenes = maxScenes;
+
+  // 장면별 상세 분석 (협력업체보다 향상된 기능)
+  const avgSecsPerScene = Math.round((duration * 60) / maxScenes);
+  const avgCharsPerScene = Math.round(avgChars / maxScenes);
 
   /**
    * 실제 음성 시간 계산 (완성된 대본이 있으면 실제 글자 수 기준, 없으면 예상)
@@ -152,14 +194,17 @@ function GenerationPreviewCard({ form, globalSettings = {}, doc = null }) {
         </Text>
       </div>
 
-      {/* 통계 그리드 - 기존 2x2 레이아웃 */}
+      {/* 협력업체보다 향상된 통계 그리드 - 2x3 레이아웃 */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: tokens.spacingHorizontalM }}>
         <StatTile
-          label={doc ? "실제 장면 수" : "예상 장면 수"}
+          label={doc ? "실제 장면 수" : "설정 장면 수"}
           value={
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span>{actualScenes}개</span>
               {doc && <Badge appearance="tint" color="success" size="small">완료</Badge>}
+              {!doc && maxScenes !== estimatedScenes && (
+                <Badge appearance="outline" color="warning" size="small">설정값</Badge>
+              )}
             </div>
           }
         />
@@ -180,6 +225,26 @@ function GenerationPreviewCard({ form, globalSettings = {}, doc = null }) {
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span>{Math.floor(actualSpeechTime / 60)}분 {actualSpeechTime % 60}초</span>
               {doc && <Badge appearance="tint" color="success" size="small">완료</Badge>}
+            </div>
+          }
+        />
+
+        <StatTile
+          label="장면당 평균 시간"
+          value={
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span>{avgSecsPerScene}초</span>
+              <Badge appearance="outline" color="info" size="small">분석</Badge>
+            </div>
+          }
+        />
+
+        <StatTile
+          label="장면당 평균 글자수"
+          value={
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span>{avgCharsPerScene}자</span>
+              <Badge appearance="outline" color="info" size="small">분석</Badge>
             </div>
           }
         />
