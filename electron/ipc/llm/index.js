@@ -2,7 +2,6 @@
 const { ipcMain } = require("electron");
 const { callOpenAIGpt5Mini } = require("./providers/openai");
 const { callAnthropic } = require("./providers/anthropic");
-const { callMinimaxAbab } = require("./providers/minimax");
 
 function ensureString(v, name) {
   if (typeof v !== "string" || !v.trim()) {
@@ -95,10 +94,6 @@ ipcMain.handle("llm/generateScript", async (_evt, payload) => {
 
     case "anthropic":
       return await callAnthropic(payload);
-
-    case "minimax":
-    case "minimax-abab":
-      return await callMinimaxAbab(payload);
 
     default:
       throw new Error(`지원하지 않는 LLM입니다: ${llm}`);

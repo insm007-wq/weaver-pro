@@ -16,7 +16,7 @@
  * @param {string} form.topic - 영상 주제
  * @param {string} form.style - 스타일 (informative, engaging, professional, casual, dramatic, storytelling)
  * @param {number} form.durationMin - 예상 길이 (분)
- * @param {string} form.aiEngine - AI 엔진 (openai-gpt5mini, anthropic, minimax)
+ * @param {string} form.aiEngine - AI 엔진 (openai-gpt5mini, anthropic)
  * @param {string} form.promptName - 선택된 프롬프트 이름
  * @param {Function} onChange - 폼 값 변경 핸들러 (key, value) => void
  * @param {Array<string>} promptNames - 사용 가능한 프롬프트 이름 목록
@@ -72,6 +72,8 @@ import {
   Dropdown,
   Option,
   Spinner,
+  Switch,
+  Textarea,
   tokens,
 } from "@fluentui/react-components";
 import { SettingsRegular } from "@fluentui/react-icons";
@@ -93,12 +95,6 @@ const AI_ENGINE_OPTIONS = [
     text: "🧠 Anthropic Claude",
     desc: "Claude Sonnet/Haiku, 정확하고 자연스러운 문체",
     processingTime: "1-3분",
-  },
-  {
-    key: "minimax",
-    text: "🚀 Minimax Abab", 
-    desc: "중국 Minimax API, 빠른 처리 속도",
-    processingTime: "30초-2분",
   },
 ];
 
@@ -261,6 +257,42 @@ function BasicSettingsCard({
             </Text>
           )}
         </Field>
+
+        {/* 레퍼런스 대본 (선택사항) - 전체 너비 사용 */}
+        <div style={{ gridColumn: "1 / -1", marginTop: tokens.spacingVerticalM }}>
+          <Field>
+            <div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS, marginBottom: tokens.spacingVerticalXS }}>
+              <Switch
+                checked={form.showReferenceScript || false}
+                onChange={(_, data) => onChange("showReferenceScript", data.checked)}
+                label="레퍼런스 대본 (선택사항)"
+              />
+            </div>
+            
+            {form.showReferenceScript && (
+              <>
+                <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginBottom: tokens.spacingVerticalXS, display: "block" }}>
+                  참고할 대본이 있다면 붙여넣기해주세요. AI가 구조와 스타일을 분석해 더 나은 대본을 만들어드립니다.
+                </Text>
+                <Textarea
+                  value={form.referenceScript || ""}
+                  onChange={(e) => onChange("referenceScript", e.target.value)}
+                  placeholder="예: 
+안녕하세요! 오늘은 인공지능에 대해 알아보겠습니다.
+
+## 도입
+인공지능이 우리 생활에 미치는 영향을 살펴보면...
+
+## 본론
+구체적인 예시를 들어보겠습니다..."
+                  rows={6}
+                  resize="vertical"
+                  style={{ minHeight: "120px" }}
+                />
+              </>
+            )}
+          </Field>
+        </div>
       </div>
     </Card>
   );

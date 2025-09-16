@@ -49,6 +49,7 @@ import AdvancedSettingsCard from "./parts/AdvancedSettingsCard";
 import { useScriptGeneration } from "../../hooks/useScriptGeneration";
 import { useVoiceSettings } from "../../hooks/useVoiceSettings";
 import { usePromptSettings } from "../../hooks/usePromptSettings";
+import { useApi } from "../../hooks/useApi";
 
 // 옵션 데이터는 기존 코드를 그대로 사용
 const STYLE_OPTIONS = [
@@ -92,14 +93,6 @@ const AI_ENGINE_OPTIONS = [
     processingTime: "1-3분",
     features: ["✨ 자연스런 문체", "🎪 창의성", "📚 교육적"],
     rating: 4.9,
-  },
-  {
-    key: "minimax",
-    text: "🚀 Minimax Abab",
-    desc: "중국 Minimax API, 빠른 처리 속도",
-    processingTime: "30초-2분",
-    features: ["⚡ 빠른 처리", "💰 저렴함", "🔧 효율성"],
-    rating: 4.6,
   },
 ];
 
@@ -158,6 +151,7 @@ const makeDefaultForm = () => ({
   temperature: 1.0,
   customPrompt: "",
   referenceScript: "",
+  showReferenceScript: false,
   imageStyle: "photo",
   speed: "1.0",
   voiceId: "",
@@ -204,8 +198,9 @@ function ScriptVoiceGenerator() {
   });
 
   // 커스텀 훅 사용
+  const api = useApi();
   const { promptNames, promptLoading } = usePromptSettings();
-  const { doc, isLoading, error, runGenerate } = useScriptGeneration();
+  const { doc, setDoc, isLoading, error, runGenerate, getSelectedPromptContent } = useScriptGeneration();
   const { voices, voiceLoading, voiceError, previewVoice, retryVoiceLoad } = useVoiceSettings(form);
   
   // Toast 추가 (applyPreset에서 사용)
@@ -373,10 +368,28 @@ ${form.topic}의 핵심은 바로 이것입니다...
         cpmMin: 300,
         cpmMax: 400,
       };
+      
+      console.log("전송할 payload:", payload); // 디버그 로그 추가
 
       await new Promise((resolve) => setTimeout(resolve, 3000));
-      const res = await api.invoke("llm/generateScript", payload);
-      if (res && res.scenes) {
+      const res = await api.invoke("llm/generateScript", payload, { timeout: 120000 }); // 2분 타임아웃
+      console.log("🔍 API 응답 확인:", res); // 디버그 로그 추가
+      console.log("🔍 응답 타입:", typeof res);
+      console.log("🔍 응답 키들:", Object.keys(res || {}));
+      console.log("🔍 scenes 존재:", res?.scenes);
+      console.log("🔍 scenes 타입:", typeof res?.scenes);
+      console.log("🔍 scenes 길이:", res?.scenes?.length);
+      
+      // 만약 다른 필드명을 사용하고 있다면 확인
+      if (res && !res.scenes) {
+        console.log("🔍 scenes 대신 다른 필드들:");
+        console.log("- data:", res.data);
+        console.log("- result:", res.result);
+        console.log("- script:", res.script);
+        console.log("- content:", res.content);
+      }
+      
+      if (res && res.scenes && Array.isArray(res.scenes) && res.scenes.length > 0) {
         setDoc(res);
         stopStreaming();
         updateFullVideoState({
@@ -386,7 +399,14 @@ ${form.topic}의 핵심은 바로 이것입니다...
         });
         return res;
       } else {
-        throw new Error("대본 생성 API 응답이 올바르지 않습니다.");
+        console.error("❌ 대본 생성 실패 상세:");
+        console.error("- res가 존재하는가?", !!res);
+        console.error("- res.scenes가 존재하는가?", !!res?.scenes);
+        console.error("- scenes가 배열인가?", Array.isArray(res?.scenes));
+        console.error("- scenes 길이:", res?.scenes?.length);
+        console.error("- 전체 응답 구조:", JSON.stringify(res, null, 2));
+        
+        throw new Error(`대본 생성 API 응답이 올바르지 않습니다. 응답: ${JSON.stringify(res)}`);
       }
     } catch (error) {
       stopStreaming();

@@ -188,7 +188,9 @@
       "Bash(git reset:*)",
       "Bash(git rm:*)",
       "Bash(del /f nul)",
-      "Bash(npm run electron:dev:*)"
+      "Bash(npm run electron:dev:*)",
+      "Bash(del \"D:\\project\\weaver-pro\\src\\components\\scriptgen\\parts\\GenerationPreviewCard.jsx\")",
+      "Bash(del \"D:\\project\\weaver-pro\\electron\\ipc\\llm\\providers\\minimax.js\")"
     ],
     "deny": [],
     "ask": []

@@ -23,8 +23,6 @@ ipcMain.handle("tts/synthesizeByScenes", async (_evt, { doc, tts }) => {
     case 'ElevenLabs':
       return await synthesizeWithElevenLabs(scenes, { voiceId: voiceId || voiceName, speakingRate });
     
-    case 'MiniMax':
-      return await synthesizeWithMiniMax(scenes, { voiceId: voiceId || voiceName, speakingRate });
     
     default:
       throw new Error(`지원하지 않는 TTS 엔진입니다: ${detectedProvider}`);
@@ -36,7 +34,6 @@ function detectProviderFromVoice(voiceId) {
   if (!voiceId) return 'Google'; // 기본값
   
   if (voiceId.startsWith('ko-KR-')) return 'Google';
-  if (voiceId.startsWith('korean_')) return 'MiniMax';
   if (voiceId.length === 20) return 'ElevenLabs'; // ElevenLabs voice ID는 20자
   
   return 'Google';
@@ -158,25 +155,6 @@ async function synthesizeWithElevenLabs(scenes, options) {
   return { ok: true, partsCount: parts.length, parts, provider: 'ElevenLabs' };
 }
 
-// MiniMax TTS 음성 합성 (시뮬레이션)
-async function synthesizeWithMiniMax(scenes, options) {
-  // MiniMax는 실제 구현 대신 시뮬레이션 제공
-  console.log(`🔄 MiniMax TTS는 현재 시뮬레이션 모드입니다.`);
-  
-  const parts = [];
-  for (let i = 0; i < scenes.length; i++) {
-    // 빈 오디오 파일의 base64 (실제로는 MiniMax API 호출)
-    const emptyAudioBase64 = "UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
-    
-    parts.push({
-      fileName: `scene-${String(i + 1).padStart(3, "0")}.mp3`,
-      base64: emptyAudioBase64,
-      mime: "audio/mpeg",
-    });
-  }
-
-  return { ok: true, partsCount: parts.length, parts, provider: 'MiniMax' };
-}
 
 // 다중 TTS 엔진 목소리 목록을 가져오는 핸들러
 ipcMain.handle("tts:listVoices", async (_evt, options = {}) => {
@@ -348,43 +326,6 @@ async function loadElevenLabsVoices(apiKey) {
   return processedVoices;
 }
 
-// MiniMax 한국어 목소리 목록 (정적)
-function getMinimaxKoreanVoices() {
-  return [
-    {
-      id: 'korean_male_1',
-      name: '한국어 남성 1 (자연스러운)',
-      gender: 'MALE',
-      type: 'Neural',
-      language: 'ko-KR',
-      provider: 'MiniMax'
-    },
-    {
-      id: 'korean_female_1', 
-      name: '한국어 여성 1 (부드러운)',
-      gender: 'FEMALE',
-      type: 'Neural',
-      language: 'ko-KR',
-      provider: 'MiniMax'
-    },
-    {
-      id: 'korean_male_2',
-      name: '한국어 남성 2 (활기찬)',
-      gender: 'MALE', 
-      type: 'Neural',
-      language: 'ko-KR',
-      provider: 'MiniMax'
-    },
-    {
-      id: 'korean_female_2',
-      name: '한국어 여성 2 (친근한)',
-      gender: 'FEMALE',
-      type: 'Neural', 
-      language: 'ko-KR',
-      provider: 'MiniMax'
-    }
-  ];
-}
 
 // 성별 감지 (ElevenLabs용)
 function detectGender(labels) {

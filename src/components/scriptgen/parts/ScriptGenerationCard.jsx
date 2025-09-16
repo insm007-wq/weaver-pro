@@ -21,12 +21,6 @@ const AI_ENGINE_OPTIONS = [
     desc: "Claude Sonnet/Haiku, 정확하고 자연스러운 문체",
     processingTime: "1-3분",
   },
-  {
-    key: "minimax",
-    text: "🚀 Minimax Abab", 
-    desc: "중국 Minimax API, 빠른 처리 속도",
-    processingTime: "30초-2분",
-  },
 ];
 
 function ScriptGenerationCard({ 

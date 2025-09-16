@@ -6,7 +6,7 @@
  * 다양한 AI 엔진 지원, 프롬프트 관리, 대본 생성 상태 관리 등을 제공합니다.
  * 
  * @features
- * - 🤖 다양한 AI 엔진 지원 (GPT-5, Claude, Minimax)
+ * - 🤖 다양한 AI 엔진 지원 (GPT-5, Claude)
  * - 📝 프롬프트 기반 대본 생성
  * - 🎯 토픽, 스타일, 길이 등 세부 설정
  * - 📊 생성 상태 및 진행률 관리
@@ -62,12 +62,6 @@ const AI_ENGINE_OPTIONS = [
     text: "🧠 Anthropic Claude",
     desc: "Claude Sonnet/Haiku, 정확하고 자연스러운 문체",
     processingTime: "1-3분",
-  },
-  {
-    key: "minimax",
-    text: "🚀 Minimax Abab", 
-    desc: "중국 Minimax API, 빠른 처리 속도",
-    processingTime: "30초-2분",
   },
 ];
 
@@ -130,7 +124,7 @@ export function useScriptGeneration() {
         cpmMax: 400,
       };
 
-      const res = await api.invoke("llm/generateScript", payload);
+      const res = await api.invoke("llm/generateScript", payload, { timeout: 120000 }); // 2분 타임아웃
 
       if (res && res.scenes) {
         setDoc(res);
@@ -152,9 +146,11 @@ export function useScriptGeneration() {
 
   return {
     doc,
+    setDoc,
     isLoading,
     error,
     runGenerate,
+    getSelectedPromptContent,
     AI_ENGINE_OPTIONS,
   };
 }

@@ -80,21 +80,6 @@ ipcMain.handle("anthropic:test", async (_e, apiKey) => {
   }
 });
 
-/** ✅ MiniMax */
-ipcMain.handle("minimax:test", async (_e, { key, groupId }) => {
-  try {
-    if (!key || !groupId) return fail(400, "MiniMax Key와 Group ID를 입력하세요.");
-    const r = await axios.post(
-      "https://api.minimax.chat/v1/text/chatcompletion",
-      { model: "abab5.5-chat", messages: [{ role: "user", content: "ping" }] },
-      { headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}`, "X-Group-Id": groupId }, timeout: 15000 }
-    );
-    return ok({ model: r.data?.model });
-  } catch (err) {
-    const { status, message } = normalizeError(err);
-    return fail(status, message);
-  }
-});
 
 /** ✅ Google TTS */
 ipcMain.handle("testGoogleTTS", async (_e, apiKey) => {
