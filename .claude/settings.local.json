@@ -199,7 +199,9 @@
       "Bash(del nul)",
       "Read(//c/WeaverPro/2025-09-17/**)",
       "Bash(tasklist)",
-      "Bash(cmd /c:*)"
+      "Bash(cmd /c:*)",
+      "Bash(echo $APPDATA)",
+      "Read(//c/Users/paul/AppData/Roaming//**)"
     ],
     "deny": [],
     "ask": []

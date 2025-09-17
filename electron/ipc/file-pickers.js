@@ -24,12 +24,19 @@ function registerFilePickers() {
   });
 
   // 폴더 선택 다이얼로그
-  ipcMain.handle("dialog:selectFolder", async () => {
+  ipcMain.handle("dialog:selectFolder", async (event, options = {}) => {
     const win = getMainWin();
-    const result = await dialog.showOpenDialog(win, {
-      title: "영상 저장 폴더 선택",
+    const dialogOptions = {
+      title: "프로젝트 루트 폴더 선택",
       properties: ["openDirectory", "createDirectory"],
-    });
+    };
+
+    // 현재 경로가 있으면 기본 경로로 설정
+    if (options.defaultPath) {
+      dialogOptions.defaultPath = options.defaultPath;
+    }
+
+    const result = await dialog.showOpenDialog(win, dialogOptions);
 
     if (result.canceled || !result.filePaths?.length) {
       return { canceled: true };

@@ -16,31 +16,9 @@ class ProjectManager {
     this.currentProject = null;
   }
 
-  // 기본 디렉토리 가져오기 (전역 설정 + 날짜) - 단순화된 구조
-  getBaseDir(dateString = null) {
-    const targetDate = dateString || new Date().toISOString().split('T')[0]; // YYYY-MM-DD 형식
-
-    try {
-      // 먼저 새로운 프로젝트 전용 설정 확인
-      const projectRootFolder = store.get('projectRootFolder');
-      console.log('📁 ProjectManager - 저장된 projectRootFolder:', projectRootFolder);
-      if (projectRootFolder && typeof projectRootFolder === 'string' && projectRootFolder.trim()) {
-        console.log('📁 ProjectManager - 사용할 폴더:', path.join(projectRootFolder.trim(), targetDate));
-        return path.join(projectRootFolder.trim(), targetDate);
-      }
-
-      // 백워드 호환성: 기존 videoSaveFolder 설정 확인
-      const userSetting = store.get('videoSaveFolder');
-      console.log('📁 ProjectManager - 저장된 videoSaveFolder:', userSetting);
-      if (userSetting && typeof userSetting === 'string' && userSetting.trim()) {
-        return path.join(userSetting.trim(), targetDate);
-      }
-    } catch (error) {
-      console.warn('설정값 읽기 실패, 기본값 사용:', error.message);
-    }
-
-    // 폴백: 기본 프로젝트 폴더 (단순화된 구조)
-    return path.join('C:\\WeaverPro', targetDate);
+  // 기본 디렉토리 가져오기 (루트 폴더만, 날짜 폴더 제거)
+  getBaseDir() {
+    return this.getProjectRootFolder();
   }
 
   // 프로젝트 루트 폴더 가져오기 (날짜 폴더 제외)
@@ -68,8 +46,7 @@ class ProjectManager {
   async createProject(topic, options = {}) {
     try {
       const projectId = this.generateProjectId(topic);
-      const createdDate = new Date().toISOString().split('T')[0]; // 생성 날짜 저장
-      const baseDir = this.getBaseDir(createdDate);
+      const baseDir = this.getBaseDir();
       const projectDir = path.join(baseDir, projectId);
 
       // 프로젝트 폴더 구조 생성
@@ -79,7 +56,6 @@ class ProjectManager {
         id: projectId,
         topic: topic,
         createdAt: new Date().toISOString(),
-        createdDate: createdDate, // 생성 날짜 추가
         paths: {
           root: projectDir,
           output: path.join(projectDir, 'output'),
@@ -91,13 +67,14 @@ class ProjectManager {
         options: options
       };
 
-      // 프로젝트 메타데이터 저장 (덮어쓰기)
-      const metaPath = path.join(projectDir, 'project.json');
-      await fs.writeFile(metaPath, JSON.stringify(projectData, null, 2));
-      console.log(`📄 project.json 저장 완료: ${metaPath}`);
+      // 설정 파일에 프로젝트 저장
+      store.addProject(projectData);
 
+      // 현재 프로젝트로 설정
+      store.setCurrentProjectId(projectId);
       this.currentProject = projectData;
-      console.log(`📁 새 프로젝트 생성: ${projectId} (${createdDate})`);
+
+      console.log(`📁 새 프로젝트 생성: ${projectId}`);
       console.log(`✅ currentProject 설정 완료:`, this.currentProject?.id);
       console.log(`📂 프로젝트 경로:`, projectData.paths.root);
 
@@ -150,9 +127,10 @@ class ProjectManager {
   // 프로젝트 로드
   async loadProject(projectId) {
     try {
-      // 먼저 모든 날짜 폴더에서 프로젝트 찾기
-      const project = await this.findProjectById(projectId);
+      // 설정에서 프로젝트 찾기
+      const project = store.findProject(projectId);
       if (project) {
+        store.setCurrentProjectId(projectId);
         this.currentProject = project;
         return project;
       }
@@ -165,49 +143,16 @@ class ProjectManager {
     }
   }
 
-  // 프로젝트 목록 가져오기 (모든 날짜 폴더 검색)
+  // 프로젝트 목록 가져오기 (설정 파일 기반 + 기존 폴더 마이그레이션)
   async listProjects() {
     try {
-      const rootFolder = this.getProjectRootFolder();
-      await fs.mkdir(rootFolder, { recursive: true });
+      // 기존 폴더 기반 프로젝트 마이그레이션 실행
+      await this.migrateExistingProjects();
 
-      const projects = [];
-      const dateEntries = await fs.readdir(rootFolder, { withFileTypes: true });
+      // 설정에서 프로젝트 목록 가져오기
+      const projects = store.getProjects();
 
-      // 모든 날짜 폴더를 순회
-      for (const dateEntry of dateEntries) {
-        if (dateEntry.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(dateEntry.name)) {
-          const dateFolderPath = path.join(rootFolder, dateEntry.name);
-
-          try {
-            const projectEntries = await fs.readdir(dateFolderPath, { withFileTypes: true });
-
-            // 각 날짜 폴더 내의 프로젝트들 확인
-            for (const projectEntry of projectEntries) {
-              if (projectEntry.isDirectory()) {
-                const metaPath = path.join(dateFolderPath, projectEntry.name, 'project.json');
-
-                try {
-                  const data = await fs.readFile(metaPath, 'utf-8');
-                  const projectData = JSON.parse(data);
-
-                  projects.push({
-                    id: projectData.id,
-                    topic: projectData.topic,
-                    createdAt: projectData.createdAt,
-                    createdDate: projectData.createdDate || dateEntry.name
-                  });
-                } catch (projectError) {
-                  console.warn(`⚠️ 프로젝트 메타데이터 읽기 실패: ${projectEntry.name}`, projectError.message);
-                }
-              }
-            }
-          } catch (folderError) {
-            console.warn(`⚠️ 날짜 폴더 읽기 실패: ${dateEntry.name}`, folderError.message);
-          }
-        }
-      }
-
+      // 생성일 기준 내림차순 정렬
       return projects.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     } catch (error) {
       console.error('❌ 프로젝트 목록 조회 실패:', error);
@@ -215,39 +160,97 @@ class ProjectManager {
     }
   }
 
-  // ID로 프로젝트 찾기 (모든 날짜 폴더 검색)
-  async findProjectById(projectId) {
+  // 날짜 폴더 내 프로젝트들을 루트로 마이그레이션하고 설정에 추가
+  async migrateDateFolderProjects(dateFolderPath) {
     try {
       const rootFolder = this.getProjectRootFolder();
-      const dateEntries = await fs.readdir(rootFolder, { withFileTypes: true });
+      const projectEntries = await fs.readdir(dateFolderPath, { withFileTypes: true });
 
-      for (const dateEntry of dateEntries) {
-        if (dateEntry.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(dateEntry.name)) {
-          const projectDir = path.join(rootFolder, dateEntry.name, projectId);
-          const metaPath = path.join(projectDir, 'project.json');
+      for (const projectEntry of projectEntries) {
+        if (projectEntry.isDirectory()) {
+          const oldProjectDir = path.join(dateFolderPath, projectEntry.name);
+          const newProjectDir = path.join(rootFolder, projectEntry.name);
+          const metaPath = path.join(oldProjectDir, 'project.json');
 
           try {
+            // 프로젝트 메타데이터 확인
             const data = await fs.readFile(metaPath, 'utf-8');
             const projectData = JSON.parse(data);
 
-            // 경로 업데이트 (현재 위치 기준)
+            // 새 위치로 이동
+            console.log(`📦 날짜 폴더 프로젝트 마이그레이션: ${projectEntry.name}`);
+            await fs.rename(oldProjectDir, newProjectDir);
+
+            // 프로젝트 메타데이터의 경로 업데이트
             projectData.paths = {
-              root: projectDir,
-              output: path.join(projectDir, 'output'),
-              scripts: path.join(projectDir, 'scripts'),
-              audio: path.join(projectDir, 'audio'),
-              images: path.join(projectDir, 'images'),
-              temp: path.join(projectDir, 'temp')
+              root: newProjectDir,
+              output: path.join(newProjectDir, 'output'),
+              scripts: path.join(newProjectDir, 'scripts'),
+              audio: path.join(newProjectDir, 'audio'),
+              images: path.join(newProjectDir, 'images'),
+              temp: path.join(newProjectDir, 'temp')
             };
 
-            return projectData;
+            // 설정에 프로젝트 추가 (중복 체크는 addProject에서 처리)
+            store.addProject(projectData);
+
+            // project.json 파일 삭제
+            try {
+              const newMetaPath = path.join(newProjectDir, 'project.json');
+              await fs.unlink(newMetaPath);
+              console.log(`🗑️ project.json 파일 삭제: ${newMetaPath}`);
+            } catch (unlinkError) {
+              console.warn(`⚠️ project.json 삭제 실패: ${newMetaPath}`, unlinkError.message);
+            }
+
+            console.log(`✅ 날짜 폴더 프로젝트 마이그레이션 완료: ${projectEntry.name}`);
           } catch (error) {
-            // 이 날짜 폴더에는 해당 프로젝트가 없음
-            continue;
+            console.warn(`⚠️ 날짜 폴더 프로젝트 마이그레이션 실패: ${projectEntry.name}`, error.message);
           }
         }
       }
 
+      // 날짜 폴더가 비어있으면 삭제
+      try {
+        const remainingEntries = await fs.readdir(dateFolderPath);
+        if (remainingEntries.length === 0) {
+          await fs.rmdir(dateFolderPath);
+          console.log(`🗑️ 빈 날짜 폴더 삭제: ${dateFolderPath}`);
+        }
+      } catch (error) {
+        console.warn(`⚠️ 날짜 폴더 삭제 실패: ${dateFolderPath}`, error.message);
+      }
+    } catch (error) {
+      console.error(`❌ 날짜 폴더 마이그레이션 실패: ${dateFolderPath}`, error);
+    }
+  }
+
+  // ID로 프로젝트 찾기 (설정 파일 기반)
+  async findProjectById(projectId) {
+    try {
+      const project = store.findProject(projectId);
+      if (project) {
+        // 경로가 없다면 생성
+        if (!project.paths) {
+          const rootFolder = this.getProjectRootFolder();
+          const projectDir = path.join(rootFolder, projectId);
+          project.paths = {
+            root: projectDir,
+            output: path.join(projectDir, 'output'),
+            scripts: path.join(projectDir, 'scripts'),
+            audio: path.join(projectDir, 'audio'),
+            images: path.join(projectDir, 'images'),
+            temp: path.join(projectDir, 'temp')
+          };
+
+          // 업데이트된 경로를 설정에 저장
+          store.updateProject(projectId, { paths: project.paths });
+        }
+
+        return project;
+      }
+
+      console.warn(`⚠️ 프로젝트를 찾을 수 없음: ${projectId}`);
       return null;
     } catch (error) {
       console.error(`❌ 프로젝트 찾기 실패: ${projectId}`, error);
@@ -273,19 +276,39 @@ class ProjectManager {
   async deleteProject(projectId) {
     try {
       // 먼저 프로젝트 찾기
-      const project = await this.findProjectById(projectId);
+      const project = store.findProject(projectId);
       if (!project) {
         return { success: false, error: '프로젝트를 찾을 수 없습니다.' };
       }
 
-      const projectDir = project.paths.root;
-      await fs.rm(projectDir, { recursive: true, force: true });
+      // 프로젝트 폴더 삭제
+      if (project.paths && project.paths.root) {
+        try {
+          await fs.rm(project.paths.root, { recursive: true, force: true });
+          console.log(`📂 프로젝트 폴더 삭제: ${project.paths.root}`);
+        } catch (folderError) {
+          console.warn(`⚠️ 프로젝트 폴더 삭제 실패: ${folderError.message}`);
+        }
 
+        // 개별 project.json 파일도 삭제 (혹시 남아있다면)
+        try {
+          const metaPath = path.join(project.paths.root, 'project.json');
+          await fs.unlink(metaPath);
+          console.log(`🗑️ project.json 파일 삭제: ${metaPath}`);
+        } catch (jsonError) {
+          // project.json이 없어도 무시
+        }
+      }
+
+      // 설정에서 프로젝트 삭제
+      store.deleteProject(projectId);
+
+      // 현재 프로젝트가 삭제된 프로젝트라면 초기화
       if (this.currentProject?.id === projectId) {
         this.currentProject = null;
       }
 
-      console.log(`🗑️ 프로젝트 삭제: ${projectId}`);
+      console.log(`🗑️ 프로젝트 삭제 완료: ${projectId}`);
       return { success: true };
     } catch (error) {
       console.error(`❌ 프로젝트 삭제 실패: ${projectId}`, error);
@@ -298,13 +321,86 @@ class ProjectManager {
     if (!this.currentProject) {
       throw new Error('현재 활성 프로젝트가 없습니다.');
     }
-    
-    this.currentProject = { ...this.currentProject, ...updates };
-    
-    const metaPath = path.join(this.currentProject.paths.root, 'project.json');
-    await fs.writeFile(metaPath, JSON.stringify(this.currentProject, null, 2));
-    
+
+    // 설정에서 프로젝트 업데이트
+    const updatedProject = store.updateProject(this.currentProject.id, updates);
+    this.currentProject = updatedProject;
+
     return this.currentProject;
+  }
+
+  // 기존 폴더 기반 프로젝트들을 설정 파일로 마이그레이션
+  async migrateExistingProjects() {
+    try {
+      const rootFolder = this.getProjectRootFolder();
+
+      // 루트 폴더가 존재하지 않으면 생성
+      try {
+        await fs.mkdir(rootFolder, { recursive: true });
+      } catch (error) {
+        console.warn('루트 폴더 생성 실패:', error.message);
+        return;
+      }
+
+      let entries;
+      try {
+        entries = await fs.readdir(rootFolder, { withFileTypes: true });
+      } catch (error) {
+        console.warn('루트 폴더 읽기 실패:', error.message);
+        return;
+      }
+
+      let migratedCount = 0;
+
+      // 루트 폴더의 모든 항목을 순회
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          // 날짜 폴더인 경우 (YYYY-MM-DD 형식)
+          if (/^\d{4}-\d{2}-\d{2}$/.test(entry.name)) {
+            console.log(`🔄 날짜 폴더 발견, 마이그레이션 시도: ${entry.name}`);
+            await this.migrateDateFolderProjects(path.join(rootFolder, entry.name));
+            continue;
+          }
+
+          // 일반 프로젝트 폴더인 경우
+          const projectDir = path.join(rootFolder, entry.name);
+          const metaPath = path.join(projectDir, 'project.json');
+
+          try {
+            // project.json이 존재하는지 확인
+            const data = await fs.readFile(metaPath, 'utf-8');
+            const projectData = JSON.parse(data);
+
+            // 이미 설정에 있는지 확인
+            const existingProject = store.findProject(projectData.id);
+            if (!existingProject) {
+              // 설정에 추가
+              store.addProject(projectData);
+              migratedCount++;
+              console.log(`📦 프로젝트 마이그레이션: ${projectData.id}`);
+            }
+
+            // project.json 파일 삭제
+            try {
+              await fs.unlink(metaPath);
+              console.log(`🗑️ project.json 파일 삭제: ${metaPath}`);
+            } catch (unlinkError) {
+              console.warn(`⚠️ project.json 삭제 실패: ${metaPath}`, unlinkError.message);
+            }
+
+          } catch (projectError) {
+            // project.json이 없거나 읽기 실패한 경우는 무시
+          }
+        }
+      }
+
+      if (migratedCount > 0) {
+        console.log(`✅ ${migratedCount}개 프로젝트 마이그레이션 완료`);
+      }
+
+    } catch (error) {
+      console.error('❌ 프로젝트 마이그레이션 실패:', error);
+    }
   }
 }
 

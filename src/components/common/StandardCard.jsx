@@ -293,9 +293,14 @@ function StandardCard({
   // SectionCard 스타일인지 확인
   const isSectionCard = (title || right) && !icon && !description;
 
+  // className을 안전하게 처리 (문자열이면 분리하여 배열로 변환)
+  const additionalClasses = className
+    ? (typeof className === 'string' ? className.split(' ').filter(Boolean) : [className])
+    : [];
+
   return (
     <Card
-      className={mergeClasses(getCardStyles(), className)}
+      className={mergeClasses(getCardStyles(), ...additionalClasses)}
       style={style}
       onClick={interactive ? onClick : undefined}
       {...props}
