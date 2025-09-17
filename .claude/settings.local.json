@@ -203,7 +203,8 @@
       "Bash(echo $APPDATA)",
       "Read(//c/Users/paul/AppData/Roaming//**)",
       "Read(//c/WeaverPro/tt/**)",
-      "Bash(ffmpeg:*)"
+      "Bash(ffmpeg:*)",
+      "Bash(del \"C:\\WeaverPro\\tt\\scripts\\test-subtitle.srt\")"
     ],
     "deny": [],
     "ask": []

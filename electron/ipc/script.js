@@ -79,21 +79,22 @@ ipcMain.handle("script/importSrt", async (_evt, { srtText }) => {
   return doc;
 });
 
-/** 동적 자막 파일 경로 생성 */
+/** 동적 자막 파일 경로 생성 (현재 프로젝트 기반) */
 ipcMain.handle("script:getSubtitlePath", async (_evt, { filename }) => {
   try {
     console.log("🔧 script:getSubtitlePath 호출됨:", { filename });
 
     const store = require('../services/store');
+    const { getProjectManager } = require('../services/projectManager');
     const path = require('path');
     const fs = require('fs').promises;
 
-    // settings.json에서 videoSaveFolder 가져오기
-    const videoSaveFolder = store.get('videoSaveFolder');
-    console.log("🎯 videoSaveFolder 설정값:", videoSaveFolder);
+    // 현재 프로젝트 ID 가져오기
+    const currentProjectId = store.getCurrentProjectId();
+    console.log("🎯 현재 프로젝트 ID:", currentProjectId);
 
-    if (!videoSaveFolder) {
-      console.warn("⚠️ videoSaveFolder가 설정되지 않았습니다. 기본 경로를 사용합니다.");
+    if (!currentProjectId) {
+      console.warn("⚠️ 현재 프로젝트가 설정되지 않았습니다. 기본 경로를 사용합니다.");
 
       // 폴백: 기본 경로 사용
       const projectRoot = store.get('projectRootFolder') || 'C:\\WeaverPro';
@@ -104,13 +105,31 @@ ipcMain.handle("script:getSubtitlePath", async (_evt, { filename }) => {
       const filePath = path.join(scriptsDir, filename);
 
       console.log("📁 폴백 자막 파일 경로:", filePath);
-      return { success: true, filePath };
+      return { success: true, data: { filePath } };
     }
 
-    // videoSaveFolder 기반으로 scripts 디렉토리 생성
-    const scriptsDir = path.join(videoSaveFolder, 'scripts');
+    // 프로젝트 매니저를 통해 현재 프로젝트 정보 가져오기
+    const projectManager = getProjectManager();
+    const currentProject = store.getCurrentProject();
 
-    console.log("📂 videoSaveFolder 기반 scripts 디렉토리:", scriptsDir);
+    if (!currentProject) {
+      console.error("❌ 현재 프로젝트 데이터를 찾을 수 없습니다:", currentProjectId);
+
+      // ID로 프로젝트 다시 찾기 시도
+      const foundProject = await projectManager.findProjectById(currentProjectId);
+      if (!foundProject) {
+        throw new Error(`프로젝트를 찾을 수 없습니다: ${currentProjectId}`);
+      }
+
+      // 프로젝트 매니저에 현재 프로젝트 설정
+      projectManager.setCurrentProject(foundProject);
+    }
+
+    // 현재 프로젝트의 scripts 경로 사용
+    const project = currentProject || projectManager.getCurrentProject();
+    const scriptsDir = project.paths.scripts;
+
+    console.log("📂 현재 프로젝트 기반 scripts 디렉토리:", scriptsDir);
 
     // 디렉토리가 없으면 생성
     try {
@@ -122,58 +141,83 @@ ipcMain.handle("script:getSubtitlePath", async (_evt, { filename }) => {
 
     // 자막 파일 경로
     const filePath = path.join(scriptsDir, filename);
-    console.log("📁 자막 파일 경로:", filePath);
+    console.log("📁 현재 프로젝트 자막 파일 경로:", filePath);
 
-    return { success: true, filePath };
+    return { success: true, data: { filePath } };
   } catch (error) {
     console.error("❌ 동적 자막 경로 생성 실패:", error);
     return { success: false, message: error.message };
   }
 });
 
-/** 테스트용 자막 파일 생성 */
-ipcMain.handle("script:testSubtitleCreation", async (_evt, { filename = "test.srt" }) => {
+/** 동적 오디오 파일 경로 생성 (현재 프로젝트 기반) */
+ipcMain.handle("script:getAudioPath", async (_evt, { filename }) => {
   try {
-    console.log("🧪 테스트 자막 생성 시작:", { filename });
+    console.log("🔧 script:getAudioPath 호출됨:", { filename });
 
-    // 테스트용 SRT 데이터
-    const testSrtContent = `1
-00:00:00,000 --> 00:00:05,000
-테스트 자막입니다.
-
-2
-00:00:05,000 --> 00:00:10,000
-이것은 테스트용 자막 파일입니다.
-
-`;
-
-    // 경로 생성 API 직접 호출
     const store = require('../services/store');
+    const { getProjectManager } = require('../services/projectManager');
     const path = require('path');
     const fs = require('fs').promises;
 
-    const videoSaveFolder = store.get('videoSaveFolder');
-    const scriptsDir = path.join(videoSaveFolder || 'C:\\WeaverPro\\default', 'scripts');
-    const filePath = path.join(scriptsDir, filename);
+    // 현재 프로젝트 ID 가져오기
+    const currentProjectId = store.getCurrentProjectId();
+    console.log("🎯 현재 프로젝트 ID:", currentProjectId);
 
-    console.log("📁 테스트 자막 파일 경로:", filePath);
+    if (!currentProjectId) {
+      console.warn("⚠️ 현재 프로젝트가 설정되지 않았습니다. 기본 경로를 사용합니다.");
 
-    // 디렉토리 생성
-    await fs.mkdir(scriptsDir, { recursive: true });
+      // 폴백: 기본 경로 사용
+      const projectRoot = store.get('projectRootFolder') || 'C:\\WeaverPro';
+      const defaultProjectName = store.get('defaultProjectName') || 'default';
+      const audioDir = path.join(projectRoot, defaultProjectName, 'audio');
 
-    // 파일 쓰기
-    await fs.writeFile(filePath, testSrtContent, 'utf8');
+      await fs.mkdir(audioDir, { recursive: true });
+      const filePath = path.join(audioDir, filename);
 
-    console.log("✅ 테스트 자막 파일 생성 완료:", filePath);
+      console.log("📁 폴백 오디오 파일 경로:", filePath);
+      return { success: true, data: { filePath } };
+    }
 
-    return {
-      success: true,
-      filePath: filePath,
-      content: testSrtContent
-    };
+    // 프로젝트 매니저를 통해 현재 프로젝트 정보 가져오기
+    const projectManager = getProjectManager();
+    const currentProject = store.getCurrentProject();
 
+    if (!currentProject) {
+      console.error("❌ 현재 프로젝트 데이터를 찾을 수 없습니다:", currentProjectId);
+
+      // ID로 프로젝트 다시 찾기 시도
+      const foundProject = await projectManager.findProjectById(currentProjectId);
+      if (!foundProject) {
+        throw new Error(`프로젝트를 찾을 수 없습니다: ${currentProjectId}`);
+      }
+
+      // 프로젝트 매니저에 현재 프로젝트 설정
+      projectManager.setCurrentProject(foundProject);
+    }
+
+    // 현재 프로젝트의 audio 경로 사용
+    const project = currentProject || projectManager.getCurrentProject();
+    const audioDir = project.paths.audio;
+
+    console.log("📂 현재 프로젝트 기반 audio 디렉토리:", audioDir);
+
+    // 디렉토리가 없으면 생성
+    try {
+      await fs.mkdir(audioDir, { recursive: true });
+      console.log("✅ 디렉토리 생성 완료:", audioDir);
+    } catch (dirError) {
+      console.warn("⚠️ 디렉토리 생성 시도 실패 (이미 존재할 수 있음):", dirError.message);
+    }
+
+    // 오디오 파일 경로
+    const filePath = path.join(audioDir, filename);
+    console.log("📁 현재 프로젝트 오디오 파일 경로:", filePath);
+
+    return { success: true, data: { filePath } };
   } catch (error) {
-    console.error("❌ 테스트 자막 생성 실패:", error);
-    return { success: false, error: error.message };
+    console.error("❌ 동적 오디오 경로 생성 실패:", error);
+    return { success: false, message: error.message };
   }
 });
+

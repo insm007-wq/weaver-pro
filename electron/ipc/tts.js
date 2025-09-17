@@ -46,17 +46,32 @@ ipcMain.handle("tts:synthesize", async (event, { scenes, ttsEngine, voiceId, spe
       const path = require('path');
       const fs = require('fs').promises;
 
-      // settings.json에서 videoSaveFolder 가져오기
-      const videoSaveFolder = store.get('videoSaveFolder');
+      // 현재 프로젝트 시스템을 사용하여 audio/parts 경로 생성
+      const { getProjectManager } = require('../services/projectManager');
+      const currentProjectId = store.getCurrentProjectId();
 
       let audioPartsDir;
-      if (videoSaveFolder) {
-        // videoSaveFolder 기반으로 audio/parts 디렉토리 생성
-        audioPartsDir = path.join(videoSaveFolder, 'audio', 'parts');
-        console.log("🔧 TTS - videoSaveFolder 기반 audio/parts 경로 사용:", audioPartsDir);
+      if (currentProjectId) {
+        // 현재 프로젝트 기반 경로 사용
+        const projectManager = getProjectManager();
+        let currentProject = store.getCurrentProject();
+
+        if (!currentProject) {
+          currentProject = await projectManager.findProjectById(currentProjectId);
+          if (currentProject) {
+            projectManager.setCurrentProject(currentProject);
+          }
+        }
+
+        if (currentProject && currentProject.paths && currentProject.paths.audio) {
+          audioPartsDir = path.join(currentProject.paths.audio, 'parts');
+          console.log("🔧 TTS - 현재 프로젝트 기반 audio/parts 경로 사용:", audioPartsDir);
+        } else {
+          throw new Error(`현재 프로젝트 경로를 찾을 수 없습니다: ${currentProjectId}`);
+        }
       } else {
         // 폴백: 기본 경로 사용
-        console.warn("⚠️ videoSaveFolder가 설정되지 않았습니다. 기본 경로를 사용합니다.");
+        console.warn("⚠️ 현재 프로젝트가 설정되지 않았습니다. 기본 경로를 사용합니다.");
         const projectRoot = store.get('projectRootFolder') || 'C:\\WeaverPro';
         const defaultProjectName = store.get('defaultProjectName') || 'default';
         audioPartsDir = path.join(projectRoot, defaultProjectName, 'audio', 'parts');
