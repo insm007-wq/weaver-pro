@@ -1,5 +1,9 @@
 // electron/ipc/audio.js
 const { ipcMain } = require("electron");
+const path = require("path");
+
+// FFmpeg 경로 설정
+const ffmpegPath = path.join(__dirname, '..', '..', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
 
 // ESM 패키지(music-metadata)를 CJS에서 안전하게 로드하기 위한 helper
 let mmPromise = null;
@@ -41,6 +45,10 @@ ipcMain.handle("audio/mergeFiles", async (_e, { audioFiles, outputPath }) => {
       throw new Error("음성 파일 목록이 비어있습니다.");
     }
 
+    // 출력 디렉토리가 없으면 생성
+    const outputDir = path.dirname(outputPath);
+    await fs.mkdir(outputDir, { recursive: true });
+
     if (audioFiles.length === 1) {
       // 파일이 하나뿐이면 복사만 하기
       const sourceFile = audioFiles[0];
@@ -65,7 +73,7 @@ ipcMain.handle("audio/mergeFiles", async (_e, { audioFiles, outputPath }) => {
         outputPath
       ];
 
-      const ffmpeg = spawn('ffmpeg', ffmpegArgs, { stdio: 'pipe' });
+      const ffmpeg = spawn(ffmpegPath, ffmpegArgs, { stdio: 'pipe' });
 
       let stderr = '';
       ffmpeg.stderr.on('data', (data) => {

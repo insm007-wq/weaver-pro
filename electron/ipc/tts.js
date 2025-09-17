@@ -49,28 +49,28 @@ ipcMain.handle("tts:synthesize", async (event, { scenes, ttsEngine, voiceId, spe
       // settings.json에서 videoSaveFolder 가져오기
       const videoSaveFolder = store.get('videoSaveFolder');
 
-      let audioDir;
+      let audioPartsDir;
       if (videoSaveFolder) {
-        // videoSaveFolder 기반으로 audio 디렉토리 생성
-        audioDir = path.join(videoSaveFolder, 'audio');
-        console.log("🔧 TTS - videoSaveFolder 기반 audio 경로 사용:", audioDir);
+        // videoSaveFolder 기반으로 audio/parts 디렉토리 생성
+        audioPartsDir = path.join(videoSaveFolder, 'audio', 'parts');
+        console.log("🔧 TTS - videoSaveFolder 기반 audio/parts 경로 사용:", audioPartsDir);
       } else {
         // 폴백: 기본 경로 사용
         console.warn("⚠️ videoSaveFolder가 설정되지 않았습니다. 기본 경로를 사용합니다.");
         const projectRoot = store.get('projectRootFolder') || 'C:\\WeaverPro';
         const defaultProjectName = store.get('defaultProjectName') || 'default';
-        audioDir = path.join(projectRoot, defaultProjectName, 'audio');
-        console.log("🔧 TTS - 폴백 audio 경로:", audioDir);
+        audioPartsDir = path.join(projectRoot, defaultProjectName, 'audio', 'parts');
+        console.log("🔧 TTS - 폴백 audio/parts 경로:", audioPartsDir);
       }
 
       // 디렉토리 생성 (없는 경우)
-      await fs.mkdir(audioDir, { recursive: true });
+      await fs.mkdir(audioPartsDir, { recursive: true });
 
       const audioFiles = [];
 
       for (let i = 0; i < result.parts.length; i++) {
         const part = result.parts[i];
-        const audioFilePath = path.join(audioDir, part.fileName);
+        const audioFilePath = path.join(audioPartsDir, part.fileName);
         
         // base64를 Buffer로 변환하여 파일 저장
         const audioBuffer = Buffer.from(part.base64, 'base64');

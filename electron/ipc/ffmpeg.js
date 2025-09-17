@@ -8,6 +8,9 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs').promises;
 
+// FFmpeg 경로 설정
+const ffmpegPath = path.join(__dirname, '..', '..', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
+
 function register() {
   // 영상 합성 (이미지 + 음성 → 비디오)
   ipcMain.handle('ffmpeg:compose', async (event, { 
@@ -176,35 +179,16 @@ async function getTotalAudioDuration(audioFiles) {
 // 개별 오디오 파일 지속 시간 측정
 function getAudioDuration(audioFile) {
   return new Promise((resolve, reject) => {
-    const ffprobe = spawn('ffprobe', [
-      '-v', 'quiet',
-      '-show_entries', 'format=duration',
-      '-of', 'csv=p=0',
-      audioFile
-    ]);
-
-    let output = '';
-    ffprobe.stdout.on('data', (data) => {
-      output += data.toString();
-    });
-
-    ffprobe.on('close', (code) => {
-      if (code === 0) {
-        const duration = parseFloat(output.trim());
-        resolve(isNaN(duration) ? 5 : duration);
-      } else {
-        resolve(5); // 실패 시 기본값
-      }
-    });
-
-    ffprobe.on('error', () => resolve(5));
+    // ffprobe가 없으므로 기본값 반환
+    console.warn('ffprobe 없음, 기본 지속시간 5초 사용');
+    resolve(5);
   });
 }
 
 // FFmpeg 실행
 function runFFmpeg(args, progressCallback = null, isCheck = false) {
   return new Promise((resolve, reject) => {
-    const ffmpegProcess = spawn('ffmpeg', args);
+    const ffmpegProcess = spawn(ffmpegPath, args);
     
     let output = '';
     let errorOutput = '';

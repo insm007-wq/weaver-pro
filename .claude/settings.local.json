@@ -202,7 +202,8 @@
       "Bash(cmd /c:*)",
       "Bash(echo $APPDATA)",
       "Read(//c/Users/paul/AppData/Roaming//**)",
-      "Read(//c/WeaverPro/tt/**)"
+      "Read(//c/WeaverPro/tt/**)",
+      "Bash(ffmpeg:*)"
     ],
     "deny": [],
     "ask": []

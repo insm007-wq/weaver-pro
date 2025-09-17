@@ -231,18 +231,54 @@ AI 모델: ${globalSettings.llmModel || "Anthropic Claude"}
         // 음성 파일들을 하나로 합치기
         if (audioFiles.length > 1) {
           try {
-            const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-            const mergedFileName = `merged_audio_${timestamp}.mp3`;
-            const outputPathResult = await api.invoke("project:getFilePath", {
-              category: "audio",
-              filename: mergedFileName,
+            // 프로젝트명으로 간단한 파일명 생성 - window.api 직접 사용
+            let projectName = 'default';
+            try {
+              // window.api.getSetting 사용 (DefaultsTab에서 사용하는 방식)
+              const currentProjectIdResult = await window.api.getSetting('currentProjectId');
+              console.log('🔍 currentProjectId 결과:', currentProjectIdResult);
+
+              if (currentProjectIdResult && currentProjectIdResult.value) {
+                projectName = currentProjectIdResult.value;
+              } else {
+                // 폴백: defaultProjectName 사용
+                const defaultProjectNameResult = await window.api.getSetting('defaultProjectName');
+                console.log('🔍 defaultProjectName 결과:', defaultProjectNameResult);
+
+                if (defaultProjectNameResult && defaultProjectNameResult.value) {
+                  projectName = defaultProjectNameResult.value;
+                }
+              }
+              console.log('🏷️ 최종 사용할 프로젝트명:', projectName);
+            } catch (error) {
+              console.warn('프로젝트 정보 가져오기 실패, 기본값 사용:', error.message);
+            }
+
+            const mergedFileName = `${projectName}.mp3`;
+
+            // 합본 파일을 위한 경로 직접 생성 (audio 폴더에 저장)
+            const audioPathResult = await api.invoke("script:getSubtitlePath", {
+              filename: mergedFileName
             });
 
-            if (outputPathResult.success) {
+            let outputPath;
+            if (audioPathResult && audioPathResult.success && audioPathResult.data && audioPathResult.data.filePath) {
+              // subtitle path를 audio path로 변환: scripts -> audio
+              outputPath = audioPathResult.data.filePath.replace(/scripts[\\\/][^\\\/]*$/, `audio/${mergedFileName}`);
+            } else {
+              // 폴백: 기본 경로 사용
+              outputPath = `C:\\WeaverPro\\tt\\audio\\${mergedFileName}`;
+            }
+
+            console.log("🎵 합본 오디오 파일 경로:", outputPath);
+
+            if (outputPath) {
               const audioFilePaths = audioFiles.map(f => f.audioUrl).filter(url => url && url !== "pending");
+              console.log("🎵 합칠 오디오 파일들:", audioFilePaths);
+
               const mergeResult = await api.invoke("audio/mergeFiles", {
                 audioFiles: audioFilePaths,
-                outputPath: outputPathResult.filePath
+                outputPath: outputPath
               });
 
               if (mergeResult.success) {
