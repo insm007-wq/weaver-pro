@@ -652,7 +652,7 @@ export default function ProjectManager() {
             <Caption1 style={{ color: tokens.colorNeutralForeground3, lineHeight: 1.4, fontFamily: "monospace" }}>
               📁 {settings.projectRootFolder}
               <br />
-              └── 📁 {selectedProject ? new Date(selectedProject.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}/
+              └── 📁 {selectedProject ? (selectedProject.createdDate || new Date(selectedProject.createdAt).toISOString().split('T')[0]) : new Date().toISOString().split('T')[0]}/
               <br />
               &nbsp;&nbsp;&nbsp;&nbsp;└── 📁 {selectedProject ? selectedProject.topic : settings.defaultProjectName}/
               <br />

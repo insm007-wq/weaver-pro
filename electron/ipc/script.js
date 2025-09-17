@@ -69,27 +69,55 @@ function parseSrt(srtText = "") {
   return { title: "Imported SRT", scenes };
 }
 
-/** doc.scenes -> SRT 문자열 */
-ipcMain.handle("script/toSrt", async (_evt, { doc }) => {
-  const scenes = Array.isArray(doc?.scenes) ? doc.scenes : [];
-  const lines = [];
-
-  scenes.forEach((sc, i) => {
-    const start = toSrtTime(sc.start);
-    const end = toSrtTime(sc.end);
-    const text = normalizeText(sc.text);
-
-    lines.push(String(i + 1));
-    lines.push(`${start} --> ${end}`);
-    lines.push(text || "");
-    lines.push(""); // 빈 줄
-  });
-
-  return { ok: true, srt: lines.join("\n") };
-});
+// script/toSrt 핸들러 등록
+const registerToSrt = require('./script/toSrt');
+registerToSrt();
 
 /** SRT 텍스트 -> { title, scenes[] } */
 ipcMain.handle("script/importSrt", async (_evt, { srtText }) => {
   const doc = parseSrt(srtText || "");
   return doc;
+});
+
+/** 동적 자막 파일 경로 생성 */
+ipcMain.handle("script:getSubtitlePath", async (_evt, { filename }) => {
+  try {
+    console.log("🔧 script:getSubtitlePath 호출됨:", { filename });
+
+    const store = require('../services/store');
+    const path = require('path');
+    const fs = require('fs').promises;
+
+    // 기본 프로젝트명과 오늘 날짜로 직접 경로 생성
+    const defaultProjectName = store.get('defaultProjectName') || 'WeaverPro-Project';
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const projectRoot = store.get('projectRootFolder') || 'C:\\WeaverPro';
+
+    console.log("📂 기본 프로젝트명:", defaultProjectName);
+    console.log("📅 오늘 날짜:", today);
+    console.log("📁 프로젝트 루트:", projectRoot);
+
+    // 경로 구성: projectRoot/YYYY-MM-DD/projectName/scripts/
+    const projectDir = path.join(projectRoot, today, defaultProjectName);
+    const scriptsDir = path.join(projectDir, 'scripts');
+
+    console.log("📂 스크립트 디렉토리:", scriptsDir);
+
+    // 디렉토리가 없으면 생성
+    try {
+      await fs.mkdir(scriptsDir, { recursive: true });
+      console.log("✅ 디렉토리 생성 완료:", scriptsDir);
+    } catch (dirError) {
+      console.warn("⚠️ 디렉토리 생성 시도 실패 (이미 존재할 수 있음):", dirError.message);
+    }
+
+    // 자막 파일 경로
+    const filePath = path.join(scriptsDir, filename);
+    console.log("📁 자막 파일 경로:", filePath);
+
+    return { success: true, filePath };
+  } catch (error) {
+    console.error("❌ 동적 자막 경로 생성 실패:", error);
+    return { success: false, message: error.message };
+  }
 });

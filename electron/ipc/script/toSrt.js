@@ -14,11 +14,18 @@ function fmtSrtTime(sec = 0) {
 
 module.exports = function registerToSrt() {
   ipcMain.handle("script/toSrt", async (evt, payload) => {
+    console.log("🔧 toSrt.js - script/toSrt 호출됨:", { payload });
+
     const doc = payload?.doc || {};
     const ttsMarks = Array.isArray(payload?.ttsMarks) ? payload.ttsMarks : null;
 
     const scenes = Array.isArray(doc?.scenes) ? doc.scenes : [];
-    if (!scenes.length) return { srt: "" };
+    console.log("📝 toSrt.js - 변환할 장면 수:", scenes.length);
+
+    if (!scenes.length) {
+      console.warn("⚠️ toSrt.js - 변환할 장면이 없음");
+      return { srt: "" };
+    }
 
     // 1) 씬별 "실제" duration 얻기
     //    - ttsMarks 가 있으면: duration = end - start
@@ -64,6 +71,8 @@ module.exports = function registerToSrt() {
       );
     }
     const srt = rows.join("\n");
+    console.log("✅ toSrt.js - SRT 변환 완료, 길이:", srt.length);
+    console.log("📄 toSrt.js - SRT 내용 미리보기:", srt.substring(0, 200) + "...");
 
     // 4) (선택) 프론트에서 미리보기용으로 쓸 수 있게 보정 씬도 반환
     const outScenes = scenes.map((s, i) => ({
@@ -72,6 +81,12 @@ module.exports = function registerToSrt() {
       end: timeline[i].end,
     }));
 
+    console.log("📤 toSrt.js - 반환값 정보:", {
+      srtLength: srt.length,
+      srtHasContent: srt.length > 0,
+      scenesCount: outScenes.length,
+      srtPreview: srt.substring(0, 100) + "..."
+    });
     return { srt, scenes: outScenes };
   });
 };

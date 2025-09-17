@@ -260,6 +260,7 @@ contextBridge.exposeInMainWorld("api", {
   },
   readTextFile: (p) => ipcRenderer.invoke("files/readText", { path: p }),
   readBinary: (p) => ipcRenderer.invoke("files/readBinary", { path: p }),
+  writeText: ({ filePath, content }) => ipcRenderer.invoke("files:writeText", { filePath, content }),
 
   // 로컬 경로/파일URL → blob: URL 변환 (video 재생용)
   videoPathToUrl: (p, opts) => pathToBlobUrlViaIPC(p, undefined, opts),
@@ -287,6 +288,7 @@ contextBridge.exposeInMainWorld("api", {
   // 스크립트/오디오/TTS
   // ========================================================================
   scriptToSrt: (payload) => ipcRenderer.invoke("script/toSrt", payload),
+  getSubtitlePath: (payload) => ipcRenderer.invoke("script:getSubtitlePath", payload),
   ttsSynthesizeByScenes: (payload) => ipcRenderer.invoke("tts/synthesizeByScenes", payload),
   getMp3Duration: (path) => ipcRenderer.invoke("audio/getDuration", { path }),
   audioConcatScenes: (payload) => ipcRenderer.invoke("audio/concatScenes", payload),

@@ -42,18 +42,20 @@ ipcMain.handle("tts:synthesize", async (event, { scenes, ttsEngine, voiceId, spe
 
     // 파일 저장 처리
     if (result.ok && result.parts) {
+      // 동적 프로젝트 폴더 생성 (오늘 날짜 + 프로젝트명)
       const { getProjectManager } = require("../services/projectManager");
       const projectManager = getProjectManager();
-      const currentProject = projectManager.getCurrentProject();
-      
-      console.log("🔍 현재 프로젝트 상태:", currentProject ? currentProject.id : "없음");
-      
-      if (!currentProject) {
-        console.error("❌ 현재 활성 프로젝트가 없습니다.");
-        throw new Error("현재 활성 프로젝트가 없습니다. 먼저 프로젝트를 생성해주세요.");
-      }
-      
-      console.log("📁 프로젝트 경로들:", currentProject.paths);
+
+      // 기본 프로젝트명 가져오기 (설정에서)
+      const store = require('../services/store');
+      const defaultProjectName = store.get('defaultProjectName') || 'WeaverPro-Project';
+      const todayDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+      console.log("🔧 TTS - 동적 프로젝트 폴더 생성:", defaultProjectName);
+
+      // 임시 프로젝트 생성 (실제 프로젝트 목록에는 추가되지 않음)
+      const dynamicProject = await projectManager.createProject(defaultProjectName);
+      console.log("📁 TTS - 동적 프로젝트 생성 완료:", dynamicProject.paths.root);
 
       const path = require('path');
       const fs = require('fs').promises;
@@ -62,7 +64,7 @@ ipcMain.handle("tts:synthesize", async (event, { scenes, ttsEngine, voiceId, spe
       
       for (let i = 0; i < result.parts.length; i++) {
         const part = result.parts[i];
-        const audioFilePath = path.join(currentProject.paths.audio, part.fileName);
+        const audioFilePath = path.join(dynamicProject.paths.audio, part.fileName);
         
         // base64를 Buffer로 변환하여 파일 저장
         const audioBuffer = Buffer.from(part.base64, 'base64');

@@ -241,12 +241,15 @@ function StandardCard({
         break;
     }
 
-    return mergeClasses(
+    // 조건부 클래스들을 배열로 필터링
+    const classes = [
       variantStyle,
       paddingStyle,
       !hover && styles.noHover,
       !interactive && styles.nonInteractive
-    );
+    ].filter(Boolean);
+
+    return mergeClasses(...classes);
   };
 
   // 헤더 렌더링

@@ -195,7 +195,11 @@
       "Bash(del \"D:\\project\\weaver-pro\\src\\components\\settings\\tabs\\ProjectTab.jsx\")",
       "Bash(npm run:*)",
       "Bash(rm:*)",
-      "Bash(del \"D:\\project\\weaver-pro\\src\\components\\scriptgen\\constants.js\")"
+      "Bash(del \"D:\\project\\weaver-pro\\src\\components\\scriptgen\\constants.js\")",
+      "Bash(del nul)",
+      "Read(//c/WeaverPro/2025-09-17/**)",
+      "Bash(tasklist)",
+      "Bash(cmd /c:*)"
     ],
     "deny": [],
     "ask": []

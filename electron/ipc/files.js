@@ -524,6 +524,26 @@ ipcMain.handle("files:nextAvailableName", async (_e, { dir, base, kind }) => {
   }
 });
 
+/** 텍스트 파일 저장 */
+ipcMain.handle("files:writeText", async (_evt, { filePath, content }) => {
+  try {
+    console.log("💾 files:writeText 호출됨:", { filePath, contentLength: content?.length });
+
+    // 디렉토리 생성
+    const dir = path.dirname(filePath);
+    ensureDirSync(dir);
+
+    // 파일 쓰기
+    await fs.promises.writeFile(filePath, content, 'utf8');
+    console.log("✅ files:writeText 완료:", filePath);
+
+    return { success: true, filePath };
+  } catch (error) {
+    console.error("❌ files:writeText 실패:", error);
+    return { success: false, message: error.message };
+  }
+});
+
 /* ============================== exports ============================== */
 module.exports = {
   getProjectRoot,

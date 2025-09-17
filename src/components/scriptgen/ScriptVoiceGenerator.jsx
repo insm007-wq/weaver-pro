@@ -240,7 +240,7 @@ AI 모델: ${globalSettings.llmModel || "Anthropic Claude"}
 
             if (outputPathResult.success) {
               const audioFilePaths = audioFiles.map(f => f.audioUrl).filter(url => url && url !== "pending");
-              const mergeResult = await window.electronAPI.audioMergeFiles({
+              const mergeResult = await api.invoke("audio/mergeFiles", {
                 audioFiles: audioFilePaths,
                 outputPath: outputPathResult.filePath
               });
@@ -262,29 +262,108 @@ AI 모델: ${globalSettings.llmModel || "Anthropic Claude"}
 
       // SRT 자막 생성
       try {
+        console.log("🎬 SRT 자막 생성 시작...", { scriptData });
+        console.log("🔧 script/toSrt API 호출 중...");
+
         const srtResult = await api.invoke("script/toSrt", {
           doc: scriptData
         });
 
-        if (srtResult && srtResult.srt) {
-          const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-          const srtFileName = `subtitles_${timestamp}.srt`;
-          const srtPathResult = await api.invoke("project:getFilePath", {
-            category: "subtitle",
-            filename: srtFileName,
-          });
+        console.log("📝 SRT 변환 API 호출 완료");
+        console.log("📝 SRT 변환 결과:", srtResult);
+        console.log("🔍 srtResult 타입:", typeof srtResult);
+        console.log("🔍 srtResult.success:", srtResult?.success);
+        console.log("🔍 srtResult.data:", srtResult?.data);
+        console.log("🔍 srtResult.data.srt 존재:", !!srtResult?.data?.srt);
+        console.log("🔍 srtResult.data.srt 타입:", typeof srtResult?.data?.srt);
+        console.log("🔍 srtResult.data.srt 길이:", srtResult?.data?.srt?.length);
 
-          if (srtPathResult.success) {
-            await api.invoke("files:writeText", {
-              filePath: srtPathResult.filePath,
-              content: srtResult.srt
-            });
-            console.log("✅ SRT 자막 파일 생성 완료:", srtPathResult.filePath);
+        // 응답 구조에 맞게 수정: srtResult.data.srt 사용
+        const srtData = srtResult?.success && srtResult?.data ? srtResult.data : srtResult;
+        if (srtData && srtData.srt && typeof srtData.srt === 'string' && srtData.srt.length > 0) {
+          const srtFileName = `subtitle.srt`;
+          console.log("📂 SRT 파일명 생성:", srtFileName);
+
+          // 직접 경로 생성 (project:getFilePath API 문제로 우회)
+          console.log("🔧 직접 scripts 경로 생성 중...");
+
+          // 설정에서 프로젝트 루트 경로 가져오기
+          let projectRoot = 'C:\\WeaverPro'; // 기본값
+          try {
+            const settingsResult = await api.invoke("settings:get", "videoSaveFolder");
+            if (settingsResult.success && settingsResult.data) {
+              projectRoot = settingsResult.data;
+            }
+          } catch (error) {
+            console.warn("⚠️ 설정 읽기 오류, 기본값 사용:", error.message);
+          }
+
+          // 현재 활성 프로젝트 정보 가져오기
+          let projectName = 'WeaverPro-Project'; // 기본값
+          try {
+            const currentProjectResult = await api.invoke("project:current");
+            if (currentProjectResult.success && currentProjectResult.data) {
+              projectName = currentProjectResult.data.id || currentProjectResult.data.topic || 'WeaverPro-Project';
+            }
+          } catch (error) {
+            console.warn("⚠️ 프로젝트 정보 읽기 오류, 기본값 사용:", error.message);
+          }
+
+          const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+          const scriptsDir = `${projectRoot}\\${today}\\${projectName}\\scripts`;
+          const filePath = `${scriptsDir}\\${srtFileName}`;
+
+          console.log("📁 생성된 자막 파일 경로:", filePath);
+          const srtPathResult = { success: true, filePath };
+
+          if (srtPathResult && srtPathResult.success && srtPathResult.filePath) {
+            console.log("💾 SRT 파일 쓰기 시작:", srtPathResult.filePath);
+            console.log("🔍 SRT 데이터 길이:", srtData.srt?.length);
+            console.log("🔍 SRT 데이터 미리보기:", srtData.srt?.substring(0, 100));
+
+            try {
+              const writeResult = await api.invoke("files:writeText", {
+                filePath: srtPathResult.filePath,
+                content: srtData.srt
+              });
+              console.log("📝 파일 쓰기 결과:", writeResult);
+
+              if (writeResult.success) {
+                console.log("✅ SRT 자막 파일 생성 완료:", srtPathResult.filePath);
+                toast.success(`SRT 자막 파일이 생성되었습니다: subtitle.srt`);
+              } else {
+                console.error("❌ 파일 쓰기 실패:", writeResult.message);
+                toast.error(`SRT 파일 쓰기 실패: ${writeResult.message}`);
+              }
+            } catch (writeError) {
+              console.error("❌ 파일 쓰기 오류:", writeError);
+              toast.error(`SRT 파일 쓰기 오류: ${writeError.message}`);
+            }
             toast.success(`SRT 자막 파일이 생성되었습니다: ${srtFileName}`);
+          } else {
+            console.error("❌ 자막 경로 생성 실패:", srtPathResult.message);
+            toast.error(`자막 경로 생성 실패: ${srtPathResult.message}`);
+          }
+        } else {
+          console.warn("⚠️ SRT 변환 결과가 없음:", srtResult);
+          console.warn("⚠️ srtData:", srtData);
+          console.warn("⚠️ srtData.srt 타입:", typeof srtData?.srt);
+          console.warn("⚠️ srtData.srt 값:", srtData?.srt);
+
+          if (srtResult?.success === false) {
+            console.error("❌ SRT 변환 실패:", srtResult.error || srtResult.message);
+            toast.error(`SRT 변환 실패: ${srtResult.error || srtResult.message || '알 수 없는 오류'}`);
+          } else {
+            toast.warn("SRT 자막을 생성할 수 없습니다. 대본 데이터를 확인해주세요.");
           }
         }
       } catch (error) {
         console.error("❌ SRT 자막 생성 오류:", error);
+        console.error("❌ 오류 상세:", {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
         toast.error(`SRT 자막 생성 오류: ${error.message}`);
       }
 
@@ -582,7 +661,7 @@ AI 모델: ${globalSettings.llmModel || "Anthropic Claude"}
 
             if (outputPathResult.success) {
               const audioFilePaths = audioFiles.map(f => f.audioUrl).filter(url => url && url !== "pending");
-              const mergeResult = await window.electronAPI.audioMergeFiles({
+              const mergeResult = await api.invoke("audio/mergeFiles", {
                 audioFiles: audioFilePaths,
                 outputPath: outputPathResult.filePath
               });
@@ -607,28 +686,104 @@ AI 모델: ${globalSettings.llmModel || "Anthropic Claude"}
         // SRT 자막 파일 생성
         try {
           addLog("📝 SRT 자막 파일 생성 중...");
+          console.log("🎬 배치 SRT 자막 생성 시작...", { scriptData });
           const srtResult = await api.invoke("script/toSrt", {
             doc: scriptData
           });
+          console.log("📝 배치 SRT 변환 결과:", srtResult);
+          console.log("🔍 배치 srtResult 타입:", typeof srtResult);
+          console.log("🔍 배치 srtResult.success:", srtResult?.success);
+          console.log("🔍 배치 srtResult.data:", srtResult?.data);
+          console.log("🔍 배치 srtResult.data.srt 존재:", !!srtResult?.data?.srt);
+          console.log("🔍 배치 srtResult.data.srt 타입:", typeof srtResult?.data?.srt);
+          console.log("🔍 배치 srtResult.data.srt 길이:", srtResult?.data?.srt?.length);
 
-          if (srtResult && srtResult.srt) {
-            const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-            const srtFileName = `subtitles_${timestamp}.srt`;
-            const srtPathResult = await api.invoke("project:getFilePath", {
-              category: "subtitle",
-              filename: srtFileName,
-            });
+          // 배치용 응답 구조에 맞게 수정
+          const batchSrtData = srtResult?.success && srtResult?.data ? srtResult.data : srtResult;
+          if (batchSrtData && batchSrtData.srt && typeof batchSrtData.srt === 'string' && batchSrtData.srt.length > 0) {
+            const srtFileName = `subtitle.srt`;
+            console.log("📂 배치 SRT 파일명 생성:", srtFileName);
 
-            if (srtPathResult.success) {
+            // 전역 설정을 이용한 경로 생성 (ProjectManager 로직 참조)
+            console.log("🔧 배치 전역 설정으로 scripts 경로 생성 중...");
+
+            // 1. 전역 설정에서 폴더 경로 가져오기 (projectRootFolder 우선, videoSaveFolder 백업)
+            let baseFolder = 'C:\\WeaverPro'; // 기본값
+            try {
+              // 먼저 projectRootFolder 확인
+              let settingsResult = await api.invoke("settings:get", "projectRootFolder");
+              console.log("📁 배치 projectRootFolder 설정값:", settingsResult);
+
+              if (!settingsResult || typeof settingsResult !== 'string' || !settingsResult.trim()) {
+                // projectRootFolder가 없으면 videoSaveFolder 확인
+                settingsResult = await api.invoke("settings:get", "videoSaveFolder");
+                console.log("📁 배치 videoSaveFolder 설정값:", settingsResult);
+              }
+
+              if (settingsResult && typeof settingsResult === 'string' && settingsResult.trim()) {
+                baseFolder = settingsResult.trim();
+              }
+              console.log("📁 배치 최종 baseFolder:", baseFolder);
+            } catch (error) {
+              console.warn("⚠️ 배치 전역 설정 읽기 오류, 기본값 사용:", error.message);
+            }
+
+            // 2. 현재 날짜 추가
+            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+            // 3. 프로젝트명 결정 (현재 활성 프로젝트 또는 기본값)
+            let projectName = '작업'; // 기본값을 사용자가 원하는 이름으로
+            try {
+              const currentProjectResult = await api.invoke("project:current");
+              console.log("📁 배치 project:current 전체 결과:", currentProjectResult);
+
+              if (currentProjectResult && currentProjectResult.success && currentProjectResult.data) {
+                console.log("📁 배치 현재 프로젝트 데이터:", currentProjectResult.data);
+                console.log("📁 배치 프로젝트 ID:", currentProjectResult.data.id);
+                console.log("📁 배치 프로젝트 topic:", currentProjectResult.data.topic);
+
+                projectName = currentProjectResult.data.id || currentProjectResult.data.topic || '작업';
+              } else {
+                console.log("📁 배치 현재 활성 프로젝트 없음, 기본값 사용");
+              }
+              console.log("📁 배치 최종 프로젝트명:", projectName);
+            } catch (error) {
+              console.warn("⚠️ 배치 프로젝트 정보 읽기 오류, 기본값 사용:", error.message);
+            }
+
+            // 4. 최종 경로 구성
+            const scriptsDir = `${baseFolder}\\${today}\\${projectName}\\scripts`;
+            const filePath = `${scriptsDir}\\${srtFileName}`;
+
+            console.log("📁 배치 생성된 자막 파일 경로:", filePath);
+            const srtPathResult = { success: true, filePath };
+
+            if (srtPathResult && srtPathResult.success && srtPathResult.filePath) {
+              console.log("💾 배치 SRT 파일 쓰기 시작:", srtPathResult.filePath);
               await api.invoke("files:writeText", {
                 filePath: srtPathResult.filePath,
-                content: srtResult.srt
+                content: batchSrtData.srt
               });
               addLog(`✅ SRT 자막 파일 생성 완료: ${srtFileName}`);
+              console.log("✅ 배치 SRT 자막 파일 생성 완료:", srtPathResult.filePath);
+            } else {
+              addLog(`❌ 자막 경로 생성 실패: ${srtPathResult.message}`, "error");
+              console.error("❌ 배치 자막 경로 생성 실패:", srtPathResult.message);
+            }
+          } else {
+            addLog("⚠️ SRT 변환 결과가 없음", "warn");
+            console.warn("⚠️ 배치 SRT 변환 결과가 없음:", srtResult);
+            console.warn("⚠️ 배치 batchSrtData:", batchSrtData);
+            console.warn("⚠️ 배치 batchSrtData.srt 타입:", typeof batchSrtData?.srt);
+            console.warn("⚠️ 배치 batchSrtData.srt 값:", batchSrtData?.srt);
+
+            if (srtResult?.success === false) {
+              addLog(`❌ 배치 SRT 변환 실패: ${srtResult.error || srtResult.message || '알 수 없는 오류'}`, "error");
             }
           }
         } catch (error) {
           addLog(`❌ SRT 자막 생성 오류: ${error.message}`, "error");
+          console.error("❌ 배치 SRT 자막 생성 오류:", error);
         }
 
         return audioFiles;

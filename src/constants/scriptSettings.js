@@ -120,8 +120,8 @@ export const LLM_OPTIONS = [
 export const makeDefaultForm = () => ({
   topic: "",
   style: "informative",
-  durationMin: null, // 초기값을 null로 변경
-  maxScenes: null,   // 초기값을 null로 변경
+  durationMin: 3, // 기본값 3분
+  maxScenes: 8,   // 기본값 8씬
   llm: "openai-gpt5mini",
   temperature: 1.0,
   imageStyle: "cinematic",
