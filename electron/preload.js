@@ -290,6 +290,8 @@ contextBridge.exposeInMainWorld("api", {
   ttsSynthesizeByScenes: (payload) => ipcRenderer.invoke("tts/synthesizeByScenes", payload),
   getMp3Duration: (path) => ipcRenderer.invoke("audio/getDuration", { path }),
   audioConcatScenes: (payload) => ipcRenderer.invoke("audio/concatScenes", payload),
+  audioMergeFiles: ({ audioFiles, outputPath }) =>
+    ipcRenderer.invoke("audio/mergeFiles", { audioFiles, outputPath }),
 
   // ========================================================================
   // 이미지 생성

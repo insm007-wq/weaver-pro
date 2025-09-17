@@ -224,14 +224,69 @@ AI 모델: ${globalSettings.llmModel || "Anthropic Claude"}
       });
 
       if (audioResult && audioResult.data && audioResult.data.ok) {
-        console.log("✅ 음성 생성 완료:", audioResult.data.audioFiles);
-        toast.success("음성 파일이 생성되었습니다!");
+        const audioFiles = audioResult.data.audioFiles;
+        console.log("✅ 음성 생성 완료:", audioFiles);
+        toast.success(`음성 파일 ${audioFiles.length}개가 생성되었습니다!`);
+
+        // 음성 파일들을 하나로 합치기
+        if (audioFiles.length > 1) {
+          try {
+            const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+            const mergedFileName = `merged_audio_${timestamp}.mp3`;
+            const outputPathResult = await api.invoke("project:getFilePath", {
+              category: "audio",
+              filename: mergedFileName,
+            });
+
+            if (outputPathResult.success) {
+              const audioFilePaths = audioFiles.map(f => f.audioUrl).filter(url => url && url !== "pending");
+              const mergeResult = await window.electronAPI.audioMergeFiles({
+                audioFiles: audioFilePaths,
+                outputPath: outputPathResult.filePath
+              });
+
+              if (mergeResult.success) {
+                console.log("✅ 음성 파일 합치기 완료:", mergeResult.outputPath);
+                toast.success(`통합 음성 파일이 생성되었습니다: ${mergedFileName}`);
+              } else {
+                console.error("❌ 음성 파일 합치기 실패:", mergeResult.message);
+                toast.error(`음성 파일 합치기 실패: ${mergeResult.message}`);
+              }
+            }
+          } catch (error) {
+            console.error("❌ 음성 파일 합치기 오류:", error);
+            toast.error(`음성 파일 합치기 오류: ${error.message}`);
+          }
+        }
       }
 
-      // SRT 자막 생성 (필요한 경우)
-      // const subtitleResult = await api.invoke("subtitle:generate", {
-      //   scenes: scriptData.scenes
-      // });
+      // SRT 자막 생성
+      try {
+        const srtResult = await api.invoke("script/toSrt", {
+          doc: scriptData
+        });
+
+        if (srtResult && srtResult.srt) {
+          const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+          const srtFileName = `subtitles_${timestamp}.srt`;
+          const srtPathResult = await api.invoke("project:getFilePath", {
+            category: "subtitle",
+            filename: srtFileName,
+          });
+
+          if (srtPathResult.success) {
+            await api.invoke("files:writeText", {
+              filePath: srtPathResult.filePath,
+              content: srtResult.srt
+            });
+            console.log("✅ SRT 자막 파일 생성 완료:", srtPathResult.filePath);
+            toast.success(`SRT 자막 파일이 생성되었습니다: ${srtFileName}`);
+          }
+        }
+      } catch (error) {
+        console.error("❌ SRT 자막 생성 오류:", error);
+        toast.error(`SRT 자막 생성 오류: ${error.message}`);
+      }
 
     } catch (error) {
       console.error("음성/자막 생성 오류:", error);
@@ -513,6 +568,68 @@ AI 모델: ${globalSettings.llmModel || "Anthropic Claude"}
         }
 
         addLog(`💾 음성 파일들: ${audioFiles.map((f) => f.fileName).join(", ")}`);
+
+        // 음성 파일들을 하나로 합치기
+        if (audioFiles.length > 1) {
+          try {
+            addLog(`🔄 ${audioFiles.length}개 음성 파일을 하나로 합치는 중...`);
+            const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+            const mergedFileName = `merged_audio_${timestamp}.mp3`;
+            const outputPathResult = await api.invoke("project:getFilePath", {
+              category: "audio",
+              filename: mergedFileName,
+            });
+
+            if (outputPathResult.success) {
+              const audioFilePaths = audioFiles.map(f => f.audioUrl).filter(url => url && url !== "pending");
+              const mergeResult = await window.electronAPI.audioMergeFiles({
+                audioFiles: audioFilePaths,
+                outputPath: outputPathResult.filePath
+              });
+
+              if (mergeResult.success) {
+                addLog(`✅ 통합 음성 파일 생성 완료: ${mergedFileName}`);
+                // 합쳐진 파일 정보를 audioFiles에 추가
+                audioFiles.push({
+                  fileName: mergedFileName,
+                  audioUrl: outputPathResult.filePath,
+                  merged: true
+                });
+              } else {
+                addLog(`❌ 음성 파일 합치기 실패: ${mergeResult.message}`, "error");
+              }
+            }
+          } catch (error) {
+            addLog(`❌ 음성 파일 합치기 오류: ${error.message}`, "error");
+          }
+        }
+
+        // SRT 자막 파일 생성
+        try {
+          addLog("📝 SRT 자막 파일 생성 중...");
+          const srtResult = await api.invoke("script/toSrt", {
+            doc: scriptData
+          });
+
+          if (srtResult && srtResult.srt) {
+            const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+            const srtFileName = `subtitles_${timestamp}.srt`;
+            const srtPathResult = await api.invoke("project:getFilePath", {
+              category: "subtitle",
+              filename: srtFileName,
+            });
+
+            if (srtPathResult.success) {
+              await api.invoke("files:writeText", {
+                filePath: srtPathResult.filePath,
+                content: srtResult.srt
+              });
+              addLog(`✅ SRT 자막 파일 생성 완료: ${srtFileName}`);
+            }
+          }
+        } catch (error) {
+          addLog(`❌ SRT 자막 생성 오류: ${error.message}`, "error");
+        }
 
         return audioFiles;
       } catch (ttsError) {

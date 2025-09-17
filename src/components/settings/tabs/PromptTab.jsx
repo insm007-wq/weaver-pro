@@ -16,7 +16,7 @@ import { LoadingSpinner } from "../../common/LoadingSpinner";
 import { ErrorBoundary } from "../../common/ErrorBoundary";
 import { SettingsHeader } from "../../common";
 import { useContainerStyles, useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
-import { DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT } from "../../scriptgen/constants";
+import { DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT } from "../../../constants/prompts";
 
 /* ================= helpers ================= */
 const isOk = (res) => res?.ok === true || res?.success === true;

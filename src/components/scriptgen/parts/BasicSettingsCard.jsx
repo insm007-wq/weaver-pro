@@ -201,9 +201,9 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
                 key={scene.key}
                 value={scene.key.toString()}
                 style={{
-                  color: scene.isRecommended ? tokens.colorPaletteGreenForeground2 : 'inherit',
-                  fontWeight: scene.isRecommended ? '500' : 'normal',
-                  backgroundColor: scene.isRecommended ? tokens.colorPaletteGreenBackground1 : 'transparent'
+                  color: scene.isRecommended ? tokens.colorPaletteGreenForeground2 : "inherit",
+                  fontWeight: scene.isRecommended ? "500" : "normal",
+                  backgroundColor: scene.isRecommended ? tokens.colorPaletteGreenBackground1 : "transparent",
                 }}
               >
                 {scene.text}
@@ -282,14 +282,7 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
                 <Textarea
                   value={form.referenceScript || ""}
                   onChange={(e) => onChange("referenceScript", e.target.value)}
-                  placeholder="예: 
-안녕하세요! 오늘은 인공지능에 대해 알아보겠습니다.
-
-## 도입
-인공지능이 우리 생활에 미치는 영향을 살펴보면...
-
-## 본론
-구체적인 예시를 들어보겠습니다..."
+                  placeholder=""
                   rows={6}
                   resize="vertical"
                   style={{ minHeight: "120px" }}
