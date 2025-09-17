@@ -554,7 +554,7 @@ export default function ProjectManager() {
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <InfoRegular style={{ color: tokens.colorPaletteBlueForeground1 }} />
               <Text>
-                생성된 프로젝트가 없습니다. 새 프로젝트를 생성해보세요. (기본 프로젝트 이름: {settings?.defaultProjectName || "default"})
+                생성된 프로젝트가 없습니다. 새 프로젝트를 생성해보세요.
               </Text>
             </div>
           </Card>

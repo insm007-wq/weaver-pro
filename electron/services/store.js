@@ -100,6 +100,12 @@ const projectStore = {
       this.setCurrentProjectId(null);
     }
 
+    // 모든 프로젝트가 삭제되면 defaultProjectName도 초기화
+    if (filteredProjects.length === 0) {
+      store.set('defaultProjectName', 'default');
+      console.log('🔄 모든 프로젝트 삭제됨, defaultProjectName을 기본값으로 초기화');
+    }
+
     store.set('lastSync', new Date().toISOString());
     console.log(`🗑️ 프로젝트 삭제: ${projectId}`);
     return true;

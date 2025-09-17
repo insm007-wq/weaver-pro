@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   Body1,
   Body2,
@@ -31,9 +31,51 @@ import {
   PositionToFrontRegular,
   PlayRegular,
 } from "@fluentui/react-icons";
-import { SettingsHeader, FormSection } from "../../common";
+import { ErrorBoundary } from "../../common/ErrorBoundary";
+import { SettingsHeader, FormSection, LoadingSpinner } from "../../common";
 import { useContainerStyles, useSettingsStyles } from "../../../styles/commonStyles";
 import { showGlobalToast } from "../../common/GlobalToast";
+import { handleError } from "@utils";
+
+/**
+ * SubtitleTab 컴포넌트
+ *
+ * @description
+ * 영상 자막의 스타일, 위치, 색상, 애니메이션 효과를 설정하는 컴포넌트입니다.
+ * 모든 설정은 settings.json에 저장되며, 실시간 미리보기를 제공합니다.
+ *
+ * @features
+ * - 텍스트 스타일: 폰트, 크기, 굵기, 간격 설정
+ * - 위치 및 정렬: 수직/수평 위치, 여백, 세밀한 위치 조정
+ * - 색상 및 효과: 텍스트/배경/테두리/그림자 색상 및 투명도
+ * - 애니메이션: 페이드, 슬라이드, 스케일, 타이핑 효과
+ * - 실시간 미리보기: 16:9 비율의 대형 미리보기 화면
+ * - 설정 저장/복원: settings.json 기반 저장, 기본값 즉시 복원
+ *
+ * @ipc_apis
+ * ⚙️ 설정 관리 APIs (electron/services/store.js):
+ * - window.api.getSetting(key) - 개별 설정값 조회
+ * - window.api.setSetting({key, value}) - 개별 설정값 저장
+ *
+ * @settings_stored
+ * settings.json에 저장되는 설정:
+ * - subtitleSettings: 모든 자막 설정을 포함한 객체
+ *   - fontFamily, fontSize, fontWeight, lineHeight, letterSpacing
+ *   - textColor, backgroundColor, backgroundOpacity, outlineColor, etc.
+ *   - position, horizontalAlign, verticalPadding, horizontalPadding
+ *   - animation, animationDuration, displayDuration
+ *   - useBackground, useOutline, useShadow, autoWrap, maxLines
+ *
+ * @preview_system
+ * 실시간 미리보기 기능:
+ * - 16:9 비율 (640x360px) 대형 미리보기
+ * - 그라디언트 배경으로 다양한 색상 대비 테스트
+ * - 실제 영상과 동일한 비율로 자막 표시
+ * - 모든 설정 변경사항 즉시 반영
+ *
+ * @author Weaver Pro Team
+ * @version 2.0.0
+ */
 
 // 폰트 옵션
 const FONT_FAMILIES = [
@@ -70,7 +112,7 @@ const ANIMATIONS = [
   { key: "typewriter", text: "타이핑 효과" },
 ];
 
-export default function SubtitleTab() {
+function SubtitleTab() {
   const containerStyles = useContainerStyles();
   const settingsStyles = useSettingsStyles();
   const previewRef = useRef(null);
@@ -122,24 +164,53 @@ export default function SubtitleTab() {
 
   // 자막 설정 상태
   const [subtitleSettings, setSubtitleSettings] = useState(defaultSettings);
+  const [originalSettings, setOriginalSettings] = useState(defaultSettings);
+  const [loading, setLoading] = useState(true);
+  const [saveLoading, setSaveLoading] = useState(false);
 
-  // 컴포넌트 마운트 시 저장된 설정 불러오기
-  React.useEffect(() => {
-    try {
-      const savedSettings = localStorage.getItem("subtitleSettings");
-      if (savedSettings) {
-        const parsedSettings = JSON.parse(savedSettings);
-        setSubtitleSettings({ ...defaultSettings, ...parsedSettings });
-      }
-    } catch (error) {
-      console.error("저장된 자막 설정 로드 실패:", error);
-    }
+  /**
+   * 컴포넌트 마운트 시 저장된 설정 불러오기
+   * settings.json에서 subtitleSettings 키로 저장된 설정을 로드
+   */
+  useEffect(() => {
+    loadSettings();
   }, []);
 
-  // 설정 업데이트 헬퍼
-  const updateSetting = (key, value) => {
-    setSubtitleSettings((prev) => ({ ...prev, [key]: value }));
+  /**
+   * 자막 설정을 settings.json에서 로드하는 함수
+   */
+  const loadSettings = async () => {
+    setLoading(true);
+    try {
+      const savedSettings = await window.api.getSetting("subtitleSettings");
+      const settingsToUse = savedSettings ? { ...defaultSettings, ...savedSettings } : defaultSettings;
+
+      setSubtitleSettings(settingsToUse);
+      setOriginalSettings(settingsToUse);
+    } catch (error) {
+      const { message } = handleError(error, "subtitle_settings_load", {
+        metadata: { action: "load_settings" },
+      });
+      console.error("자막 설정 로드 실패:", message);
+      showGlobalToast({
+        type: "error",
+        text: "자막 설정을 불러오는데 실패했습니다. 기본 설정을 사용합니다.",
+      });
+      setSubtitleSettings(defaultSettings);
+      setOriginalSettings(defaultSettings);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  /**
+   * 설정 업데이트 헬퍼 함수
+   * @param {string} key - 업데이트할 설정 키
+   * @param {any} value - 새로운 설정 값
+   */
+  const updateSetting = useCallback((key, value) => {
+    setSubtitleSettings((prev) => ({ ...prev, [key]: value }));
+  }, []);
 
   // 미리보기 텍스트 생성
   const generatePreviewStyle = () => ({
@@ -179,42 +250,69 @@ export default function SubtitleTab() {
     return fontMap[key] || fontMap["noto-sans"];
   };
 
-  // 설정 저장
-  const saveSettings = async () => {
-    console.log("saveSettings 함수 호출됨");
-    console.log("현재 자막 설정:", subtitleSettings);
-
+  /**
+   * 자막 설정을 settings.json에 저장하는 함수
+   */
+  const saveSettings = useCallback(async () => {
+    setSaveLoading(true);
     try {
-      // API로 자막 설정 저장 (향후 구현될 API)
-      // const result = await api.invoke('settings:saveSubtitleSettings', subtitleSettings);
+      await window.api.setSetting({
+        key: "subtitleSettings",
+        value: subtitleSettings,
+      });
 
-      // 현재는 localStorage에 저장
-      localStorage.setItem("subtitleSettings", JSON.stringify(subtitleSettings));
-      console.log("localStorage에 저장 완료");
-
+      setOriginalSettings(subtitleSettings);
       showGlobalToast({
         type: "success",
-        text: "자막 설정이 저장되었습니다! 🎉",
+        text: "자막 설정이 성공적으로 저장되었습니다! 🎉",
       });
     } catch (error) {
-      console.error("자막 설정 저장 실패:", error);
+      const { message } = handleError(error, "subtitle_settings_save", {
+        metadata: { action: "save_settings", settingsCount: Object.keys(subtitleSettings).length },
+      });
+      console.error("자막 설정 저장 실패:", message);
       showGlobalToast({
         type: "error",
-        text: "자막 설정 저장에 실패했습니다.",
+        text: `자막 설정 저장에 실패했습니다: ${message}`,
+      });
+    } finally {
+      setSaveLoading(false);
+    }
+  }, [subtitleSettings]);
+
+  /**
+   * 설정을 기본값으로 초기화하고 즉시 저장하는 함수
+   * ThumbnailTab과 동일한 패턴으로 초기화 후 바로 저장
+   */
+  const resetSettings = useCallback(async () => {
+    setSubtitleSettings(defaultSettings);
+
+    try {
+      await window.api.setSetting({
+        key: "subtitleSettings",
+        value: defaultSettings,
+      });
+      setOriginalSettings(defaultSettings);
+      showGlobalToast({
+        type: "success",
+        text: "자막 설정이 기본값으로 초기화되고 저장되었습니다! 🎉",
+      });
+    } catch (error) {
+      console.error("기본값 저장 실패:", error);
+      showGlobalToast({
+        type: "error",
+        text: "기본값 저장에 실패했습니다.",
       });
     }
-  };
+  }, []);
 
-  // 설정 초기화
-  const resetSettings = () => {
-    setSubtitleSettings(defaultSettings);
-    // localStorage에서도 제거
-    localStorage.removeItem("subtitleSettings");
-    showGlobalToast({
-      type: "success",
-      text: "자막 설정이 기본값으로 초기화되었습니다!",
-    });
-  };
+  if (loading) {
+    return (
+      <div className={containerStyles.container}>
+        <LoadingSpinner size="large" message="자막 설정을 불러오는 중..." centered />
+      </div>
+    );
+  }
 
   return (
     <div className={containerStyles.container}>
@@ -681,19 +779,14 @@ export default function SubtitleTab() {
       <div style={{ display: "flex", gap: "16px", marginTop: "24px" }}>
         <Button
           appearance="primary"
-          onClick={() => {
-            console.log("설정 저장 버튼 클릭됨");
-            saveSettings();
-          }}
+          onClick={saveSettings}
+          disabled={saveLoading}
         >
-          설정 저장
+          {saveLoading ? "저장 중..." : "설정 저장"}
         </Button>
         <Button
           appearance="secondary"
-          onClick={() => {
-            console.log("초기화 버튼 클릭됨");
-            resetSettings();
-          }}
+          onClick={resetSettings}
         >
           기본값으로 초기화
         </Button>
@@ -705,5 +798,15 @@ export default function SubtitleTab() {
         </MessageBarBody>
       </MessageBar>
     </div>
+  );
+}
+
+const MemoizedSubtitleTab = React.memo(SubtitleTab);
+
+export default function SubtitleTabWithErrorBoundary() {
+  return (
+    <ErrorBoundary>
+      <MemoizedSubtitleTab />
+    </ErrorBoundary>
   );
 }
