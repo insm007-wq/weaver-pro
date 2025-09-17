@@ -527,19 +527,39 @@ ipcMain.handle("files:nextAvailableName", async (_e, { dir, base, kind }) => {
 /** 텍스트 파일 저장 */
 ipcMain.handle("files:writeText", async (_evt, { filePath, content }) => {
   try {
-    console.log("💾 files:writeText 호출됨:", { filePath, contentLength: content?.length });
+    console.log("💾 files:writeText 호출됨:", {
+      filePath,
+      contentLength: content?.length,
+      contentPreview: content?.substring(0, 100)
+    });
 
     // 디렉토리 생성
     const dir = path.dirname(filePath);
+    console.log("📁 디렉토리 확인/생성:", dir);
+
     ensureDirSync(dir);
+    console.log("✅ 디렉토리 생성 완료:", dir);
+
+    // 파일 쓰기 전 경로 검증
+    console.log("📝 파일 쓰기 시작:", filePath);
+    console.log("📄 내용 길이:", content?.length);
 
     // 파일 쓰기
     await fs.promises.writeFile(filePath, content, 'utf8');
     console.log("✅ files:writeText 완료:", filePath);
 
+    // 파일이 실제로 생성되었는지 확인
+    const exists = fs.existsSync(filePath);
+    console.log("🔍 파일 생성 확인:", exists, filePath);
+
     return { success: true, filePath };
   } catch (error) {
     console.error("❌ files:writeText 실패:", error);
+    console.error("❌ 에러 상세:", {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
     return { success: false, message: error.message };
   }
 });

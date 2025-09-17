@@ -14,18 +14,19 @@ function fmtSrtTime(sec = 0) {
 
 module.exports = function registerToSrt() {
   ipcMain.handle("script/toSrt", async (evt, payload) => {
-    console.log("🔧 toSrt.js - script/toSrt 호출됨:", { payload });
+    try {
+      console.log("🔧 toSrt.js - script/toSrt 호출됨:", { payload });
 
-    const doc = payload?.doc || {};
-    const ttsMarks = Array.isArray(payload?.ttsMarks) ? payload.ttsMarks : null;
+      const doc = payload?.doc || {};
+      const ttsMarks = Array.isArray(payload?.ttsMarks) ? payload.ttsMarks : null;
 
-    const scenes = Array.isArray(doc?.scenes) ? doc.scenes : [];
-    console.log("📝 toSrt.js - 변환할 장면 수:", scenes.length);
+      const scenes = Array.isArray(doc?.scenes) ? doc.scenes : [];
+      console.log("📝 toSrt.js - 변환할 장면 수:", scenes.length);
 
-    if (!scenes.length) {
-      console.warn("⚠️ toSrt.js - 변환할 장면이 없음");
-      return { srt: "" };
-    }
+      if (!scenes.length) {
+        console.warn("⚠️ toSrt.js - 변환할 장면이 없음");
+        return { success: false, error: "변환할 장면이 없습니다." };
+      }
 
     // 1) 씬별 "실제" duration 얻기
     //    - ttsMarks 가 있으면: duration = end - start
@@ -81,12 +82,16 @@ module.exports = function registerToSrt() {
       end: timeline[i].end,
     }));
 
-    console.log("📤 toSrt.js - 반환값 정보:", {
-      srtLength: srt.length,
-      srtHasContent: srt.length > 0,
-      scenesCount: outScenes.length,
-      srtPreview: srt.substring(0, 100) + "..."
-    });
-    return { srt, scenes: outScenes };
+      console.log("📤 toSrt.js - 반환값 정보:", {
+        srtLength: srt.length,
+        srtHasContent: srt.length > 0,
+        scenesCount: outScenes.length,
+        srtPreview: srt.substring(0, 100) + "..."
+      });
+      return { success: true, data: { srt, scenes: outScenes } };
+    } catch (error) {
+      console.error("❌ toSrt.js - SRT 변환 중 오류:", error);
+      return { success: false, error: error.message };
+    }
   });
 };

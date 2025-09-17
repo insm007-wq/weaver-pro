@@ -88,20 +88,29 @@ ipcMain.handle("script:getSubtitlePath", async (_evt, { filename }) => {
     const path = require('path');
     const fs = require('fs').promises;
 
-    // 기본 프로젝트명과 오늘 날짜로 직접 경로 생성
-    const defaultProjectName = store.get('defaultProjectName') || 'WeaverPro-Project';
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    const projectRoot = store.get('projectRootFolder') || 'C:\\WeaverPro';
+    // settings.json에서 videoSaveFolder 가져오기
+    const videoSaveFolder = store.get('videoSaveFolder');
+    console.log("🎯 videoSaveFolder 설정값:", videoSaveFolder);
 
-    console.log("📂 기본 프로젝트명:", defaultProjectName);
-    console.log("📅 오늘 날짜:", today);
-    console.log("📁 프로젝트 루트:", projectRoot);
+    if (!videoSaveFolder) {
+      console.warn("⚠️ videoSaveFolder가 설정되지 않았습니다. 기본 경로를 사용합니다.");
 
-    // 경로 구성: projectRoot/YYYY-MM-DD/projectName/scripts/
-    const projectDir = path.join(projectRoot, today, defaultProjectName);
-    const scriptsDir = path.join(projectDir, 'scripts');
+      // 폴백: 기본 경로 사용
+      const projectRoot = store.get('projectRootFolder') || 'C:\\WeaverPro';
+      const defaultProjectName = store.get('defaultProjectName') || 'default';
+      const scriptsDir = path.join(projectRoot, defaultProjectName, 'scripts');
 
-    console.log("📂 스크립트 디렉토리:", scriptsDir);
+      await fs.mkdir(scriptsDir, { recursive: true });
+      const filePath = path.join(scriptsDir, filename);
+
+      console.log("📁 폴백 자막 파일 경로:", filePath);
+      return { success: true, filePath };
+    }
+
+    // videoSaveFolder 기반으로 scripts 디렉토리 생성
+    const scriptsDir = path.join(videoSaveFolder, 'scripts');
+
+    console.log("📂 videoSaveFolder 기반 scripts 디렉토리:", scriptsDir);
 
     // 디렉토리가 없으면 생성
     try {
@@ -119,5 +128,52 @@ ipcMain.handle("script:getSubtitlePath", async (_evt, { filename }) => {
   } catch (error) {
     console.error("❌ 동적 자막 경로 생성 실패:", error);
     return { success: false, message: error.message };
+  }
+});
+
+/** 테스트용 자막 파일 생성 */
+ipcMain.handle("script:testSubtitleCreation", async (_evt, { filename = "test.srt" }) => {
+  try {
+    console.log("🧪 테스트 자막 생성 시작:", { filename });
+
+    // 테스트용 SRT 데이터
+    const testSrtContent = `1
+00:00:00,000 --> 00:00:05,000
+테스트 자막입니다.
+
+2
+00:00:05,000 --> 00:00:10,000
+이것은 테스트용 자막 파일입니다.
+
+`;
+
+    // 경로 생성 API 직접 호출
+    const store = require('../services/store');
+    const path = require('path');
+    const fs = require('fs').promises;
+
+    const videoSaveFolder = store.get('videoSaveFolder');
+    const scriptsDir = path.join(videoSaveFolder || 'C:\\WeaverPro\\default', 'scripts');
+    const filePath = path.join(scriptsDir, filename);
+
+    console.log("📁 테스트 자막 파일 경로:", filePath);
+
+    // 디렉토리 생성
+    await fs.mkdir(scriptsDir, { recursive: true });
+
+    // 파일 쓰기
+    await fs.writeFile(filePath, testSrtContent, 'utf8');
+
+    console.log("✅ 테스트 자막 파일 생성 완료:", filePath);
+
+    return {
+      success: true,
+      filePath: filePath,
+      content: testSrtContent
+    };
+
+  } catch (error) {
+    console.error("❌ 테스트 자막 생성 실패:", error);
+    return { success: false, error: error.message };
   }
 });

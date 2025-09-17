@@ -261,16 +261,25 @@ AI 모델: ${globalSettings.llmModel || "Anthropic Claude"}
       }
 
       // SRT 자막 생성
+      console.log("🚀🚀🚀 === SRT 자막 생성 단계 시작 === 🚀🚀🚀");
+      console.log("🔍 현재 위치: generateVoiceAndSubtitle 함수 내부");
+      console.log("⏰ 현재 시간:", new Date().toISOString());
       try {
-        console.log("🎬 SRT 자막 생성 시작...", { scriptData });
+        console.log("🎬 SRT 자막 생성 시작...");
         console.log("🔧 script/toSrt API 호출 중...");
+        console.log("📄 scriptData 내용:", {
+          hasScenes: !!scriptData?.scenes,
+          scenesLength: scriptData?.scenes?.length,
+          firstSceneText: scriptData?.scenes?.[0]?.text?.substring(0, 50) + "...",
+          scriptData: scriptData
+        });
 
         const srtResult = await api.invoke("script/toSrt", {
           doc: scriptData
         });
 
         console.log("📝 SRT 변환 API 호출 완료");
-        console.log("📝 SRT 변환 결과:", srtResult);
+        console.log("📝 SRT 변환 결과 전체:", JSON.stringify(srtResult, null, 2));
         console.log("🔍 srtResult 타입:", typeof srtResult);
         console.log("🔍 srtResult.success:", srtResult?.success);
         console.log("🔍 srtResult.data:", srtResult?.data);
@@ -280,7 +289,24 @@ AI 모델: ${globalSettings.llmModel || "Anthropic Claude"}
 
         // 응답 구조에 맞게 수정: srtResult.data.srt 사용
         const srtData = srtResult?.success && srtResult?.data ? srtResult.data : srtResult;
-        if (srtData && srtData.srt && typeof srtData.srt === 'string' && srtData.srt.length > 0) {
+        console.log("🔍 SRT 데이터 파싱 결과:", {
+          srtResult_success: srtResult?.success,
+          srtResult_hasData: !!srtResult?.data,
+          srtData: srtData,
+          srtData_hasSrt: !!srtData?.srt,
+          srtData_srtType: typeof srtData?.srt,
+          srtData_srtLength: srtData?.srt?.length
+        });
+
+        console.log("🧪 SRT 조건문 테스트:", {
+          srtData: !!srtData,
+          hasSrt: !!srtData?.srt,
+          isString: typeof srtData?.srt === 'string',
+          hasLength: srtData?.srt?.length > 0
+        });
+
+        if (srtData && srtData.srt) {
+          console.log("✅ SRT 조건문 통과! 파일 생성 시작...");
           const srtFileName = `subtitle.srt`;
           console.log("📂 SRT 파일명 생성:", srtFileName);
 
@@ -309,27 +335,31 @@ AI 모델: ${globalSettings.llmModel || "Anthropic Claude"}
             console.warn("⚠️ 프로젝트 정보 읽기 오류, 기본값 사용:", error.message);
           }
 
-          const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-          const scriptsDir = `${projectRoot}\\${today}\\${projectName}\\scripts`;
-          const filePath = `${scriptsDir}\\${srtFileName}`;
+          // API를 통해 자막 파일 경로 생성
+          const srtPathResult = await api.invoke("script:getSubtitlePath", {
+            filename: srtFileName
+          });
 
-          console.log("📁 생성된 자막 파일 경로:", filePath);
-          const srtPathResult = { success: true, filePath };
+          console.log("🔍 전체 srtPathResult 응답:", srtPathResult);
+          console.log("🔍 srtPathResult 타입:", typeof srtPathResult);
+          console.log("🔍 srtPathResult.success:", srtPathResult?.success);
+          console.log("🔍 srtPathResult.filePath:", srtPathResult?.data?.filePath);
+          console.log("📁 생성된 자막 파일 경로:", srtPathResult.data?.filePath);
 
-          if (srtPathResult && srtPathResult.success && srtPathResult.filePath) {
-            console.log("💾 SRT 파일 쓰기 시작:", srtPathResult.filePath);
+          if (srtPathResult && srtPathResult.success && srtPathResult.data && srtPathResult.data.filePath) {
+            console.log("💾 SRT 파일 쓰기 시작:", srtPathResult.data.filePath);
             console.log("🔍 SRT 데이터 길이:", srtData.srt?.length);
             console.log("🔍 SRT 데이터 미리보기:", srtData.srt?.substring(0, 100));
 
             try {
               const writeResult = await api.invoke("files:writeText", {
-                filePath: srtPathResult.filePath,
+                filePath: srtPathResult.data.filePath,
                 content: srtData.srt
               });
               console.log("📝 파일 쓰기 결과:", writeResult);
 
               if (writeResult.success) {
-                console.log("✅ SRT 자막 파일 생성 완료:", srtPathResult.filePath);
+                console.log("✅ SRT 자막 파일 생성 완료:", srtPathResult.data.filePath);
                 toast.success(`SRT 자막 파일이 생성되었습니다: subtitle.srt`);
               } else {
                 console.error("❌ 파일 쓰기 실패:", writeResult.message);
@@ -341,8 +371,8 @@ AI 모델: ${globalSettings.llmModel || "Anthropic Claude"}
             }
             toast.success(`SRT 자막 파일이 생성되었습니다: ${srtFileName}`);
           } else {
-            console.error("❌ 자막 경로 생성 실패:", srtPathResult.message);
-            toast.error(`자막 경로 생성 실패: ${srtPathResult.message}`);
+            console.error("❌ 자막 경로 생성 실패:", srtPathResult.data?.message || srtPathResult.message);
+            toast.error(`자막 경로 생성 실패: ${srtPathResult.data?.message || srtPathResult.message}`);
           }
         } else {
           console.warn("⚠️ SRT 변환 결과가 없음:", srtResult);
@@ -684,6 +714,8 @@ AI 모델: ${globalSettings.llmModel || "Anthropic Claude"}
         }
 
         // SRT 자막 파일 생성
+        console.log("🚀 === 배치 SRT 자막 생성 단계 시작 ===");
+        console.log("🔍 현재 위치: generateAudioStep 함수 내부");
         try {
           addLog("📝 SRT 자막 파일 생성 중...");
           console.log("🎬 배치 SRT 자막 생성 시작...", { scriptData });
@@ -700,7 +732,15 @@ AI 모델: ${globalSettings.llmModel || "Anthropic Claude"}
 
           // 배치용 응답 구조에 맞게 수정
           const batchSrtData = srtResult?.success && srtResult?.data ? srtResult.data : srtResult;
-          if (batchSrtData && batchSrtData.srt && typeof batchSrtData.srt === 'string' && batchSrtData.srt.length > 0) {
+          console.log("🧪 배치 SRT 조건문 테스트:", {
+            batchSrtData: !!batchSrtData,
+            hasSrt: !!batchSrtData?.srt,
+            isString: typeof batchSrtData?.srt === 'string',
+            hasLength: batchSrtData?.srt?.length > 0
+          });
+
+          if (batchSrtData && batchSrtData.srt) {
+            console.log("✅ 배치 SRT 조건문 통과! 파일 생성 시작...");
             const srtFileName = `subtitle.srt`;
             console.log("📂 배치 SRT 파일명 생성:", srtFileName);
 
@@ -728,8 +768,7 @@ AI 모델: ${globalSettings.llmModel || "Anthropic Claude"}
               console.warn("⚠️ 배치 전역 설정 읽기 오류, 기본값 사용:", error.message);
             }
 
-            // 2. 현재 날짜 추가
-            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+            // 날짜 기반 경로는 더 이상 사용하지 않음 (settings.json의 videoSaveFolder 사용)
 
             // 3. 프로젝트명 결정 (현재 활성 프로젝트 또는 기본값)
             let projectName = '작업'; // 기본값을 사용자가 원하는 이름으로
@@ -751,24 +790,28 @@ AI 모델: ${globalSettings.llmModel || "Anthropic Claude"}
               console.warn("⚠️ 배치 프로젝트 정보 읽기 오류, 기본값 사용:", error.message);
             }
 
-            // 4. 최종 경로 구성
-            const scriptsDir = `${baseFolder}\\${today}\\${projectName}\\scripts`;
-            const filePath = `${scriptsDir}\\${srtFileName}`;
+            // 4. API를 통해 자막 파일 경로 생성
+            const srtPathResult = await api.invoke("script:getSubtitlePath", {
+              filename: srtFileName
+            });
 
-            console.log("📁 배치 생성된 자막 파일 경로:", filePath);
-            const srtPathResult = { success: true, filePath };
+            console.log("🔍 배치 전체 srtPathResult 응답:", srtPathResult);
+            console.log("🔍 배치 srtPathResult 타입:", typeof srtPathResult);
+            console.log("🔍 배치 srtPathResult.success:", srtPathResult?.success);
+            console.log("🔍 배치 srtPathResult.filePath:", srtPathResult?.data?.filePath);
+            console.log("📁 배치 생성된 자막 파일 경로:", srtPathResult.data?.filePath);
 
-            if (srtPathResult && srtPathResult.success && srtPathResult.filePath) {
-              console.log("💾 배치 SRT 파일 쓰기 시작:", srtPathResult.filePath);
+            if (srtPathResult && srtPathResult.success && srtPathResult.data && srtPathResult.data.filePath) {
+              console.log("💾 배치 SRT 파일 쓰기 시작:", srtPathResult.data.filePath);
               await api.invoke("files:writeText", {
-                filePath: srtPathResult.filePath,
+                filePath: srtPathResult.data.filePath,
                 content: batchSrtData.srt
               });
               addLog(`✅ SRT 자막 파일 생성 완료: ${srtFileName}`);
-              console.log("✅ 배치 SRT 자막 파일 생성 완료:", srtPathResult.filePath);
+              console.log("✅ 배치 SRT 자막 파일 생성 완료:", srtPathResult.data.filePath);
             } else {
-              addLog(`❌ 자막 경로 생성 실패: ${srtPathResult.message}`, "error");
-              console.error("❌ 배치 자막 경로 생성 실패:", srtPathResult.message);
+              addLog(`❌ 자막 경로 생성 실패: ${srtPathResult.data?.message || srtPathResult.message}`, "error");
+              console.error("❌ 배치 자막 경로 생성 실패:", srtPathResult.data?.message || srtPathResult.message);
             }
           } else {
             addLog("⚠️ SRT 변환 결과가 없음", "warn");

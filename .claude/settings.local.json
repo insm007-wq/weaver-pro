@@ -201,7 +201,8 @@
       "Bash(tasklist)",
       "Bash(cmd /c:*)",
       "Bash(echo $APPDATA)",
-      "Read(//c/Users/paul/AppData/Roaming//**)"
+      "Read(//c/Users/paul/AppData/Roaming//**)",
+      "Read(//c/WeaverPro/tt/**)"
     ],
     "deny": [],
     "ask": []

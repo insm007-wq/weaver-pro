@@ -42,29 +42,35 @@ ipcMain.handle("tts:synthesize", async (event, { scenes, ttsEngine, voiceId, spe
 
     // 파일 저장 처리
     if (result.ok && result.parts) {
-      // 동적 프로젝트 폴더 생성 (오늘 날짜 + 프로젝트명)
-      const { getProjectManager } = require("../services/projectManager");
-      const projectManager = getProjectManager();
-
-      // 기본 프로젝트명 가져오기 (설정에서)
       const store = require('../services/store');
-      const defaultProjectName = store.get('defaultProjectName') || 'WeaverPro-Project';
-      const todayDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-
-      console.log("🔧 TTS - 동적 프로젝트 폴더 생성:", defaultProjectName);
-
-      // 임시 프로젝트 생성 (실제 프로젝트 목록에는 추가되지 않음)
-      const dynamicProject = await projectManager.createProject(defaultProjectName);
-      console.log("📁 TTS - 동적 프로젝트 생성 완료:", dynamicProject.paths.root);
-
       const path = require('path');
       const fs = require('fs').promises;
-      
+
+      // settings.json에서 videoSaveFolder 가져오기
+      const videoSaveFolder = store.get('videoSaveFolder');
+
+      let audioDir;
+      if (videoSaveFolder) {
+        // videoSaveFolder 기반으로 audio 디렉토리 생성
+        audioDir = path.join(videoSaveFolder, 'audio');
+        console.log("🔧 TTS - videoSaveFolder 기반 audio 경로 사용:", audioDir);
+      } else {
+        // 폴백: 기본 경로 사용
+        console.warn("⚠️ videoSaveFolder가 설정되지 않았습니다. 기본 경로를 사용합니다.");
+        const projectRoot = store.get('projectRootFolder') || 'C:\\WeaverPro';
+        const defaultProjectName = store.get('defaultProjectName') || 'default';
+        audioDir = path.join(projectRoot, defaultProjectName, 'audio');
+        console.log("🔧 TTS - 폴백 audio 경로:", audioDir);
+      }
+
+      // 디렉토리 생성 (없는 경우)
+      await fs.mkdir(audioDir, { recursive: true });
+
       const audioFiles = [];
-      
+
       for (let i = 0; i < result.parts.length; i++) {
         const part = result.parts[i];
-        const audioFilePath = path.join(dynamicProject.paths.audio, part.fileName);
+        const audioFilePath = path.join(audioDir, part.fileName);
         
         // base64를 Buffer로 변환하여 파일 저장
         const audioBuffer = Buffer.from(part.base64, 'base64');
