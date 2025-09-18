@@ -26,14 +26,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Text, tokens, Button, Card, CardHeader } from "@fluentui/react-components";
-import {
-  DocumentEditRegular,
-  VideoRegular,
-  MicRegular,
-  ImageRegular,
-  FolderOpenRegular,
-  PlayRegular,
-} from "@fluentui/react-icons";
+import { DocumentEditRegular, VideoRegular, MicRegular, ImageRegular, FolderOpenRegular, PlayRegular } from "@fluentui/react-icons";
 import ProgressStepComponent from "./ProgressStepComponent";
 
 /**
@@ -63,75 +56,8 @@ import ProgressStepComponent from "./ProgressStepComponent";
  * @param {Object} props.toast - 토스트 알림 객체
  * @param {Function} props.toast.success - 성공 토스트 표시 함수
  * @param {Function} props.toast.error - 오류 토스트 표시 함수
- *
- * @example
- * ```jsx
- * // 기본 사용법
- * import FullVideoProgressPanel from './parts/FullVideoProgressPanel';
- * import { useToast } from '../../hooks/useToast';
- * import { useApi } from '../../hooks/useApi';
- *
- * function ScriptGenerator() {
- *   const [fullVideoState, setFullVideoState] = useState({
- *     isGenerating: false,
- *     currentStep: "idle",
- *     mode: "script_mode",
- *     progress: { script: 0, audio: 0, images: 0, video: 0, subtitle: 0 },
- *     startTime: null,
- *     logs: [],
- *     results: { script: null, audio: null, images: [], video: null }
- *   });
- *
- *   const toast = useToast();
- *   const api = useApi();
- *
- *   const resetFullVideoState = () => {
- *     setFullVideoState({
- *       isGenerating: false,
- *       mode: "idle",
- *       currentStep: "idle",
- *       progress: { script: 0, audio: 0, images: 0, video: 0, subtitle: 0 },
- *       results: { script: null, audio: null, images: [], video: null },
- *       startTime: null,
- *       logs: [],
- *     });
- *   };
- *
- *   return (
- *     <FullVideoProgressPanel
- *       fullVideoState={fullVideoState}
- *       resetFullVideoState={resetFullVideoState}
- *       api={api}
- *       toast={toast}
- *     />
- *   );
- * }
- * ```
- *
- * @example
- * ```jsx
- * // 자동화 모드에서 사용
- * const automationState = {
- *   isGenerating: true,
- *   currentStep: "audio",
- *   mode: "automation_mode",
- *   progress: { script: 100, audio: 65, images: 0, video: 0, subtitle: 0 },
- *   startTime: new Date(),
- *   logs: [
- *     { timestamp: "14:30:25", message: "대본 생성 완료", type: "success" },
- *     { timestamp: "14:30:45", message: "음성 생성 중... (2/5)", type: "info" }
- *   ],
- *   results: { script: {...}, audio: null, images: [], video: null }
- * };
- *
- * <FullVideoProgressPanel
- *   fullVideoState={automationState}
- *   resetFullVideoState={resetState}
- *   api={apiInstance}
- *   toast={toastInstance}
- * />
- * ```
  */
+
 function FullVideoProgressPanel({ fullVideoState, resetFullVideoState, api, toast }) {
   // 실시간 타이머 상태
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -210,9 +136,7 @@ function FullVideoProgressPanel({ fullVideoState, resetFullVideoState, api, toas
       const remainingMinutes = Math.floor(remaining / 60);
       const remainingSeconds = Math.floor(remaining % 60);
 
-      return remainingMinutes > 0
-        ? `약 ${remainingMinutes}분 ${remainingSeconds}초 남음`
-        : `약 ${remainingSeconds}초 남음`;
+      return remainingMinutes > 0 ? `약 ${remainingMinutes}분 ${remainingSeconds}초 남음` : `약 ${remainingSeconds}초 남음`;
     }
 
     return "계산 중...";
@@ -224,10 +148,10 @@ function FullVideoProgressPanel({ fullVideoState, resetFullVideoState, api, toas
         // 상태에 따른 배경색 변경
         background:
           fullVideoState.currentStep === "complete"
-            ? tokens.colorPaletteLightGreenBackground1    // 완료: 연한 녹색
+            ? tokens.colorPaletteLightGreenBackground1 // 완료: 연한 녹색
             : fullVideoState.currentStep === "error"
-            ? tokens.colorPaletteRedBackground1           // 오류: 연한 빨간색
-            : "#fff",                                     // 진행중: 흰색
+            ? tokens.colorPaletteRedBackground1 // 오류: 연한 빨간색
+            : "#fff", // 진행중: 흰색
         border: "1px solid rgba(0,0,0,0.06)",
         boxShadow: "0 6px 24px rgba(0,0,0,0.06)",
         borderRadius: 14,
@@ -241,10 +165,7 @@ function FullVideoProgressPanel({ fullVideoState, resetFullVideoState, api, toas
           <div>
             {/* 모드별 제목 표시 */}
             <Text size={500} weight="semibold">
-              {fullVideoState.mode === "automation_mode"
-                ? "🎬 완전 자동화 영상 생성"
-                : "📝 대본 & 음성 & 자막 생성"
-              }
+              {fullVideoState.mode === "automation_mode" ? "🎬 완전 자동화 영상 생성" : "📝 대본 & 음성 & 자막 생성"}
             </Text>
             {/* 상태별 부제목 및 경과 시간 표시 */}
             <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
@@ -266,27 +187,30 @@ function FullVideoProgressPanel({ fullVideoState, resetFullVideoState, api, toas
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {/* 디버깅 정보 (항상 표시) */}
             <Text size={100} style={{ opacity: 0.7, fontSize: "10px" }}>
-              상태: {fullVideoState.mode || 'unknown'} | {fullVideoState.currentStep || 'unknown'} | {fullVideoState.isGenerating ? 'generating' : 'idle'}
+              상태: {fullVideoState.mode || "unknown"} | {fullVideoState.currentStep || "unknown"} |{" "}
+              {fullVideoState.isGenerating ? "generating" : "idle"}
             </Text>
 
             {/* 항상 버튼들 표시 */}
             <Button
               appearance={fullVideoState.isGenerating ? "secondary" : "primary"}
               size="small"
-              onClick={resetFullVideoState}
+              onClick={() => resetFullVideoState(false)}
             >
               {fullVideoState.isGenerating ? "취소" : "닫기"}
             </Button>
 
             {/* 초기화 버튼 (항상 표시) */}
-            <Button
-              appearance="secondary"
-              size="small"
-              onClick={resetFullVideoState}
-              style={{ backgroundColor: "#f3f2f1" }}
-            >
+            <Button appearance="secondary" size="small" onClick={() => resetFullVideoState(false)} style={{ backgroundColor: "#f3f2f1" }}>
               초기화
             </Button>
+
+            {/* 로그 지우기 버튼 (로그가 있을 때만 표시) */}
+            {fullVideoState.logs.length > 0 && (
+              <Button appearance="secondary" size="small" onClick={() => resetFullVideoState(true)} style={{ backgroundColor: "#fff2e6" }}>
+                로그 지우기
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -313,13 +237,8 @@ function FullVideoProgressPanel({ fullVideoState, resetFullVideoState, api, toas
               title={step.title}
               icon={step.icon}
               mode={fullVideoState.mode}
-              isCompleted={
-                fullVideoState.currentStep === "completed" || fullVideoState.currentStep === "complete"
-              }
-              hasError={
-                fullVideoState.currentStep === "error" &&
-                fullVideoState.failedStep === step.key
-              }
+              isCompleted={fullVideoState.currentStep === "completed" || fullVideoState.currentStep === "complete"}
+              hasError={fullVideoState.currentStep === "error" && fullVideoState.failedStep === step.key}
             />
 
             {/* 단계 간 연결선 (마지막 단계 제외) */}
@@ -338,17 +257,16 @@ function FullVideoProgressPanel({ fullVideoState, resetFullVideoState, api, toas
                   style={{
                     height: "100%",
                     backgroundColor: (() => {
-                      const stepOrder = fullVideoState.mode === "automation_mode"
-                        ? ["script", "audio", "images", "video"]
-                        : ["script", "audio", "subtitle"];
+                      const stepOrder =
+                        fullVideoState.mode === "automation_mode"
+                          ? ["script", "audio", "images", "video"]
+                          : ["script", "audio", "subtitle"];
 
                       const currentIndex = stepOrder.indexOf(fullVideoState.currentStep);
                       const isCompleted = fullVideoState.currentStep === "completed" || fullVideoState.currentStep === "complete";
 
                       // 현재 단계가 연결선보다 앞서거나 완료되면 녹색, 아니면 회색
-                      return (currentIndex > index || isCompleted)
-                        ? tokens.colorPaletteLightGreenForeground1
-                        : tokens.colorNeutralStroke2;
+                      return currentIndex > index || isCompleted ? tokens.colorPaletteLightGreenForeground1 : tokens.colorNeutralStroke2;
                     })(),
                     transition: "all 0.3s ease",
                   }}
@@ -366,15 +284,15 @@ function FullVideoProgressPanel({ fullVideoState, resetFullVideoState, api, toas
             backgroundColor: tokens.colorNeutralBackground2,
             borderRadius: 8,
             padding: tokens.spacingVerticalS,
-            maxHeight: 120,
+            maxHeight: 300,
             overflowY: "auto",
           }}
         >
           <Text size={300} weight="semibold" style={{ marginBottom: 8 }}>
-            📋 진행 로그
+            📋 진행 로그 ({fullVideoState.logs.length}개)
           </Text>
-          {/* 최근 5개 로그만 표시 */}
-          {fullVideoState.logs.slice(-5).map((log, index) => (
+          {/* 모든 로그 표시 - 파일 경로 포함 */}
+          {fullVideoState.logs.map((log, index) => (
             <div key={index} style={{ marginBottom: 4 }}>
               <Text
                 size={200}
@@ -382,10 +300,10 @@ function FullVideoProgressPanel({ fullVideoState, resetFullVideoState, api, toas
                   // 로그 타입별 색상 지정
                   color:
                     log.type === "error"
-                      ? tokens.colorPaletteRedForeground1           // 오류: 빨간색
+                      ? tokens.colorPaletteRedForeground1 // 오류: 빨간색
                       : log.type === "success"
-                      ? tokens.colorPaletteLightGreenForeground1    // 성공: 녹색
-                      : tokens.colorNeutralForeground2,             // 기본: 회색
+                      ? tokens.colorPaletteLightGreenForeground1 // 성공: 녹색
+                      : tokens.colorNeutralForeground2, // 기본: 회색
                 }}
               >
                 [{log.timestamp}] {log.message}
@@ -464,14 +382,4 @@ export default FullVideoProgressPanel;
  * @property {string} timestamp - 로그 시간 (HH:MM:SS 형태)
  * @property {string} message - 로그 메시지
  * @property {('info'|'success'|'error'|'warning')} type - 로그 타입
- */
-
-/**
- * 사용되는 API 목록:
- *
- * 1. project:openOutputFolder
- *    - 설명: 프로젝트 출력 폴더를 시스템 파일 탐색기로 열기
- *    - 매개변수: 없음
- *    - 반환값: { success: boolean, message?: string }
- *    - 사용: 완료 후 "출력 폴더 열기" 버튼 클릭 시
  */

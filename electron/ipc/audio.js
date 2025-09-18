@@ -5,6 +5,15 @@ const path = require("path");
 // FFmpeg 경로 설정
 const ffmpegPath = path.join(__dirname, '..', '..', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
 
+// FFmpeg 경로 확인
+const fs = require("fs");
+if (!fs.existsSync(ffmpegPath)) {
+  console.error("❌ FFmpeg 바이너리를 찾을 수 없습니다:", ffmpegPath);
+  console.log("📦 ffmpeg-static 패키지가 설치되어 있는지 확인하세요");
+} else {
+  console.log("✅ FFmpeg 바이너리 확인:", ffmpegPath);
+}
+
 // ESM 패키지(music-metadata)를 CJS에서 안전하게 로드하기 위한 helper
 let mmPromise = null;
 async function getMusicMetadata() {
@@ -41,12 +50,26 @@ ipcMain.handle("audio/mergeFiles", async (_e, { audioFiles, outputPath }) => {
   const { spawn } = require("child_process");
 
   try {
+    console.log("🎵 audio/mergeFiles 호출됨:", { audioFiles, outputPath });
+
     if (!audioFiles || audioFiles.length === 0) {
       throw new Error("음성 파일 목록이 비어있습니다.");
     }
 
+    // 입력 파일들이 실제로 존재하는지 확인
+    for (const audioFile of audioFiles) {
+      try {
+        await fs.access(audioFile);
+        console.log("✅ 입력 파일 확인:", audioFile);
+      } catch (error) {
+        console.error("❌ 입력 파일 없음:", audioFile);
+        throw new Error(`입력 파일을 찾을 수 없습니다: ${audioFile}`);
+      }
+    }
+
     // 출력 디렉토리가 없으면 생성
     const outputDir = path.dirname(outputPath);
+    console.log("📁 출력 디렉토리 생성:", outputDir);
     await fs.mkdir(outputDir, { recursive: true });
 
     if (audioFiles.length === 1) {
@@ -73,15 +96,39 @@ ipcMain.handle("audio/mergeFiles", async (_e, { audioFiles, outputPath }) => {
         outputPath
       ];
 
+      console.log("🎬 FFmpeg 실행:", { ffmpegPath, ffmpegArgs });
+      console.log("📝 concat 리스트 파일:", tempListFile);
+      console.log("📄 리스트 내용:", listContent);
+
       const ffmpeg = spawn(ffmpegPath, ffmpegArgs, { stdio: 'pipe' });
 
       let stderr = '';
+      let stdout = '';
+
+      ffmpeg.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+
       ffmpeg.stderr.on('data', (data) => {
-        stderr += data.toString();
+        const chunk = data.toString();
+        stderr += chunk;
+        console.log("🎬 FFmpeg stderr:", chunk);
       });
 
       ffmpeg.on('close', async (code) => {
         try {
+          console.log("🎬 FFmpeg 종료 코드:", code);
+          console.log("🎬 FFmpeg stdout:", stdout);
+          console.log("🎬 FFmpeg stderr:", stderr);
+
+          // 출력 파일이 실제로 생성되었는지 확인
+          try {
+            await fs.access(outputPath);
+            console.log("✅ 출력 파일 생성 확인:", outputPath);
+          } catch (error) {
+            console.error("❌ 출력 파일 생성 실패:", outputPath);
+          }
+
           // 임시 파일 정리
           await fs.unlink(tempListFile).catch(() => {});
 
@@ -100,6 +147,7 @@ ipcMain.handle("audio/mergeFiles", async (_e, { audioFiles, outputPath }) => {
       });
 
       ffmpeg.on('error', (error) => {
+        console.error("🎬 FFmpeg 실행 오류:", error);
         reject(new Error(`FFmpeg 실행 오류: ${error.message}`));
       });
     });

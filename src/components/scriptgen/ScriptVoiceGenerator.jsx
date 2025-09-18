@@ -173,7 +173,8 @@ function ScriptVoiceGenerator() {
         // 전역 설정에서 영상 폴더 경로 가져오기
         let videoSaveFolder = null;
         try {
-          const videoFolderSetting = await api.invoke("settings:get", "videoSaveFolder");
+          const videoFolderSettingResult = await window.api.getSetting("videoSaveFolder");
+          const videoFolderSetting = videoFolderSettingResult?.value || videoFolderSettingResult;
           if (videoFolderSetting) {
             videoSaveFolder = videoFolderSetting;
             console.log("📂 대본 모드 - 설정된 영상 폴더:", videoSaveFolder);
@@ -210,7 +211,7 @@ function ScriptVoiceGenerator() {
             progress: { ...prev.progress, script: 100, audio: 0 },
           }));
 
-          // 대본 생성 모드: 음성과 자막만 생성
+          // 대본 생성 모드: 음성과 자막만 생성 (프로젝트 폴더 구조 사용)
           await generateAudioAndSubtitles(res, "script_mode", {
             form,
             voices,
@@ -218,7 +219,7 @@ function ScriptVoiceGenerator() {
             api,
             toast,
             addLog,
-          }, videoSaveFolder);
+          });
         } else {
           throw new Error(`대본 생성 실패: ${JSON.stringify(res)}`);
         }
@@ -249,8 +250,8 @@ function ScriptVoiceGenerator() {
     });
   };
 
-  const resetFullVideoState = () => {
-    setFullVideoState({
+  const resetFullVideoState = (clearLogs = false) => {
+    setFullVideoState(prev => ({
       isGenerating: false,
       mode: "idle",
       currentStep: "idle",
@@ -259,8 +260,9 @@ function ScriptVoiceGenerator() {
       streamingScript: "",
       error: null,
       startTime: null,
-      logs: [],
-    });
+      // 로그는 clearLogs가 true일 때만 지우고, 기본적으로는 보존
+      logs: clearLogs ? [] : prev.logs,
+    }));
 
     // 예상 생성 결과(doc)도 함께 초기화
     setDoc(null);
@@ -274,7 +276,8 @@ function ScriptVoiceGenerator() {
    */
   const runFullVideoGeneration = async () => {
     console.log("🚀 runFullVideoGeneration 함수 실행 시작! (AUTOMATION MODE)");
-    resetFullVideoState();
+    // 로그는 보존하고 상태만 리셋
+    resetFullVideoState(false);
     updateFullVideoState({
       isGenerating: true,
       mode: "automation_mode",
@@ -312,13 +315,38 @@ function ScriptVoiceGenerator() {
       addLog(`📊 설정된 장면 수: ${form.maxScenes}개`);
       addLog(`⏱️ 설정된 영상 길이: ${form.durationMin}분`);
 
-      // 자동화 모드에서는 프로젝트 생성 없이 직접 영상 폴더에 파일 생성
-      if (videoSaveFolder && form.topic) {
-        addLog(`🎯 파일 생성 경로 설정 - 영상 폴더: ${videoSaveFolder}`);
-        addLog(`📂 프로젝트 폴더 생성 없이 직접 파일 생성 모드`);
-      } else {
-        addLog(`⚠️ 영상 폴더 설정이 필요합니다`, "warning");
-        throw new Error("영상 폴더가 설정되지 않았습니다.");
+      // 자동화 모드에서는 설정에서 직접 경로 가져오기
+      let projectPaths = null;
+      try {
+        const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
+        const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
+        const currentProjectIdResult = await window.api.getSetting("currentProjectId");
+        const currentProjectId = currentProjectIdResult?.value || currentProjectIdResult;
+
+        if (videoSaveFolder && currentProjectId) {
+          projectPaths = {
+            root: videoSaveFolder,
+            scripts: `${videoSaveFolder}\\scripts`,
+            audio: `${videoSaveFolder}\\audio`,
+            images: `${videoSaveFolder}\\images`,
+            output: `${videoSaveFolder}\\output`,
+            temp: `${videoSaveFolder}\\temp`
+          };
+
+          addLog(`🎯 현재 프로젝트: ${currentProjectId}`);
+          addLog(`📂 프로젝트 폴더 구조 사용 모드`);
+          addLog(`  - 루트: ${projectPaths.root}`);
+          addLog(`  - 대본/자막: ${projectPaths.scripts}`);
+          addLog(`  - 음성: ${projectPaths.audio}`);
+          addLog(`  - 이미지: ${projectPaths.images}`);
+          addLog(`  - 영상: ${projectPaths.output}`);
+        } else {
+          addLog(`⚠️ 프로젝트 설정이 없습니다`, "warning");
+          throw new Error("프로젝트 설정이 없습니다.");
+        }
+      } catch (settingsError) {
+        addLog(`❌ 프로젝트 설정 가져오기 실패: ${settingsError.message}`, "error");
+        throw new Error("프로젝트 설정을 가져올 수 없습니다.");
       }
 
       addLog("📝 AI 대본 생성 중...");
@@ -335,15 +363,15 @@ function ScriptVoiceGenerator() {
 
       updateFullVideoState({ currentStep: "audio", progress: { script: 100 } });
       addLog("🎤 음성 생성 중...");
-      const audio = await generateAudioStep(script, form, addLog, setFullVideoState, api, videoSaveFolder);
+      const audio = await generateAudioStep(script, form, addLog, setFullVideoState, api);
 
       updateFullVideoState({ currentStep: "images", progress: { audio: 100 } });
       addLog("🖼️ 이미지 생성 중...");
-      const images = await generateImagesStep(script, form, addLog, updateFullVideoState, api, videoSaveFolder);
+      const images = await generateImagesStep(script, form, addLog, updateFullVideoState, api);
 
       updateFullVideoState({ currentStep: "video", progress: { images: 100 } });
       addLog("🎬 영상 합성 중...");
-      const video = await generateVideoStep(script, audio, images, addLog, setFullVideoState, api, videoSaveFolder);
+      const video = await generateVideoStep(script, audio, images, addLog, setFullVideoState, api);
 
       updateFullVideoState({
         currentStep: "complete",
@@ -356,8 +384,25 @@ function ScriptVoiceGenerator() {
 
       // 출력 폴더 자동 열기
       try {
-        await window.electronAPI.project.openOutputFolder();
-        addLog("📂 출력 폴더를 열었습니다.", "success");
+        // 프로젝트 API가 실패할 경우 videoSaveFolder의 output 폴더 직접 열기
+        try {
+          await window.electronAPI.project.openOutputFolder();
+          addLog("📂 출력 폴더를 열었습니다.", "success");
+        } catch (projectError) {
+          console.warn("프로젝트 출력 폴더 열기 실패, 대안 시도:", projectError.message);
+
+          // 대안: videoSaveFolder/output 폴더 직접 열기
+          const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
+          const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
+
+          if (videoSaveFolder) {
+            const outputFolder = `${videoSaveFolder}\\output`;
+            await api.invoke("shell:openPath", outputFolder);
+            addLog("📂 출력 폴더를 열었습니다.", "success");
+          } else {
+            throw new Error("출력 폴더 경로를 찾을 수 없습니다.");
+          }
+        }
       } catch (error) {
         addLog("❌ 출력 폴더 열기 실패: " + error.message, "error");
       }

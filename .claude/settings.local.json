@@ -204,7 +204,9 @@
       "Read(//c/Users/paul/AppData/Roaming//**)",
       "Read(//c/WeaverPro/tt/**)",
       "Bash(ffmpeg:*)",
-      "Bash(del \"C:\\WeaverPro\\tt\\scripts\\test-subtitle.srt\")"
+      "Bash(del \"C:\\WeaverPro\\tt\\scripts\\test-subtitle.srt\")",
+      "Read(//c/WeaverPro/tttt/images/**)",
+      "Bash(powershell:*)"
     ],
     "deny": [],
     "ask": []

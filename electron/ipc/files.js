@@ -526,6 +526,106 @@ ipcMain.handle("files:nextAvailableName", async (_e, { dir, base, kind }) => {
   }
 });
 
+/** ✅ URL을 지정된 경로에 다운로드 */
+ipcMain.handle("files:writeUrl", async (_evt, { url, filePath }) => {
+  try {
+    console.log("🌐 files:writeUrl 호출됨:", { url, filePath });
+
+    if (!url || typeof url !== "string") {
+      return { success: false, message: "url_required" };
+    }
+    if (!filePath || typeof filePath !== "string") {
+      return { success: false, message: "filePath_required" };
+    }
+
+    // 디렉토리 생성
+    const dir = path.dirname(filePath);
+    console.log("📁 디렉토리 확인/생성:", dir);
+    ensureDirSync(dir);
+
+    // 파일 다운로드 및 저장
+    console.log("🌐 URL 다운로드 시작:", url);
+    await streamDownloadToFile(url, filePath);
+    console.log("✅ files:writeUrl 완료:", filePath);
+
+    // 파일이 실제로 생성되었는지 확인
+    const exists = fs.existsSync(filePath);
+    console.log("🔍 파일 생성 확인:", exists, filePath);
+
+    if (!exists) {
+      return { success: false, message: "file_not_created" };
+    }
+
+    return {
+      success: true,
+      data: {
+        ok: true,
+        path: filePath
+      }
+    };
+  } catch (error) {
+    console.error("❌ files:writeUrl 실패:", error);
+    return {
+      success: false,
+      message: error.message,
+      data: {
+        ok: false,
+        message: error.message
+      }
+    };
+  }
+});
+
+/** ✅ 버퍼를 지정된 경로에 저장 */
+ipcMain.handle("files:writeBuffer", async (_evt, { buffer, filePath }) => {
+  try {
+    console.log("💾 files:writeBuffer 호출됨:", { filePath, bufferLength: buffer?.length });
+
+    if (!buffer) {
+      return { success: false, message: "buffer_required" };
+    }
+    if (!filePath || typeof filePath !== "string") {
+      return { success: false, message: "filePath_required" };
+    }
+
+    // 디렉토리 생성
+    const dir = path.dirname(filePath);
+    console.log("📁 디렉토리 확인/생성:", dir);
+    ensureDirSync(dir);
+
+    // 버퍼를 파일로 저장
+    const bufferData = toBuffer(buffer);
+    await fs.promises.writeFile(filePath, bufferData);
+    console.log("✅ files:writeBuffer 완료:", filePath);
+
+    // 파일이 실제로 생성되었는지 확인
+    const exists = fs.existsSync(filePath);
+    console.log("🔍 파일 생성 확인:", exists, filePath);
+
+    if (!exists) {
+      return { success: false, message: "file_not_created" };
+    }
+
+    return {
+      success: true,
+      data: {
+        ok: true,
+        path: filePath
+      }
+    };
+  } catch (error) {
+    console.error("❌ files:writeBuffer 실패:", error);
+    return {
+      success: false,
+      message: error.message,
+      data: {
+        ok: false,
+        message: error.message
+      }
+    };
+  }
+});
+
 /** 텍스트 파일 저장 */
 ipcMain.handle("files:writeText", async (_evt, { filePath, content }) => {
   try {

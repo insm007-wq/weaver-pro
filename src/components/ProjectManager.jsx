@@ -80,9 +80,9 @@ export default function ProjectManager() {
   const api = useApi();
 
   // 프로젝트 설정 상태 관리
-  const [settings, setSettings] = useState(DEFAULT_PROJECT_SETTINGS);
+  const [settings, setSettings] = useState({...DEFAULT_PROJECT_SETTINGS, videoSaveFolder: ""});
   const [isModified, setIsModified] = useState(false);
-  const [originalSettings, setOriginalSettings] = useState(DEFAULT_PROJECT_SETTINGS);
+  const [originalSettings, setOriginalSettings] = useState({...DEFAULT_PROJECT_SETTINGS, videoSaveFolder: ""});
 
   // 프로젝트 목록 상태 관리
   const [projects, setProjects] = useState([]);
@@ -164,7 +164,7 @@ export default function ProjectManager() {
   const loadSettings = async () => {
     try {
       // API 호출 실패 시에도 기본값으로 동작
-      let projectRootFolder, defaultProjectName;
+      let projectRootFolder, defaultProjectName, videoSaveFolder;
 
       try {
         projectRootFolder = await window?.api?.getSetting?.("projectRootFolder");
@@ -180,9 +180,17 @@ export default function ProjectManager() {
         defaultProjectName = DEFAULT_PROJECT_SETTINGS.defaultProjectName;
       }
 
+      try {
+        videoSaveFolder = await window?.api?.getSetting?.("videoSaveFolder");
+      } catch (err) {
+        console.warn("영상 저장 폴더 설정 로드 실패:", err);
+        videoSaveFolder = "";
+      }
+
       const loadedSettings = {
         projectRootFolder: projectRootFolder || DEFAULT_PROJECT_SETTINGS.projectRootFolder,
         defaultProjectName: defaultProjectName || DEFAULT_PROJECT_SETTINGS.defaultProjectName,
+        videoSaveFolder: videoSaveFolder || "",
       };
 
       setSettings(loadedSettings);
@@ -190,8 +198,9 @@ export default function ProjectManager() {
     } catch (error) {
       console.error("프로젝트 설정 로드 실패:", error);
       // 에러 발생 시에도 기본값으로 동작
-      setSettings(DEFAULT_PROJECT_SETTINGS);
-      setOriginalSettings(DEFAULT_PROJECT_SETTINGS);
+      const defaultWithVideo = {...DEFAULT_PROJECT_SETTINGS, videoSaveFolder: ""};
+      setSettings(defaultWithVideo);
+      setOriginalSettings(defaultWithVideo);
     }
   };
 
@@ -264,6 +273,10 @@ export default function ProjectManager() {
         key: "defaultProjectName",
         value: settings.defaultProjectName,
       });
+      await window.api.setSetting({
+        key: "videoSaveFolder",
+        value: settings.videoSaveFolder,
+      });
 
       setOriginalSettings(settings);
 
@@ -287,13 +300,15 @@ export default function ProjectManager() {
    * 프로젝트 설정을 기본값으로 초기화
    */
   const resetSettings = async () => {
-    setSettings(DEFAULT_PROJECT_SETTINGS);
+    const defaultWithVideo = {...DEFAULT_PROJECT_SETTINGS, videoSaveFolder: ""};
+    setSettings(defaultWithVideo);
     // 선택된 프로젝트 초기화
     setSelectedProject(null);
     // 강제로 originalSettings를 다른 값으로 설정해서 isModified가 true가 되도록 함
     setOriginalSettings({
       projectRootFolder: "temp_different_value",
       defaultProjectName: "temp_different_value",
+      videoSaveFolder: "temp_different_value",
     });
 
     showGlobalToast({
@@ -380,6 +395,7 @@ export default function ProjectManager() {
             setSettings((prev) => ({
               ...prev,
               defaultProjectName: originalSettings.defaultProjectName,
+              videoSaveFolder: originalSettings.videoSaveFolder || "",
             }));
           }
         }
@@ -575,10 +591,11 @@ export default function ProjectManager() {
                 onClick={() => {
                   setSelectedProject(project);
                   // 안전한 프로젝트 선택 처리
-                  if (project?.topic) {
+                  if (project?.topic && project?.paths?.root) {
                     setSettings((prev) => ({
                       ...prev,
                       defaultProjectName: project.topic,
+                      videoSaveFolder: project.paths.root,
                     }));
 
                     // 안전한 전역 이벤트 발생

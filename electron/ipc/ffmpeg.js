@@ -7,6 +7,7 @@ const { ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs').promises;
+const store = require('../services/store');
 
 // FFmpeg 경로 설정
 const ffmpegPath = path.join(__dirname, '..', '..', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
@@ -25,17 +26,37 @@ function register() {
       console.log('- 이미지 파일:', imageFiles);
       console.log('- 출력 경로:', outputPath);
 
-      // 기본 옵션 설정
+      // 설정에서 영상 품질 옵션들 가져오기
+      const videoQuality = store.get('videoQuality', 'balanced');
+      const videoPreset = store.get('videoPreset', 'fast');
+      const videoCrf = store.get('videoCrf', 23);
+
+      // 협력업체보다 더 빠른 품질 설정
+      let qualitySettings = { crf: 23, preset: 'veryfast' }; // 기본값 (매우 빠른 처리)
+
+      if (videoQuality === 'high') {
+        qualitySettings = { crf: 18, preset: 'fast' }; // 고품질도 빠르게
+      } else if (videoQuality === 'medium') {
+        qualitySettings = { crf: 21, preset: 'veryfast' };
+      } else if (videoQuality === 'low') {
+        qualitySettings = { crf: 28, preset: 'ultrafast' };
+      }
+
+      // 개별 설정이 있으면 사용
+      if (videoPreset) qualitySettings.preset = videoPreset;
+      if (videoCrf !== undefined) qualitySettings.crf = videoCrf;
+
       const defaultOptions = {
         fps: 24,
         videoCodec: 'libx264',
         audioCodec: 'aac',
-        crf: 18, // 높은 품질
-        preset: 'medium',
+        ...qualitySettings,
         format: 'mp4'
       };
-      
+
       const finalOptions = { ...defaultOptions, ...options };
+
+      console.log(`📊 사용 중인 영상 품질 설정: CRF=${finalOptions.crf}, Preset=${finalOptions.preset}`);
 
       // FFmpeg 명령어 구성
       const ffmpegArgs = await buildFFmpegCommand(
@@ -96,65 +117,78 @@ function register() {
   console.log('[ipc] ffmpeg: registered');
 }
 
-// FFmpeg 명령어 구성
+// FFmpeg 명령어 구성 (협력업체 수준 최적화)
 async function buildFFmpegCommand(audioFiles, imageFiles, outputPath, options) {
-  const args = ['-y']; // 기존 파일 덮어쓰기
+  const args = [
+    '-y', // 기존 파일 덮어쓰기
+    '-hide_banner', // 불필요한 로그 숨기기
+    '-loglevel', 'warning' // 로그 레벨 최적화
+  ];
 
-  // 이미지 입력 설정
+  // 입력 파일들 추가
   if (imageFiles && imageFiles.length > 0) {
-    // 이미지 시퀀스로 처리
-    args.push('-framerate', options.fps.toString());
-    
-    // 각 이미지의 지속 시간 계산
-    const totalAudioDuration = await getTotalAudioDuration(audioFiles);
-    const imageDuration = totalAudioDuration / imageFiles.length;
-    
-    // 이미지들을 concat 필터로 연결
-    let filterComplex = '';
-    const inputs = [];
-    
-    for (let i = 0; i < imageFiles.length; i++) {
-      args.push('-i', imageFiles[i]);
-      inputs.push(`[${i}:v]`);
-      
-      // 각 이미지를 비디오로 변환하고 지속시간 설정
-      filterComplex += `[${i}:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setpts=PTS-STARTPTS,loop=-1:size=1:start=0[v${i}];`;
+    for (const imageFile of imageFiles) {
+      args.push('-i', imageFile);
     }
-    
-    // 비디오 연결
-    filterComplex += inputs.map((_, i) => `[v${i}]`).join('') + `concat=n=${imageFiles.length}:v=1:a=0[outv];`;
-    
-    args.push('-filter_complex', filterComplex);
-    args.push('-map', '[outv]');
   }
 
-  // 오디오 입력 설정
   if (audioFiles && audioFiles.length > 0) {
     for (const audioFile of audioFiles) {
       args.push('-i', audioFile);
     }
-    
-    if (audioFiles.length > 1) {
-      // 여러 오디오 파일 연결
-      const audioInputs = audioFiles.map((_, i) => `[${i + imageFiles.length}:a]`).join('');
-      args.push('-filter_complex', `${audioInputs}concat=n=${audioFiles.length}:v=0:a=1[outa]`);
-      args.push('-map', '[outa]');
-    } else {
-      args.push('-map', `${imageFiles.length}:a`);
-    }
   }
 
-  // 출력 옵션
-  args.push('-c:v', options.videoCodec);
+  // 협력업체 수준의 최적화된 필터 체인
+  if (imageFiles && imageFiles.length > 0) {
+    const totalAudioDuration = await getTotalAudioDuration(audioFiles);
+    const imageDuration = totalAudioDuration / imageFiles.length;
+
+    console.log(`⚡ 협력업체 수준 최적화: 총 ${totalAudioDuration}초, 이미지당 ${imageDuration.toFixed(1)}초`);
+
+    // 더 효율적인 필터 체인 구성
+    let filterComplex = '';
+
+    if (imageFiles.length === 1) {
+      // 단일 이미지: 가장 간단한 처리
+      filterComplex = `[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p,fps=${options.fps}[v]`;
+    } else {
+      // 다중 이미지: 배치 처리로 최적화
+      for (let i = 0; i < imageFiles.length; i++) {
+        const duration = imageDuration.toFixed(3);
+        filterComplex += `[${i}:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p,fps=${options.fps},trim=duration=${duration}[v${i}];`;
+      }
+      filterComplex += imageFiles.map((_, i) => `[v${i}]`).join('') + `concat=n=${imageFiles.length}:v=1[v]`;
+    }
+
+    args.push('-filter_complex', filterComplex);
+    args.push('-map', '[v]');
+  }
+
+  // 오디오 매핑
+  if (audioFiles && audioFiles.length > 0) {
+    args.push('-map', `${imageFiles.length}:a`);
+  }
+
+  // 협력업체보다 더 빠른 인코딩 설정
+  args.push(
+    '-c:v', options.videoCodec,
+    '-profile:v', 'main', // 호환성 최적화
+    '-pix_fmt', 'yuv420p', // 픽셀 포맷 고정
+    '-crf', options.crf.toString(),
+    '-preset', options.preset,
+    '-tune', 'fastdecode', // 디코딩 최적화
+    '-threads', '0' // 멀티스레드 최대 활용
+  );
+
   if (audioFiles && audioFiles.length > 0) {
     args.push('-c:a', options.audioCodec);
   }
-  args.push('-crf', options.crf.toString());
-  args.push('-preset', options.preset);
-  args.push('-movflags', '+faststart'); // 웹 최적화
-  
-  // 출력 파일
-  args.push(outputPath);
+
+  args.push(
+    '-movflags', '+faststart', // 웹 최적화
+    '-avoid_negative_ts', 'make_zero', // 타임스탬프 최적화
+    outputPath
+  );
 
   return args;
 }
@@ -188,10 +222,27 @@ function getAudioDuration(audioFile) {
 // FFmpeg 실행
 function runFFmpeg(args, progressCallback = null, isCheck = false) {
   return new Promise((resolve, reject) => {
+    // 타임아웃 설정: 체크 시 10초, 일반 처리 시 5분
+    const timeoutMs = isCheck ? 10000 : 300000; // 5분으로 증가
+    let timeoutId;
+
     const ffmpegProcess = spawn(ffmpegPath, args);
-    
+
     let output = '';
     let errorOutput = '';
+    let isCompleted = false;
+
+    // 타임아웃 타이머 설정
+    timeoutId = setTimeout(() => {
+      if (!isCompleted) {
+        console.warn(`⚠️ FFmpeg 타임아웃 (${timeoutMs}ms), 프로세스 종료 중...`);
+        ffmpegProcess.kill('SIGKILL');
+        resolve({
+          success: false,
+          error: `FFmpeg 처리 시간이 너무 오래 걸려서 중단되었습니다 (${timeoutMs / 1000}초 초과)`
+        });
+      }
+    }, timeoutMs);
 
     ffmpegProcess.stdout.on('data', (data) => {
       output += data.toString();
@@ -218,25 +269,33 @@ function runFFmpeg(args, progressCallback = null, isCheck = false) {
     });
 
     ffmpegProcess.on('close', (code) => {
+      if (isCompleted) return;
+      isCompleted = true;
+      clearTimeout(timeoutId);
+
       if (code === 0 || isCheck) {
-        resolve({ 
-          success: code === 0, 
+        resolve({
+          success: code === 0,
           output: output || errorOutput,
           duration: extractDuration(errorOutput),
           size: 0 // 파일 크기는 별도로 계산 가능
         });
       } else {
-        resolve({ 
-          success: false, 
-          error: errorOutput || `FFmpeg exited with code ${code}` 
+        resolve({
+          success: false,
+          error: errorOutput || `FFmpeg exited with code ${code}`
         });
       }
     });
 
     ffmpegProcess.on('error', (error) => {
-      resolve({ 
-        success: false, 
-        error: error.message 
+      if (isCompleted) return;
+      isCompleted = true;
+      clearTimeout(timeoutId);
+
+      resolve({
+        success: false,
+        error: error.message
       });
     });
   });
