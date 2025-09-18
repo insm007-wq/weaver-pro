@@ -14,22 +14,27 @@ const ffmpegPath = path.join(__dirname, '..', '..', 'node_modules', 'ffmpeg-stat
 
 function register() {
   // 영상 합성 (이미지 + 음성 → 비디오)
-  ipcMain.handle('ffmpeg:compose', async (event, { 
-    audioFiles, 
-    imageFiles, 
-    outputPath, 
-    options = {} 
+  ipcMain.handle('ffmpeg:compose', async (event, {
+    audioFiles,
+    imageFiles,
+    outputPath,
+    subtitlePath = null, // 자막 파일 경로 추가
+    options = {}
   }) => {
     try {
       console.log('🎬 FFmpeg 영상 합성 시작...');
       console.log('- 오디오 파일:', audioFiles);
       console.log('- 이미지 파일:', imageFiles);
       console.log('- 출력 경로:', outputPath);
+      console.log('- 자막 파일:', subtitlePath);
 
       // 설정에서 영상 품질 옵션들 가져오기
       const videoQuality = store.get('videoQuality', 'balanced');
       const videoPreset = store.get('videoPreset', 'fast');
       const videoCrf = store.get('videoCrf', 23);
+
+      // 자막 설정 가져오기
+      const subtitleSettings = store.get('subtitleSettings', null);
 
       // 협력업체보다 더 빠른 품질 설정
       let qualitySettings = { crf: 23, preset: 'veryfast' }; // 기본값 (매우 빠른 처리)
@@ -60,10 +65,12 @@ function register() {
 
       // FFmpeg 명령어 구성
       const ffmpegArgs = await buildFFmpegCommand(
-        audioFiles, 
-        imageFiles, 
-        outputPath, 
-        finalOptions
+        audioFiles,
+        imageFiles,
+        outputPath,
+        finalOptions,
+        subtitleSettings, // 자막 설정 전달
+        subtitlePath // 자막 파일 경로 전달
       );
 
       console.log('FFmpeg 명령어:', ffmpegArgs.join(' '));
@@ -117,78 +124,160 @@ function register() {
   console.log('[ipc] ffmpeg: registered');
 }
 
-// FFmpeg 명령어 구성 (협력업체 수준 최적화)
-async function buildFFmpegCommand(audioFiles, imageFiles, outputPath, options) {
+// FFmpeg 명령어 구성 (협력업체 완전 복제 + 개선)
+async function buildFFmpegCommand(audioFiles, imageFiles, outputPath, options, subtitleSettings = null, subtitlePath = null) {
+  const path = require('path');
+  const fs = require('fs').promises;
+  const { app } = require('electron');
+
+  // 임시 폴더 생성 (기존 파일들 정리)
+  const tempDir = path.join(app.getPath('userData'), 'ffmpeg-temp');
+  try {
+    await fs.mkdir(tempDir, { recursive: true });
+    // 기존 임시 파일들 정리
+    const files = await fs.readdir(tempDir);
+    for (const file of files) {
+      if (file.startsWith('concat_') || file.startsWith('clip_')) {
+        try {
+          await fs.unlink(path.join(tempDir, file));
+          console.log(`🗑️ 기존 임시 파일 삭제: ${file}`);
+        } catch (e) {}
+      }
+    }
+  } catch (e) {}
+
   const args = [
     '-y', // 기존 파일 덮어쓰기
-    '-hide_banner', // 불필요한 로그 숨기기
-    '-loglevel', 'warning' // 로그 레벨 최적화
+    '-hide_banner', // 협력업체와 동일
+    '-f', 'concat', // 협력업체 핵심: concat demuxer 사용
+    '-safe', '0',
   ];
 
-  // 입력 파일들 추가
-  if (imageFiles && imageFiles.length > 0) {
-    for (const imageFile of imageFiles) {
-      args.push('-i', imageFile);
-    }
-  }
-
-  if (audioFiles && audioFiles.length > 0) {
-    for (const audioFile of audioFiles) {
-      args.push('-i', audioFile);
-    }
-  }
-
-  // 협력업체 수준의 최적화된 필터 체인
+  // 협력업체 방식: concat 리스트 파일 생성
   if (imageFiles && imageFiles.length > 0) {
     const totalAudioDuration = await getTotalAudioDuration(audioFiles);
     const imageDuration = totalAudioDuration / imageFiles.length;
 
-    console.log(`⚡ 협력업체 수준 최적화: 총 ${totalAudioDuration}초, 이미지당 ${imageDuration.toFixed(1)}초`);
+    console.log(`🔥 concat demuxer 방식 적용, 총 ${totalAudioDuration}초`);
 
-    // 더 효율적인 필터 체인 구성
-    let filterComplex = '';
+    // 각 이미지를 개별 비디오 클립으로 변환해서 리스트 파일 생성
+    const listFile = path.join(tempDir, `concat_${Date.now()}.txt`);
+    const videoClips = [];
 
-    if (imageFiles.length === 1) {
-      // 단일 이미지: 가장 간단한 처리
-      filterComplex = `[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p,fps=${options.fps}[v]`;
-    } else {
-      // 다중 이미지: 배치 처리로 최적화
-      for (let i = 0; i < imageFiles.length; i++) {
-        const duration = imageDuration.toFixed(3);
-        filterComplex += `[${i}:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p,fps=${options.fps},trim=duration=${duration}[v${i}];`;
-      }
-      filterComplex += imageFiles.map((_, i) => `[v${i}]`).join('') + `concat=n=${imageFiles.length}:v=1[v]`;
+    for (let i = 0; i < imageFiles.length; i++) {
+      const tempVideo = path.join(tempDir, `clip_${i}_${Date.now()}.mp4`);
+
+      // 각 이미지를 비디오 클립으로 변환 (협력업체 스타일)
+      const clipArgs = [
+        '-y', '-hide_banner',
+        '-loop', '1',
+        '-i', imageFiles[i],
+        '-t', imageDuration.toFixed(3),
+        '-vf', `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p`,
+        '-c:v', 'libx264',
+        '-preset', 'veryfast',
+        '-crf', '23',
+        '-r', options.fps.toString(),
+        tempVideo
+      ];
+
+      console.log(`📹 클립 ${i+1}/${imageFiles.length} 생성 중... (${imageDuration.toFixed(1)}초)`);
+
+      // 동기적으로 각 클립 생성
+      await new Promise((resolve, reject) => {
+        const { spawn } = require('child_process');
+        const ffmpegPath = path.join(__dirname, '..', '..', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
+        const proc = spawn(ffmpegPath, clipArgs, { windowsHide: true });
+
+        proc.on('close', (code) => {
+          if (code === 0) resolve();
+          else reject(new Error(`클립 생성 실패: ${code}`));
+        });
+
+        proc.on('error', reject);
+      });
+
+      videoClips.push(tempVideo);
     }
 
-    args.push('-filter_complex', filterComplex);
-    args.push('-map', '[v]');
+    // concat 리스트 파일 생성 (협력업체와 동일)
+    const concatContent = videoClips
+      .map(clip => `file '${clip.replace(/'/g, "'\\''")}'`)
+      .join('\n');
+
+    await fs.writeFile(listFile, concatContent, 'utf8');
+
+    args.push('-i', listFile);
   }
 
-  // 오디오 매핑
+  // 오디오 추가 (모든 입력을 먼저 정의)
   if (audioFiles && audioFiles.length > 0) {
-    args.push('-map', `${imageFiles.length}:a`);
+    args.push('-i', audioFiles[0]); // 첫 번째 오디오 파일
   }
 
-  // 협력업체보다 더 빠른 인코딩 설정
+  // 매핑 설정
+  if (audioFiles && audioFiles.length > 0) {
+    args.push('-map', '0:v', '-map', '1:a'); // 비디오와 오디오 매핑
+  } else {
+    args.push('-map', '0:v');
+  }
+
+  // 자막 처리를 고려한 비디오 필터 구성
+  console.log('🔍 자막 파일 경로 체크:', subtitlePath);
+  let videoFilter = 'scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p';
+
+  if (subtitlePath) {
+    const fs = require('fs');
+    const fileExists = fs.existsSync(subtitlePath);
+    console.log('🔍 자막 파일 존재 여부:', fileExists);
+
+    if (fileExists) {
+      // 파일 내용 확인
+      try {
+        const content = fs.readFileSync(subtitlePath, 'utf8');
+        console.log('🔍 자막 파일 크기:', content.length, '자');
+        console.log('🔍 자막 파일 첫 200자:', content.substring(0, 200));
+      } catch (readError) {
+        console.error('❌ 자막 파일 읽기 실패:', readError.message);
+      }
+
+      console.log('🎬 자막을 하드서브로 적용 중...', subtitlePath);
+
+      // Windows 경로를 FFmpeg 호환 경로로 변환 + 콜론 이스케이프
+      const os = require('os');
+      let srtForFfmpeg = os.platform() === "win32" ? subtitlePath.replace(/\\/g, "/") : subtitlePath;
+      // 콜론을 이스케이프 처리 (Windows 드라이브 문자 때문)
+      srtForFfmpeg = srtForFfmpeg.replace(/:/g, '\\:');
+      console.log('🔍 FFmpeg용 경로:', srtForFfmpeg);
+
+      // 자막 필터를 비디오 필터 체인 앞에 추가
+      videoFilter = `subtitles='${srtForFfmpeg.replace(/'/g, "'\\''")}',${videoFilter}`;
+      console.log('📝 최종 비디오 필터:', videoFilter);
+    } else {
+      console.warn('⚠️ 자막 파일이 존재하지 않음, 자막 없이 진행');
+    }
+  } else {
+    console.log('⚠️ 자막 파일 경로가 지정되지 않음');
+  }
+
+  // 완성된 비디오 필터를 args에 추가
+  args.push('-vf', videoFilter);
+
+  // 협력업체와 동일한 인코딩 설정
   args.push(
-    '-c:v', options.videoCodec,
-    '-profile:v', 'main', // 호환성 최적화
-    '-pix_fmt', 'yuv420p', // 픽셀 포맷 고정
-    '-crf', options.crf.toString(),
-    '-preset', options.preset,
-    '-tune', 'fastdecode', // 디코딩 최적화
-    '-threads', '0' // 멀티스레드 최대 활용
+    '-c:v', 'libx264',
+    '-profile:v', 'main',
+    '-pix_fmt', 'yuv420p',
+    '-b:v', '1200k', // 협력업체는 비트레이트 방식
+    '-preset', 'veryfast',
+    '-movflags', '+faststart'
   );
 
   if (audioFiles && audioFiles.length > 0) {
-    args.push('-c:a', options.audioCodec);
+    args.push('-c:a', options.audioCodec || 'aac');
   }
 
-  args.push(
-    '-movflags', '+faststart', // 웹 최적화
-    '-avoid_negative_ts', 'make_zero', // 타임스탬프 최적화
-    outputPath
-  );
+  args.push(outputPath);
 
   return args;
 }

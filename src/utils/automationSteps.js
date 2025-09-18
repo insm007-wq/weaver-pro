@@ -531,6 +531,7 @@ export async function generateVideoStep(scriptData, audioFiles, imageFiles, addL
           audioFiles: validAudioFiles,
           imageFiles: finalImageFiles,
           outputPath: finalOutputPath,
+          subtitlePath: subtitleFilePath, // 자막 파일 경로 전달
           options: {
             fps: 24,
             videoCodec: "libx264",
@@ -746,65 +747,168 @@ async function renameSingleAudioFile(audioFile, api, addLog) {
 }
 
 /**
- * 자막 파일을 생성하는 함수 (자동화 모드용)
+ * 자막 파일을 생성하는 함수 (협력업체 방식으로 변경)
  */
 async function generateSubtitleFile(scriptData, api, addLog) {
   try {
-    addLog("📝 SRT 자막 파일 생성 중...");
+    addLog("📝 SRT 자막 생성 시작...");
+    console.log("🔍 자막 생성 함수 호출됨", scriptData);
 
-    const srtResult = await api.invoke("script/toSrt", {
-      doc: scriptData
-    });
+    // 스크립트 데이터 검증
+    if (!scriptData) {
+      addLog("❌ scriptData가 없습니다", "error");
+      return;
+    }
 
-    const srtData = srtResult?.success && srtResult?.data ? srtResult.data : srtResult;
+    if (!scriptData.scenes || !Array.isArray(scriptData.scenes)) {
+      addLog("❌ scriptData.scenes가 없거나 배열이 아닙니다", "error");
+      console.log("🔍 scriptData 구조:", Object.keys(scriptData));
+      return;
+    }
 
-    if (srtData && srtData.srt) {
-      const srtFileName = `subtitle.srt`;
+    addLog(`🔍 ${scriptData.scenes.length}개 씬 발견`);
 
-      // videoSaveFolder의 scripts 폴더에 자막 파일 저장
-      let srtFilePath = null;
-      try {
-        const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
-        const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
-        if (videoSaveFolder) {
-          // scripts 폴더 생성 확인
-          const scriptsFolder = `${videoSaveFolder}\\scripts`;
-          await api.invoke("fs:mkDirRecursive", { dirPath: scriptsFolder });
-          srtFilePath = `${scriptsFolder}\\${srtFileName}`;
-        }
-      } catch (error) {
-        console.warn("설정 가져오기 실패:", error);
-      }
+    // 스크립트에서 cue 데이터 추출
+    const cues = [];
+    let currentTime = 0;
 
-      if (srtFilePath) {
-        addLog(`📝 자막 파일 저장: ${srtFilePath}`);
+    for (let i = 0; i < scriptData.scenes.length; i++) {
+      const scene = scriptData.scenes[i];
+      addLog(`🔍 씬 ${i+1} 처리 중...`);
 
-        const writeResult = await api.invoke("files:writeText", {
-          filePath: srtFilePath,
-          content: srtData.srt
+      // scene.text 필드 사용 (실제 데이터 구조에 맞춤)
+      if (scene.text && scene.text.trim()) {
+        // 텍스트 길이 기반으로 대략적인 지속시간 계산
+        const words = scene.text.trim().split(/\s+/).length;
+        const estimatedDuration = Math.max(2000, words * 400); // 단어당 400ms, 최소 2초
+
+        cues.push({
+          start: currentTime,
+          end: currentTime + estimatedDuration,
+          text: scene.text.trim()
         });
 
-        if (writeResult.success) {
-          addLog("✅ SRT 자막 파일 생성 완료!");
-          addLog(`📁 자막 파일 위치: ${srtFilePath}`);
-          addLog(`📝 === 자막 생성 단계 완료 ===`);
-        } else {
-          addLog(`❌ SRT 파일 쓰기 실패: ${writeResult.message}`, "error");
-          addLog(`🛑 자막 생성 단계를 중단합니다.`, "error");
-          throw new Error(`자막 파일 생성 실패: ${writeResult.message}`);
-        }
+        addLog(`  ✅ 자막 추가: "${scene.text.trim().substring(0, 30)}..." (${estimatedDuration}ms)`);
+        currentTime += estimatedDuration + 200; // 200ms 간격
       } else {
-        addLog("❌ 자막 파일 경로 생성 실패", "error");
-        addLog(`🛑 자막 생성 단계를 중단합니다.`, "error");
-        throw new Error("자막 파일 경로 생성 실패");
+        addLog(`  ⚠️ 씬 ${i+1}에 text가 없음`);
+        console.log("🔍 씬 구조:", Object.keys(scene));
+      }
+    }
+
+    if (cues.length === 0) {
+      addLog("⚠️ 자막으로 변환할 텍스트가 없습니다.", "warn");
+      return;
+    }
+
+    addLog(`✅ ${cues.length}개 자막 구간 추출 완료`);
+
+    // SRT 생성
+    const srtContent = await createSrtFromCues(cues);
+    addLog(`📝 SRT 내용 생성 완료 (${srtContent.length}자)`);
+    console.log("🔍 생성된 SRT 내용:", srtContent.substring(0, 200) + "...");
+
+    // 파일 저장 경로 설정
+    let srtFilePath = null;
+    try {
+      addLog("🔍 저장 경로 설정 중...");
+      const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
+      const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
+
+      addLog(`🔍 videoSaveFolder: ${videoSaveFolder}`);
+
+      if (videoSaveFolder) {
+        const scriptsFolder = `${videoSaveFolder}\\scripts`;
+        addLog(`🔍 scripts 폴더 생성: ${scriptsFolder}`);
+
+        const mkdirResult = await api.invoke("fs:mkDirRecursive", { dirPath: scriptsFolder });
+        addLog(`🔍 폴더 생성 결과: ${JSON.stringify(mkdirResult)}`);
+
+        srtFilePath = `${scriptsFolder}\\subtitle.srt`;
+        addLog(`🔍 자막 파일 경로: ${srtFilePath}`);
+      } else {
+        addLog("⚠️ videoSaveFolder가 설정되지 않음, 기본 경로 사용");
+      }
+    } catch (error) {
+      console.warn("설정 가져오기 실패:", error);
+      addLog(`❌ 설정 가져오기 실패: ${error.message}`, "error");
+    }
+
+    // 기본 경로 사용
+    if (!srtFilePath) {
+      srtFilePath = "C:\\WeaverPro\\default\\scripts\\subtitle.srt";
+      addLog(`🔍 기본 경로 사용: ${srtFilePath}`);
+
+      try {
+        const defaultScriptsFolder = "C:\\WeaverPro\\default\\scripts";
+        await api.invoke("fs:mkDirRecursive", { dirPath: defaultScriptsFolder });
+        addLog(`🔍 기본 폴더 생성 완료: ${defaultScriptsFolder}`);
+      } catch (error) {
+        addLog(`❌ 기본 폴더 생성 실패: ${error.message}`, "error");
+      }
+    }
+
+    if (srtFilePath) {
+      addLog(`📝 자막 파일 저장 시도: ${srtFilePath}`);
+
+      try {
+        const writeResult = await api.invoke("files:writeText", {
+          filePath: srtFilePath,
+          content: srtContent
+        });
+
+        addLog(`🔍 파일 쓰기 결과: ${JSON.stringify(writeResult)}`);
+
+        if (writeResult && writeResult.success) {
+          addLog("✅ SRT 자막 생성 완료!");
+          addLog(`📁 자막 파일: ${srtFilePath}`);
+          addLog(`🎬 ${cues.length}개 자막 구간 생성됨`);
+
+          // 파일 존재 확인
+          try {
+            const existsResult = await api.invoke("files:exists", { filePath: srtFilePath });
+            addLog(`🔍 파일 존재 확인: ${JSON.stringify(existsResult)}`);
+          } catch (existsError) {
+            addLog(`⚠️ 파일 존재 확인 실패: ${existsError.message}`, "warn");
+          }
+        } else {
+          const errorMsg = writeResult?.message || writeResult?.error || "알 수 없는 오류";
+          throw new Error(`자막 파일 저장 실패: ${errorMsg}`);
+        }
+      } catch (writeError) {
+        addLog(`❌ 파일 쓰기 오류: ${writeError.message}`, "error");
+        throw writeError;
       }
     } else {
-      addLog(`❌ SRT 변환 실패: ${srtResult?.error || srtResult?.message || '알 수 없는 오류'}`, "error");
-      addLog(`🛑 자막 생성 단계를 중단합니다.`, "error");
-      throw new Error(`SRT 변환 실패: ${srtResult?.error || srtResult?.message || '알 수 없는 오류'}`);
+      addLog("❌ 자막 파일 경로가 설정되지 않았습니다", "error");
     }
   } catch (error) {
-    console.error("❌ SRT 자막 생성 오류:", error);
-    addLog(`❌ SRT 자막 생성 오류: ${error.message}`, "error");
+    console.error("❌ 자막 생성 오류:", error);
+    addLog(`❌ 자막 생성 오류: ${error.message}`, "error");
   }
+}
+
+/**
+ * 협력업체와 동일한 SRT 생성 함수
+ */
+async function createSrtFromCues(cues) {
+  const msToSrt = (ms) => {
+    const total = Math.max(0, Math.floor(ms));
+    const h = String(Math.floor(total / 3600000)).padStart(2, "0");
+    const m = String(Math.floor((total % 3600000) / 60000)).padStart(2, "0");
+    const s = String(Math.floor((total % 60000) / 1000)).padStart(2, "0");
+    const ms3 = String(total % 1000).padStart(3, "0");
+    return `${h}:${m}:${s},${ms3}`;
+  };
+
+  let idx = 1;
+  const parts = [];
+  for (const cue of cues || []) {
+    parts.push(String(idx++));
+    parts.push(`${msToSrt(cue.start)} --> ${msToSrt(cue.end)}`);
+    parts.push((cue.text || "").replace(/\r?\n/g, "\n"));
+    parts.push(""); // 빈 줄
+  }
+
+  return parts.join("\n");
 }
