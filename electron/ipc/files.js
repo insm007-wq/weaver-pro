@@ -187,7 +187,7 @@ function createDatedProjectRoot(baseDir) {
   const root = path.join(baseDir, folderName);
   // 덮어쓰기 모드: 이미 있어도 그대로 사용
   ensureDirSync(root);
-  for (const sub of ["audio", "electron_data", "exports", "subtitle", "videos"])
+  for (const sub of ["audio", "electron_data", "exports", "images", "subtitle", "videos"])
     ensureDirSync(path.join(root, sub));
   CURRENT_ROOT = root;
   return root;
@@ -247,6 +247,7 @@ ipcMain.handle("files/selectDatedProjectRoot", async () => {
       audio: path.join(root, "audio"),
       electron_data: path.join(root, "electron_data"),
       exports: path.join(root, "exports"),
+      images: path.join(root, "images"),
       subtitle: path.join(root, "subtitle"),
       videos: path.join(root, "videos"),
     };
@@ -264,6 +265,7 @@ ipcMain.handle("files/getProjectRoot", async () => {
       audio: path.join(root, "audio"),
       electron_data: path.join(root, "electron_data"),
       exports: path.join(root, "exports"),
+      images: path.join(root, "images"),
       subtitle: path.join(root, "subtitle"),
       videos: path.join(root, "videos"),
     };

@@ -108,7 +108,12 @@ function ProgressStepComponent({
   const stepOrder = mode === "automation_mode" ? automationOrder : scriptModeOrder;
 
   // 현재 단계가 이미 완료되었는지 확인 (과거 단계인지)
-  const isPast = stepOrder.indexOf(currentStep) > stepOrder.indexOf(step);
+  const currentStepIndex = stepOrder.indexOf(currentStep);
+  const thisStepIndex = stepOrder.indexOf(step);
+
+  // 과거 단계 판단: 현재 단계가 이 단계보다 앞서거나, 오류가 발생했을 때 이 단계가 현재 단계보다 앞선 경우
+  const isPast = currentStepIndex > thisStepIndex ||
+    (hasError && thisStepIndex < currentStepIndex);
 
   /**
    * 단계별 배경 색상 결정 함수

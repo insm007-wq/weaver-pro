@@ -31,11 +31,39 @@ ipcMain.handle("tts:synthesize", async (event, { scenes, ttsEngine, voiceId, spe
       case 'Google':
         result = await synthesizeWithGoogle(scenes, { voiceId, speakingRate }, progressCallback);
         break;
-      
+
       case 'ElevenLabs':
-        result = await synthesizeWithElevenLabs(scenes, { voiceId, speakingRate }, progressCallback);
+        try {
+          result = await synthesizeWithElevenLabs(scenes, { voiceId, speakingRate }, progressCallback);
+        } catch (error) {
+          // ElevenLabs 크레딧 부족 또는 할당량 초과 시 Google TTS로 자동 전환
+          if (error.message.includes('quota_exceeded') || error.message.includes('insufficient_quota')) {
+            console.warn('⚠️ ElevenLabs 크레딧 부족으로 Google TTS로 자동 전환합니다.');
+            event.sender.send('tts:fallback', {
+              original: 'ElevenLabs',
+              fallback: 'Google',
+              reason: 'quota_exceeded',
+              message: 'ElevenLabs 크레딧이 부족하여 Google TTS로 자동 전환됩니다.'
+            });
+
+            // Google TTS로 재시도 (기본 한국어 음성 사용)
+            result = await synthesizeWithGoogle(scenes, {
+              voiceId: 'ko-KR-Neural2-A',
+              speakingRate
+            }, progressCallback);
+
+            // 결과에 자동 전환 정보 추가
+            if (result.ok) {
+              result.fallback = true;
+              result.originalProvider = 'ElevenLabs';
+              result.provider = 'Google (자동 전환)';
+            }
+          } else {
+            throw error; // 다른 에러는 그대로 던지기
+          }
+        }
         break;
-      
+
       default:
         throw new Error(`지원하지 않는 TTS 엔진입니다: ${provider}`);
     }

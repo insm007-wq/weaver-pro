@@ -83,6 +83,14 @@ export function useScriptGeneration() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // 훅 초기화 시 강제로 상태 클리어
+  useEffect(() => {
+    setDoc(null);
+    setIsLoading(false);
+    setError("");
+    console.log("✅ useScriptGeneration 훅 초기화 완료 - doc 상태 클리어됨");
+  }, []);
+
   const getSelectedPromptContent = useCallback(async (promptName) => {
     try {
       const res = await api.invoke("prompts:getPairByName", promptName);

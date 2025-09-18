@@ -28,9 +28,10 @@
  * @param {Function} options.api - API 호출 함수
  * @param {Object} options.toast - 토스트 알림 객체
  * @param {Function} options.addLog - 로그 추가 함수
+ * @param {string} outputPath - 파일 출력 경로 (선택사항)
  * @returns {Promise<void>}
  */
-export async function generateAudioAndSubtitles(scriptData, mode = "script_mode", options) {
+export async function generateAudioAndSubtitles(scriptData, mode = "script_mode", options, outputPath = null) {
   const { form, voices, setFullVideoState, api, toast, addLog } = options;
 
   try {
@@ -46,18 +47,28 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       console.log("🚀 자동화 모드 - 음성 생성 시작...");
     }
 
-    // TTS 생성 (장면 수에 따라 동적 타임아웃 설정)
+    // TTS 생성 (장면 수와 엔진에 따라 동적 타임아웃 설정)
     const sceneCount = scriptData.scenes?.length || 1;
-    const estimatedTimeSeconds = Math.max(30, sceneCount * 8); // 최소 30초, 장면당 8초
+    const ttsEngine = form.ttsEngine || "google";
+
+    // ElevenLabs는 더 오래 걸림 (각 요청 사이 1초 대기 + 처리 시간)
+    let estimatedTimeSeconds;
+    if (ttsEngine === "elevenlabs") {
+      estimatedTimeSeconds = Math.max(60, sceneCount * 15); // 최소 60초, 장면당 15초
+    } else {
+      estimatedTimeSeconds = Math.max(30, sceneCount * 8); // Google: 최소 30초, 장면당 8초
+    }
+
     const timeoutMs = estimatedTimeSeconds * 1000;
 
     if (addLog) {
-      addLog(`🎤 ${sceneCount}개 장면의 음성 생성 중...`);
-      addLog(`⏳ 예상 소요 시간: 약 ${estimatedTimeSeconds}초`);
+      addLog(`🎤 ${sceneCount}개 장면의 음성 생성 중... (${ttsEngine})`);
+      addLog(`⏳ 예상 소요 시간: 약 ${estimatedTimeSeconds}초 (${ttsEngine === 'elevenlabs' ? 'ElevenLabs는 품질을 위해 더 오래 걸립니다' : 'Google TTS'})`);
     }
 
     // TTS 진행률 리스너 설정
     let ttsProgressListener = null;
+    let ttsFallbackListener = null;
     try {
       ttsProgressListener = (data) => {
         const { current, total, progress } = data;
@@ -71,11 +82,25 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
         }
       };
 
+      // TTS 자동 전환 리스너 추가
+      ttsFallbackListener = (data) => {
+        const { original, fallback, reason, message } = data;
+
+        if (addLog) {
+          addLog(`⚠️ ${original} ${reason === 'quota_exceeded' ? '크레딧 부족' : '오류'}으로 ${fallback}로 자동 전환`, "warning");
+          addLog(`🔄 ${message}`, "info");
+        }
+
+        toast.warning(`${original} → ${fallback} 자동 전환: ${reason === 'quota_exceeded' ? '크레딧 부족' : '오류 발생'}`);
+        console.warn("🔄 TTS 자동 전환:", data);
+      };
+
       if (window.electronAPI?.on) {
         window.electronAPI.on("tts:progress", ttsProgressListener);
+        window.electronAPI.on("tts:fallback", ttsFallbackListener);
       }
     } catch (listenerError) {
-      console.warn("TTS 진행률 리스너 설정 실패:", listenerError);
+      console.warn("TTS 리스너 설정 실패:", listenerError);
     }
 
     let audioResult;
@@ -85,17 +110,21 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
         ttsEngine: form.ttsEngine || "google",
         voiceId: form.voiceId || voices[0]?.id,
         speed: form.speed || "1.0",
+        outputPath: outputPath, // 직접 파일 생성 경로 전달
       }, {
         timeout: timeoutMs
       });
     } finally {
-      // 진행률 리스너 제거
+      // 리스너들 제거
       try {
         if (ttsProgressListener && window.electronAPI?.off) {
           window.electronAPI.off("tts:progress", ttsProgressListener);
         }
+        if (ttsFallbackListener && window.electronAPI?.off) {
+          window.electronAPI.off("tts:fallback", ttsFallbackListener);
+        }
       } catch (cleanupError) {
-        console.warn("TTS 진행률 리스너 정리 실패:", cleanupError);
+        console.warn("TTS 리스너 정리 실패:", cleanupError);
       }
     }
 
@@ -108,16 +137,21 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
 
       const audioFiles = audioResult.data.audioFiles;
       console.log("✅ 음성 생성 완료:", audioFiles);
+      console.log("🔍 audioFiles 구조 확인:", JSON.stringify(audioFiles, null, 2));
       toast.success(`🎵 음성 파일 ${audioFiles.length}개가 생성되었습니다!`);
 
       // 음성 파일들을 하나로 합치기
-      if (audioFiles.length > 1) {
+      if (audioFiles && audioFiles.length > 1) {
         if (addLog) {
           addLog(`🔄 ${audioFiles.length}개 음성 파일을 하나로 합치는 중...`);
         }
+        console.log("🎵 mergeAudioFiles 함수 호출 시작...");
         await mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState, addLog });
-      } else if (audioFiles.length === 1 && addLog) {
+        console.log("🎵 mergeAudioFiles 함수 호출 완료");
+      } else if (audioFiles && audioFiles.length === 1 && addLog) {
         addLog(`✅ 단일 음성 파일 생성 완료: ${audioFiles[0].fileName}`);
+      } else {
+        console.warn("⚠️ audioFiles가 비어있거나 형식이 잘못됨:", audioFiles);
       }
     }
 
@@ -150,15 +184,21 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
  */
 async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState, addLog }) {
   try {
+    console.log("🎵 === mergeAudioFiles 함수 시작 ===");
+    console.log("🎵 입력 audioFiles:", audioFiles);
+    console.log("🎵 입력 mode:", mode);
+
     // 프로젝트명으로 간단한 파일명 생성
     let projectName = 'default';
     try {
       const currentProjectIdResult = await window.api.getSetting('currentProjectId');
+      console.log("🔍 currentProjectIdResult:", currentProjectIdResult);
 
       if (currentProjectIdResult && currentProjectIdResult.value) {
         projectName = currentProjectIdResult.value;
       } else {
         const defaultProjectNameResult = await window.api.getSetting('defaultProjectName');
+        console.log("🔍 defaultProjectNameResult:", defaultProjectNameResult);
         if (defaultProjectNameResult && defaultProjectNameResult.value) {
           projectName = defaultProjectNameResult.value;
         }
@@ -166,6 +206,8 @@ async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState
     } catch (error) {
       console.warn('프로젝트 정보 가져오기 실패, 기본값 사용:', error.message);
     }
+
+    console.log("🔍 최종 projectName:", projectName);
 
     const mergedFileName = `${projectName}.mp3`;
 

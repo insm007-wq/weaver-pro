@@ -73,7 +73,35 @@ export async function generateScriptStep(form, globalSettings, getSelectedPrompt
     }
 
     await new Promise((resolve) => setTimeout(resolve, 3000));
-    const res = await api.invoke("llm/generateScript", payload, { timeout: 120000 });
+
+    let res;
+    try {
+      res = await api.invoke("llm/generateScript", payload, { timeout: 120000 });
+    } catch (error) {
+      // LLM 모델 오류 시 자동 전환 처리
+      if (selectedLlm === "openai-gpt5mini" && (
+        error.message.includes("invalid_request") ||
+        error.message.includes("model_not_found") ||
+        error.message.includes("not available")
+      )) {
+        if (addLog) {
+          addLog(`⚠️ OpenAI GPT-5 Mini 응답이 유효하지 않아 Anthropic Claude로 자동 전환`, "warning");
+          addLog(`🔄 더 안정적인 Claude 모델로 다시 시도합니다.`, "info");
+        }
+
+        toast.warning("OpenAI GPT-5 Mini → Anthropic Claude 자동 전환: 모델 오류");
+
+        // Anthropic Claude로 재시도
+        const fallbackPayload = { ...payload, llm: "anthropic" };
+        res = await api.invoke("llm/generateScript", fallbackPayload, { timeout: 120000 });
+
+        if (addLog && res && res.data && res.data.scenes) {
+          addLog(`✅ Claude 모델로 자동 전환 완료!`, "success");
+        }
+      } else {
+        throw error; // 다른 에러는 그대로 던지기
+      }
+    }
 
     console.log("🔍 API 응답 확인:", res);
 

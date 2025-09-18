@@ -87,11 +87,11 @@ const StatTile = ({ label, value }) => (
 
 /**
  * 예상 생성 결과 카드 컴포넌트
- * 
+ *
  * @param {Object} props - 컴포넌트 props
  * @returns {JSX.Element} 예상 생성 결과 카드 JSX
  */
-function GenerationPreviewCard({ form, globalSettings = {}, doc = null }) {
+function GenerationPreviewCard({ form, globalSettings = {}, doc = null, isGenerating = false, hasJustCompleted = false }) {
   const cardStyles = useCardStyles();
   const settingsStyles = useSettingsStyles();
 
@@ -148,18 +148,24 @@ function GenerationPreviewCard({ form, globalSettings = {}, doc = null }) {
   const avgCharsPerScene = Math.round(avgChars / maxScenes);
 
   /**
-   * 실제 음성 시간 계산 (완성된 대본이 있으면 실제 글자 수 기준, 없으면 예상)
+   * 실제 음성 시간 계산 (완성된 대본이 있고 생성 중이거나 방금 완료된 경우에만 실제 글자 수 기준, 그 외는 예상)
+   *
+   * 📌 중요: 이전 세션의 지속된 doc 상태는 제외하고, 현재 세션에서 실제로 생성 중이거나 완료된 경우만 실제 결과로 표시
+   * - isGenerating이 true일 때만 실제 결과 표시 (생성 중인 경우)
+   * - hasJustCompleted는 제거하여 완료 후 지속적으로 실제 결과가 표시되는 것을 방지
    */
-  const actualChars = doc && doc.scenes
+  const shouldShowActualResults = doc && doc.scenes && isGenerating;
+
+  const actualChars = shouldShowActualResults
     ? doc.scenes.reduce((sum, scene) => sum + (scene.text ? scene.text.length : 0), 0)
     : avgChars;
 
   const actualSpeechTime = Math.round((actualChars / 350) * 60); // 분당 350자 기준으로 초 단위 계산
 
   /**
-   * 실제 장면 수 (완성된 대본이 있으면 실제 수, 없으면 예상)
+   * 실제 장면 수 (완성된 대본이 있고 생성 중이거나 방금 완료된 경우에만 실제 수, 그 외는 예상)
    */
-  const actualScenes = doc && doc.scenes ? doc.scenes.length : estimatedScenes;
+  const actualScenes = shouldShowActualResults ? doc.scenes.length : estimatedScenes;
 
   /**
    * 선택된 AI 엔진 정보 가져오기 (전역 설정 기반)
@@ -190,19 +196,19 @@ function GenerationPreviewCard({ form, globalSettings = {}, doc = null }) {
           </Text>
         </div>
         <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-          {doc ? "생성 완료된 실제 결과입니다" : "설정 기반 예상 결과입니다"}
+          {shouldShowActualResults ? "생성 완료된 실제 결과입니다" : "설정 기반 예상 결과입니다"}
         </Text>
       </div>
 
       {/* 협력업체보다 향상된 통계 그리드 - 2x3 레이아웃 */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: tokens.spacingHorizontalM }}>
         <StatTile
-          label={doc ? "실제 장면 수" : "설정 장면 수"}
+          label={shouldShowActualResults ? "실제 장면 수" : "설정 장면 수"}
           value={
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span>{actualScenes}개</span>
-              {doc && <Badge appearance="tint" color="success" size="small">완료</Badge>}
-              {!doc && maxScenes !== estimatedScenes && (
+              {shouldShowActualResults && <Badge appearance="tint" color="success" size="small">완료</Badge>}
+              {!shouldShowActualResults && maxScenes !== estimatedScenes && (
                 <Badge appearance="outline" color="warning" size="small">설정값</Badge>
               )}
             </div>
@@ -210,21 +216,21 @@ function GenerationPreviewCard({ form, globalSettings = {}, doc = null }) {
         />
 
         <StatTile
-          label={doc ? "실제 글자 수" : "예상 글자 수"}
+          label={shouldShowActualResults ? "실제 글자 수" : "예상 글자 수"}
           value={
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span>{actualChars.toLocaleString()}자</span>
-              {doc && <Badge appearance="tint" color="success" size="small">완료</Badge>}
+              {shouldShowActualResults && <Badge appearance="tint" color="success" size="small">완료</Badge>}
             </div>
           }
         />
 
         <StatTile
-          label={doc ? "실제 음성 시간" : "예상 음성 시간"}
+          label={shouldShowActualResults ? "실제 음성 시간" : "예상 음성 시간"}
           value={
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span>{Math.floor(actualSpeechTime / 60)}분 {actualSpeechTime % 60}초</span>
-              {doc && <Badge appearance="tint" color="success" size="small">완료</Badge>}
+              {shouldShowActualResults && <Badge appearance="tint" color="success" size="small">완료</Badge>}
             </div>
           }
         />

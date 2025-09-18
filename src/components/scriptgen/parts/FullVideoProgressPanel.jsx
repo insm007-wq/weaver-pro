@@ -24,7 +24,7 @@
  * @since 2024-01-01
  */
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Text, tokens, Button, Card, CardHeader } from "@fluentui/react-components";
 import {
   DocumentEditRegular,
@@ -133,6 +133,18 @@ import ProgressStepComponent from "./ProgressStepComponent";
  * ```
  */
 function FullVideoProgressPanel({ fullVideoState, resetFullVideoState, api, toast }) {
+  // 실시간 타이머 상태
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // 실시간 타이머 업데이트
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000); // 1초마다 업데이트
+
+    return () => clearInterval(timer);
+  }, []);
+
   // 생성이 진행중이지 않고 대기 상태면 패널을 표시하지 않음
   if (!fullVideoState.isGenerating && fullVideoState.currentStep === "idle") return null;
 
@@ -156,15 +168,54 @@ function FullVideoProgressPanel({ fullVideoState, resetFullVideoState, api, toas
   const steps = fullVideoState.mode === "automation_mode" ? automationSteps : scriptModeSteps;
 
   /**
-   * 시작 시간부터 현재까지의 경과 시간을 계산하여 문자열로 반환
+   * 시작 시간부터 현재까지의 경과 시간을 실시간으로 계산하여 문자열로 반환
    * @returns {string} "X분 Y초" 또는 "Y초" 형태의 경과 시간
    */
   const getElapsedTime = () => {
     if (!fullVideoState.startTime) return "0초";
-    const elapsed = Math.floor((new Date() - fullVideoState.startTime) / 1000);
+    const elapsed = Math.floor((currentTime - fullVideoState.startTime) / 1000);
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
     return minutes > 0 ? `${minutes}분 ${seconds}초` : `${seconds}초`;
+  };
+
+  /**
+   * 현재 단계와 진행률을 기반으로 예상 남은 시간을 계산
+   * @returns {string} 예상 남은 시간
+   */
+  const getEstimatedTimeRemaining = () => {
+    if (!fullVideoState.startTime || !fullVideoState.isGenerating) return "";
+
+    const elapsed = Math.floor((currentTime - fullVideoState.startTime) / 1000);
+    const currentStep = fullVideoState.currentStep;
+    const progress = fullVideoState.progress;
+
+    // 현재 단계의 진행률 확인
+    let totalProgress = 0;
+    let stepCount = 0;
+
+    if (fullVideoState.mode === "automation_mode") {
+      // 자동화 모드: 4단계
+      totalProgress = (progress.script + progress.audio + progress.images + progress.video) / 4;
+      stepCount = 4;
+    } else {
+      // 스크립트 모드: 3단계
+      totalProgress = (progress.script + progress.audio + progress.subtitle) / 3;
+      stepCount = 3;
+    }
+
+    if (totalProgress > 0 && totalProgress < 100) {
+      const estimatedTotal = (elapsed / totalProgress) * 100;
+      const remaining = Math.max(0, estimatedTotal - elapsed);
+      const remainingMinutes = Math.floor(remaining / 60);
+      const remainingSeconds = Math.floor(remaining % 60);
+
+      return remainingMinutes > 0
+        ? `약 ${remainingMinutes}분 ${remainingSeconds}초 남음`
+        : `약 ${remainingSeconds}초 남음`;
+    }
+
+    return "계산 중...";
   };
 
   return (
@@ -203,46 +254,39 @@ function FullVideoProgressPanel({ fullVideoState, resetFullVideoState, api, toas
                 ? `❌ 오류 발생 (${getElapsedTime()} 경과)`
                 : `🔄 진행 중... (${getElapsedTime()} 경과)`}
             </Text>
-          </div>
-          {/* 상태별 버튼 표시 */}
-          <div style={{ display: "flex", gap: 8 }}>
-            {/* 디버깅 정보 (개발용) */}
-            {process.env.NODE_ENV === 'development' && (
-              <Text size={100} style={{ opacity: 0.6 }}>
-                Debug: {fullVideoState.mode} | {fullVideoState.currentStep} | {fullVideoState.isGenerating ? 'generating' : 'idle'}
+
+            {/* 예상 시간 표시 (진행 중일 때만) */}
+            {fullVideoState.isGenerating && fullVideoState.currentStep !== "complete" && (
+              <Text size={100} style={{ color: tokens.colorBrandForeground1, marginTop: 2, fontWeight: "500" }}>
+                ⏳ {getEstimatedTimeRemaining()}
               </Text>
             )}
+          </div>
+          {/* 상태별 버튼 표시 - 강제로 항상 표시 */}
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {/* 디버깅 정보 (항상 표시) */}
+            <Text size={100} style={{ opacity: 0.7, fontSize: "10px" }}>
+              상태: {fullVideoState.mode || 'unknown'} | {fullVideoState.currentStep || 'unknown'} | {fullVideoState.isGenerating ? 'generating' : 'idle'}
+            </Text>
 
-            {fullVideoState.isGenerating ? (
-              /* 진행 중일 때 취소 버튼 */
-              <Button
-                appearance="secondary"
-                size="small"
-                onClick={resetFullVideoState}
-              >
-                취소
-              </Button>
-            ) : (
-              /* 진행이 끝났을 때 닫기 버튼 */
-              <Button
-                appearance="primary"
-                size="small"
-                onClick={resetFullVideoState}
-              >
-                닫기
-              </Button>
-            )}
+            {/* 항상 버튼들 표시 */}
+            <Button
+              appearance={fullVideoState.isGenerating ? "secondary" : "primary"}
+              size="small"
+              onClick={resetFullVideoState}
+            >
+              {fullVideoState.isGenerating ? "취소" : "닫기"}
+            </Button>
 
-            {/* 추가 취소 버튼 (항상 표시) */}
-            {!fullVideoState.isGenerating && (
-              <Button
-                appearance="secondary"
-                size="small"
-                onClick={resetFullVideoState}
-              >
-                초기화
-              </Button>
-            )}
+            {/* 초기화 버튼 (항상 표시) */}
+            <Button
+              appearance="secondary"
+              size="small"
+              onClick={resetFullVideoState}
+              style={{ backgroundColor: "#f3f2f1" }}
+            >
+              초기화
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -272,7 +316,10 @@ function FullVideoProgressPanel({ fullVideoState, resetFullVideoState, api, toas
               isCompleted={
                 fullVideoState.currentStep === "completed" || fullVideoState.currentStep === "complete"
               }
-              hasError={fullVideoState.currentStep === "error"}
+              hasError={
+                fullVideoState.currentStep === "error" &&
+                fullVideoState.failedStep === step.key
+              }
             />
 
             {/* 단계 간 연결선 (마지막 단계 제외) */}

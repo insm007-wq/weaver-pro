@@ -153,7 +153,7 @@ function ScriptVoiceGenerator() {
    */
   const runGenerate = useCallback(
     async (formData) => {
-      console.log("🚀 대본 생성 모드 시작!");
+      console.log("🚀 runGenerate 함수 실행 시작! (SCRIPT MODE)");
 
       setError("");
       setIsLoading(true);
@@ -167,8 +167,29 @@ function ScriptVoiceGenerator() {
         progress: { script: 0, audio: 0, images: 0, video: 0, subtitle: 0 },
         startTime: new Date(),
       }));
+      console.log("✅ fullVideoState mode가 script_mode로 설정됨");
 
       try {
+        // 전역 설정에서 영상 폴더 경로 가져오기
+        let videoSaveFolder = null;
+        try {
+          const videoFolderSetting = await api.invoke("settings:get", "videoSaveFolder");
+          if (videoFolderSetting) {
+            videoSaveFolder = videoFolderSetting;
+            console.log("📂 대본 모드 - 설정된 영상 폴더:", videoSaveFolder);
+          }
+        } catch (settingError) {
+          console.warn("⚠️ 대본 모드 - 전역 설정 읽기 실패:", settingError.message);
+        }
+
+        // 대본 모드에서는 프로젝트 생성 없이 직접 영상 폴더에 파일 생성
+        if (videoSaveFolder && formData.topic) {
+          console.log("🎯 대본 모드 - 파일 생성 경로 설정:", videoSaveFolder);
+          console.log("📂 대본 모드 - 프로젝트 폴더 생성 없이 직접 파일 생성 모드");
+        } else {
+          console.warn("⚠️ 대본 모드 - 영상 폴더 설정이 필요합니다");
+        }
+
         // 1단계: 대본 생성 (새로운 generateScriptStep 함수 사용)
         const res = await generateScriptStep(
           formData,
@@ -197,7 +218,7 @@ function ScriptVoiceGenerator() {
             api,
             toast,
             addLog,
-          });
+          }, videoSaveFolder);
         } else {
           throw new Error(`대본 생성 실패: ${JSON.stringify(res)}`);
         }
@@ -240,6 +261,11 @@ function ScriptVoiceGenerator() {
       startTime: null,
       logs: [],
     });
+
+    // 예상 생성 결과(doc)도 함께 초기화
+    setDoc(null);
+    setIsLoading(false);
+    console.log("✅ 상태 초기화 완료: fullVideoState + doc + isLoading");
   };
 
   /**
@@ -247,6 +273,7 @@ function ScriptVoiceGenerator() {
    * 4단계: 대본 생성 → 음성 생성 → 이미지 생성 → 영상 합성
    */
   const runFullVideoGeneration = async () => {
+    console.log("🚀 runFullVideoGeneration 함수 실행 시작! (AUTOMATION MODE)");
     resetFullVideoState();
     updateFullVideoState({
       isGenerating: true,
@@ -255,40 +282,45 @@ function ScriptVoiceGenerator() {
       startTime: new Date(),
       progress: { script: 0, audio: 0, images: 0, video: 0, subtitle: 0 },
     });
+    console.log("✅ fullVideoState mode가 automation_mode로 설정됨");
     addLog("🎬 완전 자동화 영상 생성을 시작합니다...");
 
-    // 프로젝트 생성
-    try {
-      addLog("📁 프로젝트 생성 중...");
-
-      const projectResult = await api.invoke("project:create", {
-        topic: form.topic,
-        options: {
-          style: form.style,
-          duration: form.durationMin,
-        },
-      });
-
-      if (!projectResult.success) {
-        throw new Error(`프로젝트 생성 실패: ${projectResult.message}`);
-      }
-
-      const project = projectResult.data?.project || projectResult.project;
-      if (!project || !project.id) {
-        throw new Error("프로젝트 데이터가 올바르지 않습니다: " + JSON.stringify(projectResult));
-      }
-
-      addLog(`✅ 프로젝트 생성 완료: ${project.id}`);
-    } catch (error) {
-      addLog(`❌ 프로젝트 생성 실패: ${error.message}`, "error");
-      updateFullVideoState({
-        currentStep: "error",
-        error: error.message,
-      });
-      return;
-    }
+    // 프로젝트 설정 확인 (대본 생성 모드와 동일한 방식)
+    addLog("📁 현재 프로젝트 설정 사용 중...");
 
     try {
+      // 전역 설정에서 영상 폴더 경로 가져오기
+      addLog("📁 전역 설정에서 영상 폴더 경로 확인 중...");
+      let videoSaveFolder = null;
+
+      try {
+        const videoFolderSetting = await api.invoke("settings:get", "videoSaveFolder");
+        if (videoFolderSetting) {
+          videoSaveFolder = videoFolderSetting;
+          addLog(`📂 설정된 영상 폴더: ${videoSaveFolder}`);
+        } else {
+          addLog("⚠️ 전역 설정에 영상 폴더가 설정되지 않음");
+        }
+      } catch (settingError) {
+        addLog(`⚠️ 전역 설정 읽기 실패: ${settingError.message}`, "warning");
+      }
+
+      // 현재 폼 설정 확인 및 디버깅
+      console.log("🔍 자동화 모드 실행 중 현재 폼 설정:", form);
+      console.log("🔍 전역 영상 폴더 설정:", videoSaveFolder);
+      addLog(`📋 현재 주제: "${form.topic}"`);
+      addLog(`📊 설정된 장면 수: ${form.maxScenes}개`);
+      addLog(`⏱️ 설정된 영상 길이: ${form.durationMin}분`);
+
+      // 자동화 모드에서는 프로젝트 생성 없이 직접 영상 폴더에 파일 생성
+      if (videoSaveFolder && form.topic) {
+        addLog(`🎯 파일 생성 경로 설정 - 영상 폴더: ${videoSaveFolder}`);
+        addLog(`📂 프로젝트 폴더 생성 없이 직접 파일 생성 모드`);
+      } else {
+        addLog(`⚠️ 영상 폴더 설정이 필요합니다`, "warning");
+        throw new Error("영상 폴더가 설정되지 않았습니다.");
+      }
+
       addLog("📝 AI 대본 생성 중...");
       const script = await generateScriptStep(
         form,
@@ -303,15 +335,15 @@ function ScriptVoiceGenerator() {
 
       updateFullVideoState({ currentStep: "audio", progress: { script: 100 } });
       addLog("🎤 음성 생성 중...");
-      const audio = await generateAudioStep(script, form, addLog, setFullVideoState, api);
+      const audio = await generateAudioStep(script, form, addLog, setFullVideoState, api, videoSaveFolder);
 
       updateFullVideoState({ currentStep: "images", progress: { audio: 100 } });
       addLog("🖼️ 이미지 생성 중...");
-      const images = await generateImagesStep(script, form, addLog, updateFullVideoState, api);
+      const images = await generateImagesStep(script, form, addLog, updateFullVideoState, api, videoSaveFolder);
 
       updateFullVideoState({ currentStep: "video", progress: { images: 100 } });
       addLog("🎬 영상 합성 중...");
-      const video = await generateVideoStep(script, audio, images, addLog, setFullVideoState, api);
+      const video = await generateVideoStep(script, audio, images, addLog, setFullVideoState, api, videoSaveFolder);
 
       updateFullVideoState({
         currentStep: "complete",
@@ -331,37 +363,65 @@ function ScriptVoiceGenerator() {
       }
 
       toast.success("🎉 완전 자동화 영상 생성 완료! 출력 폴더를 확인해보세요.");
-
-      // 5초 후 자동으로 초기화
-      setTimeout(() => {
-        resetFullVideoState();
-      }, 5000);
     } catch (error) {
       updateFullVideoState({
         currentStep: "error",
+        failedStep: fullVideoState.currentStep, // 실패한 단계 기록
         error: error.message,
         isGenerating: false,
       });
       addLog(`❌ 오류 발생: ${error.message}`, "error");
       toast.error(`영상 생성 실패: ${error.message}`);
-
-      // 에러 상태에서도 10초 후 초기화
-      setTimeout(() => {
-        resetFullVideoState();
-      }, 10000);
     }
   };
 
-  // 전역 설정 로드
+  // 컴포넌트 마운트 시 상태 초기화 및 전역 설정 로드
   useEffect(() => {
+    // 프로그램 시작 시 항상 깨끗한 상태로 시작 (예상 생성 결과 삭제)
+    setDoc(null);
+    setIsLoading(false);
+
+    // 영상 생성 상태도 초기화하여 완전한 clean state 보장
+    setFullVideoState({
+      mode: "idle",
+      isGenerating: false,
+      currentStep: "idle",
+      progress: {
+        script: 0,
+        audio: 0,
+        images: 0,
+        video: 0,
+        subtitle: 0,
+      },
+      results: {
+        script: null,
+        audio: null,
+        images: [],
+        video: null,
+      },
+      streamingScript: "",
+      error: null,
+      startTime: null,
+      logs: [],
+    });
+
+    console.log("✅ ScriptVoiceGenerator 초기 상태 설정 완료 - 예상 생성 결과 삭제됨");
+
+    // localStorage 완전 클리어 - 모든 저장된 상태 삭제
     try {
-      const savedSettings = localStorage.getItem("defaultSettings");
-      if (savedSettings) {
-        const parsedSettings = JSON.parse(savedSettings);
-        setGlobalSettings((prev) => ({ ...prev, ...parsedSettings }));
-      }
+      localStorage.removeItem("defaultSettings");
+      localStorage.removeItem("doc");
+      localStorage.removeItem("fullVideoState");
+      localStorage.removeItem("scriptGenerator");
+      // 관련된 모든 키 삭제
+      Object.keys(localStorage).forEach(key => {
+        if (key.includes('script') || key.includes('doc') || key.includes('video') || key.includes('generation')) {
+          localStorage.removeItem(key);
+        }
+      });
+      console.log("✅ localStorage 완전 클리어 완료");
     } catch (error) {
-      console.error("전역 설정 로드 실패:", error);
+      console.warn("localStorage 클리어 실패:", error);
     }
   }, []);
 
@@ -501,7 +561,10 @@ function ScriptVoiceGenerator() {
                   appearance="secondary"
                   size="large"
                   icon={<VideoRegular />}
-                  onClick={runFullVideoGeneration}
+                  onClick={() => {
+                    console.log("🎬 완전 자동화 버튼 클릭됨! (automation_mode)");
+                    runFullVideoGeneration();
+                  }}
                   disabled={fullVideoState.isGenerating || !form.topic?.trim() || !form.promptName}
                   style={{
                     backgroundColor: "#fff",
@@ -569,7 +632,13 @@ function ScriptVoiceGenerator() {
           {/* 우측: 상태 및 결과 패널 */}
           <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL }}>
             {/* 예상 결과 카드 */}
-            <GenerationPreviewCard form={form} globalSettings={globalSettings} doc={doc} />
+            <GenerationPreviewCard
+              form={form}
+              globalSettings={globalSettings}
+              doc={doc}
+              isGenerating={fullVideoState.isGenerating}
+              hasJustCompleted={fullVideoState.currentStep === "completed"}
+            />
 
             {/* 대본만 생성 카드 */}
             <ScriptGenerationCard
@@ -578,7 +647,7 @@ function ScriptVoiceGenerator() {
               fullVideoState={fullVideoState}
               globalSettings={globalSettings}
               onGenerate={() => {
-                console.log("🔥 대본 생성 버튼 클릭됨!");
+                console.log("📝 대본 생성 버튼 클릭됨! (script_mode)");
                 runGenerate(form);
               }}
             />

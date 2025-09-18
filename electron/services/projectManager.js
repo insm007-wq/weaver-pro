@@ -46,7 +46,14 @@ class ProjectManager {
   async createProject(topic, options = {}) {
     try {
       const projectId = this.generateProjectId(topic);
-      const baseDir = this.getBaseDir();
+
+      // baseFolder 옵션이 있으면 우선 사용, 없으면 기본 디렉토리 사용
+      const baseDir = options.baseFolder && options.baseFolder.trim()
+        ? options.baseFolder.trim()
+        : this.getBaseDir();
+
+      console.log(`📁 프로젝트 생성 - 기본 폴더: ${baseDir}, 프로젝트 ID: ${projectId}`);
+
       const projectDir = path.join(baseDir, projectId);
 
       // 프로젝트 폴더 구조 생성
