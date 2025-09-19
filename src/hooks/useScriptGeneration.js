@@ -52,16 +52,25 @@ import { useToast } from "./useToast";
 
 const AI_ENGINE_OPTIONS = [
   {
-    key: "openai-gpt5mini",
-    text: "🤖 OpenAI GPT-5 Mini",
-    desc: "최신 GPT-5 모델, 롱폼 대본 최적화",
-    processingTime: "2-5분",
+    key: "anthropic",
+    text: "🧠 Anthropic Claude",
+    desc: "협력업체 검증, 안정성 최우선",
+    processingTime: "1-3분",
+    bestFor: "모든 길이",
   },
   {
-    key: "anthropic", 
-    text: "🧠 Anthropic Claude",
-    desc: "Claude Sonnet/Haiku, 정확하고 자연스러운 문체",
-    processingTime: "1-3분",
+    key: "openai-gpt5mini",
+    text: "🤖 OpenAI GPT-5",
+    desc: "롱폼 특화, 복잡한 구조 대본",
+    processingTime: "2-5분",
+    bestFor: "20분+",
+  },
+  {
+    key: "google-gemini",
+    text: "🔥 Google Gemini",
+    desc: "빠른 생성, 단편 대본 특화",
+    processingTime: "30초-1분",
+    bestFor: "5-15분",
   },
 ];
 
@@ -159,7 +168,19 @@ export function useScriptGeneration() {
         console.log("  - avgCharsPerScene:", avgCharsPerScene);
       }
 
-      const res = await api.invoke("llm/generateScript", payload, { timeout: 120000 }); // 2분 타임아웃
+      // 롱폼 컨텐츠 대응 타임아웃 (scriptGenerator.js와 동일한 로직)
+      const getTimeoutForDuration = (minutes) => {
+        if (minutes >= 90) return 1800000;  // 90분+: 30분 타임아웃
+        if (minutes >= 60) return 1200000;  // 60분+: 20분 타임아웃
+        if (minutes >= 30) return 900000;   // 30분+: 15분 타임아웃
+        if (minutes >= 20) return 600000;   // 20분+: 10분 타임아웃
+        return 300000; // 기본: 5분 타임아웃
+      };
+
+      const timeoutMs = getTimeoutForDuration(form.durationMin);
+      console.log(`⏱️ 타임아웃 설정: ${form.durationMin}분 → ${timeoutMs/60000}분 대기`);
+
+      const res = await api.invoke("llm/generateScript", payload, { timeout: timeoutMs });
 
       if (res && res.data && res.data.scenes) {
         // 협력업체 방식: 실제 생성된 장면 수 검증

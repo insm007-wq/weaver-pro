@@ -719,6 +719,12 @@ function ScriptVoiceGenerator() {
               globalSettings={globalSettings}
               onGenerate={() => {
                 console.log("📝 대본 생성 버튼 클릭됨! (script_mode)");
+                console.log("🎯 전달되는 form 데이터:", {
+                  topic: form.topic,
+                  durationMin: form.durationMin,
+                  maxScenes: form.maxScenes,
+                  promptName: form.promptName
+                });
                 runGenerate(form);
               }}
             />

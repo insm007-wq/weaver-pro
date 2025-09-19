@@ -206,7 +206,11 @@
       "Bash(ffmpeg:*)",
       "Bash(del \"C:\\WeaverPro\\tt\\scripts\\test-subtitle.srt\")",
       "Read(//c/WeaverPro/tttt/images/**)",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(move providersanthropic.js .)",
+      "Bash(move providersopenai.js .)",
+      "Bash(del index.js)",
+      "Bash(del common.js)"
     ],
     "deny": [],
     "ask": []
