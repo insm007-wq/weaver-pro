@@ -223,7 +223,7 @@ function StreamingScriptViewer({
       >
         {doc ? (
           // 완성된 대본 표시
-          <CompletedScript doc={doc} />
+          <CompletedScript doc={doc} form={form} />
         ) : (
           // 생성 중 표시 (기본 메시지)
           <GeneratingScript
@@ -240,10 +240,36 @@ function StreamingScriptViewer({
 /**
  * 완성된 대본을 구조화하여 표시하는 서브 컴포넌트
  * @param {Object} props.doc - 완성된 대본 데이터
+ * @param {Object} props.form - 폼 설정 (주제 정보 포함)
  */
-function CompletedScript({ doc }) {
+function CompletedScript({ doc, form }) {
   return (
     <div>
+      {/* 주제 정보 표시 */}
+      {form?.topic && (
+        <div style={{
+          marginBottom: tokens.spacingVerticalM,
+          padding: tokens.spacingVerticalS + " " + tokens.spacingHorizontalM,
+          backgroundColor: "rgba(102, 126, 234, 0.08)",
+          borderRadius: 8,
+          border: "1px solid rgba(102, 126, 234, 0.2)"
+        }}>
+          <Text size={300} style={{ color: tokens.colorBrandForeground1, fontWeight: 600 }}>
+            📋 주제: {form.topic}
+          </Text>
+          {form.style && (
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginLeft: 16 }}>
+              🎨 {form.style} 스타일
+            </Text>
+          )}
+          {form.durationMin && (
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginLeft: 16 }}>
+              ⏱️ {form.durationMin}분
+            </Text>
+          )}
+        </div>
+      )}
+
       {/* 대본 제목 */}
       <div style={{ marginBottom: tokens.spacingVerticalL }}>
         <Text size={400} weight="semibold" style={{ color: tokens.colorBrandForeground1 }}>

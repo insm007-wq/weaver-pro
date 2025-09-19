@@ -610,7 +610,15 @@ function ScriptVoiceGenerator() {
                     console.log("🎬 완전 자동화 버튼 클릭됨! (automation_mode)");
                     runFullVideoGeneration();
                   }}
-                  disabled={fullVideoState.isGenerating || !form.topic?.trim() || !form.promptName}
+                  disabled={(() => {
+                    const hasValidTopic = form.topic?.trim();
+                    const hasValidReference = form.referenceScript?.trim() && form.referenceScript.trim().length >= 50;
+                    const isReferenceOnlyMode = hasValidReference && !hasValidTopic;
+
+                    return fullVideoState.isGenerating ||
+                           (!hasValidTopic && !hasValidReference) ||
+                           (!isReferenceOnlyMode && !form.promptName);
+                  })()}
                   style={{
                     backgroundColor: "#fff",
                     color: "#667eea",
@@ -624,30 +632,48 @@ function ScriptVoiceGenerator() {
                 </Button>
               </div>
 
-              {/* 필수 조건 안내 */}
-              {(!form.topic?.trim() || !form.promptName) && (
-                <div
-                  style={{
-                    marginTop: 16,
-                    background: "rgba(255,255,255,0.1)",
-                    padding: 12,
-                    borderRadius: 8,
-                    position: "relative",
-                    zIndex: 1,
-                  }}
-                >
-                  {!form.topic?.trim() && (
-                    <Text size={200} style={{ display: "block", color: "rgba(255,255,255,0.9)" }}>
-                      ⚠️ 영상 주제를 입력해주세요.
-                    </Text>
-                  )}
-                  {!form.promptName && (
-                    <Text size={200} style={{ display: "block", color: "rgba(255,255,255,0.9)" }}>
-                      ⚠️ 대본 생성 프롬프트를 선택해주세요.
-                    </Text>
-                  )}
-                </div>
-              )}
+              {/* 설정 정보 표시 */}
+              <div
+                style={{
+                  marginTop: 16,
+                  background: "rgba(255,255,255,0.1)",
+                  padding: 12,
+                  borderRadius: 8,
+                  position: "relative",
+                  zIndex: 1,
+                }}
+              >
+                {form.topic?.trim() ? (
+                  <Text size={200} style={{ display: "block", color: "rgba(255,255,255,0.95)", marginBottom: 4 }}>
+                    📋 주제: {form.topic}
+                  </Text>
+                ) : (
+                  <Text size={200} style={{ display: "block", color: "rgba(255,255,255,0.9)", marginBottom: 4 }}>
+                    ⚠️ 영상 주제를 입력해주세요.
+                  </Text>
+                )}
+
+                {form.promptName ? (
+                  <Text size={200} style={{ display: "block", color: "rgba(255,255,255,0.8)" }}>
+                    🤖 프롬프트: {form.promptName}
+                  </Text>
+                ) : (
+                  <Text size={200} style={{ display: "block", color: "rgba(255,255,255,0.9)" }}>
+                    ⚠️ 대본 생성 프롬프트를 선택해주세요.
+                  </Text>
+                )}
+
+                {/* ✅ 레퍼런스 대본 상태 표시 */}
+                {form.referenceScript && form.referenceScript.trim() ? (
+                  <Text size={200} style={{ display: "block", color: "rgba(255,255,255,0.8)", marginTop: 4 }}>
+                    📜 레퍼런스: 적용됨 ({form.referenceScript.trim().length.toLocaleString()}자)
+                  </Text>
+                ) : (
+                  <Text size={200} style={{ display: "block", color: "rgba(255,255,255,0.6)", marginTop: 4 }}>
+                    📜 레퍼런스: 사용 안함
+                  </Text>
+                )}
+              </div>
             </Card>
 
             {/* 기본 설정 카드 */}

@@ -144,11 +144,13 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
       <div className={layoutStyles.gridTwo}>
         {/* 영상 주제 - 전체 너비 사용 */}
         <div style={{ gridColumn: "1 / -1" }}>
-          <Field label="영상 주제" required>
+          <Field label="영상 주제">
             <Input
               value={form.topic || ""}
               onChange={(e) => onChange("topic", e.target.value)}
-              placeholder="예: 인공지능의 미래와 우리 삶의 변화"
+              placeholder={form.showReferenceScript
+                ? "주제를 입력하면 레퍼런스 스타일로 새 대본 생성 / 비워두면 레퍼런스 자체를 개선"
+                : "예: 인공지능의 미래와 우리 삶의 변화"}
               size="large"
             />
           </Field>
@@ -277,16 +279,53 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
                   size={200}
                   style={{ color: tokens.colorNeutralForeground3, marginBottom: tokens.spacingVerticalXS, display: "block" }}
                 >
-                  참고할 대본이 있다면 붙여넣기해주세요. AI가 구조와 스타일을 분석해 더 나은 대본을 만들어드립니다.
+                  {form.topic && form.topic.trim() ? (
+                    "🎭 레퍼런스의 톤앤매너를 분석해 새로운 주제에 적용한 대본을 생성합니다."
+                  ) : (
+                    "📈 레퍼런스 대본을 분석해 구조와 스타일을 개선한 더 나은 버전을 만들어드립니다."
+                  )}
                 </Text>
                 <Textarea
                   value={form.referenceScript || ""}
                   onChange={(e) => onChange("referenceScript", e.target.value)}
-                  placeholder=""
+                  placeholder="예시: '안녕하세요! 오늘은 맛있는 요리를 만들어볼게요. 먼저 재료를 준비해주세요...'"
                   rows={6}
                   resize="vertical"
                   style={{ minHeight: "120px" }}
                 />
+
+                {/* ✅ 글자 수 및 상태 표시 */}
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginTop: tokens.spacingVerticalXS,
+                  paddingTop: tokens.spacingVerticalXS,
+                  borderTop: `1px solid ${tokens.colorNeutralStroke2}`
+                }}>
+                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                    {form.referenceScript && form.referenceScript.trim() ? (
+                      `📊 ${form.referenceScript.trim().length.toLocaleString()}자 입력됨`
+                    ) : form.topic && form.topic.trim() ? (
+                      "📝 레퍼런스 대본을 입력하면 해당 스타일로 새로운 주제의 대본을 생성합니다"
+                    ) : (
+                      "📝 레퍼런스만 입력하면 더 나은 버전을 생성하고, 주제도 함께 입력하면 새로운 주제로 스타일을 적용합니다"
+                    )}
+                  </Text>
+
+                  {form.referenceScript && form.referenceScript.trim() && (
+                    <Text size={200} style={{
+                      color: form.referenceScript.trim().length > 500
+                        ? tokens.colorPaletteGreenForeground2
+                        : tokens.colorNeutralForeground3,
+                      fontWeight: form.referenceScript.trim().length > 500 ? "600" : "normal"
+                    }}>
+                      {form.referenceScript.trim().length > 500
+                        ? (form.topic && form.topic.trim() ? "✅ 스타일 가이드 준비완료" : "✅ 개선 준비완료")
+                        : "권장: 500자 이상"}
+                    </Text>
+                  )}
+                </div>
               </>
             )}
           </Field>

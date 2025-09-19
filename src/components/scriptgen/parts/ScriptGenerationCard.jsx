@@ -19,14 +19,22 @@ function ScriptGenerationCard({
   const cardStyles = useCardStyles();
   const settingsStyles = useSettingsStyles();
 
-  const isDisabled = isLoading || !form.topic?.trim() || !form.promptName || fullVideoState.isGenerating;
+  // ✅ 하이브리드 모드 지원: 주제 OR 레퍼런스(50자 이상) 중 하나만 있으면 활성화
+  const hasValidTopic = form.topic?.trim();
+  const hasValidReference = form.referenceScript?.trim() && form.referenceScript.trim().length >= 50;
+  const isReferenceOnlyMode = hasValidReference && !hasValidTopic;
+  const isDisabled = isLoading || (!hasValidTopic && !hasValidReference) || (!isReferenceOnlyMode && !form.promptName) || fullVideoState.isGenerating;
 
   const selectedEngine = AI_ENGINE_OPTIONS.find((engine) => engine.key === globalSettings.llmModel);
 
   const getValidationErrors = () => {
     const errors = [];
-    if (!form.topic?.trim()) errors.push("• 영상 주제 입력");
-    if (!form.promptName) errors.push("• 대본 생성 프롬프트 선택");
+    if (!hasValidTopic && !hasValidReference) {
+      errors.push("• 영상 주제 입력 또는 레퍼런스 대본 입력 (50자 이상)");
+    }
+    if (!isReferenceOnlyMode && !form.promptName) {
+      errors.push("• 대본 생성 프롬프트 선택");
+    }
     return errors;
   };
 
