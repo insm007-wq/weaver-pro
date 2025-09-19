@@ -32,9 +32,9 @@ import {
 } from "@fluentui/react-components";
 import {
   Play24Regular,
-  Download24Regular,
+  ArrowDownload24Regular,
   Search24Regular,
-  SignIn24Regular,
+  PersonAdd24Regular,
   CheckmarkCircle24Regular,
   Beaker24Regular,
   Person24Regular,
@@ -400,7 +400,7 @@ const CanvaSessionTab = () => {
             {!sessionActive && (
               <Button
                 appearance="primary"
-                icon={<SignIn24Regular />}
+                icon={<PersonAdd24Regular />}
                 disabled={isLoggingIn}
                 onClick={handleLogin}
               >
@@ -487,7 +487,7 @@ const CanvaSessionTab = () => {
                 />
                 <Button
                   appearance="primary"
-                  icon={<Download24Regular />}
+                  icon={<ArrowDownload24Regular />}
                   disabled={isDownloading || selectedVideos.length === 0}
                   onClick={handleDownload}
                 >

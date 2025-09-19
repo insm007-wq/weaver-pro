@@ -14,8 +14,6 @@ import {
   Button,
   TabList,
   Tab,
-  SelectTabEvent,
-  SelectTabData,
   Divider,
   Badge,
   Spinner,
@@ -26,7 +24,7 @@ import {
   Settings24Regular,
   Video24Regular,
   TextBulletListLtr24Regular,
-  CompositeTarget24Regular,
+  Target24Regular,
   Play24Regular,
   Apps24Regular,
   LockClosed24Regular,
@@ -313,7 +311,7 @@ export default function AssembleEditor() {
       {/* Header */}
       <div className={styles.header}>
         <div className={styles.headerTitle}>
-          <CompositeTarget24Regular />
+          <Target24Regular />
           <Title3>영상 구성</Title3>
         </div>
         <div className={styles.headerStats}>
