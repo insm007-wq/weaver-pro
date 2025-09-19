@@ -1,13 +1,13 @@
 /**
- * Google Gemini API Provider - 단편 대본 특화
+ * Google Gemini API Provider - 빠른 생성
  *
  * @description
- * - 빠른 응답 속도로 5-15분 대본에 최적화
+ * - 빠른 응답 속도로 모든 길이 대본 지원
  * - 간단하고 직관적인 프롬프트 구조
  * - 비용 효율적인 대본 생성
  *
  * @author Weaver Pro Team
- * @version 1.0.0 - Gemini 특화 버전
+ * @version 1.0.0 - 롱폼 지원 버전
  */
 
 const { getSecret } = require("../../services/secrets");
@@ -79,53 +79,53 @@ function validateScript(data) {
 }
 
 /**
- * Gemini 단편 특화 프롬프트 생성
+ * Gemini 프롬프트 생성 (모든 길이 지원)
  */
 function buildGeminiPrompt({ topic, style, duration, maxScenes, referenceText, cpmMin, cpmMax }) {
   const minChars = Math.round(duration * (cpmMin || 1100));
   const maxChars = Math.round(duration * (cpmMax || 1200));
+  const avgCharsPerScene = Math.round((minChars + maxChars) / 2 / maxScenes);
 
   const parts = [
-    `빠른 ${duration}분 영상 대본 작성`,
+    `다음 조건에 맞는 ${duration}분 길이의 영상 대본을 작성해주세요.`,
     "",
-    `주제: ${topic || "미지정"}`,
-    `스타일: ${style || "친근하고 흥미롭게"}`,
-    `목표: 짧고 임팩트 있는 대본`,
+    `📋 기본 정보:`,
+    `• 주제: ${topic || "미지정"}`,
+    `• 스타일: ${style || "친근하고 흥미롭게"}`,
+    `• 언어: 한국어`,
     "",
-    `📊 요구사항:`,
-    `• 정확히 ${maxScenes}개 장면`,
-    `• 총 ${minChars}-${maxChars}자`,
-    `• 장면당 최대 ${TTS_SAFE_CHAR_LIMIT}자`,
-    `• 총 ${duration * 60}초 길이`,
+    `📊 분량 요구사항:`,
+    `• 정확히 ${maxScenes}개 장면으로 구성`,
+    `• 총 글자수: ${minChars} ~ ${maxChars}자`,
+    `• 장면당 평균: 약 ${avgCharsPerScene}자`,
+    `• 각 장면 최대 ${TTS_SAFE_CHAR_LIMIT}자 (TTS 제한)`,
     "",
-    `🎯 단편 대본 특화:`,
-    `• 간결하고 핵심적인 내용`,
-    `• 빠른 템포, 지루하지 않게`,
-    `• 시청자 관심 집중 유지`,
-    `• 쉽고 이해하기 좋은 설명`,
+    `⚠️ 중요 규칙:`,
+    `• 장면 수는 반드시 ${maxScenes}개를 준수하세요`,
+    `• 전체 재생시간이 ${duration}분에 맞도록 조절하세요`,
+    `• 마크다운, 불릿포인트, 목차 등 금지`,
+    `• 자연스러운 문단 형태로 작성`,
   ];
 
+  // 레퍼런스 대본이 있으면 추가
   if (referenceText && referenceText.trim()) {
-    parts.push(
-      "",
-      `참고 대본:`,
-      referenceText.trim(),
-      "",
-      `위 참고 대본의 스타일과 구조를 참고하여 새로운 주제로 작성하세요.`
-    );
+    parts.push("", `📄 참고 대본:`, `아래 대본의 구조와 스타일을 참고하여 더 나은 대본을 작성하세요.`, "", referenceText.trim());
   }
 
   parts.push(
     "",
-    `JSON 형식으로만 응답:`,
+    `📤 응답 형식 (JSON만 반환):`,
     `{`,
-    `  "title": "제목",`,
+    `  "title": "대본 제목",`,
     `  "scenes": [`,
-    `    {"text": "내용", "duration": 초}`,
+    `    {`,
+    `      "text": "장면 내용",`,
+    `      "duration": 시간(초)`,
+    `    }`,
     `  ]`,
     `}`,
     "",
-    `다른 설명 없이 JSON만 출력하세요.`
+    `⚡ JSON만 출력하고 다른 설명은 절대 포함하지 마세요.`
   );
 
   return parts.join("\n");
@@ -133,7 +133,7 @@ function buildGeminiPrompt({ topic, style, duration, maxScenes, referenceText, c
 
 async function _buildGeminiPrompt(topic, duration, style, maxScenes, customPrompt = null, referenceScript = null) {
   const minCharacters = duration * 1100;
-  const maxCharacters = duration * 1200;
+  const maxCharacters = duration * 1210;
   const avgCharactersPerScene = Math.floor((minCharacters + maxCharacters) / 2 / maxScenes);
 
   let prompt;
@@ -150,11 +150,11 @@ async function _buildGeminiPrompt(topic, duration, style, maxScenes, customPromp
       .replace(/\{avgCharactersPerScene\}/g, avgCharactersPerScene);
   } else {
     // 기본 Gemini 프롬프트 사용
-    prompt = buildGeminiPrompt({ topic, style, duration, maxScenes, referenceText: referenceScript, cpmMin: 1100, cpmMax: 1200 });
+    prompt = buildGeminiPrompt({ topic, style, duration, maxScenes, referenceText: referenceScript, cpmMin: 1100, cpmMax: 1210 });
   }
 
   if (referenceScript && referenceScript.trim()) {
-    prompt += `\n\n참고 대본:\n${referenceScript}`;
+    prompt += `\n\n## 레퍼런스 대본 분석\n${referenceScript}`;
   }
 
   return prompt;
@@ -242,11 +242,11 @@ async function callGoogleGemini(params) {
     referenceText = "",
     compiledPrompt = "",
     cpmMin = 1100,
-    cpmMax = 1200
+    cpmMax = 1210
   } = params;
 
-  console.log("🔥 Google Gemini 대본 생성 시작 (단편 특화)");
-  console.log(`📊 설정: ${duration}분, ${maxScenes}개 장면`);
+  console.log("🔥 Google Gemini 대본 생성 시작 (빠른 생성)");
+  console.log(`📊 설정: ${duration}분, ${maxScenes}개 장면, CPM ${cpmMin}-${cpmMax}`);
 
   // 1. API 키 확인
   const apiKey = await getSecret("geminiKey");
@@ -254,10 +254,22 @@ async function callGoogleGemini(params) {
     throw new Error("Google Gemini API Key가 설정되지 않았습니다.");
   }
 
-  // 2. 프롬프트 준비 (협력업체 방식)
+  // 2. 프롬프트 준비
   const prompt = await _buildGeminiPrompt(topic, duration, style, maxScenes, params.prompt, referenceText);
 
-  console.log("📝 Gemini 프롬프트 길이:", prompt.length, "자");
+  console.log("📝 프롬프트 길이:", prompt.length, "자");
+
+  // 롱폼 컨텐츠 대응 타임아웃 (anthropic.js와 동일한 로직)
+  const getTimeoutForDuration = (minutes) => {
+    if (minutes >= 90) return 1800000;  // 90분+: 30분 타임아웃
+    if (minutes >= 60) return 1200000;  // 60분+: 20분 타임아웃
+    if (minutes >= 30) return 900000;   // 30분+: 15분 타임아웃
+    if (minutes >= 20) return 600000;   // 20분+: 10분 타임아웃
+    return 300000; // 기본: 5분 타임아웃
+  };
+
+  const timeoutMs = getTimeoutForDuration(duration);
+  console.log(`⏱️ 타임아웃 설정: ${duration}분 → ${timeoutMs/60000}분 대기`);
 
   try {
     // 3. API 호출
@@ -278,6 +290,21 @@ async function callGoogleGemini(params) {
     // 6. 씬 데이터 정규화
     const normalizedScenes = normalizeScenes(parsedData.scenes, duration, maxScenes);
 
+    // 실제 생성된 장면 수 검증 (협력업체 방식)
+    const actualScenes = normalizedScenes.length;
+    const requestedScenes = maxScenes;
+
+    console.log("✅ Script generation validation (협력업체 방식):");
+    console.log(`  - 요청 장면 수: ${requestedScenes}개`);
+    console.log(`  - 실제 생성 장면 수: ${actualScenes}개`);
+    console.log(`  - 일치도: ${actualScenes === requestedScenes ? '완전일치' : `차이 ${Math.abs(actualScenes - requestedScenes)}개`}`);
+
+    // 실제 대본 분량 분석
+    const totalChars = normalizedScenes.reduce((sum, scene) => sum + scene.charCount, 0);
+    const avgCharsPerScene = Math.round(totalChars / actualScenes);
+    console.log(`  - 총 글자 수: ${totalChars}자`);
+    console.log(`  - 장면당 평균: ${avgCharsPerScene}자`);
+
     // 7. 최종 결과 구성
     const result = {
       title: parsedData.title || topic || "Gemini 생성 대본",
@@ -285,11 +312,11 @@ async function callGoogleGemini(params) {
     };
 
     // 8. 결과 통계
-    const totalChars = normalizedScenes.reduce((sum, scene) => sum + scene.charCount, 0);
     const totalDuration = normalizedScenes.reduce((sum, scene) => sum + scene.duration, 0);
 
     console.log("🎉 Gemini 대본 생성 완료!");
-    console.log(`📈 통계: ${normalizedScenes.length}개 장면, ${totalChars}자, ${Math.round(totalDuration/60*10)/10}분`);
+    console.log(`📈 통계: ${normalizedScenes.length}개 장면, ${totalChars}자, ${Math.round((totalDuration / 60) * 10) / 10}분`);
+    console.log(`📊 장면당 평균: ${Math.round(totalChars / normalizedScenes.length)}자`);
 
     return { success: true, data: result };
 

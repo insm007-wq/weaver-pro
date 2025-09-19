@@ -210,7 +210,8 @@
       "Bash(move providersanthropic.js .)",
       "Bash(move providersopenai.js .)",
       "Bash(del index.js)",
-      "Bash(del common.js)"
+      "Bash(del common.js)",
+      "Bash(del:*)"
     ],
     "deny": [],
     "ask": []
