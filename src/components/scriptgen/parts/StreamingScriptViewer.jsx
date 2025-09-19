@@ -341,7 +341,7 @@ function GeneratingScript({ isLoading, form, fullVideoState }) {
       )}
 
       {/* CSS 애니메이션 정의 */}
-      <style jsx>{`
+      <style>{`
         @keyframes blink {
           0%, 50% { opacity: 1; }
           51%, 100% { opacity: 0; }
