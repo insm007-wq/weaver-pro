@@ -319,18 +319,6 @@ export const useAnimationStyles = makeStyles({
   },
 });
 
-/**
- * 토스트/알림 스타일
- */
-export const useToastStyles = makeStyles({
-  toastContainer: {
-    position: "fixed",
-    top: tokens.spacingVerticalL,
-    right: tokens.spacingHorizontalL,
-    zIndex: 1000,
-    maxWidth: "400px",
-  },
-});
 
 /**
  * 설정 탭 전용 스타일

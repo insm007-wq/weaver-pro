@@ -54,7 +54,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useApi } from "./useApi";
-import { useToast } from "./useToast";
 
 /**
  * TTS 음성 설정 관리 훅
@@ -71,7 +70,6 @@ import { useToast } from "./useToast";
  */
 export function useVoiceSettings(form) {
   const api = useApi();
-  const toast = useToast();
 
   const [voices, setVoices] = useState([]);
   const [voiceLoading, setVoiceLoading] = useState(true);
@@ -204,7 +202,7 @@ export function useVoiceSettings(form) {
         audio.onended = () => URL.revokeObjectURL(audioUrl);
         audio.play().catch((err) => {
           console.error("오디오 재생 실패:", err);
-          toast.error("목소리 미리듣기 재생에 실패했습니다.");
+          console.error("목소리 미리듣기 재생에 실패했습니다.");
         });
         console.log("✅ 목소리 미리듣기 재생 성공");
       } else {
@@ -212,9 +210,9 @@ export function useVoiceSettings(form) {
       }
     } catch (error) {
       console.error("목소리 미리듣기 실패:", error);
-      toast.error("목소리 미리듣기에 실패했습니다.");
+      console.error("목소리 미리듣기에 실패했습니다.");
     }
-  }, [toast, form.ttsEngine, form.speed]);
+  }, [form.ttsEngine, form.speed]);
 
   const retryVoiceLoad = useCallback(async () => {
     try {
@@ -225,7 +223,7 @@ export function useVoiceSettings(form) {
         const allItems = Array.isArray(res.data) ? res.data : [];
         const filteredItems = filterVoicesByEngine(allItems, form.ttsEngine);
         setVoices(filteredItems);
-        toast.success(`✅ ${filteredItems.length}개의 목소리를 로드했습니다!`);
+        console.log(`✅ ${filteredItems.length}개의 목소리를 로드했습니다!`);
       } else {
         setVoiceError({
           code: res?.code ?? res?.errorCode ?? 1004,
@@ -240,7 +238,7 @@ export function useVoiceSettings(form) {
     } finally {
       setVoiceLoading(false);
     }
-  }, [toast, form.ttsEngine]);
+  }, [form.ttsEngine]);
 
   return {
     voices,

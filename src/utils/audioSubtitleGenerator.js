@@ -32,7 +32,7 @@
  * @returns {Promise<void>}
  */
 export async function generateAudioAndSubtitles(scriptData, mode = "script_mode", options, outputPath = null) {
-  const { form, voices, setFullVideoState, api, toast, addLog } = options;
+  const { form, voices, setFullVideoState, api, addLog } = options;
 
   try {
     // 모드별 진행 상황 업데이트
@@ -104,7 +104,7 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
           addLog(`🔄 ${message}`, "info");
         }
 
-        toast.warning(`${original} → ${fallback} 자동 전환: ${reason === 'quota_exceeded' ? '크레딧 부족' : '오류 발생'}`);
+        console.warn(`${original} → ${fallback} 자동 전환: ${reason === 'quota_exceeded' ? '크레딧 부족' : '오류 발생'}`);
         console.warn("🔄 TTS 자동 전환:", data);
       };
 
@@ -151,7 +151,7 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       const audioFiles = audioResult.data.audioFiles;
       console.log("✅ 음성 생성 완료:", audioFiles);
       console.log("🔍 audioFiles 구조 확인:", JSON.stringify(audioFiles, null, 2));
-      toast.success(`🎵 음성 파일 ${audioFiles.length}개가 생성되었습니다!`);
+      console.log(`🎵 음성 파일 ${audioFiles.length}개가 생성되었습니다!`);
 
       // 먼저 base64 오디오 파일들을 디스크에 저장
       const savedAudioFiles = [];
@@ -269,7 +269,7 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       currentStep: "error"
     }));
 
-    toast.error(`음성/자막 생성 실패: ${error.message}`);
+    console.error(`음성/자막 생성 실패: ${error.message}`);
   }
 }
 
@@ -428,8 +428,8 @@ async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState
           }));
 
           console.log("✅ 2단계 완료: 음성 파일 합치기 완료:", mergeResult.outputPath);
-          toast.success(`🎵 2단계 완료: 통합 음성 파일이 생성되었습니다!`);
-          toast.success("📝 3단계 시작: 자막을 생성합니다...");
+          console.log(`🎵 2단계 완료: 통합 음성 파일이 생성되었습니다!`);
+          console.log("📝 3단계 시작: 자막을 생성합니다...");
         } else {
           // 자동화 모드에서는 음성 생성 완료
           setFullVideoState(prev => ({
@@ -438,7 +438,7 @@ async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState
           }));
 
           console.log("✅ 자동화 모드 - 음성 파일 합치기 완료:", mergeResult.outputPath);
-          toast.success(`🎵 음성 파일 합치기 완료: 통합 음성 파일이 생성되었습니다!`);
+          console.log(`🎵 음성 파일 합치기 완료: 통합 음성 파일이 생성되었습니다!`);
         }
       } else {
         if (addLog) {
@@ -447,12 +447,12 @@ async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState
           addLog(`📊 전체 응답: ${JSON.stringify(mergeResult)}`);
         }
         console.error("❌ 음성 파일 합치기 실패:", mergeResult);
-        toast.error(`음성 파일 합치기 실패: ${mergeResult.message || '알 수 없는 오류'}`);
+        console.error(`음성 파일 합치기 실패: ${mergeResult.message || '알 수 없는 오류'}`);
       }
     }
   } catch (error) {
     console.error("❌ 음성 파일 합치기 오류:", error);
-    toast.error(`음성 파일 합치기 오류: ${error.message}`);
+    console.error(`음성 파일 합치기 오류: ${error.message}`);
   }
 }
 
@@ -537,31 +537,31 @@ async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideo
           }
 
           console.log("✅ SRT 자막 파일 생성 완료:", srtFilePath);
-          toast.success(`SRT 자막 파일이 생성되었습니다: subtitle.srt`);
+          console.log(`SRT 자막 파일이 생성되었습니다: subtitle.srt`);
         } else {
           if (addLog) {
             addLog(`❌ SRT 파일 쓰기 실패: ${writeResult.message}`, "error");
           }
           console.error("❌ 파일 쓰기 실패:", writeResult.message);
-          toast.error(`SRT 파일 쓰기 실패: ${writeResult.message}`);
+          console.error(`SRT 파일 쓰기 실패: ${writeResult.message}`);
         }
       } else {
         console.error("❌ scripts 폴더 경로 생성 실패");
-        toast.error(`자막 경로 생성 실패`);
+        console.error(`자막 경로 생성 실패`);
       }
     } else {
       console.warn("⚠️ SRT 변환 결과가 없음:", srtResult);
 
       if (srtResult?.success === false) {
         console.error("❌ SRT 변환 실패:", srtResult.error || srtResult.message);
-        toast.error(`SRT 변환 실패: ${srtResult.error || srtResult.message || '알 수 없는 오류'}`);
+        console.error(`SRT 변환 실패: ${srtResult.error || srtResult.message || '알 수 없는 오류'}`);
       } else {
-        toast.warning("SRT 자막을 생성할 수 없습니다. 대본 데이터를 확인해주세요.");
+        console.warn("SRT 자막을 생성할 수 없습니다. 대본 데이터를 확인해주세요.");
       }
     }
   } catch (error) {
     console.error("❌ SRT 자막 생성 오류:", error);
-    toast.error(`SRT 자막 생성 오류: ${error.message}`);
+    console.error(`SRT 자막 생성 오류: ${error.message}`);
   }
 }
 
@@ -588,7 +588,7 @@ function handleCompletionByMode(mode, { setFullVideoState, toast, addLog }) {
       addLog("✅ 닫기 버튼을 클릭하여 창을 닫을 수 있습니다.");
     }
 
-    toast.success("🎉 3단계 완료: 대본, 음성, 자막이 모두 생성되었습니다!");
+    console.log("🎉 3단계 완료: 대본, 음성, 자막이 모두 생성되었습니다!");
 
   } else {
     // 자동화 모드는 음성 생성까지만 여기서 처리
@@ -598,6 +598,6 @@ function handleCompletionByMode(mode, { setFullVideoState, toast, addLog }) {
     }));
 
     console.log("🎉 자동화 모드 - 음성 생성 완료!");
-    toast.success("🎵 2단계 완료: 음성이 생성되었습니다. 다음 단계를 진행해주세요.");
+    console.log("🎵 2단계 완료: 음성이 생성되었습니다. 다음 단계를 진행해주세요.");
   }
 }

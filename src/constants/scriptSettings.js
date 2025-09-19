@@ -122,7 +122,7 @@ export const makeDefaultForm = () => ({
   style: "informative",
   durationMin: 3, // 기본값 3분
   maxScenes: 8,   // 기본값 8씬
-  llm: "openai-gpt5mini",
+  aiEngine: "openai-gpt5mini",
   temperature: 1.0,
   imageStyle: "cinematic",
   generateImages: true,

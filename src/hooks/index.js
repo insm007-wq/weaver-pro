@@ -7,10 +7,10 @@
  * @example
  * // 개별 카테고리에서 import
  * import { useApi, useAsyncOperation } from '@hooks/api'
- * import { useToast, useProgress } from '@hooks/ui'
+ * import { useProgress } from '@hooks/ui'
  * 
  * // 전체에서 한번에 import
- * import { useApi, useToast, useLocalStorage } from '@hooks'
+ * import { useApi, useLocalStorage } from '@hooks'
  */
 
 // ===== API 관련 훅들 =====
@@ -21,7 +21,6 @@ export { useLocalStorage } from './useLocalStorage';
 export { usePersistProject } from './usePersistProject';
 
 // ===== UI 상태 관련 훅들 =====
-export { useToast } from './useToast';
 export { useProgress } from './useProgress';
 export { useProgressTracking } from './useProgressTracking';
 export { default as useFullscreen } from './useFullscreen';

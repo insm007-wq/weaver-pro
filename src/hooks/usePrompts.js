@@ -18,12 +18,10 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useApi } from './useApi';
-import { useToast } from './useToast';
 import { API_ENDPOINTS } from '@constants';
 
 const usePrompts = (category = 'script', options = {}) => {
   const api = useApi();
-  const toast = useToast();
   
   // 옵션 기본값
   const {

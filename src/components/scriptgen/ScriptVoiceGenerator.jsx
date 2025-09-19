@@ -43,12 +43,10 @@ import { useScriptGeneration } from "../../hooks/useScriptGeneration";
 import { useVoiceSettings } from "../../hooks/useVoiceSettings";
 import { usePromptSettings } from "../../hooks/usePromptSettings";
 import { useApi } from "../../hooks/useApi";
-import { useToast } from "../../hooks/useToast";
 
 // 상수 및 유틸리티 imports
 import { ADVANCED_PRESETS, makeDefaultForm } from "../../constants/scriptSettings";
 import { generateAudioAndSubtitles } from "../../utils/audioSubtitleGenerator";
-import { generateScriptStep } from "../../utils/scriptGenerator";
 import { generateAudioStep, generateImagesStep, generateVideoStep } from "../../utils/automationSteps";
 
 /**
@@ -92,9 +90,8 @@ function ScriptVoiceGenerator() {
 
   // 커스텀 훅들
   const api = useApi();
-  const toast = useToast();
   const { promptNames, promptLoading } = usePromptSettings();
-  const { doc, setDoc, isLoading, error, setIsLoading, setError, getSelectedPromptContent } = useScriptGeneration();
+  const { doc, setDoc, isLoading, error, setIsLoading, setError, getSelectedPromptContent, runGenerate } = useScriptGeneration();
   const { voices, voiceLoading, voiceError, previewVoice, retryVoiceLoad } = useVoiceSettings(form);
 
   // 폼 변경 핸들러
@@ -143,7 +140,7 @@ function ScriptVoiceGenerator() {
     if (preset) {
       setForm((prev) => ({ ...prev, ...preset.settings }));
       setSelectedPreset(presetName);
-      toast.success(`${presetName} 프리셋을 적용했습니다.`);
+      console.log(`${presetName} 프리셋을 적용했습니다.`);
     }
   };
 
@@ -151,7 +148,7 @@ function ScriptVoiceGenerator() {
    * 대본 생성 모드 실행 함수
    * 3단계: 대본 생성 → 음성 생성 → 자막 생성
    */
-  const runGenerate = useCallback(
+  const runScriptMode = useCallback(
     async (formData) => {
       console.log("🚀 runGenerate 함수 실행 시작! (SCRIPT MODE)");
 
@@ -191,19 +188,11 @@ function ScriptVoiceGenerator() {
           console.warn("⚠️ 대본 모드 - 영상 폴더 설정이 필요합니다");
         }
 
-        // 1단계: 대본 생성 (새로운 generateScriptStep 함수 사용)
-        const res = await generateScriptStep(
-          formData,
-          globalSettings,
-          getSelectedPromptContent,
-          api,
-          setDoc,
-          setFullVideoState,
-          toast,
-          addLog
-        );
+        // 1단계: 대본 생성
+        addLog("📝 AI 대본 생성 중...");
+        const scriptResult = await runGenerate(formData);
 
-        if (res && res.scenes && Array.isArray(res.scenes) && res.scenes.length > 0) {
+        if (scriptResult && scriptResult.scenes && Array.isArray(scriptResult.scenes) && scriptResult.scenes.length > 0) {
           // 2단계 음성 및 자막 생성 시작
           setFullVideoState((prev) => ({
             ...prev,
@@ -212,26 +201,25 @@ function ScriptVoiceGenerator() {
           }));
 
           // 대본 생성 모드: 음성과 자막만 생성 (프로젝트 폴더 구조 사용)
-          await generateAudioAndSubtitles(res, "script_mode", {
+          await generateAudioAndSubtitles(scriptResult, "script_mode", {
             form,
             voices,
             setFullVideoState,
             api,
-            toast,
-            addLog,
+              addLog,
           });
         } else {
-          throw new Error(`대본 생성 실패: ${JSON.stringify(res)}`);
+          throw new Error("대본이 생성되지 않았습니다. 먼저 대본을 생성해주세요.");
         }
       } catch (error) {
         console.error("대본 생성 오류:", error);
         setError(error.message);
-        toast.error(`대본 생성 실패: ${error.message}`);
+        console.error(`대본 생성 실패: ${error.message}`);
       } finally {
         setIsLoading(false);
       }
     },
-    [globalSettings, api, getSelectedPromptContent, setDoc, setError, setIsLoading, toast]
+    [globalSettings, api, getSelectedPromptContent, setDoc, setError, setIsLoading]
   );
 
   // 상태 업데이트 헬퍼 함수들
@@ -350,16 +338,10 @@ function ScriptVoiceGenerator() {
       }
 
       addLog("📝 AI 대본 생성 중...");
-      const script = await generateScriptStep(
-        form,
-        globalSettings,
-        getSelectedPromptContent,
-        api,
-        setDoc,
-        setFullVideoState,
-        toast,
-        addLog
-      );
+      const script = await runGenerate(form);
+      if (!script || !script.scenes || script.scenes.length === 0) {
+        throw new Error("대본 생성에 실패했습니다.");
+      }
 
       updateFullVideoState({ currentStep: "audio", progress: { script: 100 } });
       addLog("🎤 음성 생성 중...");
@@ -407,7 +389,7 @@ function ScriptVoiceGenerator() {
         addLog("❌ 출력 폴더 열기 실패: " + error.message, "error");
       }
 
-      toast.success("🎉 완전 자동화 영상 생성 완료! 출력 폴더를 확인해보세요.");
+      console.log("🎉 완전 자동화 영상 생성 완료! 출력 폴더를 확인해보세요.");
     } catch (error) {
       updateFullVideoState({
         currentStep: "error",
@@ -416,7 +398,7 @@ function ScriptVoiceGenerator() {
         isGenerating: false,
       });
       addLog(`❌ 오류 발생: ${error.message}`, "error");
-      toast.error(`영상 생성 실패: ${error.message}`);
+      console.error(`영상 생성 실패: ${error.message}`);
     }
   };
 
@@ -527,7 +509,7 @@ function ScriptVoiceGenerator() {
         </div>
 
         {/* 진행률 패널 */}
-        <FullVideoProgressPanel fullVideoState={fullVideoState} resetFullVideoState={resetFullVideoState} api={api} toast={toast} />
+        <FullVideoProgressPanel fullVideoState={fullVideoState} resetFullVideoState={resetFullVideoState} api={api} />
 
         {/* 스트리밍 뷰어 */}
         <StreamingScriptViewer
@@ -725,7 +707,7 @@ function ScriptVoiceGenerator() {
                   maxScenes: form.maxScenes,
                   promptName: form.promptName
                 });
-                runGenerate(form);
+                runScriptMode(form);
               }}
             />
           </div>

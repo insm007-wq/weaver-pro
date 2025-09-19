@@ -9,19 +9,88 @@
 // ============================================================================
 
 const OpenAI = require("openai");
-const { getSecret } = require("../../../services/secrets");
-const {
-  dumpRaw,
-  stripFence,
-  tryParse,
-  coerceToScenesShape,
-  validateScriptDocLoose,
-  pickText,
-  formatScenes,
-  estimateMaxTokens,
-  buildRepairInput,
-  buildRepairInstruction,
-} = require("../common");
+const { getSecret } = require("../../services/secrets");
+
+// Utility functions (previously from common.js)
+function dumpRaw(type, data) {
+  try {
+    console.log(`[RAW:${type}]`, data);
+  } catch {}
+}
+
+function stripFence(text) {
+  if (!text) return "";
+  return text
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/, "")
+    .replace(/```\s*$/, "")
+    .trim();
+}
+
+function tryParse(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function coerceToScenesShape(obj) {
+  if (!obj || typeof obj !== "object") return { title: "", scenes: [] };
+
+  const scenes = Array.isArray(obj.scenes) ? obj.scenes : [];
+  return {
+    title: String(obj.title || ""),
+    scenes: scenes.map((scene, i) => ({
+      id: scene?.id || `s${i + 1}`,
+      text: String(scene?.text || ""),
+      duration: Number(scene?.duration) || 0,
+      charCount: scene?.charCount || 0
+    }))
+  };
+}
+
+function validateScriptDocLoose(doc) {
+  return doc &&
+         typeof doc === "object" &&
+         Array.isArray(doc.scenes) &&
+         doc.scenes.length > 0 &&
+         doc.scenes.every(s => s && typeof s.text === "string" && s.text.trim());
+}
+
+function pickText(scene) {
+  return String(scene?.text || "").trim();
+}
+
+function formatScenes(doc, topic, duration, maxScenes, options = {}) {
+  if (!doc || !Array.isArray(doc.scenes)) {
+    return { title: topic || "", scenes: [] };
+  }
+
+  return {
+    title: doc.title || topic || "",
+    scenes: doc.scenes.slice(0, maxScenes || 20).map((scene, i) => ({
+      id: scene?.id || `s${i + 1}`,
+      text: String(scene?.text || "").trim(),
+      duration: Number(scene?.duration) || Math.max(1, Math.round((duration || 5) * 60 / (maxScenes || 10))),
+      charCount: scene?.charCount || countCharsKo(scene?.text || "")
+    }))
+  };
+}
+
+function estimateMaxTokens({ maxScenes = 10, duration = 5 }) {
+  const avgCharsPerScene = (duration * 350) / maxScenes; // 350 chars per minute average
+  const totalChars = avgCharsPerScene * maxScenes;
+  return Math.max(6000, Math.ceil(totalChars * 1.2) + 2000); // Add overhead
+}
+
+function buildRepairInput(doc) {
+  return JSON.stringify(doc, null, 2);
+}
+
+function buildRepairInstruction(topic, style) {
+  return `Fix the following script JSON to ensure proper structure and timing. Topic: ${topic || "N/A"}, Style: ${style || "N/A"}. Return valid JSON only.`;
+}
 
 /* ======================= 글자수(공백 포함) 통일 계산기 ======================= */
 // - NFC 정규화
