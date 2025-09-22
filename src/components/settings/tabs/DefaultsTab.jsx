@@ -201,6 +201,9 @@ export default function DefaultsTab() {
         type: "success",
         text: "기본 설정이 저장되었습니다! 🎉",
       });
+
+      // 설정 변경 이벤트 발생
+      window.dispatchEvent(new Event('settingsChanged'));
     } catch (error) {
       console.error("기본 설정 저장 실패:", error);
       showGlobalToast({

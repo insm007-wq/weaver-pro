@@ -49,6 +49,14 @@ export const AI_ENGINE_OPTIONS = [
     features: ["✨ 자연스런 문체", "🎪 창의성", "📚 교육적"],
     rating: 4.9,
   },
+  {
+    key: "google-gemini",
+    text: "🚀 Google Gemini",
+    desc: "Google의 최신 멀티모달 AI 모델",
+    processingTime: "1-2분",
+    features: ["⚡ 빠른 속도", "🔍 정확한 분석", "💡 창의적 아이디어"],
+    rating: 4.7,
+  },
 ];
 
 export const ADVANCED_PRESETS = [
@@ -115,6 +123,7 @@ export const CPM_PRESETS = [
 export const LLM_OPTIONS = [
   { label: "Anthropic Claude 3.5/3.7", value: "anthropic" },
   { label: "OpenAI GPT-5 mini", value: "openai-gpt5mini" },
+  { label: "Google Gemini", value: "google-gemini" },
 ];
 
 export const makeDefaultForm = () => ({

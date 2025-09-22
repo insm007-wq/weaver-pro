@@ -62,7 +62,6 @@ function ScriptVoiceGenerator() {
   const [form, setForm] = useState(makeDefaultForm());
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState("");
-  const [globalSettings, setGlobalSettings] = useState({ llmModel: "anthropic" });
 
   // 전체 영상 생성 상태 (모드별 분기 지원)
   const [fullVideoState, setFullVideoState] = useState({
@@ -219,7 +218,7 @@ function ScriptVoiceGenerator() {
         setIsLoading(false);
       }
     },
-    [globalSettings, api, getSelectedPromptContent, setDoc, setError, setIsLoading]
+    [api, getSelectedPromptContent, setDoc, setError, setIsLoading]
   );
 
   // 상태 업데이트 헬퍼 함수들
@@ -402,7 +401,7 @@ function ScriptVoiceGenerator() {
     }
   };
 
-  // 컴포넌트 마운트 시 상태 초기화 및 전역 설정 로드
+  // 컴포넌트 마운트 시 상태 초기화
   useEffect(() => {
     // 프로그램 시작 시 항상 깨끗한 상태로 시작 (예상 생성 결과 삭제)
     setDoc(null);
@@ -450,7 +449,57 @@ function ScriptVoiceGenerator() {
     } catch (error) {
       console.warn("localStorage 클리어 실패:", error);
     }
-  }, []);
+  }, []); // 빈 의존성 배열로 한 번만 실행
+
+  // 전역 설정 로드 (별도 useEffect)
+  useEffect(() => {
+    let currentLLM = null;
+
+    const loadGlobalSettings = async () => {
+      try {
+        const llmSetting = await api.invoke("settings:get", "llmModel");
+
+        if (llmSetting) {
+          // 응답이 객체 형태인 경우 data 또는 value 속성에서 실제 값 추출
+          let llmValue;
+          if (typeof llmSetting === 'object') {
+            llmValue = llmSetting.data || llmSetting.value || llmSetting;
+          } else {
+            llmValue = llmSetting;
+          }
+
+          // 유효한 문자열 값이고 현재 값과 다른 경우에만 업데이트
+          if (typeof llmValue === 'string' && llmValue.trim() && llmValue !== currentLLM) {
+            currentLLM = llmValue;
+            setForm(prev => {
+              if (prev.aiEngine !== llmValue) {
+                console.log("🔄 LLM 변경됨:", prev.aiEngine, "→", llmValue);
+                return { ...prev, aiEngine: llmValue };
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (error) {
+        console.warn("전역 설정 로드 실패:", error);
+      }
+    };
+
+    // 컴포넌트 마운트 시에만 한 번 실행
+    loadGlobalSettings();
+
+    // 전역 설정 변경 이벤트 리스너
+    const handleSettingsChange = () => {
+      loadGlobalSettings();
+    };
+
+    // 설정 변경 이벤트 등록
+    window.addEventListener('settingsChanged', handleSettingsChange);
+
+    return () => {
+      window.removeEventListener('settingsChanged', handleSettingsChange);
+    };
+  }, []); // 빈 의존성 배열
 
   // 프롬프트 자동 선택
   useEffect(() => {
@@ -517,7 +566,6 @@ function ScriptVoiceGenerator() {
           doc={doc}
           isLoading={isLoading}
           form={form}
-          globalSettings={globalSettings}
           onClose={() => {
             setDoc(null);
             resetFullVideoState();
@@ -687,7 +735,6 @@ function ScriptVoiceGenerator() {
             {/* 예상 결과 카드 */}
             <GenerationPreviewCard
               form={form}
-              globalSettings={globalSettings}
               doc={doc}
               isGenerating={fullVideoState.isGenerating}
               hasJustCompleted={fullVideoState.currentStep === "completed"}
@@ -698,7 +745,6 @@ function ScriptVoiceGenerator() {
               form={form}
               isLoading={isLoading}
               fullVideoState={fullVideoState}
-              globalSettings={globalSettings}
               onGenerate={() => {
                 console.log("📝 대본 생성 버튼 클릭됨! (script_mode)");
                 console.log("🎯 전달되는 form 데이터:", {

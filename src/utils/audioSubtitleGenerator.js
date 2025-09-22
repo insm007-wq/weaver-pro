@@ -35,16 +35,39 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
   const { form, voices, setFullVideoState, api, toast, addLog } = options;
 
   try {
-    // 모드별 진행 상황 업데이트
+    if (mode === "script_mode") {
+      console.log("🎤 대본 생성 모드 - 자막 및 음성 생성 시작...");
+    } else {
+      console.log("🚀 자동화 모드 - 음성 생성 시작...");
+    }
+
+    // 1단계: SRT 자막 생성 (script_mode에서만)
+    if (mode === "script_mode") {
+      setFullVideoState(prev => ({
+        ...prev,
+        progress: { ...prev.progress, subtitle: 0 }
+      }));
+
+      console.log("📝 1단계: 자막 파일 생성 시작...");
+      await generateSubtitleFile(scriptData, mode, { api, toast, setFullVideoState, addLog });
+
+      setFullVideoState(prev => ({
+        ...prev,
+        progress: { ...prev.progress, subtitle: 100 }
+      }));
+      console.log("✅ 1단계 완료: 자막 파일 생성 완료");
+    }
+
+    // 2단계: 음성 생성 시작
     setFullVideoState(prev => ({
       ...prev,
-      progress: { ...prev.progress, audio: 10 }
+      progress: { ...prev.progress, audio: 25 }
     }));
 
     if (mode === "script_mode") {
-      console.log("🎤 대본 생성 모드 - 음성 및 자막 생성 시작...");
+      console.log("🎤 2단계: 음성 생성 시작...");
     } else {
-      console.log("🚀 자동화 모드 - 음성 생성 시작...");
+      console.log("🚀 음성 생성 시작...");
     }
 
     // videoSaveFolder에 직접 음성 파일 저장
@@ -152,7 +175,7 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       // 음성 생성 완료
       setFullVideoState(prev => ({
         ...prev,
-        progress: { ...prev.progress, audio: 50 }
+        progress: { ...prev.progress, audio: 75 }
       }));
 
       const audioFiles = audioResult.data.audioFiles;
@@ -344,9 +367,6 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
         }
       }
     }
-
-    // SRT 자막 생성
-    await generateSubtitleFile(scriptData, mode, { api, toast, setFullVideoState, addLog });
 
     // 모든 단계 완료 - 모드별 메시지
     handleCompletionByMode(mode, { setFullVideoState, toast, addLog });
@@ -590,14 +610,6 @@ async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState
  * @param {Object} options - 옵션 객체
  */
 async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideoState, addLog }) {
-  // SRT 자막 생성 - 모드별 진행률 업데이트
-  if (mode === "script_mode") {
-    setFullVideoState(prev => ({
-      ...prev,
-      progress: { ...prev.progress, subtitle: 10 }
-    }));
-  }
-
   console.log("🚀🚀🚀 === SRT 자막 생성 단계 시작 === 🚀🚀🚀");
 
   if (addLog) {
@@ -658,14 +670,6 @@ async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideo
         });
 
         if (writeResult.success) {
-          // 대본 생성 모드에서 자막 진행률 업데이트
-          if (mode === "script_mode") {
-            setFullVideoState(prev => ({
-              ...prev,
-              progress: { ...prev.progress, subtitle: 100 }
-            }));
-          }
-
           if (addLog) {
             addLog("✅ SRT 자막 파일 생성 완료!");
             addLog("📁 파일명: subtitle.srt");

@@ -67,13 +67,20 @@ function buildPrompt({ topic, style, duration, maxScenes, referenceText, cpmMin,
   const maxChars = Math.round(duration * (cpmMax || 400));
   const avgCharsPerScene = Math.round((minChars + maxChars) / 2 / maxScenes);
 
+  // 🚀 협력업체 방식: 긴 영상에 대한 프롬프트 강화
+  const isLongContent = duration >= 20;
+  const contentDepthInstruction = isLongContent ?
+    `\n⭐ 긴 영상 특별 요구사항:\n• 각 주제를 상세하고 구체적으로 설명\n• 실제 사례와 예시를 풍부하게 포함\n• 다양한 관점에서 접근하여 내용 확장\n• 시청자가 지루하지 않도록 흥미로운 요소 추가\n• 실습이나 적용 방법을 단계별로 설명\n• 전문적이면서도 이해하기 쉽게 작성` :
+    ``;
+
   const parts = [
-    `다음 조건에 맞는 ${duration}분 길이의 영상 대본을 작성해주세요.`,
+    `다음 조건에 맞는 ${duration}분 길이의 ${isLongContent ? '상세한 ' : ''}영상 대본을 작성해주세요.`,
     "",
     `📋 기본 정보:`,
     `• 주제: ${topic || "(미지정)"}`,
     `• 스타일: ${style || "전문가 톤, 쉽고 차분하게"}`,
     `• 언어: 한국어`,
+    contentDepthInstruction,
     "",
     `📊 분량 요구사항:`,
     `• 정확히 ${maxScenes}개 장면으로 구성`,
@@ -91,6 +98,20 @@ function buildPrompt({ topic, style, duration, maxScenes, referenceText, cpmMin,
   // 레퍼런스 대본이 있으면 추가
   if (referenceText && referenceText.trim()) {
     parts.push("", `📄 참고 대본:`, `아래 대본의 구조와 스타일을 참고하여 더 나은 대본을 작성하세요.`, "", referenceText.trim());
+  }
+
+  // 🚀 협력업체 방식: 긴 영상 구성 가이드 추가
+  if (isLongContent) {
+    parts.push(
+      "",
+      `🎯 추천 구성 (${duration}분 영상):`,
+      `1. 흥미로운 도입 (5%)`,
+      `2. 기본 개념 설명 (15%)`,
+      `3. 상세한 내용 전개 (50%)`,
+      `4. 실제 사례/예시 (20%)`,
+      `5. 실습/적용 방법 (7%)`,
+      `6. 요약 및 마무리 (3%)`
+    );
   }
 
   parts.push(

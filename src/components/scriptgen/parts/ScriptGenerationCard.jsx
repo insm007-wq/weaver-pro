@@ -13,7 +13,6 @@ function ScriptGenerationCard({
   form,
   isLoading,
   fullVideoState,
-  globalSettings = {},
   onGenerate
 }) {
   const cardStyles = useCardStyles();
@@ -55,7 +54,7 @@ function ScriptGenerationCard({
         <Text size={300} color="secondary" style={{ lineHeight: 1.4 }}>
           {selectedEngine
             ? `${selectedEngine.text.replace(/🤖|🧠|🚀/g, "").trim()}로 대본을 생성합니다`
-            : `${form.aiEngine || "AI 모델"}로 대본을 생성합니다`}
+            : `AI 모델로 대본을 생성합니다`}
         </Text>
       </div>
 
