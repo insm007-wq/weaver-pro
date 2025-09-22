@@ -36,7 +36,7 @@ import { LoadingSpinner } from "../../common/LoadingSpinner";
 import { extractKeywords as fallbackExtract } from "../../../utils/extractKeywords";
 import { getSetting, readTextAny, aiExtractKeywords, getSecret } from "../../../utils/ipcSafe";
 import { formatMs, debounce } from "../../../utils/common";
-import { useToast } from "../../../hooks/useToast";
+import { showGlobalToast } from "../../common/GlobalToast";
 import { useApi } from "../../../hooks/useApi";
 
 // =========================== 상수 정의 ===========================
@@ -179,7 +179,6 @@ function buildResolutionLabel(w, h) {
  * @returns {JSX.Element} Canva 다운로드 탭 UI
  */
 function CanvaTab({ addAssets }) {
-  const toast = useToast();
   const api = useApi();
   
   // =========================== 기본 상태 관리 ===========================
