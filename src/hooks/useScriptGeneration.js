@@ -62,8 +62,8 @@ export function useScriptGeneration() {
           temperature: form.temperature,
           prompt: promptContent.script || form.customPrompt,
           referenceText: form.referenceScript,
-          cpmMin: 300,
-          cpmMax: 400,
+          cpmMin: form.cpmMin || 300,
+          cpmMax: form.cpmMax || 400,
         };
 
         // 상세 로깅 (디버깅 강화)
@@ -95,11 +95,11 @@ export function useScriptGeneration() {
 
         // 롱폼 컨텐츠 대응 타임아웃 (scriptGenerator.js와 동일한 로직)
         const getTimeoutForDuration = (minutes) => {
-          if (minutes >= 90) return 1800000; // 90분+: 30분 타임아웃
-          if (minutes >= 60) return 1200000; // 60분+: 20분 타임아웃
-          if (minutes >= 30) return 900000; // 30분+: 15분 타임아웃
-          if (minutes >= 20) return 600000; // 20분+: 10분 타임아웃
-          return 300000; // 기본: 5분 타임아웃
+          if (minutes >= 90) return 600000; // 90분+: 10분 타임아웃 (속도 우선)
+          if (minutes >= 60) return 480000; // 60분+: 8분 타임아웃
+          if (minutes >= 30) return 300000; // 30분+: 5분 타임아웃
+          if (minutes >= 20) return 180000; // 20분+: 3분 타임아웃
+          return 120000; // 기본: 2분 타임아웃 (속도 우선)
         };
 
         const timeoutMs = getTimeoutForDuration(form.durationMin);

@@ -32,7 +32,7 @@
  * @returns {Promise<void>}
  */
 export async function generateAudioAndSubtitles(scriptData, mode = "script_mode", options, outputPath = null) {
-  const { form, voices, setFullVideoState, api, addLog } = options;
+3  const { form, voices, setFullVideoState, api, toast, addLog } = options;
 
   try {
     // 모드별 진행 상황 업데이트
@@ -241,6 +241,9 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
           addLog(`🔄 ${savedAudioFiles.length}개 저장된 음성 파일을 하나로 합치는 중...`);
         }
         console.log("🎵 mergeAudioFiles 함수 호출 시작...");
+        console.log("🎵 savedAudioFiles 전달 전 확인:", savedAudioFiles);
+        console.log("🎵 savedAudioFiles 개수:", savedAudioFiles.length);
+        console.log("🎵 savedAudioFiles 구조:", JSON.stringify(savedAudioFiles, null, 2));
         await mergeAudioFiles(savedAudioFiles, mode, { api, toast, setFullVideoState, addLog });
         console.log("🎵 mergeAudioFiles 함수 호출 완료");
       } else if (savedAudioFiles && savedAudioFiles.length === 1 && addLog) {
@@ -349,9 +352,11 @@ async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState
       const audioFilePaths = audioFiles
         .map((f, index) => {
           console.log(`🔍 디버그 - 개별 파일 ${index}:`, f);
+          console.log(`🔍 디버그 - 개별 파일 ${index} 모든 속성:`, Object.keys(f));
           console.log(`🔍 디버그 - 개별 파일 ${index} audioUrl:`, f.audioUrl);
           console.log(`🔍 디버그 - 개별 파일 ${index} filePath:`, f.filePath);
-          const path = f.audioUrl || f.filePath;
+          console.log(`🔍 디버그 - 개별 파일 ${index} fileName:`, f.fileName);
+          const path = f.audioUrl || f.filePath || f.path;
           console.log(`🔍 디버그 - 개별 파일 ${index} 최종 경로:`, path);
           return path;
         })
@@ -494,16 +499,25 @@ async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideo
       console.log("✅ SRT 조건문 통과! 파일 생성 시작...");
       const srtFileName = `subtitle.srt`;
 
-      // videoSaveFolder에 직접 자막 파일 저장
+      // scripts 폴더에 자막 파일 저장 (프로젝트 기반)
       let srtFilePath = null;
       try {
-        const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
-        const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
-        if (videoSaveFolder) {
-          srtFilePath = `${videoSaveFolder}\\${srtFileName}`;
+        const pathResult = await api.invoke("script:getSubtitlePath", {
+          filename: srtFileName
+        });
+
+        if (pathResult?.success && pathResult?.data?.filePath) {
+          srtFilePath = pathResult.data.filePath;
+        } else {
+          // 폴백: videoSaveFolder 사용
+          const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
+          const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
+          if (videoSaveFolder) {
+            srtFilePath = `${videoSaveFolder}\\${srtFileName}`;
+          }
         }
       } catch (error) {
-        console.warn("설정 가져오기 실패:", error);
+        console.warn("경로 설정 실패:", error);
       }
 
       console.log("📁 자막 파일 저장 경로:", srtFilePath);

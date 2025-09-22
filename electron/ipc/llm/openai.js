@@ -58,6 +58,54 @@ function validateScriptDocLoose(doc) {
          doc.scenes.every(s => s && typeof s.text === "string" && s.text.trim());
 }
 
+function validateScriptDocLooseDebug(doc) {
+  const errors = [];
+
+  if (!doc) {
+    errors.push("문서가 null/undefined");
+    return { isValid: false, errors };
+  }
+
+  if (typeof doc !== "object") {
+    errors.push("문서가 객체가 아님");
+    return { isValid: false, errors };
+  }
+
+  if (!Array.isArray(doc.scenes)) {
+    errors.push(`scenes가 배열이 아님 (타입: ${typeof doc.scenes})`);
+    return { isValid: false, errors };
+  }
+
+  if (doc.scenes.length === 0) {
+    errors.push("scenes 배열이 비어있음");
+    return { isValid: false, errors };
+  }
+
+  // 각 scene 검증
+  for (let i = 0; i < doc.scenes.length; i++) {
+    const scene = doc.scenes[i];
+    if (!scene) {
+      errors.push(`장면 ${i+1}이 null/undefined`);
+      continue;
+    }
+
+    if (typeof scene.text !== "string") {
+      errors.push(`장면 ${i+1}의 text가 문자열이 아님 (타입: ${typeof scene.text})`);
+      continue;
+    }
+
+    if (!scene.text.trim()) {
+      errors.push(`장면 ${i+1}의 text가 빈 문자열`);
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+    sceneCount: doc.scenes?.length || 0
+  };
+}
+
 function pickText(scene) {
   return String(scene?.text || "").trim();
 }
@@ -67,15 +115,129 @@ function formatScenes(doc, topic, duration, maxScenes, options = {}) {
     return { title: topic || "", scenes: [] };
   }
 
+  let scenes = doc.scenes.map((scene, i) => ({
+    id: scene?.id || `s${i + 1}`,
+    text: String(scene?.text || "").trim(),
+    duration: Number(scene?.duration) || Math.max(1, Math.round((duration || 5) * 60 / (maxScenes || 10))),
+    charCount: scene?.charCount || countCharsKo(scene?.text || "")
+  }));
+
+  // 협력업체 방식: 장면 수 조정
+  scenes = adjustSceneCount(scenes, maxScenes, duration);
+
   return {
     title: doc.title || topic || "",
-    scenes: doc.scenes.slice(0, maxScenes || 20).map((scene, i) => ({
-      id: scene?.id || `s${i + 1}`,
-      text: String(scene?.text || "").trim(),
-      duration: Number(scene?.duration) || Math.max(1, Math.round((duration || 5) * 60 / (maxScenes || 10))),
-      charCount: scene?.charCount || countCharsKo(scene?.text || "")
-    }))
+    scenes
   };
+}
+
+// 협력업체 방식: 장면 수를 목표에 맞게 조정
+function adjustSceneCount(scenes, targetCount, duration) {
+  const currentCount = scenes.length;
+
+  console.log(`🔧 장면 수 조정: ${currentCount}개 → ${targetCount}개`);
+
+  if (currentCount === targetCount) {
+    return scenes;
+  }
+
+  if (currentCount < targetCount) {
+    // 부족한 경우: 긴 장면들을 분할
+    return splitScenesIfNeeded(scenes, targetCount, duration);
+  } else {
+    // 초과한 경우: 짧은 장면들을 병합
+    return mergeScenesIfNeeded(scenes, targetCount, duration);
+  }
+}
+
+// 장면 분할 (부족할 때)
+function splitScenesIfNeeded(scenes, targetCount, duration) {
+  const needed = targetCount - scenes.length;
+  console.log(`➕ ${needed}개 장면 분할 필요`);
+
+  let result = [...scenes];
+
+  // 가장 긴 장면들을 우선적으로 분할
+  for (let i = 0; i < needed && result.length < targetCount; i++) {
+    const longestIndex = result.reduce((maxIdx, scene, idx) =>
+      scene.charCount > result[maxIdx].charCount ? idx : maxIdx, 0);
+
+    const sceneToSplit = result[longestIndex];
+    if (sceneToSplit.charCount < 100) break; // 너무 짧으면 분할 중단
+
+    // 텍스트를 반으로 나누기
+    const text = sceneToSplit.text;
+    const midPoint = Math.floor(text.length / 2);
+    const sentences = text.split(/[.!?。]/);
+
+    let splitPoint = midPoint;
+    // 문장 경계에서 자르기
+    if (sentences.length > 1) {
+      const halfSentences = Math.floor(sentences.length / 2);
+      splitPoint = sentences.slice(0, halfSentences).join('.').length;
+    }
+
+    const firstPart = text.substring(0, splitPoint).trim() + '.';
+    const secondPart = text.substring(splitPoint).trim();
+
+    const baseDuration = Math.round((duration * 60) / targetCount);
+
+    result[longestIndex] = {
+      ...sceneToSplit,
+      text: firstPart,
+      charCount: countCharsKo(firstPart),
+      duration: baseDuration
+    };
+
+    result.splice(longestIndex + 1, 0, {
+      id: `${sceneToSplit.id}_split`,
+      text: secondPart,
+      charCount: countCharsKo(secondPart),
+      duration: baseDuration
+    });
+
+    console.log(`  ✂️ 장면 ${longestIndex + 1} 분할: ${sceneToSplit.charCount}자 → ${countCharsKo(firstPart)}자 + ${countCharsKo(secondPart)}자`);
+  }
+
+  return result.slice(0, targetCount);
+}
+
+// 장면 병합 (초과할 때)
+function mergeScenesIfNeeded(scenes, targetCount, duration) {
+  const excess = scenes.length - targetCount;
+  console.log(`➖ ${excess}개 장면 병합 필요`);
+
+  let result = [...scenes];
+
+  for (let i = 0; i < excess && result.length > targetCount; i++) {
+    // 가장 짧은 인접한 두 장면을 찾아 병합
+    let shortestPairIndex = 0;
+    let shortestPairLength = Infinity;
+
+    for (let j = 0; j < result.length - 1; j++) {
+      const combinedLength = result[j].charCount + result[j + 1].charCount;
+      if (combinedLength < shortestPairLength) {
+        shortestPairLength = combinedLength;
+        shortestPairIndex = j;
+      }
+    }
+
+    const first = result[shortestPairIndex];
+    const second = result[shortestPairIndex + 1];
+
+    const merged = {
+      id: first.id,
+      text: first.text + ' ' + second.text,
+      charCount: first.charCount + second.charCount,
+      duration: Math.round((duration * 60) / targetCount)
+    };
+
+    console.log(`  🔗 장면 ${shortestPairIndex + 1}, ${shortestPairIndex + 2} 병합: ${first.charCount}자 + ${second.charCount}자 = ${merged.charCount}자`);
+
+    result.splice(shortestPairIndex, 2, merged);
+  }
+
+  return result;
 }
 
 function estimateMaxTokens({ maxScenes = 10, duration = 5 }) {
@@ -657,10 +819,13 @@ async function callOpenAIGpt5Mini(payload) {
     style,
     duration,
     maxScenes,
-    cpmMin,
-    cpmMax,
+    cpmMin = 300,
+    cpmMax = 400,
     referenceText, // 추가: 레퍼런스 텍스트(있으면 롱폼에도 반영)
   } = payload || {};
+
+  console.log("🤖 OpenAI 대본 생성 시작 (장면 수 강제 준수)");
+  console.log(`📊 설정: ${duration}분, ${maxScenes}개 장면, CPM ${cpmMin}-${cpmMax}`);
 
   const client = new OpenAI({ apiKey });
   const { primary, fallback, wantedFamily } = resolveOpenAIModels(payload);
@@ -793,8 +958,9 @@ async function callOpenAIGpt5Mini(payload) {
 
   const systemMsg = [
     "You are a professional Korean scriptwriter.",
-    'Return ONLY JSON like: {"title":"...","scenes":[{"text":"...","duration":N,"charCount":N}]}',
-    "No Markdown. No explanation.",
+    'Return ONLY valid JSON in this EXACT format: {"title":"string","scenes":[{"text":"string","duration":number,"charCount":number}]}',
+    "Each scene MUST have text, duration, and charCount fields.",
+    "No Markdown. No explanation. No additional text outside JSON.",
   ].join(" ");
 
   const messages = [
@@ -842,30 +1008,134 @@ async function callOpenAIGpt5Mini(payload) {
     }
   }
 
-  // 파싱
+  // 장면 수 강제 준수 재시도 로직 (속도 우선)
+  const maxRetries = 1;
+  let lastError = null;
   let parsed = null;
-  if (rawText) parsed = coerceToScenesShape(extractLargestJson(rawText) || {});
 
-  // 폴백
-  if (!rawText || !validateScriptDocLoose(parsed)) {
-    if (!notice) {
-      notice =
-        wantedFamily === "gpt-5"
-          ? "OpenAI GPT-5 응답이 유효하지 않아 GPT-4로 자동 전환했습니다."
-          : "요청 모델 응답이 유효하지 않아 안정 모델로 전환했습니다.";
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    console.log(`🔄 OpenAI 시도 ${attempt}/${maxRetries}: 장면 수 ${maxScenes}개 대본 생성`);
+
+    try {
+      // 첫 시도가 아니면 새로운 API 호출 필요
+      let currentRawText = rawText;
+
+      if (attempt > 1) {
+        // 재시도용 강화된 프롬프트
+        const retryMessages = [
+          {
+            role: "system",
+            content: [
+              "You are a professional Korean scriptwriter.",
+              'Return ONLY valid JSON in this EXACT format: {"title":"string","scenes":[{"text":"string","duration":number,"charCount":number}]}',
+              "Each scene MUST have text, duration, and charCount fields.",
+              "No Markdown. No explanation. No additional text outside JSON.",
+              "CRITICAL: Your previous response failed validation. Ensure proper JSON structure."
+            ].join(" ")
+          },
+          { role: "user", content: userPrompt + `\n\n🚨 중요: 이전 시도에서 구조가 올바르지 않았습니다. 반드시 정확한 JSON 형태로 ${maxScenes}개 장면을 생성해주세요!` }
+        ];
+
+        if (attempt > 2) {
+          retryMessages[1].content += `\n\n❌ 마지막 기회입니다! 장면 수가 ${maxScenes}개가 아니면 실패입니다.`;
+        }
+
+        currentRawText = await chatJsonOrFallbackFreeText(
+          client,
+          usedModel,
+          retryMessages,
+          budget
+        );
+
+        await new Promise(resolve => setTimeout(resolve, 500)); // 0.5초 대기
+      }
+
+      // 파싱 및 디버깅
+      console.log(`📄 OpenAI 원본 응답 (첫 500자):`, currentRawText?.substring(0, 500));
+
+      if (currentRawText) {
+        const extracted = extractLargestJson(currentRawText);
+        console.log(`🔍 JSON 추출 결과:`, extracted ? "성공" : "실패");
+        if (!extracted) {
+          console.log(`❌ JSON 추출 실패 - 원본 텍스트:`, currentRawText?.substring(0, 1000));
+        }
+        parsed = coerceToScenesShape(extracted || {});
+        console.log(`📋 파싱된 구조:`, {
+          hasTitle: !!parsed?.title,
+          scenesCount: parsed?.scenes?.length || 0,
+          firstSceneStructure: parsed?.scenes?.[0] ? Object.keys(parsed.scenes[0]) : "없음"
+        });
+      }
+
+      // 폴백 (첫 시도에서만)
+      if (attempt === 1 && (!currentRawText || !validateScriptDocLoose(parsed))) {
+        if (!notice) {
+          notice =
+            wantedFamily === "gpt-5"
+              ? "OpenAI GPT-5 응답이 유효하지 않아 GPT-4로 자동 전환했습니다."
+              : "요청 모델 응답이 유효하지 않아 안정 모델로 전환했습니다.";
+        }
+        usedModel = fallback;
+        currentRawText = await chatJsonOrFallbackFreeText(
+          client,
+          fallback,
+          messages,
+          budget
+        );
+        parsed = coerceToScenesShape(extractLargestJson(currentRawText) || {});
+        if (!validateScriptDocLoose(parsed)) {
+          dumpRaw("openai-fallback-json-invalid", { raw: currentRawText });
+          throw new Error("OpenAI 응답(JSON) 구조가 유효하지 않습니다.");
+        }
+      }
+
+      // 구조 검증 (세분화된 디버깅)
+      const validation = validateScriptDocLooseDebug(parsed);
+      console.log(`🔍 구조 검증 결과:`, validation);
+
+      if (!validation.isValid) {
+        console.log(`❌ 구조 검증 실패:`, validation.errors);
+        throw new Error(`생성된 대본의 구조가 올바르지 않습니다: ${validation.errors.join(", ")}`);
+      }
+
+      // 장면 수 검증 (30% 오차까지 허용, 협력업체 방식)
+      const actualScenes = parsed.scenes ? parsed.scenes.length : 0;
+      const allowableRange = Math.ceil(maxScenes * 0.5); // 50% 허용으로 확대
+      const sceneDiff = Math.abs(actualScenes - maxScenes);
+      console.log(`🎯 OpenAI 장면 수 검증: 요청 ${maxScenes}개 vs 실제 ${actualScenes}개 (차이: ${sceneDiff}개, 허용: ±${allowableRange}개)`);
+
+      if (sceneDiff > allowableRange) {
+        const error = `장면 수 차이가 매우 큼: ${maxScenes}개 요청했으나 ${actualScenes}개 생성됨 (허용 오차: ±${allowableRange}개)`;
+        console.warn(`⚠️ ${error} (시도 ${attempt}/${maxRetries})`);
+
+        if (attempt < maxRetries) {
+          console.log(`🔄 재시도 준비 중... (${maxRetries - attempt}번 남음)`);
+          continue; // 다음 시도로
+        } else {
+          throw new Error(error);
+        }
+      } else if (sceneDiff > 0) {
+        console.log(`✅ 허용 오차 내 장면 수 차이 (±${sceneDiff}개), 후처리로 자동 조정`);
+      }
+
+      // 성공: 루프 탈출
+      console.log(`✅ OpenAI 장면 수 검증 성공 (시도 ${attempt}/${maxRetries})`);
+      break;
+
+    } catch (error) {
+      lastError = error;
+      console.error(`❌ OpenAI 시도 ${attempt} 실패:`, error.message);
+
+      if (attempt < maxRetries) {
+        console.log(`⏳ 1초 후 재시도...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
-    usedModel = fallback;
-    rawText = await chatJsonOrFallbackFreeText(
-      client,
-      fallback,
-      messages,
-      budget
-    );
-    parsed = coerceToScenesShape(extractLargestJson(rawText) || {});
-    if (!validateScriptDocLoose(parsed)) {
-      dumpRaw("openai-fallback-json-invalid", { raw: rawText });
-      throw new Error("OpenAI 응답(JSON) 구조가 유효하지 않습니다.");
-    }
+  }
+
+  if (!parsed) {
+    console.error(`❌ OpenAI 모든 시도 실패 (${maxRetries}/${maxRetries})`);
+    throw new Error(`OpenAI 대본 생성 실패: ${lastError?.message || "알 수 없는 오류"}`);
   }
 
   // 정규화 + charCount 강제 재계산
@@ -965,6 +1235,37 @@ async function callOpenAIGpt5Mini(payload) {
       debug("violates final:", violatesLengthPolicy(out, policy));
     }
   }
+
+  // 시간 계산 정확성 검증 로깅
+  const totalChars = out.scenes.reduce((sum, scene) => sum + (scene.charCount || 0), 0);
+  const totalDuration = out.scenes.reduce((sum, scene) => sum + (scene.duration || 0), 0);
+  const actualDurationMinutes = totalDuration / 60;
+
+  // 실제 vs 예상 시간 계산
+  const expectedMinChars = duration * cpmMin;
+  const expectedMaxChars = duration * cpmMax;
+  const expectedDurationSeconds = duration * 60;
+
+  console.log(`🎉 OpenAI 대본 생성 완료!`);
+  console.log(`📈 기본 통계: ${out.scenes.length}개 장면, ${totalChars}자, ${actualDurationMinutes.toFixed(1)}분`);
+
+  // 정확성 검증 로그
+  console.log(`🔍 시간 정확성 검증:`);
+  console.log(`  📋 요청 시간: ${duration}분 (${expectedDurationSeconds}초)`);
+  console.log(`  ⏱️ 실제 시간: ${actualDurationMinutes.toFixed(1)}분 (${totalDuration}초)`);
+  console.log(`  📊 시간 차이: ${Math.abs(actualDurationMinutes - duration).toFixed(1)}분`);
+  console.log(`  ✅ 시간 정확도: ${((1 - Math.abs(actualDurationMinutes - duration) / duration) * 100).toFixed(1)}%`);
+
+  console.log(`🔍 글자 수 정확성 검증:`);
+  console.log(`  📋 예상 범위: ${expectedMinChars}~${expectedMaxChars}자`);
+  console.log(`  📝 실제 글자: ${totalChars}자`);
+  console.log(`  ✅ 범위 내 여부: ${totalChars >= expectedMinChars && totalChars <= expectedMaxChars ? '✅ 적합' : '❌ 범위 초과'}`);
+
+  console.log(`🔍 CPM 정확성 검증:`);
+  const actualCPM = Math.round(totalChars / duration);
+  console.log(`  📋 설정 CPM: ${cpmMin}~${cpmMax}자/분`);
+  console.log(`  📝 실제 CPM: ${actualCPM}자/분`);
+  console.log(`  ✅ CPM 정확도: ${actualCPM >= cpmMin && actualCPM <= cpmMax ? '✅ 적합' : '❌ 범위 초과'}`);
 
   if (notice) {
     out._notice = notice + ` (사용 모델: ${usedModel})`;

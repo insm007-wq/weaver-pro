@@ -25,7 +25,7 @@ function ScriptGenerationCard({
   const isReferenceOnlyMode = hasValidReference && !hasValidTopic;
   const isDisabled = isLoading || (!hasValidTopic && !hasValidReference) || (!isReferenceOnlyMode && !form.promptName) || fullVideoState.isGenerating;
 
-  const selectedEngine = AI_ENGINE_OPTIONS.find((engine) => engine.key === globalSettings.llmModel);
+  const selectedEngine = AI_ENGINE_OPTIONS.find((engine) => engine.key === form.aiEngine);
 
   const getValidationErrors = () => {
     const errors = [];
@@ -55,18 +55,8 @@ function ScriptGenerationCard({
         <Text size={300} color="secondary" style={{ lineHeight: 1.4 }}>
           {selectedEngine
             ? `${selectedEngine.text.replace(/🤖|🧠|🚀/g, "").trim()}로 대본을 생성합니다`
-            : "전역 설정의 LLM 모델로 대본을 생성합니다"}
+            : `${form.aiEngine || "AI 모델"}로 대본을 생성합니다`}
         </Text>
-        {selectedEngine && (
-          <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
-            예상 처리 시간: {selectedEngine.processingTime}
-          </Text>
-        )}
-        {!selectedEngine && globalSettings.llmModel && (
-          <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
-            현재 모델: {globalSettings.llmModel} (전역 설정)
-          </Text>
-        )}
       </div>
 
       <Button
