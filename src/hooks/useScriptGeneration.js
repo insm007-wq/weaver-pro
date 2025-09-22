@@ -1,88 +1,11 @@
 /**
  * 대본 생성 관리를 위한 커스텀 훅
- *
- * @description
- * AI 엔진을 사용한 대본 생성 기능을 관리하는 훅
- * 다양한 AI 엔진 지원, 프롬프트 관리, 대본 생성 상태 관리 등을 제공합니다.
- *
- * @features
- * - 🤖 다양한 AI 엔진 지원 (GPT-5, Claude)
- * - 📝 프롬프트 기반 대본 생성
- * - 🎯 토픽, 스타일, 길이 등 세부 설정
- * - 📊 생성 상태 및 진행률 관리
- * - 🛡️ 오류 처리 및 토스트 알림
- * - 🔄 생성된 대본 상태 관리
- *
- * @example
- * ```jsx
- * import { useScriptGeneration } from './hooks/useScriptGeneration';
- *
- * function ScriptGenerator() {
- *   const { doc, isLoading, error, runGenerate, AI_ENGINE_OPTIONS } = useScriptGeneration();
- *
- *   const handleGenerate = () => {
- *     runGenerate({
- *       topic: '인공지능의 미래',
- *       style: 'informative',
- *       aiEngine: 'openai-gpt5mini',
- *       durationMin: 3,
- *       maxScenes: 10
- *     });
- *   };
- *
- *   if (isLoading) return <GeneratingSpinner />;
- *   if (error) return <ErrorMessage message={error} />;
- *   if (doc) return <ScriptDocument scenes={doc.scenes} />;
- *
- *   return <GenerateButton onClick={handleGenerate} />;
- * }
- * ```
- *
- * @usage
- * - ScriptVoiceGenerator.jsx: 대본 생성 및 상태 관리
- *
- * @author Weaver Pro Team
- * @version 1.0.0
- * @since 2024-01-01
  */
 
 import { useState, useEffect, useCallback } from "react";
 import { useApi } from "./useApi";
+import { AI_ENGINE_OPTIONS } from "../constants/scriptSettings";
 
-const AI_ENGINE_OPTIONS = [
-  {
-    key: "anthropic",
-    text: "🧠 Anthropic Claude",
-    desc: "안정성",
-    processingTime: "1-3분",
-    bestFor: "모든 길이",
-  },
-  {
-    key: "openai-gpt5mini",
-    text: "🤖 OpenAI GPT-5",
-    desc: "롱폼 특화",
-    processingTime: "2-5분",
-    bestFor: "20분+",
-  },
-  {
-    key: "google-gemini",
-    text: "🔥 Google Gemini",
-    desc: "빠른 생성",
-    processingTime: "30초-1분",
-    bestFor: "5-15분",
-  },
-];
-
-/**
- * 대본 생성 관리 훅
- *
- * @returns {Object} 대본 생성 관련 상태와 함수들
- * @returns {Object|null} returns.doc - 생성된 대본 문서 객체 (scenes 배열 포함)
- * @returns {boolean} returns.isLoading - 대본 생성 중 여부
- * @returns {string} returns.error - 생성 오류 메시지 (없으면 빈 문자열)
- * @returns {Function} returns.runGenerate - 대본 생성 실행 함수
- * @returns {Array} returns.AI_ENGINE_OPTIONS - 사용 가능한 AI 엔진 옵션 목록
- */
 export function useScriptGeneration() {
   const api = useApi();
 
@@ -189,7 +112,7 @@ export function useScriptGeneration() {
           const actualScenes = res.data.scenes.length;
           const requestedScenes = form.maxScenes;
 
-          console.log("✅ Script generation validation (협력업체 방식):");
+          console.log("✅ Script generation validation");
           console.log(`  - 요청 장면 수: ${requestedScenes}개`);
           console.log(`  - 실제 생성 장면 수: ${actualScenes}개`);
           console.log(
@@ -207,7 +130,9 @@ export function useScriptGeneration() {
           const promptName = form.promptName || "기본";
 
           // 성공 메시지는 컴포넌트에서 처리
-          console.log(`✅ ${engineName}로 "${promptName}" 프롬프트를 사용해 ${actualScenes}개 장면의 대본을 생성했습니다. (${totalChars}자)`);
+          console.log(
+            `✅ ${engineName}로 "${promptName}" 프롬프트를 사용해 ${actualScenes}개 장면의 대본을 생성했습니다. (${totalChars}자)`
+          );
 
           return res.data; // 완전 자동 모드를 위해 반환
         } else {
