@@ -2,11 +2,11 @@
  * TTS 음성 설정 관리를 위한 커스텀 훅
  * 
  * @description
- * TTS 엔진(Google, ElevenLabs)의 음성 목록을 로드하고 관리하는 훅
+ * TTS 엔진(Google)의 음성 목록을 로드하고 관리하는 훅
  * 음성 미리듣기, 음성 필터링, 오류 처리 등의 기능을 제공합니다.
  * 
  * @features
- * - 🎤 TTS 엔진별 음성 목록 로드 (Google TTS, ElevenLabs)
+ * - 🎤 TTS 엔진별 음성 목록 로드 (Google TTS)
  * - 🔄 엔진 변경 시 자동 음성 재로드
  * - 🎵 음성 미리듣기 기능
  * - 🎯 음성 필터링 및 추천 음성 우선 표시
@@ -59,7 +59,7 @@ import { useApi } from "./useApi";
  * TTS 음성 설정 관리 훅
  * 
  * @param {Object} form - 폼 상태 객체 (ttsEngine 필드 필수)
- * @param {string} form.ttsEngine - 사용할 TTS 엔진 ('google' | 'elevenlabs')
+ * @param {string} form.ttsEngine - 사용할 TTS 엔진 ('google')
  * @param {string} [form.speed] - 음성 속도 설정 (미리듣기용)
  * @returns {Object} 음성 관련 상태와 함수들
  * @returns {Array} returns.voices - 사용 가능한 음성 목록
@@ -162,21 +162,9 @@ export function useVoiceSettings(form) {
   }, [form.ttsEngine]);
 
   const filterVoicesByEngine = (allItems, engine) => {
-    if (engine === "elevenlabs") {
-      const filteredItems = allItems.filter((voice) => voice.provider === "ElevenLabs");
-      const recommendedNames = ["alice", "bella", "dorothy", "elli", "josh", "sam", "rachel", "domi", "fin", "sarah"];
-      const recommendedVoices = filteredItems.filter((voice) =>
-        recommendedNames.some((name) => voice.name.toLowerCase().includes(name))
-      );
-      const otherVoices = filteredItems.filter((voice) => 
-        !recommendedNames.some((name) => voice.name.toLowerCase().includes(name))
-      );
-      return [...recommendedVoices, ...otherVoices].slice(0, 10);
-    } else {
-      return allItems
-        .filter((voice) => voice.provider === "Google" && (voice.type === "Neural2" || voice.type === "Wavenet"))
-        .slice(0, 8);
-    }
+    return allItems
+      .filter((voice) => voice.provider === "Google" && (voice.type === "Neural2" || voice.type === "Wavenet"))
+      .slice(0, 8);
   };
 
   const previewVoice = useCallback(async (voiceId, voiceName) => {
@@ -190,7 +178,7 @@ export function useVoiceSettings(form) {
           voiceId: voiceId,
           voiceName: voiceName,
           speakingRate: form.speed || "1.0",
-          provider: form.ttsEngine === "elevenlabs" ? "ElevenLabs" : "Google",
+          provider: "Google",
         },
       };
 

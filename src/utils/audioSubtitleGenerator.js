@@ -87,19 +87,14 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
     const sceneCount = scriptData.scenes?.length || 1;
     const ttsEngine = form.ttsEngine || "google";
 
-    // ElevenLabs는 더 오래 걸림 (각 요청 사이 1초 대기 + 처리 시간)
-    let estimatedTimeSeconds;
-    if (ttsEngine === "elevenlabs") {
-      estimatedTimeSeconds = Math.max(60, sceneCount * 15); // 최소 60초, 장면당 15초
-    } else {
-      estimatedTimeSeconds = Math.max(30, sceneCount * 8); // Google: 최소 30초, 장면당 8초
-    }
+    // Google TTS 타임아웃 설정
+    const estimatedTimeSeconds = Math.max(30, sceneCount * 8); // 최소 30초, 장면당 8초
 
     const timeoutMs = estimatedTimeSeconds * 1000;
 
     if (addLog) {
       addLog(`🎤 ${sceneCount}개 장면의 음성 생성 중... (${ttsEngine})`);
-      addLog(`⏳ 예상 소요 시간: 약 ${estimatedTimeSeconds}초 (${ttsEngine === 'elevenlabs' ? 'ElevenLabs는 품질을 위해 더 오래 걸립니다' : 'Google TTS'})`);
+      addLog(`⏳ 예상 소요 시간: 약 ${estimatedTimeSeconds}초 (Google TTS)`);
     }
 
     // TTS 진행률 리스너 설정

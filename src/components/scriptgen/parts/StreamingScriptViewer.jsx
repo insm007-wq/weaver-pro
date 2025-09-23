@@ -112,25 +112,17 @@ import { CheckmarkCircleRegular, DismissRegular } from "@fluentui/react-icons";
  * />
  * ```
  */
-function StreamingScriptViewer({
-  fullVideoState,
-  doc,
-  isLoading,
-  form,
-  globalSettings,
-  onClose
-}) {
+function StreamingScriptViewer({ fullVideoState, doc, isLoading, form, globalSettings, onClose }) {
   // 표시 조건 확인
   // 1. 대본 생성 중이거나 (스크립트 단계)
   // 2. 로딩 중이거나
   // 3. 완성된 대본이 있을 때
   // 4. 완료된 상태일 때
-  const shouldShow = (
+  const shouldShow =
     (fullVideoState.isGenerating && fullVideoState.currentStep === "script") ||
     isLoading ||
     doc ||
-    fullVideoState.currentStep === "completed"
-  );
+    fullVideoState.currentStep === "completed";
 
   if (!shouldShow) return null;
 
@@ -153,15 +145,15 @@ function StreamingScriptViewer({
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {/* 상태별 아이콘 표시 */}
-            {(isLoading || (fullVideoState.isGenerating && fullVideoState.currentStep === "script")) ? (
+            {isLoading || (fullVideoState.isGenerating && fullVideoState.currentStep === "script") ? (
               // 생성 중: 회전하는 스피너
               <Spinner size="small" appearance="primary" />
-            ) : (doc || fullVideoState.currentStep === "completed") ? (
+            ) : doc || fullVideoState.currentStep === "completed" ? (
               // 완료: 녹색 체크마크
               <CheckmarkCircleRegular
                 style={{
                   color: tokens.colorPaletteLightGreenForeground1,
-                  fontSize: 20
+                  fontSize: 20,
                 }}
               />
             ) : null}
@@ -171,12 +163,13 @@ function StreamingScriptViewer({
               size={500}
               weight="semibold"
               style={{
-                color: (doc || fullVideoState.currentStep === "completed")
-                  ? tokens.colorPaletteLightGreenForeground1  // 완료: 녹색
-                  : tokens.colorBrandForeground1              // 진행중: 브랜드 색상
+                color:
+                  doc || fullVideoState.currentStep === "completed"
+                    ? tokens.colorPaletteLightGreenForeground1 // 완료: 녹색
+                    : tokens.colorBrandForeground1, // 진행중: 브랜드 색상
               }}
             >
-              {(doc || fullVideoState.currentStep === "completed") ? "✅ 대본 생성 완료" : "📝 AI 대본 생성 중..."}
+              {doc || fullVideoState.currentStep === "completed" ? "✅ 대본 생성 완료" : "📝 AI 대본 생성 중..."}
             </Text>
           </div>
 
@@ -188,7 +181,7 @@ function StreamingScriptViewer({
               onClick={onClose}
               size="small"
               style={{
-                color: tokens.colorNeutralForeground3
+                color: tokens.colorNeutralForeground3,
               }}
             />
           )}
@@ -196,10 +189,9 @@ function StreamingScriptViewer({
 
         {/* 부제목: 상태별 상세 정보 */}
         <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
-          {(doc || fullVideoState.currentStep === "completed")
+          {doc || fullVideoState.currentStep === "completed"
             ? `총 ${doc?.scenes?.length || 0}개 장면으로 구성된 대본이 생성되었습니다`
-            : `${getModelDisplayName(globalSettings?.llmModel || form.aiEngine)} 모델이 실시간으로 대본을 생성하고 있습니다`
-          }
+            : `${getModelDisplayName(globalSettings?.llmModel || form.aiEngine)} 모델이 실시간으로 대본을 생성하고 있습니다`}
         </Text>
       </CardHeader>
 
@@ -226,11 +218,7 @@ function StreamingScriptViewer({
           <CompletedScript doc={doc} form={form} />
         ) : (
           // 생성 중 표시 (기본 메시지)
-          <GeneratingScript
-            isLoading={isLoading}
-            form={form}
-            fullVideoState={fullVideoState}
-          />
+          <GeneratingScript isLoading={isLoading} form={form} fullVideoState={fullVideoState} />
         )}
       </div>
     </Card>
@@ -247,13 +235,15 @@ function CompletedScript({ doc, form }) {
     <div>
       {/* 주제 정보 표시 */}
       {form?.topic && (
-        <div style={{
-          marginBottom: tokens.spacingVerticalM,
-          padding: tokens.spacingVerticalS + " " + tokens.spacingHorizontalM,
-          backgroundColor: "rgba(102, 126, 234, 0.08)",
-          borderRadius: 8,
-          border: "1px solid rgba(102, 126, 234, 0.2)"
-        }}>
+        <div
+          style={{
+            marginBottom: tokens.spacingVerticalM,
+            padding: tokens.spacingVerticalS + " " + tokens.spacingHorizontalM,
+            backgroundColor: "rgba(102, 126, 234, 0.08)",
+            borderRadius: 8,
+            border: "1px solid rgba(102, 126, 234, 0.2)",
+          }}
+        >
           <Text size={300} style={{ color: tokens.colorBrandForeground1, fontWeight: 600 }}>
             📋 주제: {form.topic}
           </Text>
@@ -285,9 +275,7 @@ function CompletedScript({ doc, form }) {
             marginBottom: tokens.spacingVerticalM,
             paddingBottom: tokens.spacingVerticalM,
             // 마지막 씬이 아니면 하단 구분선 표시
-            borderBottom: index < doc.scenes.length - 1
-              ? `1px solid ${tokens.colorNeutralStroke3}`
-              : 'none'
+            borderBottom: index < doc.scenes.length - 1 ? `1px solid ${tokens.colorNeutralStroke3}` : "none",
           }}
         >
           {/* 씬 헤더: 순서 + 지속시간 */}
@@ -296,7 +284,7 @@ function CompletedScript({ doc, form }) {
               display: "flex",
               alignItems: "center",
               marginBottom: tokens.spacingVerticalXS,
-              gap: 8
+              gap: 8,
             }}
           >
             {/* 씬 번호 */}
@@ -312,7 +300,7 @@ function CompletedScript({ doc, form }) {
                   color: tokens.colorNeutralForeground3,
                   backgroundColor: tokens.colorNeutralBackground2,
                   padding: "2px 8px",
-                  borderRadius: 4
+                  borderRadius: 4,
                 }}
               >
                 {scene.duration}초
@@ -321,9 +309,7 @@ function CompletedScript({ doc, form }) {
           </div>
 
           {/* 씬 텍스트 */}
-          <Text style={{ lineHeight: 1.6 }}>
-            {scene.text}
-          </Text>
+          <Text style={{ lineHeight: 1.6 }}>{scene.text}</Text>
         </div>
       ))}
     </div>
@@ -384,8 +370,8 @@ function GeneratingScript({ isLoading, form, fullVideoState }) {
  */
 function getModelDisplayName(modelName) {
   const modelMap = {
-    "anthropic": "🧠 Anthropic Claude",
-    "openai-gpt5mini": "🤖 OpenAI GPT-5 Mini"
+    anthropic: "🧠 Anthropic Claude",
+    "openai-gpt5mini": "🤖 OpenAI GPT-5 Mini",
   };
 
   return modelMap[modelName] || "🤖 AI";
@@ -413,22 +399,4 @@ export default StreamingScriptViewer;
  * @property {string} currentText - 현재 화면에 표시되는 텍스트
  * @property {boolean} isTyping - 타이핑 애니메이션 진행 여부
  * @property {string} fullText - 최종 완성될 전체 텍스트
- */
-
-/**
- * 컴포넌트 상태별 표시 로직:
- *
- * 1. 표시 안함 (return null)
- *    - isGenerating: false && currentStep !== "script" && !isLoading && !typingState.isTyping && !doc
- *
- * 2. 생성 중 표시 (GeneratingScript)
- *    - isGenerating: true && currentStep === "script"
- *    - isLoading: true
- *    - typingState.isTyping: true
- *
- * 3. 완성된 대본 표시 (CompletedScript)
- *    - doc: 존재하는 객체
- *    - isGenerating: false || currentStep !== "script"
- *    - isLoading: false
- *    - typingState.isTyping: false
  */

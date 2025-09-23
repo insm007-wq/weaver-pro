@@ -31,7 +31,7 @@ export async function generateAudioStep(scriptData, form, addLog, setFullVideoSt
     }
 
     // TTS 엔진과 음성 설정 확인
-    const ttsEngine = form.ttsEngine || "elevenlabs";
+    const ttsEngine = form.ttsEngine || "google";
     const voiceId = form.voiceId;
 
     if (!voiceId) throw new Error("음성을 선택해주세요.");

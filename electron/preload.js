@@ -315,7 +315,6 @@ contextBridge.exposeInMainWorld("api", {
   testReplicate: (token) => ipcRenderer.invoke("replicate:test", token),
   testAnthropic: (apiKey) => ipcRenderer.invoke("anthropic:test", apiKey),
   testGoogleTTS: (apiKey) => ipcRenderer.invoke("testGoogleTTS", apiKey),
-  testElevenLabs: (apiKey) => ipcRenderer.invoke("testElevenLabs", apiKey),
   testGoogleImageFX: (apiKey) => ipcRenderer.invoke("googleImageFx:test", apiKey),
   testPexels: (key) => ipcRenderer.invoke("pexels:test", key),
   testPixabay: (key) => ipcRenderer.invoke("pixabay:test", key),

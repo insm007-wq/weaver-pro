@@ -1,361 +1,366 @@
 /**
- * 전체 영상 생성 진행률 패널 컴포넌트
- *
- * @description
- * 자동화 모드와 대본 생성 모드의 전체 진행 상황을 시각적으로 표시하는 메인 패널
- * 각 단계별 진행률, 경과 시간, 로그, 완료 시 액션 버튼 등을 포함합니다.
- *
- * @features
- * - 🎯 모드별 단계 표시 (자동화: 4단계, 대본생성: 3단계)
- * - ⏱️ 실시간 경과 시간 표시
- * - 📋 진행 로그 실시간 업데이트
- * - 🎨 단계별 연결선 및 진행률 바
- * - 🎬 완료 시 출력 폴더 열기 / 영상 재생 버튼
- * - 🚫 진행 중 취소 버튼
- * - 🎨 상태별 배경색 변경 (진행중/완료/오류)
- *
- * @requires
- * - API: `project:openOutputFolder` - 출력 폴더 열기
- * - Component: ProgressStepComponent - 개별 단계 컴포넌트
- * - Icons: DocumentEditRegular, MicRegular, ImageRegular, VideoRegular, FolderOpenRegular, PlayRegular
- *
- * @author Weaver Pro Team
- * @version 1.0.0
- * @since 2024-01-01
+ * 전체 영상 생성 진행률 패널 (모던 플랫 • 세로 구분선 • 상태배지 • 바형 진행률)
+ * - 동그라미 제거, 타일형 스텝 카드
+ * - 완료(연녹 배경) / 진행(중립 배경) / 오류(연적 배경)
+ * - 상단 헤더는 최대한 컴팩트
+ * - ETA 유지(보이면 상단 캡션으로), 불필요하면 showEta=false로 끄기
  */
 
-import React, { useState, useEffect } from "react";
-import { Text, tokens, Button, Card, CardHeader } from "@fluentui/react-components";
-import { DocumentEditRegular, VideoRegular, MicRegular, ImageRegular, FolderOpenRegular, PlayRegular } from "@fluentui/react-icons";
-import ProgressStepComponent from "./ProgressStepComponent";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Card, CardHeader, Text, Button, Badge, Spinner, tokens } from "@fluentui/react-components";
+import {
+  DocumentEditRegular,
+  VideoRegular,
+  MicRegular,
+  ImageRegular,
+  FolderOpenRegular,
+  PlayRegular,
+  DismissRegular,
+  CheckmarkCircleRegular,
+  ErrorCircleRegular,
+} from "@fluentui/react-icons";
 
-/**
- * 전체 영상 생성 진행률을 표시하는 패널 컴포넌트
- *
- * @component
- * @param {Object} props - 컴포넌트 props
- * @param {Object} props.fullVideoState - 전체 영상 생성 상태 객체
- * @param {boolean} props.fullVideoState.isGenerating - 현재 생성 진행 중 여부
- * @param {string} props.fullVideoState.currentStep - 현재 진행 단계 ("script"|"audio"|"images"|"video"|"subtitle"|"completed"|"error"|"idle")
- * @param {string} props.fullVideoState.mode - 실행 모드 ("automation_mode"|"script_mode"|"idle")
- * @param {Object} props.fullVideoState.progress - 각 단계별 진행률 (0-100)
- * @param {number} props.fullVideoState.progress.script - 대본 생성 진행률
- * @param {number} props.fullVideoState.progress.audio - 음성 생성 진행률
- * @param {number} props.fullVideoState.progress.images - 이미지 생성 진행률
- * @param {number} props.fullVideoState.progress.video - 영상 합성 진행률
- * @param {number} props.fullVideoState.progress.subtitle - 자막 생성 진행률
- * @param {Date} props.fullVideoState.startTime - 생성 시작 시간
- * @param {Array} props.fullVideoState.logs - 진행 로그 배열
- * @param {Object} props.fullVideoState.logs[].timestamp - 로그 시간
- * @param {string} props.fullVideoState.logs[].message - 로그 메시지
- * @param {string} props.fullVideoState.logs[].type - 로그 타입 ("info"|"success"|"error"|"warning")
- * @param {Object} props.fullVideoState.results - 생성 결과 객체
- * @param {Object} props.fullVideoState.results.video - 영상 파일 정보
- * @param {Function} props.resetFullVideoState - 상태 초기화 함수
- * @param {Function} props.api - API 호출 함수
- * @param {Object} props.toast - 토스트 알림 객체
- * @param {Function} props.toast.success - 성공 토스트 표시 함수
- * @param {Function} props.toast.error - 오류 토스트 표시 함수
- */
+const STEP_META = {
+  script: { label: "대본 생성", icon: DocumentEditRegular },
+  audio: { label: "음성 생성", icon: MicRegular },
+  images: { label: "이미지 생성", icon: ImageRegular },
+  video: { label: "영상 합성", icon: VideoRegular },
+  subtitle: { label: "자막 생성", icon: DocumentEditRegular },
+};
 
-function FullVideoProgressPanel({ fullVideoState, resetFullVideoState, api, toast }) {
-  // 실시간 타이머 상태
-  const [currentTime, setCurrentTime] = useState(new Date());
+function ProgressBar({ value, tone }) {
+  const bg = "#e8e8ea";
+  const fg =
+    tone === "success"
+      ? tokens.colorPaletteGreenForeground1
+      : tone === "danger"
+      ? tokens.colorPaletteRedForeground1
+      : tokens.colorBrandForeground1;
+  return (
+    <div style={{ width: "100%", height: 10, borderRadius: 999, background: bg, overflow: "hidden" }}>
+      <div
+        style={{
+          width: `${Math.max(0, Math.min(100, value || 0))}%`,
+          height: "100%",
+          background: fg,
+          transition: "width 220ms ease",
+        }}
+      />
+    </div>
+  );
+}
 
-  // 실시간 타이머 업데이트
+function StepTile({ id, label, icon: Icon, percent, status, error }) {
+  const tone = error ? "danger" : status === "done" ? "success" : "brand";
+
+  const cardBg = error
+    ? tokens.colorPaletteRedBackground1
+    : status === "done"
+    ? tokens.colorPaletteGreenBackground1
+    : tokens.colorNeutralBackground1;
+
+  const badge = error
+    ? { text: "오류", color: "red" }
+    : status === "done"
+    ? { text: "완료", color: "green" }
+    : { text: "진행중", color: "brand" };
+
+  const stateText = error ? "문제 발생" : status === "done" ? "완료됨" : "작업 중…";
+
+  return (
+    <div
+      key={id}
+      style={{
+        flex: 1,
+        minWidth: 240,
+        background: cardBg,
+        border: `1px solid ${tokens.colorNeutralStroke2}`,
+        borderRadius: 12,
+        padding: 14,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Icon />
+          <Text weight="semibold" size={300}>
+            {label}
+          </Text>
+        </div>
+        <Badge appearance="tint" color={badge.color}>
+          {badge.text}
+        </Badge>
+      </div>
+
+      <ProgressBar value={percent} tone={tone} />
+
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
+        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+          {stateText}
+        </Text>
+        <Text size={200} style={{ color: tokens.colorNeutralForeground2 }}>
+          {Math.round(percent || 0)}%
+        </Text>
+      </div>
+    </div>
+  );
+}
+
+/** ETA 계산(현재 스텝 이동평균 속도 → 백업 전체평균) */
+function useETA(fullVideoState, visibleSteps, enabled) {
+  const histRef = useRef([]);
+  const lastRef = useRef(Date.now());
+
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000); // 1초마다 업데이트
+    if (!enabled) return;
+    const now = Date.now();
+    const step = fullVideoState.currentStep;
+    const p = step && fullVideoState.progress ? fullVideoState.progress[step] || 0 : 0;
 
-    return () => clearInterval(timer);
-  }, []);
+    if (step && !["idle", "complete", "completed", "error"].includes(step)) {
+      histRef.current.push({ step, t: now / 1000, p });
+      if (histRef.current.length > 100) histRef.current = histRef.current.slice(-70);
+    }
+    lastRef.current = now;
+  }, [enabled, fullVideoState.currentStep, fullVideoState.progress]);
 
-  // 생성이 진행중이지 않고 대기 상태면 패널을 표시하지 않음
+  return useMemo(() => {
+    if (!enabled) return "";
+    const current = fullVideoState.currentStep;
+    const isComplete = ["complete", "completed"].includes(fullVideoState.currentStep);
+    if (isComplete || !current || current === "idle" || fullVideoState.currentStep === "error") return "";
+
+    // 1) 현재 스텝 최근 속도
+    const recent = histRef.current.filter((h) => h.step === current).slice(-10);
+    if (recent.length >= 3) {
+      const p0 = recent[0].p;
+      const t0 = recent[0].t;
+      const p1 = recent[recent.length - 1].p;
+      const t1 = recent[recent.length - 1].t;
+      const dp = Math.max(0, p1 - p0);
+      const dt = Math.max(0.001, t1 - t0);
+      const rate = dp / dt; // %/sec
+
+      if (rate > 0 && p1 < 100) {
+        const remainThis = (100 - p1) / rate;
+        const currentIdx = visibleSteps.indexOf(current);
+        const remainOthers = Math.max(0, visibleSteps.length - currentIdx - 1) * 60; // 경험칙 1스텝=60s
+        const total = Math.max(0, remainThis + remainOthers);
+        const m = Math.floor(total / 60),
+          s = Math.round(total % 60);
+        return m > 0 ? `약 ${m}분 ${s}초 남음` : `약 ${s}초 남음`;
+      }
+    }
+
+    // 2) 백업: 전체 평균
+    const progress = fullVideoState.progress || {};
+    const sum = visibleSteps.reduce((acc, k) => acc + (progress[k] || 0), 0);
+    const pct = sum / visibleSteps.length;
+    if (pct > 0 && pct < 100) {
+      const start = fullVideoState.startTime ? new Date(fullVideoState.startTime).getTime() : Date.now();
+      const elapsed = (Date.now() - start) / 1000;
+      const estTotal = (elapsed / pct) * 100;
+      const remain = Math.max(0, estTotal - elapsed);
+      const m = Math.floor(remain / 60),
+        s = Math.round(remain % 60);
+      return m > 0 ? `약 ${m}분 ${s}초 남음` : `약 ${s}초 남음`;
+    }
+    return "계산 중...";
+  }, [enabled, fullVideoState, visibleSteps]);
+}
+
+/** 로그 타임 표시 보조(Invalid Date 방지) */
+function formatLogTime(ts) {
+  if (!ts) return "-";
+  // Date 객체
+  if (ts instanceof Date) return ts.toLocaleTimeString();
+  // 숫자 타임스탬프
+  if (typeof ts === "number") return new Date(ts).toLocaleTimeString();
+  // 문자열: ISO 가능 여부
+  const parsed = Date.parse(ts);
+  if (!Number.isNaN(parsed)) return new Date(parsed).toLocaleTimeString();
+  // HH:MM:SS 등 포맷은 그대로 노출
+  return String(ts);
+}
+
+export default function FullVideoProgressPanel({
+  fullVideoState,
+  resetFullVideoState,
+  api,
+  toast,
+  showEta = true, // 필요 없으면 false
+}) {
   if (!fullVideoState.isGenerating && fullVideoState.currentStep === "idle") return null;
 
-  // 모드별 단계 정의
-  // 자동화 모드: 대본 생성 → 음성 생성 → 이미지 생성 → 영상 합성
-  const automationSteps = [
-    { key: "script", title: "대본 생성", icon: DocumentEditRegular },
-    { key: "audio", title: "음성 생성", icon: MicRegular },
-    { key: "images", title: "이미지 생성", icon: ImageRegular },
-    { key: "video", title: "영상 합성", icon: VideoRegular },
-  ];
+  const isComplete = ["complete", "completed"].includes(fullVideoState.currentStep);
+  const isError = fullVideoState.currentStep === "error";
 
-  // 대본 생성 모드: 대본 생성 → 음성 생성 → 자막 생성
-  const scriptModeSteps = [
-    { key: "script", title: "대본 생성", icon: DocumentEditRegular },
-    { key: "audio", title: "음성 생성", icon: MicRegular },
-    { key: "subtitle", title: "자막 생성", icon: DocumentEditRegular },
-  ];
+  const steps = fullVideoState.mode === "automation_mode" ? ["script", "audio", "images", "video"] : ["script", "audio", "subtitle"];
 
-  // 현재 모드에 따른 단계 배열 선택
-  const steps = fullVideoState.mode === "automation_mode" ? automationSteps : scriptModeSteps;
+  // 경과 시간 텍스트
+  const [tick, setTick] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const elapsedText = useMemo(() => {
+    const start = fullVideoState.startTime ? new Date(fullVideoState.startTime).getTime() : Date.now();
+    const sec = Math.max(0, Math.floor((Date.now() - start) / 1000));
+    const m = Math.floor(sec / 60),
+      s = sec % 60;
+    return m > 0 ? `${m}분 ${s}초` : `${s}초`;
+  }, [tick, fullVideoState.startTime]);
 
-  /**
-   * 시작 시간부터 현재까지의 경과 시간을 실시간으로 계산하여 문자열로 반환
-   * @returns {string} "X분 Y초" 또는 "Y초" 형태의 경과 시간
-   */
-  const getElapsedTime = () => {
-    if (!fullVideoState.startTime) return "0초";
-    const elapsed = Math.floor((currentTime - fullVideoState.startTime) / 1000);
-    const minutes = Math.floor(elapsed / 60);
-    const seconds = elapsed % 60;
-    return minutes > 0 ? `${minutes}분 ${seconds}초` : `${seconds}초`;
-  };
+  const etaText = useETA(fullVideoState, steps, showEta && !isComplete && !isError);
 
-  /**
-   * 현재 단계와 진행률을 기반으로 예상 남은 시간을 계산
-   * @returns {string} 예상 남은 시간
-   */
-  const getEstimatedTimeRemaining = () => {
-    if (!fullVideoState.startTime || !fullVideoState.isGenerating) return "";
-
-    const elapsed = Math.floor((currentTime - fullVideoState.startTime) / 1000);
-    const currentStep = fullVideoState.currentStep;
-    const progress = fullVideoState.progress;
-
-    // 현재 단계의 진행률 확인
-    let totalProgress = 0;
-    let stepCount = 0;
-
-    if (fullVideoState.mode === "automation_mode") {
-      // 자동화 모드: 4단계
-      totalProgress = (progress.script + progress.audio + progress.images + progress.video) / 4;
-      stepCount = 4;
-    } else {
-      // 스크립트 모드: 3단계
-      totalProgress = (progress.script + progress.audio + progress.subtitle) / 3;
-      stepCount = 3;
-    }
-
-    if (totalProgress > 0 && totalProgress < 100) {
-      const estimatedTotal = (elapsed / totalProgress) * 100;
-      const remaining = Math.max(0, estimatedTotal - elapsed);
-      const remainingMinutes = Math.floor(remaining / 60);
-      const remainingSeconds = Math.floor(remaining % 60);
-
-      return remainingMinutes > 0 ? `약 ${remainingMinutes}분 ${remainingSeconds}초 남음` : `약 ${remainingSeconds}초 남음`;
-    }
-
-    return "계산 중...";
-  };
+  const models = steps.map((k) => {
+    const pct = fullVideoState.progress?.[k] || 0;
+    const status = isError ? "error" : isComplete ? "done" : fullVideoState.currentStep === k ? "active" : pct >= 100 ? "done" : "idle";
+    return {
+      id: k,
+      label: STEP_META[k].label,
+      icon: STEP_META[k].icon,
+      percent: pct,
+      status,
+      error: isError && fullVideoState.failedStep === k,
+    };
+  });
 
   return (
     <Card
       style={{
-        // 상태에 따른 배경색 변경
-        background:
-          fullVideoState.currentStep === "complete"
-            ? tokens.colorPaletteLightGreenBackground1 // 완료: 연한 녹색
-            : fullVideoState.currentStep === "error"
-            ? tokens.colorPaletteRedBackground1 // 오류: 연한 빨간색
-            : "#fff", // 진행중: 흰색
-        border: "1px solid rgba(0,0,0,0.06)",
+        background: tokens.colorNeutralBackground1,
+        border: `1px solid ${tokens.colorNeutralStroke2}`,
         boxShadow: "0 6px 24px rgba(0,0,0,0.06)",
-        borderRadius: 14,
-        padding: tokens.spacingVerticalL,
-        marginBottom: tokens.spacingVerticalL,
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 16,
       }}
     >
-      {/* 패널 헤더: 제목, 경과 시간, 취소 버튼 */}
-      <CardHeader style={{ paddingBottom: tokens.spacingVerticalM }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            {/* 모드별 제목 표시 */}
-            <Text size={500} weight="semibold">
-              {fullVideoState.mode === "automation_mode" ? "🎬 완전 자동화 영상 생성" : "📝 대본 & 음성 & 자막 생성"}
-            </Text>
-            {/* 상태별 부제목 및 경과 시간 표시 */}
-            <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
-              {fullVideoState.currentStep === "complete"
-                ? `✅ 완료! (총 소요시간: ${getElapsedTime()})`
-                : fullVideoState.currentStep === "error"
-                ? `❌ 오류 발생 (${getElapsedTime()} 경과)`
-                : `🔄 진행 중... (${getElapsedTime()} 경과)`}
-            </Text>
-
-            {/* 예상 시간 표시 (진행 중일 때만) */}
-            {fullVideoState.isGenerating && fullVideoState.currentStep !== "complete" && (
-              <Text size={100} style={{ color: tokens.colorBrandForeground1, marginTop: 2, fontWeight: "500" }}>
-                ⏳ {getEstimatedTimeRemaining()}
-              </Text>
+      {/* 상단 헤더: 최대한 컴팩트 (스샷 느낌) */}
+      <CardHeader style={{ paddingBottom: 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {isComplete ? (
+              <CheckmarkCircleRegular style={{ color: tokens.colorPaletteGreenForeground1 }} />
+            ) : isError ? (
+              <ErrorCircleRegular style={{ color: tokens.colorPaletteRedForeground1 }} />
+            ) : (
+              <Spinner size="tiny" />
             )}
-          </div>
-          {/* 상태별 버튼 표시 - 강제로 항상 표시 */}
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {/* 디버깅 정보 (항상 표시) */}
-            <Text size={100} style={{ opacity: 0.7, fontSize: "10px" }}>
-              상태: {fullVideoState.mode || "unknown"} | {fullVideoState.currentStep || "unknown"} |{" "}
-              {fullVideoState.isGenerating ? "generating" : "idle"}
+            <Text weight="semibold" size={400}>
+              {fullVideoState.mode === "automation_mode" ? "완전 자동화 영상 생성" : "대본 · 음성 · 자막 생성"}
             </Text>
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+              {isComplete ? `완료 (${elapsedText})` : isError ? `오류 (${elapsedText})` : `진행중 (${elapsedText})`}
+              {etaText ? ` · ⏳ ${etaText}` : ""}
+            </Text>
+          </div>
 
-            {/* 항상 버튼들 표시 */}
-            <Button
-              appearance={fullVideoState.isGenerating ? "secondary" : "primary"}
-              size="small"
-              onClick={() => resetFullVideoState(false)}
-            >
-              {fullVideoState.isGenerating ? "취소" : "닫기"}
-            </Button>
-
-            {/* 초기화 버튼 (항상 표시) */}
-            <Button appearance="secondary" size="small" onClick={() => resetFullVideoState(false)} style={{ backgroundColor: "#f3f2f1" }}>
-              초기화
-            </Button>
-
-            {/* 로그 지우기 버튼 (로그가 있을 때만 표시) */}
-            {fullVideoState.logs.length > 0 && (
-              <Button appearance="secondary" size="small" onClick={() => resetFullVideoState(true)} style={{ backgroundColor: "#fff2e6" }}>
-                로그 지우기
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {fullVideoState.isGenerating ? (
+              <Button appearance="subtle" size="small" icon={<DismissRegular />} onClick={() => resetFullVideoState(false)}>
+                취소
               </Button>
+            ) : (
+              <>
+                {fullVideoState.currentStep !== "idle" && (
+                  <Button appearance="subtle" size="small" onClick={() => resetFullVideoState(true)}>
+                    초기화
+                  </Button>
+                )}
+                <Button appearance="subtle" size="small" icon={<DismissRegular />} onClick={() => resetFullVideoState(false)}>
+                  닫기
+                </Button>
+              </>
             )}
           </div>
         </div>
       </CardHeader>
 
-      {/* 진행 단계 표시 영역 */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: tokens.spacingVerticalL,
-          padding: tokens.spacingVerticalM,
-          backgroundColor: tokens.colorNeutralBackground1,
-          borderRadius: 12,
-        }}
-      >
-        {steps.map((step, index) => (
-          <React.Fragment key={step.key}>
-            {/* 개별 진행 단계 컴포넌트 */}
-            <ProgressStepComponent
-              step={step.key}
-              currentStep={fullVideoState.currentStep}
-              progress={fullVideoState.progress}
-              title={step.title}
-              icon={step.icon}
-              mode={fullVideoState.mode}
-              isCompleted={fullVideoState.currentStep === "completed" || fullVideoState.currentStep === "complete"}
-              hasError={fullVideoState.currentStep === "error" && fullVideoState.failedStep === step.key}
-            />
-
-            {/* 단계 간 연결선 (마지막 단계 제외) */}
-            {index < steps.length - 1 && (
+      {/* 스텝 타일 + 얇은 세로 구분선 (스샷 스타일) */}
+      <div style={{ display: "flex", alignItems: "stretch", gap: 12, marginBottom: 12 }}>
+        {models.map((m, i) => (
+          <React.Fragment key={m.id}>
+            <StepTile {...m} />
+            {i < models.length - 1 && (
               <div
                 style={{
-                  flex: 1,
-                  height: 2,
-                  backgroundColor: tokens.colorNeutralStroke2,
-                  margin: "0 16px",
-                  position: "relative",
+                  width: 1,
+                  alignSelf: "stretch",
+                  background: tokens.colorNeutralStroke2,
+                  opacity: 0.5,
+                  borderRadius: 1,
                 }}
-              >
-                {/* 진행률에 따른 연결선 색상 변경 */}
-                <div
-                  style={{
-                    height: "100%",
-                    backgroundColor: (() => {
-                      const stepOrder =
-                        fullVideoState.mode === "automation_mode"
-                          ? ["script", "audio", "images", "video"]
-                          : ["script", "audio", "subtitle"];
-
-                      const currentIndex = stepOrder.indexOf(fullVideoState.currentStep);
-                      const isCompleted = fullVideoState.currentStep === "completed" || fullVideoState.currentStep === "complete";
-
-                      // 현재 단계가 연결선보다 앞서거나 완료되면 녹색, 아니면 회색
-                      return currentIndex > index || isCompleted ? tokens.colorPaletteLightGreenForeground1 : tokens.colorNeutralStroke2;
-                    })(),
-                    transition: "all 0.3s ease",
-                  }}
-                />
-              </div>
+              />
             )}
           </React.Fragment>
         ))}
       </div>
 
-      {/* 진행 로그 표시 (로그가 있을 때만) */}
-      {fullVideoState.logs.length > 0 && (
+      {/* 로그 영역 */}
+      {fullVideoState.logs?.length > 0 && (
         <div
           style={{
-            backgroundColor: tokens.colorNeutralBackground2,
-            borderRadius: 8,
-            padding: tokens.spacingVerticalS,
-            maxHeight: 300,
+            background: tokens.colorNeutralBackground1,
+            borderRadius: 12,
+            border: `1px solid ${tokens.colorNeutralStroke2}`,
+            padding: 12,
+            maxHeight: 320,
             overflowY: "auto",
           }}
         >
-          <Text size={300} weight="semibold" style={{ marginBottom: 8 }}>
+          <Text size={300} weight="semibold" style={{ marginBottom: 8, display: "block" }}>
             📋 진행 로그 ({fullVideoState.logs.length}개)
           </Text>
-          {/* 모든 로그 표시 - 파일 경로 포함 */}
-          {fullVideoState.logs.map((log, index) => (
-            <div key={index} style={{ marginBottom: 4 }}>
+          {fullVideoState.logs.map((log, idx) => (
+            <div key={idx} style={{ padding: "4px 0" }}>
               <Text
                 size={200}
                 style={{
-                  // 로그 타입별 색상 지정
                   color:
                     log.type === "error"
-                      ? tokens.colorPaletteRedForeground1 // 오류: 빨간색
+                      ? tokens.colorPaletteRedForeground1
                       : log.type === "success"
-                      ? tokens.colorPaletteLightGreenForeground1 // 성공: 녹색
-                      : tokens.colorNeutralForeground2, // 기본: 회색
+                      ? tokens.colorPaletteGreenForeground1
+                      : log.type === "warning"
+                      ? tokens.colorPaletteYellowForeground1
+                      : tokens.colorNeutralForeground2,
                 }}
               >
-                [{log.timestamp}] {log.message}
+                [{formatLogTime(log.timestamp)}] {log.message}
               </Text>
             </div>
           ))}
         </div>
       )}
 
-      {/* 완료 시 액션 버튼들 (자동화 모드 완료 + 영상 결과 있을 때만) */}
-      {fullVideoState.currentStep === "complete" && fullVideoState.results.video && (
-        <div
-          style={{
-            marginTop: tokens.spacingVerticalM,
-            display: "flex",
-            gap: tokens.spacingHorizontalM,
-          }}
-        >
-          {/* 출력 폴더 열기 버튼 */}
+      {/* 완료 액션 (오른쪽 정렬) */}
+      {isComplete && fullVideoState.results?.video && (
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
           <Button
-            appearance="primary"
+            appearance="secondary"
+            size="small"
             icon={<FolderOpenRegular />}
             onClick={async () => {
               try {
-                /**
-                 * API 호출: project:openOutputFolder
-                 * @description 프로젝트 출력 폴더를 시스템 파일 탐색기로 열기
-                 * @returns {Object} { success: boolean, message?: string }
-                 */
-                const result = await api.invoke("project:openOutputFolder");
-
-                if (result.success) {
-                  toast.success("출력 폴더를 열었습니다.");
+                const result = await api?.invoke?.("project:openOutputFolder");
+                if (result?.success) {
+                  toast?.success?.("출력 폴더를 열었습니다.");
                 } else {
-                  toast.error(`폴더 열기 실패: ${result.message}`);
+                  toast?.error?.(`폴더 열기 실패: ${result?.message || "알 수 없는 오류"}`);
                 }
-              } catch (error) {
-                toast.error(`오류: ${error.message}`);
+              } catch (e) {
+                toast?.error?.(`오류: ${e.message}`);
               }
             }}
           >
             출력 폴더 열기
           </Button>
 
-          {/* 영상 재생 버튼 (미구현) */}
-          <Button
-            appearance="secondary"
-            icon={<PlayRegular />}
-            onClick={() => {
-              toast.success("영상 재생 기능 구현 예정");
-            }}
-          >
+          <Button appearance="primary" size="small" icon={<PlayRegular />} onClick={() => toast?.success?.("영상 재생 기능 구현 예정")}>
             영상 재생
           </Button>
         </div>
@@ -363,23 +368,3 @@ function FullVideoProgressPanel({ fullVideoState, resetFullVideoState, api, toas
     </Card>
   );
 }
-
-export default FullVideoProgressPanel;
-
-/**
- * @typedef {Object} FullVideoState
- * @property {boolean} isGenerating - 현재 생성 진행 중 여부
- * @property {string} currentStep - 현재 진행 단계
- * @property {string} mode - 실행 모드 (automation_mode | script_mode | idle)
- * @property {Object} progress - 각 단계별 진행률 (0-100)
- * @property {Date} startTime - 생성 시작 시간
- * @property {Array} logs - 진행 로그 배열
- * @property {Object} results - 생성 결과 객체
- */
-
-/**
- * @typedef {Object} LogEntry
- * @property {string} timestamp - 로그 시간 (HH:MM:SS 형태)
- * @property {string} message - 로그 메시지
- * @property {('info'|'success'|'error'|'warning')} type - 로그 타입
- */

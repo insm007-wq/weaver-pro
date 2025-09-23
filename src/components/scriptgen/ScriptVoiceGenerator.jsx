@@ -7,7 +7,7 @@
  *
  * @features
  * - 🤖 AI 대본 생성 (Anthropic Claude, OpenAI GPT 지원)
- * - 🎤 다중 TTS 엔진 지원 (Google, ElevenLabs 등)
+ * - 🎤 TTS 엔진 지원 (Google TTS)
  * - 📝 SRT 자막 자동 생성
  * - 🎬 완전 자동화 영상 생성 (4단계)
  * - 📊 실시간 진행률 표시

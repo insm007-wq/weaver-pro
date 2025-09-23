@@ -81,19 +81,18 @@ function VoiceSettingsCard({ form, voices, voiceLoading, voiceError, onChange, o
           }
           hint={
             <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-              Google: 안정적 발음 · ElevenLabs: 감정/톤 풍부
+              Google: 안정적 발음
             </Text>
           }
         >
           <Dropdown
-            value={form.ttsEngine === "google" ? "Google Cloud TTS" : "ElevenLabs"}
-            selectedOptions={[form.ttsEngine]}
+            value="Google Cloud TTS"
+            selectedOptions={["google"]}
             onOptionSelect={(_, d) => onChange("ttsEngine", d.optionValue)}
             size="medium" /* 🔧 large → medium */
             style={{ minHeight: 36 }}
           >
             <Option value="google">Google Cloud TTS</Option>
-            <Option value="elevenlabs">ElevenLabs</Option>
           </Dropdown>
         </Field>
 
@@ -180,7 +179,7 @@ function VoiceSettingsCard({ form, voices, voiceLoading, voiceError, onChange, o
                     🎤 {selectedVoice.name}
                   </Text>
                   <Badge appearance="tint" color="brand">
-                    {form.ttsEngine === "elevenlabs" ? "ElevenLabs" : "Google TTS"}
+                    Google TTS
                   </Badge>
                 </div>
 
@@ -259,7 +258,7 @@ function VoiceSettingsCard({ form, voices, voiceLoading, voiceError, onChange, o
             <Text weight="semibold">TTS 음성 목록 로드 실패</Text>
           </div>
           <Text style={{ marginBottom: 10 }}>
-            {form.ttsEngine === "elevenlabs" ? "ElevenLabs" : "Google TTS"} 음성 목록을 불러올 수 없습니다. API 키를 확인해주세요.
+            Google TTS 음성 목록을 불러올 수 없습니다. API 키를 확인해주세요.
             <br />
             API 오류 ({voiceError.code || "unknown"}): {voiceError.message || "API 키가 설정되지 않았습니다."}
           </Text>

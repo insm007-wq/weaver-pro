@@ -197,7 +197,6 @@ export default function ApiTab() {
   const [pexelsKey, setPexelsKey] = useState("");
   const [pixabayKey, setPixabayKey] = useState("");
   const [googleTtsKey, setGoogleTtsKey] = useState("");
-  const [elevenlabsKey, setElevenlabsKey] = useState("");
   const [geminiKey, setGeminiKey] = useState("");
 
   const [status, setStatus] = useState({
@@ -207,7 +206,6 @@ export default function ApiTab() {
     pexels: null,
     pixabay: null,
     googleTts: null,
-    elevenlabs: null,
     gemini: null,
   });
 
@@ -218,19 +216,17 @@ export default function ApiTab() {
     pexels: false,
     pixabay: false,
     googleTts: false,
-    elevenlabs: false,
     gemini: false,
   });
 
   // ===== 초기 로드 =====
   useEffect(() => {
     (async () => {
-      const [ok, ak, rk, gk, elk, pxk, pbk, gmk] = await Promise.all([
+      const [ok, ak, rk, gk, pxk, pbk, gmk] = await Promise.all([
         window.api.getSecret("openaiKey"),
         window.api.getSecret("anthropicKey"),
         window.api.getSecret("replicateKey"),
         window.api.getSecret("googleTtsApiKey"),
-        window.api.getSecret("elevenlabsApiKey"),
         window.api.getSecret("pexelsApiKey"),
         window.api.getSecret("pixabayApiKey"),
         window.api.getSecret("geminiKey"),
@@ -239,7 +235,6 @@ export default function ApiTab() {
       setAnthropicKey(ak || "");
       setReplicateKey(rk || "");
       setGoogleTtsKey(gk || "");
-      setElevenlabsKey(elk || "");
       setPexelsKey(pxk || "");
       setPixabayKey(pbk || "");
       setGeminiKey(gmk || "");
@@ -277,10 +272,6 @@ export default function ApiTab() {
   const saveGoogleTts = async () => {
     await saveSecret("googleTtsApiKey", googleTtsKey);
     setSaved("googleTts");
-  };
-  const saveElevenLabs = async () => {
-    await saveSecret("elevenlabsApiKey", elevenlabsKey);
-    setSaved("elevenlabs");
   };
   const saveGemini = async () => {
     await saveSecret("geminiKey", geminiKey);
@@ -402,52 +393,6 @@ export default function ApiTab() {
     }
   };
 
-  const testElevenLabs = async () => {
-    console.log("🔍 Frontend: ElevenLabs 테스트 시작");
-    console.log("🔑 Frontend: ElevenLabs Key:", elevenlabsKey ? `${elevenlabsKey.substring(0, 10)}...` : "없음");
-    
-    if (!elevenlabsKey?.trim()) {
-      console.log("❌ Frontend: ElevenLabs 키가 비어있음");
-      return setStat("elevenlabs", false, "키 미입력");
-    }
-    
-    setBusy("elevenlabs", true);
-    setStat("elevenlabs", false, "");
-    
-    try {
-      const trimmedKey = elevenlabsKey.trim();
-      console.log("📞 Frontend: testElevenLabs 호출, 키 길이:", trimmedKey.length);
-      
-      const res = await window.api.testElevenLabs?.(trimmedKey);
-      console.log("📋 Frontend: ElevenLabs 테스트 응답:", res);
-      
-      if (res?.ok) {
-        // 권한에 따라 다른 메시지 표시
-        let message;
-        if (res.hasUserPermission) {
-          const usagePercent = res.charactersUsed && res.charactersLimit 
-            ? Math.round((res.charactersUsed / res.charactersLimit) * 100) 
-            : 0;
-          message = `연결 성공 (${res.voices}개 목소리, ${res.subscription} 플랜, 사용량: ${usagePercent}%)`;
-        } else {
-          message = `연결 성공 (${res.voices}개 목소리, ${res.subscription})`;
-        }
-        setStat("elevenlabs", true, message);
-        console.log("✅ Frontend: ElevenLabs 테스트 성공");
-      } else {
-        console.error("❌ Frontend: ElevenLabs 테스트 실패:", res);
-        setStat("elevenlabs", false, `실패: ${stringifyErr(res?.message)}`);
-      }
-    } catch (e) {
-      console.error("❌ Frontend: ElevenLabs 테스트 오류:", e);
-      const { message } = handleApiError(e, "api_test", {
-        metadata: { service: "elevenlabs", action: "test_connection" }
-      });
-      setStat("elevenlabs", false, `오류: ${message}`);
-    } finally {
-      setBusy("elevenlabs", false);
-    }
-  };
 
   const testGemini = async () => {
     if (!geminiKey?.trim()) return setStat("gemini", false, "키 미입력");
@@ -544,19 +489,6 @@ export default function ApiTab() {
       onTest: testGoogleTts,
       status: status.googleTts,
       loading: loading.googleTts,
-    },
-    {
-      key: "elevenlabs",
-      name: "🎯 ElevenLabs",
-      description: "최고 품질의 AI 음성 합성 - 자연스러운 억양과 감정 표현",
-      value: elevenlabsKey,
-      setValue: setElevenlabsKey,
-      placeholder: "sk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-      hint: "ElevenLabs에서 발급받은 API 키를 입력하세요 (월 10,000자 무료)",
-      onSave: saveElevenLabs,
-      onTest: testElevenLabs,
-      status: status.elevenlabs,
-      loading: loading.elevenlabs,
     },
     {
       key: "gemini",
