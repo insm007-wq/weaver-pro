@@ -168,29 +168,6 @@ if (!gotLock) {
     const preview = safeRequire("ipc/preview", () => require("./ipc/preview"));
     await tryRegister("preview", preview, "register");
 
-    // ✅ Canva IPC 등록 (기존)
-    const canvaIpc = safeRequire("ipc/canva", () => require("./ipc/canva"));
-    await tryRegister("canva", canvaIpc, "register");
-
-    // ✅ Canva Browse (Playwright 방식 - 우선 사용)
-    const canvaBrowse = safeRequire("ipc/canva-browse", () => require("./ipc/canva-browse"));
-    await tryRegister("canva-browse", canvaBrowse, "register");
-    
-    // ✅ 협력업체 방식 활성화 - 최강 보안 우회
-    const canvaEnhanced = safeRequire("ipc/canva-service-enhanced", () => require("./ipc/canva-service-enhanced"));
-    await tryRegister("canva-enhanced", canvaEnhanced, "register");
-    
-    // ✅ Canva 세션 방식 (로그인 후 세션 유지, 영상 목록 표시) - puppeteer-core 의존성으로 비활성화
-    // const canvaSession = safeRequire("ipc/canva-session", () => require("./ipc/canva-session"));
-    // await tryRegister("canva-session", canvaSession, "register");
-    
-    // ✅ Canva 스텔스 방식 (puppeteer-extra + stealth + CDP 네트워크 모니터링)
-    const canvaStealth = safeRequire("ipc/canva-stealth", () => require("./ipc/canva-stealth"));
-    await tryRegister("canva-stealth", canvaStealth, "register");
-    
-    // ✅ 비디오 서비스 (downloaded_canva 폴더 스캔 및 통합 관리)
-    const videoService = safeRequire("ipc/videoService", () => require("./ipc/videoService"));
-    await tryRegister("video-service", videoService, "register");
     
     // ✅ 프로젝트 관리 서비스 (출력 폴더 및 파일 경로 관리)
     const projectManager = safeRequire("ipc/projectManager", () => require("./ipc/projectManager"));

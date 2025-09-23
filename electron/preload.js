@@ -204,11 +204,11 @@ contextBridge.exposeInMainWorld("api", {
   },
 
   // ========================================================================
-  // ✨ 이벤트 버스 (CanvaTab 등에서 사용)
+  // ✨ 이벤트 버스
   // ========================================================================
   // 사용법:
-  //   const onProg = (p)=>{...}; window.api.on('canva:progress', onProg)
-  //   window.api.off('canva:progress', onProg)
+  //   const onProg = (p)=>{...}; window.api.on('progress', onProg)
+  //   window.api.off('progress', onProg)
   //   window.api.once('foo', (p)=>{...})
   on: (event, handler) => busOn(event, handler),
   once: (event, handler) => busOnce(event, handler),
@@ -355,75 +355,6 @@ contextBridge.exposeInMainWorld("api", {
     },
   },
 
-  // ========================================================================
-  // ✨ Canva (기존 + B안 canva-browse 확장)
-  // ========================================================================
-  canva: {
-    // ---- 기존(canva IPC) 유지 ----
-    login: () => ipcRenderer.invoke("canva:login"),
-    getSession: () => ipcRenderer.invoke("canva:getSession"),
-    logout: () => ipcRenderer.invoke("canva:logout"),
-    autoRun: (payload) => ipcRenderer.invoke("canva:autoRun", payload),
-    stop: () => ipcRenderer.invoke("canva:stop"),
-
-    // ---- ✅ NEW: B안(Playwright 직접 실행: ipc/canva-browse) ----
-    openBrowser: (opts) => ipcRenderer.invoke("canva:openBrowser", opts),
-    bulkDownload: (keywords, options) => ipcRenderer.invoke("canva:bulkDownload", { keywords, options }),
-
-    // 진행/완료 이벤트 래퍼(버스 기반 사용도 가능)
-    onProgress: (handler) => {
-      if (typeof handler !== "function") return () => {};
-      const wrapped = (_e, payload) => {
-        try {
-          handler(payload);
-        } catch (e) {
-          console.warn("[preload] canva:progress handler error:", e);
-        }
-      };
-      ipcRenderer.on("canva:progress", wrapped);
-      return () => ipcRenderer.removeListener("canva:progress", wrapped);
-    },
-    onDownloaded: (handler) => {
-      if (typeof handler !== "function") return () => {};
-      const wrapped = (_e, payload) => {
-        try {
-          handler(payload);
-        } catch (e) {
-          console.warn("[preload] canva:downloaded handler error:", e);
-        }
-      };
-      ipcRenderer.on("canva:downloaded", wrapped);
-      return () => ipcRenderer.removeListener("canva:downloaded", wrapped);
-    },
-
-    // ---- ✅ NEW: Stealth 방식 (puppeteer-extra + stealth) ----
-    stealth: {
-      init: () => ipcRenderer.invoke("canva:stealth:init"),
-      confirm: () => ipcRenderer.invoke("canva:stealth:confirm"),
-      download: (params) => ipcRenderer.invoke("canva:stealth:download", params),
-      autoRun: (params) => ipcRenderer.invoke("canva:stealth:autoRun", params),
-      status: () => ipcRenderer.invoke("canva:stealth:status"),
-      cleanup: () => ipcRenderer.invoke("canva:stealth:cleanup"),
-    },
-  },
-
-  // ========================================================================
-  // ✨ Video Service (downloaded_canva 폴더 스캔 및 관리)
-  // ========================================================================
-  video: {
-    getAll: () => ipcRenderer.invoke("video:getAll"),
-    getCanvaVideos: () => ipcRenderer.invoke("video:getCanvaVideos"),
-    getByKeyword: (keyword) => ipcRenderer.invoke("video:getByKeyword", keyword),
-    getKeywords: () => ipcRenderer.invoke("video:getKeywords"),
-    search: (query) => ipcRenderer.invoke("video:search", query),
-    getStats: () => ipcRenderer.invoke("video:getStats"),
-    delete: (videoPath) => ipcRenderer.invoke("video:delete", videoPath),
-    move: (params) => ipcRenderer.invoke("video:move", params),
-    refreshCanva: () => ipcRenderer.invoke("video:refreshCanva"),
-    clearCache: () => ipcRenderer.invoke("video:clearCache"),
-    cleanupDirs: () => ipcRenderer.invoke("video:cleanupDirs"),
-    getPaths: () => ipcRenderer.invoke("video:getPaths"),
-  },
 });
 
 // ============================================================================
@@ -443,41 +374,6 @@ contextBridge.exposeInMainWorld("electron", {
     openPath: (path) => ipcRenderer.invoke("shell:openPath", path),
   },
 
-  // canva 기능
-  canva: {
-    // 기존 canva 기능
-    login: () => ipcRenderer.invoke("canva:login"),
-    getSession: () => ipcRenderer.invoke("canva:getSession"),
-    logout: () => ipcRenderer.invoke("canva:logout"),
-    autoRun: (payload) => ipcRenderer.invoke("canva:autoRun", payload),
-    stop: () => ipcRenderer.invoke("canva:stop"),
-    
-    // stealth 기능
-    stealth: {
-      init: () => ipcRenderer.invoke("canva:stealth:init"),
-      confirm: () => ipcRenderer.invoke("canva:stealth:confirm"),
-      download: (params) => ipcRenderer.invoke("canva:stealth:download", params),
-      autoRun: (params) => ipcRenderer.invoke("canva:stealth:autoRun", params),
-      status: () => ipcRenderer.invoke("canva:stealth:status"),
-      cleanup: () => ipcRenderer.invoke("canva:stealth:cleanup"),
-    },
-  },
-
-  // video 기능
-  video: {
-    getAll: () => ipcRenderer.invoke("video:getAll"),
-    getCanvaVideos: () => ipcRenderer.invoke("video:getCanvaVideos"),
-    getByKeyword: (keyword) => ipcRenderer.invoke("video:getByKeyword", keyword),
-    getKeywords: () => ipcRenderer.invoke("video:getKeywords"),
-    search: (query) => ipcRenderer.invoke("video:search", query),
-    getStats: () => ipcRenderer.invoke("video:getStats"),
-    delete: (videoPath) => ipcRenderer.invoke("video:delete", videoPath),
-    move: (params) => ipcRenderer.invoke("video:move", params),
-    refreshCanva: () => ipcRenderer.invoke("video:refreshCanva"),
-    clearCache: () => ipcRenderer.invoke("video:clearCache"),
-    cleanupDirs: () => ipcRenderer.invoke("video:cleanupDirs"),
-    getPaths: () => ipcRenderer.invoke("video:getPaths"),
-  },
 
   // 프로젝트 관리
   project: {

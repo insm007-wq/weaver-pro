@@ -218,8 +218,7 @@ ipcMain.handle("tts:listVoices", async (_evt, options = {}) => {
         console.error('❌ Google TTS 목소리 로드 실패:', error);
         console.error('오류 상세:', error.message, error.stack);
       }
-    }
-    
+
     if (voices.length === 0) {
       return {
         ok: false,
@@ -267,10 +266,10 @@ async function loadGoogleVoices(apiKey) {
   
   const processedVoices = koreanVoices.map(voice => ({
     id: voice.name,
-    name: formatVoiceName(voice.name),
+    name: formatVoiceName(voice.name, voice.ssmlGender),
     gender: voice.ssmlGender || 'NEUTRAL',
-    type: voice.name.includes('Wavenet') ? 'Wavenet' : 
-          voice.name.includes('Neural2') ? 'Neural2' : 
+    type: voice.name.includes('Wavenet') ? 'Wavenet' :
+          voice.name.includes('Neural2') ? 'Neural2' :
           voice.name.includes('Standard') ? 'Standard' : 'Unknown',
     language: 'ko-KR',
     provider: 'Google'
@@ -293,18 +292,22 @@ async function loadGoogleVoices(apiKey) {
 
 
 // 목소리 이름을 사용자 친화적으로 포맷
-function formatVoiceName(voiceName) {
-  // 예: ko-KR-Wavenet-A -> 한국어 (Wavenet A)
-  // 예: ko-KR-Neural2-B -> 한국어 (Neural2 B)
+function formatVoiceName(voiceName, ssmlGender) {
+  // 예: ko-KR-Wavenet-A -> 한국어 여성 (Wavenet A)
+  // 예: ko-KR-Neural2-B -> 한국어 남성 (Neural2 B)
   const parts = voiceName.split('-');
   if (parts.length >= 4) {
     const type = parts[2]; // Wavenet, Neural2, Standard
     const variant = parts[3]; // A, B, C, etc.
-    const genderMap = {
-      'A': '여성', 'B': '남성', 'C': '여성', 'D': '남성', 
-      'E': '여성', 'F': '남성'
+
+    // 실제 Google API의 성별 정보 사용
+    const genderKorean = {
+      'MALE': '남성',
+      'FEMALE': '여성',
+      'NEUTRAL': '중성'
     };
-    const gender = genderMap[variant] || variant;
+    const gender = genderKorean[ssmlGender] || '중성';
+
     return `한국어 ${gender} (${type} ${variant})`;
   }
   return voiceName;
