@@ -1,27 +1,9 @@
 import React from "react";
-import {
-  Card,
-  Text,
-  Dropdown,
-  Option,
-  Field,
-  Badge,
-  Button,
-  Spinner,
-  tokens,
-} from "@fluentui/react-components";
+import { Card, Text, Dropdown, Option, Field, Badge, Button, Spinner, tokens } from "@fluentui/react-components";
 import { MicRegular, PlayRegular, ShieldError24Regular } from "@fluentui/react-icons";
 import { useCardStyles, useSettingsStyles, useLayoutStyles } from "../../../styles/commonStyles";
 
-function VoiceSettingsCard({ 
-  form, 
-  voices, 
-  voiceLoading, 
-  voiceError, 
-  onChange, 
-  onPreviewVoice, 
-  onRetryVoiceLoad 
-}) {
+function VoiceSettingsCard({ form, voices, voiceLoading, voiceError, onChange, onPreviewVoice, onRetryVoiceLoad }) {
   const cardStyles = useCardStyles();
   const settingsStyles = useSettingsStyles();
   const layoutStyles = useLayoutStyles();
@@ -42,98 +24,206 @@ function VoiceSettingsCard({
   };
 
   return (
-    <Card className={cardStyles.settingsCard}>
-      <div className={settingsStyles.sectionHeader}>
-        <div className={settingsStyles.sectionTitle}>
+    <Card
+      className={cardStyles.settingsCard}
+      style={{
+        padding: "18px",
+        borderRadius: 16,
+        borderColor: tokens.colorNeutralStroke2,
+      }}
+    >
+      {/* 헤더 */}
+      <div className={settingsStyles.sectionHeader} style={{ marginBottom: 8 }}>
+        <div className={settingsStyles.sectionTitle} style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <MicRegular />
-          <Text size={400} weight="semibold">음성 설정</Text>
+          <Text size={500} weight="semibold" style={{ letterSpacing: 0.2 }}>
+            음성 설정
+          </Text>
         </div>
+        <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
+          TTS 엔진 · 말하기 속도 · 목소리를 선택해 나레이션 톤을 맞춰요.
+        </Text>
       </div>
-      
-      <div className={layoutStyles.gridTwo}>
-        <Field label="TTS 엔진">
+
+      {/* 상단 상태 바 */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          minHeight: 28,
+          marginBottom: 8,
+        }}
+      >
+        {voiceLoading && (
+          <>
+            <Spinner size="tiny" />
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+              음성 목록을 불러오는 중…
+            </Text>
+          </>
+        )}
+        {!voiceLoading && !voiceError && (
+          <Badge appearance="tint" color="brand">
+            {voices.length ? `${voices.length}개 음성 사용 가능` : "목록 비어 있음"}
+          </Badge>
+        )}
+      </div>
+
+      {/* 폼: 2열 그리드 */}
+      <div className={layoutStyles.gridTwo} style={{ gap: 16, alignItems: "start" }}>
+        {/* TTS 엔진 */}
+        <Field
+          label={
+            <Text size={300} weight="semibold">
+              TTS 엔진
+            </Text>
+          }
+          hint={
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+              Google: 안정적 발음 · ElevenLabs: 감정/톤 풍부
+            </Text>
+          }
+        >
           <Dropdown
             value={form.ttsEngine === "google" ? "Google Cloud TTS" : "ElevenLabs"}
             selectedOptions={[form.ttsEngine]}
             onOptionSelect={(_, d) => onChange("ttsEngine", d.optionValue)}
-            size="large"
+            size="medium" /* 🔧 large → medium */
+            style={{ minHeight: 36 }}
           >
             <Option value="google">Google Cloud TTS</Option>
             <Option value="elevenlabs">ElevenLabs</Option>
           </Dropdown>
         </Field>
-        
-        <Field label="말하기 속도">
+
+        {/* 말하기 속도 */}
+        <Field
+          label={
+            <Text size={300} weight="semibold">
+              말하기 속도
+            </Text>
+          }
+          hint={
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+              0.95~1.05 범위가 대부분 콘텐츠에 무난
+            </Text>
+          }
+        >
           <Dropdown
             value={form.speed === "0.9" ? "느림 (0.9x)" : form.speed === "1.1" ? "빠름 (1.1x)" : "보통 (1.0x)"}
             selectedOptions={[form.speed]}
             onOptionSelect={(_, d) => onChange("speed", d.optionValue)}
-            size="large"
+            size="medium" /* 🔧 large → medium */
+            style={{ minHeight: 36 }}
           >
             <Option value="0.9">느림 (0.9x)</Option>
             <Option value="1.0">보통 (1.0x)</Option>
             <Option value="1.1">빠름 (1.1x)</Option>
           </Dropdown>
         </Field>
-        
+
+        {/* 목소리 */}
         <div style={{ gridColumn: "1 / -1" }}>
-          <Field label="목소리">
+          <Field
+            label={
+              <Text size={300} weight="semibold">
+                목소리
+              </Text>
+            }
+            hint={
+              <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                엔진 선택 후 목록에서 원하는 톤을 고르세요.
+              </Text>
+            }
+          >
             <Dropdown
               value={selectedVoice?.name || (voiceLoading ? "불러오는 중…" : "목소리 선택")}
               selectedOptions={form.voiceId ? [form.voiceId] : []}
               onOptionSelect={(_, d) => onChange("voiceId", d.optionValue)}
-              size="large"
+              size="medium" /* 🔧 large → medium */
               disabled={voiceLoading || !!voiceError}
+              style={{ minHeight: 36 }}
             >
               {voices.map((v) => (
                 <Option key={v.id} value={v.id}>
                   {v.name || v.id}
                   {v.type && (
-                    <Badge size="small" appearance="tint" style={{ marginLeft: "8px" }}>
+                    <Badge size="small" appearance="tint" style={{ marginLeft: 8 }}>
                       {v.type}
                     </Badge>
                   )}
                 </Option>
               ))}
             </Dropdown>
-            
+
+            {/* 선택한 목소리 정보 패널 */}
             {selectedVoice && (
-              <div style={{
-                marginTop: 12,
-                padding: 12,
-                background: "#f8f9fa",
-                borderRadius: 8,
-                border: "1px solid rgba(0,0,0,0.06)",
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <Text weight="semibold" size={300}>🎤 {selectedVoice.name}</Text>
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: 12,
+                  borderRadius: 12,
+                  border: `1px solid ${tokens.colorNeutralStroke2}`,
+                  background: tokens.colorNeutralBackground2,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text weight="semibold" size={300}>
+                    🎤 {selectedVoice.name}
+                  </Text>
                   <Badge appearance="tint" color="brand">
                     {form.ttsEngine === "elevenlabs" ? "ElevenLabs" : "Google TTS"}
                   </Badge>
                 </div>
-                
-                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    alignItems: "center",
+                    marginBottom: 6,
+                    flexWrap: "wrap",
+                  }}
+                >
                   <Badge appearance="outline" size="small">
                     {selectedVoice.gender === "MALE" ? "👨 남성" : selectedVoice.gender === "FEMALE" ? "👩 여성" : "🧑 중성"}
                   </Badge>
-                  <Badge appearance="outline" size="small">{selectedVoice.type}</Badge>
-                  <Badge appearance="outline" size="small">{selectedVoice.language}</Badge>
+                  {selectedVoice.type && (
+                    <Badge appearance="outline" size="small">
+                      {selectedVoice.type}
+                    </Badge>
+                  )}
+                  {selectedVoice.language && (
+                    <Badge appearance="outline" size="small">
+                      {selectedVoice.language}
+                    </Badge>
+                  )}
                 </div>
-                
-                <div style={{
-                  marginBottom: 8,
-                  padding: 8,
-                  background: "#f8f9fa",
-                  borderRadius: 6,
-                  border: "1px solid rgba(0,0,0,0.06)",
-                }}>
-                  <Text size={200} style={{ color: "#666", lineHeight: 1.4 }}>
+
+                <div
+                  style={{
+                    marginBottom: 10,
+                    padding: 10,
+                    borderRadius: 10,
+                    border: `1px dashed ${tokens.colorNeutralStroke2}`,
+                    background: tokens.colorNeutralBackground3,
+                  }}
+                >
+                  <Text size={200} style={{ color: tokens.colorNeutralForeground3, lineHeight: 1.5 }}>
                     {getVoiceDescription(selectedVoice.name)}
                   </Text>
                 </div>
-                
+
                 <Button
-                  appearance="subtle"
+                  appearance="secondary"
                   size="small"
                   icon={<PlayRegular />}
                   onClick={() => onPreviewVoice(selectedVoice.id, selectedVoice.name)}
@@ -146,28 +236,38 @@ function VoiceSettingsCard({
         </div>
       </div>
 
+      {/* 오류 패널 */}
       {voiceError && (
-        <div style={{
-          marginTop: tokens.spacingVerticalM,
-          border: `1px solid ${tokens.colorPaletteRedBorder2}`,
-          background: "#fff5f5",
-          borderRadius: 12,
-          padding: tokens.spacingVerticalM,
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <div
+          style={{
+            marginTop: tokens.spacingVerticalM,
+            border: `1px solid ${tokens.colorPaletteRedBorder2}`,
+            background: tokens.colorPaletteRedBackground1,
+            borderRadius: 12,
+            padding: tokens.spacingVerticalM,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 6,
+            }}
+          >
             <ShieldError24Regular />
             <Text weight="semibold">TTS 음성 목록 로드 실패</Text>
           </div>
-          <Text style={{ marginBottom: 8 }}>
+          <Text style={{ marginBottom: 10 }}>
             {form.ttsEngine === "elevenlabs" ? "ElevenLabs" : "Google TTS"} 음성 목록을 불러올 수 없습니다. API 키를 확인해주세요.
             <br />
-            API 오류 ({voiceError.code}): {voiceError.message || "API 키가 설정되지 않았습니다."}
+            API 오류 ({voiceError.code || "unknown"}): {voiceError.message || "API 키가 설정되지 않았습니다."}
           </Text>
           <div style={{ display: "flex", gap: 8 }}>
-            <Button appearance="secondary" onClick={onRetryVoiceLoad}>
+            <Button appearance="secondary" size="small" onClick={onRetryVoiceLoad}>
               다시 시도
             </Button>
-            <Button appearance="outline" onClick={() => {}}>
+            <Button appearance="outline" size="small" onClick={() => {}}>
               API 키 설정
             </Button>
           </div>
