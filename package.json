@@ -4,9 +4,15 @@
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
+    "dev:5174": "vite --port 5174",
+    "dev:5175": "vite --port 5175",
+    "dev:auto": "vite --port 0",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "electron ."
+    "start": "electron .",
+    "electron:dev": "cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
+    "electron:dev:5174": "cross-env VITE_DEV_SERVER_URL=http://localhost:5174 electron .",
+    "electron:dev:5175": "cross-env VITE_DEV_SERVER_URL=http://localhost:5175 electron ."
   },
   "dependencies": {
     "@fluentui/react-components": "^9.69.0",
@@ -37,6 +43,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.7.0",
+    "cross-env": "^10.0.0",
     "electron": "^28.1.3",
     "vite": "^4.3.9"
   }

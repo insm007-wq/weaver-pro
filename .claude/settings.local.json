@@ -211,7 +211,11 @@
       "Bash(move providersopenai.js .)",
       "Bash(del index.js)",
       "Bash(del common.js)",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(git config:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Read(//d/download/**)"
     ],
     "deny": [],
     "ask": []

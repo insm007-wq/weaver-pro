@@ -44,7 +44,10 @@ async function tryRegister(label, mod, fnName = "register") {
  * 메인 윈도우 (utils/window 없을 때 폴백 제공)
  * ============================================================================= */
 function createWindowFallback() {
-  const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL || "http://localhost:5173";
+  // 포트 범위를 더 넓게 설정하여 유연성 확보
+  const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL ||
+    process.env.VITE_PORT ? `http://localhost:${process.env.VITE_PORT}` :
+    "http://localhost:5173";
 
   const win = new BrowserWindow({
     width: 1280,
