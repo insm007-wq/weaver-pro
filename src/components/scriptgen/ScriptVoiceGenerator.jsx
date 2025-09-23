@@ -62,6 +62,7 @@ function ScriptVoiceGenerator() {
   const [form, setForm] = useState(makeDefaultForm());
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState("");
+  const [globalSettings, setGlobalSettings] = useState({});
 
   // 전체 영상 생성 상태 (모드별 분기 지원)
   const [fullVideoState, setFullVideoState] = useState({
@@ -471,6 +472,7 @@ function ScriptVoiceGenerator() {
           // 유효한 문자열 값이고 현재 값과 다른 경우에만 업데이트
           if (typeof llmValue === 'string' && llmValue.trim() && llmValue !== currentLLM) {
             currentLLM = llmValue;
+            setGlobalSettings({ llmModel: llmValue });
             setForm(prev => {
               if (prev.aiEngine !== llmValue) {
                 console.log("🔄 LLM 변경됨:", prev.aiEngine, "→", llmValue);
@@ -566,6 +568,7 @@ function ScriptVoiceGenerator() {
           doc={doc}
           isLoading={isLoading}
           form={form}
+          globalSettings={globalSettings}
           onClose={() => {
             setDoc(null);
             resetFullVideoState();

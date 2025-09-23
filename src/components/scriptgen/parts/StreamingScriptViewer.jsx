@@ -198,7 +198,7 @@ function StreamingScriptViewer({
         <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
           {(doc || fullVideoState.currentStep === "completed")
             ? `총 ${doc?.scenes?.length || 0}개 장면으로 구성된 대본이 생성되었습니다`
-            : `${getModelDisplayName(globalSettings.llmModel)} 모델이 실시간으로 대본을 생성하고 있습니다`
+            : `${getModelDisplayName(globalSettings?.llmModel || form.aiEngine)} 모델이 실시간으로 대본을 생성하고 있습니다`
           }
         </Text>
       </CardHeader>
