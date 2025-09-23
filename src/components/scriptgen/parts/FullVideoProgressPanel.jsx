@@ -368,7 +368,7 @@ export default function FullVideoProgressPanel({
       <div style={{ padding: "14px 20px 8px" }}>
         <ChevronSteps steps={steps} currentStep={fullVideoState.currentStep} progress={fullVideoState.progress} />
         <div style={{ marginTop: 10 }}>
-          <ProgressBar value={avgProgress} tone={isError ? "danger" : isComplete ? "success" : "brand"} />
+          <ProgressBar value={avgProgress} tone={isError ? "danger" : "brand"} />
         </div>
       </div>
 
@@ -392,7 +392,7 @@ export default function FullVideoProgressPanel({
           const badge = m.error
             ? { text: "오류", color: "red" }
             : m.status === "done"
-            ? { text: "완료", color: "green" }
+            ? { text: "완료", color: "brand" }
             : { text: "진행중", color: "brand" };
 
           return (
