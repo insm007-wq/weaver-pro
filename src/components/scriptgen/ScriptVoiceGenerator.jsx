@@ -424,65 +424,79 @@ function ScriptVoiceGenerator() {
     console.log("✅ ScriptVoiceGenerator 초기 상태 설정 완룜");
   }, []); // 빈 의존성 배열로 한 번만 실행
 
-  // 전역 설정 변경 이벤트 핸들러 (useCallback으로 메모이제이션)
-  const handleSettingsChange = useCallback(async () => {
-    try {
-      if (!api?.invoke) return;
-
-      const llmSetting = await api.invoke("settings:get", "llmModel");
-
-      if (llmSetting) {
-        // 응답이 객체 형태인 경우 data 또는 value 속성에서 실제 값 추출
-        let llmValue;
-        if (typeof llmSetting === 'object') {
-          llmValue = llmSetting.data || llmSetting.value || llmSetting;
-        } else {
-          llmValue = llmSetting;
-        }
-
-        // 유효한 문자열 값인 경우에만 업데이트
-        if (typeof llmValue === 'string' && llmValue.trim()) {
-          setGlobalSettings({ llmModel: llmValue });
-          setForm(prev => {
-            if (prev.aiEngine !== llmValue) {
-              console.log("🔄 LLM 변경됨:", prev.aiEngine, "→", llmValue);
-              return { ...prev, aiEngine: llmValue };
-            }
-            return prev;
-          });
-        }
-      }
-    } catch (error) {
-      console.warn("전역 설정 로드 실패:", error);
-    }
-  }, [api, setForm, setGlobalSettings]);
-
   // 전역 설정 로드 (별도 useEffect)
   useEffect(() => {
+    let isMounted = true;
+
+    const loadGlobalSettings = async () => {
+      try {
+        if (!api?.invoke) return;
+
+        const llmSetting = await api.invoke("settings:get", "llmModel");
+
+        if (!isMounted) return; // 컴포넌트가 언마운트된 경우 중단
+
+        // null 응답시 추가 호출 방지
+        if (llmSetting !== null && llmSetting !== undefined) {
+          // 응답이 객체 형태인 경우 data 또는 value 속성에서 실제 값 추출
+          let llmValue;
+          if (typeof llmSetting === 'object') {
+            llmValue = llmSetting.data || llmSetting.value || llmSetting;
+          } else {
+            llmValue = llmSetting;
+          }
+
+          // 유효한 문자열 값인 경우에만 업데이트
+          if (typeof llmValue === 'string' && llmValue.trim()) {
+            setGlobalSettings({ llmModel: llmValue });
+            setForm(prev => {
+              if (prev.aiEngine !== llmValue) {
+                console.log("🔄 LLM 변경됨:", prev.aiEngine, "→", llmValue);
+                return { ...prev, aiEngine: llmValue };
+              }
+              return prev;
+            });
+          }
+        } else {
+          console.log("⚠️ 설정에서 llmModel이 null 또는 undefined입니다.");
+        }
+      } catch (error) {
+        if (isMounted) {
+          console.warn("전역 설정 로드 실패:", error);
+        }
+      }
+    };
+
+    // 전역 설정 변경 이벤트 핸들러 (의존성 없음)
+    const handleSettingsChange = () => {
+      loadGlobalSettings();
+    };
+
     // 컴포넌트 마운트 시 초기 설정 로드
-    handleSettingsChange();
+    loadGlobalSettings();
 
     // 전역 설정 변경 이벤트 리스너 등록
     window.addEventListener('settingsChanged', handleSettingsChange);
 
     return () => {
+      isMounted = false;
       window.removeEventListener('settingsChanged', handleSettingsChange);
     };
-  }, [handleSettingsChange]); // handleSettingsChange가 변경될 때만 재실행
+  }, []); // 빈 의존성 배열 - 마운트시에만 실행
 
   // 프롬프트 자동 선택
   useEffect(() => {
     if (promptNames.length > 0 && !form.promptName) {
       setForm((prev) => ({ ...prev, promptName: promptNames[0] }));
     }
-  }, [promptNames, form.promptName]);
+  }, [promptNames, form.promptName, setForm]);
 
   // 목소리 자동 선택
   useEffect(() => {
     if (voices.length > 0 && !form.voiceId) {
       setForm((prev) => ({ ...prev, voiceId: voices[0].id }));
     }
-  }, [voices, form.voiceId]);
+  }, [voices, form.voiceId, setForm]);
 
   // FFmpeg 설치 확인 (자동화 모드에서만)
   useEffect(() => {
