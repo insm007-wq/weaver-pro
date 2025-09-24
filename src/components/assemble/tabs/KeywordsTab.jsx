@@ -367,6 +367,17 @@ export default function KeywordsTab({ addAssets }) {
   /* ---------------------------- UI ---------------------------- */
   return (
     <div className="w-full max-w-screen-xl mx-auto px-4">
+      {/* 탭 헤더 */}
+      <StandardCard
+        title="키워드 & 소스"
+        right={<span className="text-xs text-slate-500">AI 키워드 추출 & 영상 다운로드</span>}
+        className="mb-6"
+      >
+        <div className="text-sm text-slate-600">
+          자막에서 AI가 키워드를 추출하고, 해당 키워드로 Pexels/Pixabay에서 관련 영상을 자동으로 다운로드합니다.
+        </div>
+      </StandardCard>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch [&>*]:min-w-0">
         {/* 옵션 */}
         <StandardCard

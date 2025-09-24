@@ -115,7 +115,18 @@ export default function ArrangeTab({ scenes: propScenes, onChangeScenes, selecte
 
   /* -------------------------------- 렌더 --------------------------------- */
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+    <div className="space-y-6">
+      {/* 탭 헤더 */}
+      <StandardCard
+        title="배치 & 타임라인"
+        right={<span className="text-xs text-slate-500">영상 구성 편집</span>}
+      >
+        <div className="text-sm text-slate-600">
+          자막 씬에 영상 소스를 배치하고 타임라인을 조정하세요. 드래그 앤 드롭으로 영상을 변경하거나 속성을 편집할 수 있습니다.
+        </div>
+      </StandardCard>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
       {/* 씬 목록 */}
       <div className="lg:col-span-3">
         <SceneList scenes={scenes} selected={selectedIdx} selectedIndex={selectedIdx} onSelect={(i) => setSelectedIdx(i)} />
@@ -178,6 +189,7 @@ export default function ArrangeTab({ scenes: propScenes, onChangeScenes, selecte
           onToggleKenBurns={(v) => patchScene(selectedIdx, { kenBurns: !!v })}
           onChangeTransition={(name) => patchScene(selectedIdx, { transition: name })}
         />
+      </div>
       </div>
     </div>
   );

@@ -299,7 +299,18 @@ export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnec
   }, [fs, now]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div className="space-y-6">
+      {/* 탭 헤더 */}
+      <StandardCard
+        title="미리보기 & 자막"
+        right={<span className="text-xs text-slate-500">최종 결과 확인</span>}
+      >
+        <div className="text-sm text-slate-600">
+          완성된 영상을 미리보고 자막 스타일을 조정하세요. 키보드 단축키로 편리하게 제어할 수 있습니다.
+        </div>
+      </StandardCard>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {/* ⬅ 왼쪽: 미리보기 + 자막 설정 */}
       <div ref={leftColRef} className="lg:col-span-2 space-y-4">
         <StandardCard title="미리보기" right={<div className="text-xs text-slate-500">{status}</div>} bodyClass="space-y-3">
@@ -433,6 +444,7 @@ export default function ReviewTab({ scenes = [], selectedSceneIdx = 0, srtConnec
             />
           </div>
         </StandardCard>
+      </div>
       </div>
     </div>
   );
