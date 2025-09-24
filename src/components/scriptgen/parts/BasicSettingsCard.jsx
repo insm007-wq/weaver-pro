@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { Card, Text, Field, Input, Dropdown, Option, Spinner, Switch, Textarea, tokens } from "@fluentui/react-components";
 import { SettingsRegular } from "@fluentui/react-icons";
 import { STYLE_OPTIONS, DURATION_OPTIONS } from "../../../constants/scriptSettings";
+import { validateAndSanitizeText } from "../../../utils/sanitizer";
 
 /** 영상 길이별 최적 장면 수 자동 계산 (원본 유지) */
 const getRecommendedScenes = (durationMin) => {
@@ -44,8 +45,35 @@ const getDynamicSceneOptions = (durationMin) => {
  * 기본 설정 카드 (UI만 개선)
  */
 function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
+  const [validationErrors, setValidationErrors] = useState({});
 
-  const sceneOptions = getDynamicSceneOptions(form.durationMin);
+  const sceneOptions = useMemo(() =>
+    getDynamicSceneOptions(form.durationMin),
+    [form.durationMin]
+  );
+
+  // 안전한 입력 처리 함수
+  const handleSafeChange = (field, value, options = {}) => {
+    const result = validateAndSanitizeText(value, {
+      maxLength: field === 'topic' ? 200 : field === 'referenceScript' ? 100000 : 100,
+      allowEmpty: true,
+      fieldName: field,
+      ...options
+    });
+
+    // 검증 오류 상태 업데이트
+    setValidationErrors(prev => ({
+      ...prev,
+      [field]: result.errors
+    }));
+
+    // 정제된 값으로 onChange 호출
+    onChange(field, result.sanitized);
+
+    if (!result.isValid) {
+      console.warn(`입력 검증 실패 [${field}]:`, result.errors);
+    }
+  };
 
   return (
     <Card
@@ -113,15 +141,21 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
           >
             <Input
               value={form.topic || ""}
-              onChange={(e) => onChange("topic", e.target.value)}
+              onChange={(e) => handleSafeChange("topic", e.target.value)}
               placeholder={
                 form.showReferenceScript
                   ? "주제를 입력하면 레퍼런스 스타일로 새 대본 생성 / 비워두면 레퍼런스 자체를 개선"
                   : "예: 인공지능의 미래와 우리 삶의 변화"
               }
-              size="medium" // 🔧 large → medium
-              style={{ height: 36 }} // 🔧 높이 살짝 축소(시각 안정)
+              size="medium"
+              style={{ height: 36 }}
+              aria-invalid={validationErrors.topic?.length > 0}
             />
+            {validationErrors.topic?.length > 0 && (
+              <Text size={200} style={{ color: tokens.colorPaletteRedForeground2, marginTop: 4 }}>
+                {validationErrors.topic[0]}
+              </Text>
+            )}
           </Field>
         </div>
 
@@ -293,17 +327,24 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
 
                 <Textarea
                   value={form.referenceScript || ""}
-                  onChange={(e) => onChange("referenceScript", e.target.value)}
+                  onChange={(e) => handleSafeChange("referenceScript", e.target.value)}
                   placeholder="예시: '안녕하세요! 오늘은 맛있는 요리를 만들어볼게요. 먼저 재료를 준비해주세요...'"
                   rows={6}
                   resize="vertical"
                   style={{
                     minHeight: 120,
-                    // 🔧 텍스트영역 모서리/테두리 은은하게
-                    borderColor: tokens.colorNeutralStroke2,
+                    borderColor: validationErrors.referenceScript?.length > 0
+                      ? tokens.colorPaletteRedBorder2
+                      : tokens.colorNeutralStroke2,
                     borderRadius: 12,
                   }}
+                  aria-invalid={validationErrors.referenceScript?.length > 0}
                 />
+                {validationErrors.referenceScript?.length > 0 && (
+                  <Text size={200} style={{ color: tokens.colorPaletteRedForeground2, marginTop: 4 }}>
+                    {validationErrors.referenceScript[0]}
+                  </Text>
+                )}
 
                 {/* 글자 수/상태 바: 상단 경계선 약화 */}
                 <div

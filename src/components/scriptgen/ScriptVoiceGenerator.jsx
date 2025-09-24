@@ -3,6 +3,7 @@ import { Text, tokens, Button, Card } from "@fluentui/react-components";
 import { useHeaderStyles, useContainerStyles } from "../../styles/commonStyles";
 import { DocumentEditRegular, VideoRegular, EyeRegular } from "@fluentui/react-icons";
 import { ErrorBoundary } from "../common";
+import AsyncErrorBoundary from "../common/AsyncErrorBoundary";
 
 // 컴포넌트 imports
 import ModeSelector from "./parts/ModeSelector";
@@ -35,6 +36,9 @@ function ScriptVoiceGenerator() {
   const [globalSettings, setGlobalSettings] = useState({});
   const [selectedMode, setSelectedMode] = useState("automation_mode"); // 기본값: 완전 자동화 모드
   const [showResultsSidebar, setShowResultsSidebar] = useState(true);
+
+  // Race Condition 방지를 위한 AbortController 관리
+  const [currentOperation, setCurrentOperation] = useState(null);
 
   // 전체 영상 생성 상태 (모드별 분기 지원)
   const [fullVideoState, setFullVideoState] = useState({
@@ -96,6 +100,16 @@ function ScriptVoiceGenerator() {
     async (formData) => {
       console.log("🚀 runGenerate 함수 실행 시작! (SCRIPT MODE)");
 
+      // 기존 작업이 진행 중이면 취소
+      if (currentOperation) {
+        console.log("⏹️ 기존 작업 취소 중...");
+        currentOperation.abort();
+      }
+
+      // 새로운 AbortController 생성
+      const abortController = new AbortController();
+      setCurrentOperation(abortController);
+
       setError("");
       setIsLoading(true);
 
@@ -113,6 +127,10 @@ function ScriptVoiceGenerator() {
       try {
         // 전역 설정에서 영상 폴더 경로 가져오기
         let videoSaveFolder = null;
+        if (!window.api?.getSetting) {
+          throw new Error("API를 사용할 수 없습니다.");
+        }
+
         try {
           const videoFolderSettingResult = await window.api.getSetting("videoSaveFolder");
           const videoFolderSetting = videoFolderSettingResult?.value || videoFolderSettingResult;
@@ -156,14 +174,21 @@ function ScriptVoiceGenerator() {
           throw new Error("대본이 생성되지 않았습니다. 먼저 대본을 생성해주세요.");
         }
       } catch (error) {
-        console.error("대본 생성 오류:", error);
-        setError(error.message);
-        console.error(`대본 생성 실패: ${error.message}`);
+        // AbortError는 정상적인 취소이므로 에러로 처리하지 않음
+        if (error.name === 'AbortError') {
+          console.log("✅ 대본 생성 작업이 취소되었습니다.");
+          addLog("⏹️ 작업이 취소되었습니다.", "info");
+        } else {
+          console.error("대본 생성 오류:", error);
+          setError(error.message);
+          console.error(`대본 생성 실패: ${error.message}`);
+        }
       } finally {
         setIsLoading(false);
+        setCurrentOperation(null);
       }
     },
-    [runGenerate, form, voices, api, setError, setIsLoading, addLog]
+    [runGenerate, form, voices, api, setError, setIsLoading, addLog, setFullVideoState, currentOperation]
   );
 
   const resetFullVideoState = (clearLogs = false) => {
@@ -192,6 +217,17 @@ function ScriptVoiceGenerator() {
    */
   const runFullVideoGeneration = async () => {
     console.log("🚀 runFullVideoGeneration 함수 실행 시작! (AUTOMATION MODE)");
+
+    // 기존 작업이 진행 중이면 취소
+    if (currentOperation) {
+      console.log("⏹️ 기존 작업 취소 중...");
+      currentOperation.abort();
+    }
+
+    // 새로운 AbortController 생성
+    const abortController = new AbortController();
+    setCurrentOperation(abortController);
+
     // 로그는 보존하고 상태만 리셋
     resetFullVideoState(false);
     updateFullVideoState({
@@ -233,6 +269,11 @@ function ScriptVoiceGenerator() {
 
       // 자동화 모드에서는 설정에서 직접 경로 가져오기
       let projectPaths = null;
+
+      if (!window.api?.getSetting) {
+        throw new Error("API를 사용할 수 없습니다.");
+      }
+
       try {
         const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
         const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
@@ -302,12 +343,20 @@ function ScriptVoiceGenerator() {
           console.warn("프로젝트 출력 폴더 열기 실패, 대안 시도:", projectError.message);
 
           // 대안: videoSaveFolder/output 폴더 직접 열기
+          if (!window.api?.getSetting) {
+            throw new Error("출력 폴더 열기를 위한 API를 사용할 수 없습니다.");
+          }
           const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
           const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
 
           if (videoSaveFolder) {
-            const outputFolder = `${videoSaveFolder}\\output`;
-            await api.invoke("shell:openPath", outputFolder);
+            // 경로 검증
+            const pathValidation = validatePath(`${videoSaveFolder}\\output`, videoSaveFolder);
+            if (!pathValidation.isValid) {
+              throw new Error(`안전하지 않은 출력 경로: ${pathValidation.errors.join(', ')}`);
+            }
+
+            await api.invoke("shell:openPath", pathValidation.sanitized);
             addLog("📂 출력 폴더를 열었습니다.", "success");
           } else {
             throw new Error("출력 폴더 경로를 찾을 수 없습니다.");
@@ -319,14 +368,26 @@ function ScriptVoiceGenerator() {
 
       console.log("🎉 완전 자동화 영상 생성 완료! 출력 폴더를 확인해보세요.");
     } catch (error) {
-      updateFullVideoState({
-        currentStep: "error",
-        failedStep: fullVideoState.currentStep, // 실패한 단계 기록
-        error: error.message,
-        isGenerating: false,
-      });
-      addLog(`❌ 오류 발생: ${error.message}`, "error");
-      console.error(`영상 생성 실패: ${error.message}`);
+      // AbortError는 정상적인 취소이므로 에러로 처리하지 않음
+      if (error.name === 'AbortError') {
+        console.log("✅ 자동화 영상 생성 작업이 취소되었습니다.");
+        addLog("⏹️ 작업이 취소되었습니다.", "info");
+        updateFullVideoState({
+          currentStep: "cancelled",
+          isGenerating: false,
+        });
+      } else {
+        updateFullVideoState({
+          currentStep: "error",
+          failedStep: fullVideoState?.currentStep || 'unknown',
+          error: error.message,
+          isGenerating: false,
+        });
+        addLog(`❌ 오류 발생: ${error.message}`, "error");
+        console.error(`영상 생성 실패: ${error.message}`);
+      }
+    } finally {
+      setCurrentOperation(null);
     }
   };
 
@@ -360,76 +421,54 @@ function ScriptVoiceGenerator() {
       logs: [],
     });
 
-    console.log("✅ ScriptVoiceGenerator 초기 상태 설정 완료 - 예상 생성 결과 삭제됨");
-
-    // localStorage 완전 클리어 - 모든 저장된 상태 삭제
-    try {
-      localStorage.removeItem("defaultSettings");
-      localStorage.removeItem("doc");
-      localStorage.removeItem("fullVideoState");
-      localStorage.removeItem("scriptGenerator");
-      // 관련된 모든 키 삭제
-      Object.keys(localStorage).forEach(key => {
-        if (key.includes('script') || key.includes('doc') || key.includes('video') || key.includes('generation')) {
-          localStorage.removeItem(key);
-        }
-      });
-      console.log("✅ localStorage 완전 클리어 완료");
-    } catch (error) {
-      console.warn("localStorage 클리어 실패:", error);
-    }
+    console.log("✅ ScriptVoiceGenerator 초기 상태 설정 완룜");
   }, []); // 빈 의존성 배열로 한 번만 실행
+
+  // 전역 설정 변경 이벤트 핸들러 (useCallback으로 메모이제이션)
+  const handleSettingsChange = useCallback(async () => {
+    try {
+      if (!api?.invoke) return;
+
+      const llmSetting = await api.invoke("settings:get", "llmModel");
+
+      if (llmSetting) {
+        // 응답이 객체 형태인 경우 data 또는 value 속성에서 실제 값 추출
+        let llmValue;
+        if (typeof llmSetting === 'object') {
+          llmValue = llmSetting.data || llmSetting.value || llmSetting;
+        } else {
+          llmValue = llmSetting;
+        }
+
+        // 유효한 문자열 값인 경우에만 업데이트
+        if (typeof llmValue === 'string' && llmValue.trim()) {
+          setGlobalSettings({ llmModel: llmValue });
+          setForm(prev => {
+            if (prev.aiEngine !== llmValue) {
+              console.log("🔄 LLM 변경됨:", prev.aiEngine, "→", llmValue);
+              return { ...prev, aiEngine: llmValue };
+            }
+            return prev;
+          });
+        }
+      }
+    } catch (error) {
+      console.warn("전역 설정 로드 실패:", error);
+    }
+  }, [api, setForm, setGlobalSettings]);
 
   // 전역 설정 로드 (별도 useEffect)
   useEffect(() => {
-    let currentLLM = null;
+    // 컴포넌트 마운트 시 초기 설정 로드
+    handleSettingsChange();
 
-    const loadGlobalSettings = async () => {
-      try {
-        const llmSetting = await api.invoke("settings:get", "llmModel");
-
-        if (llmSetting) {
-          // 응답이 객체 형태인 경우 data 또는 value 속성에서 실제 값 추출
-          let llmValue;
-          if (typeof llmSetting === 'object') {
-            llmValue = llmSetting.data || llmSetting.value || llmSetting;
-          } else {
-            llmValue = llmSetting;
-          }
-
-          // 유효한 문자열 값이고 현재 값과 다른 경우에만 업데이트
-          if (typeof llmValue === 'string' && llmValue.trim() && llmValue !== currentLLM) {
-            currentLLM = llmValue;
-            setGlobalSettings({ llmModel: llmValue });
-            setForm(prev => {
-              if (prev.aiEngine !== llmValue) {
-                console.log("🔄 LLM 변경됨:", prev.aiEngine, "→", llmValue);
-                return { ...prev, aiEngine: llmValue };
-              }
-              return prev;
-            });
-          }
-        }
-      } catch (error) {
-        console.warn("전역 설정 로드 실패:", error);
-      }
-    };
-
-    // 컴포넌트 마운트 시에만 한 번 실행
-    loadGlobalSettings();
-
-    // 전역 설정 변경 이벤트 리스너
-    const handleSettingsChange = () => {
-      loadGlobalSettings();
-    };
-
-    // 설정 변경 이벤트 등록
+    // 전역 설정 변경 이벤트 리스너 등록
     window.addEventListener('settingsChanged', handleSettingsChange);
 
     return () => {
       window.removeEventListener('settingsChanged', handleSettingsChange);
     };
-  }, []); // 빈 의존성 배열
+  }, [handleSettingsChange]); // handleSettingsChange가 변경될 때만 재실행
 
   // 프롬프트 자동 선택
   useEffect(() => {
@@ -476,7 +515,13 @@ function ScriptVoiceGenerator() {
 
   return (
     <ErrorBoundary>
-      <div className={containerStyles.container} style={{ overflowX: "hidden", maxWidth: "100vw" }}>
+      <AsyncErrorBoundary
+        onError={(error, errorInfo) => {
+          console.error('비동기 에러 발생:', error, errorInfo);
+          addLog(`❌ 예상치 못한 오류: ${error.message}`, 'error');
+        }}
+      >
+        <div className={containerStyles.container} style={{ overflowX: "hidden", maxWidth: "100vw" }}>
         {/* 헤더 */}
         <div className={headerStyles.pageHeader}>
           <div className={headerStyles.pageTitleWithIcon}>
@@ -604,7 +649,8 @@ function ScriptVoiceGenerator() {
             </Card>
           )}
         </div>
-      </div>
+        </div>
+      </AsyncErrorBoundary>
     </ErrorBoundary>
   );
 }
