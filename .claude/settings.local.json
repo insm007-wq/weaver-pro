@@ -215,7 +215,8 @@
       "Bash(git config:*)",
       "Bash(netstat:*)",
       "Bash(findstr:*)",
-      "Read(//d/download/**)"
+      "Read(//d/download/**)",
+      "Bash(asar extract:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,12 +1,8 @@
-// src/components/assemble/AssembleEditor.jsx
-// Fluent UI v9 Migration - Modern, Native Cross-Platform UI
 import React, { useMemo, useState, useRef, useLayoutEffect, useEffect, useCallback } from "react";
 import {
-  makeStyles,
   tokens,
   Card,
   CardHeader,
-  CardPreview,
   Body1,
   Body2,
   Title3,
@@ -17,117 +13,40 @@ import {
   Divider,
   Badge,
   Spinner,
-  mergeClasses,
 } from "@fluentui/react-components";
-import { StandardCard, ActionButton, StatusBadge } from "../common";
+import {
+  StandardCard,
+  PrimaryButton,
+  StatusBadge
+} from "../common";
 import {
   Target24Regular,
   Settings24Regular,
   Video24Regular,
 } from "@fluentui/react-icons";
 
-import KeepAlivePane from "../common/KeepAlivePane";
 
 // Utils
 import { parseSrtToScenes } from "../../utils/parseSrt";
 import { getSetting, readTextAny, getMp3DurationSafe } from "../../utils/ipcSafe";
 import { runAutoMatch } from "../../utils/autoMatchEngine";
 import { clampSelectedIndex } from "../../utils/sceneIndex";
-import { handleError, handleApiError } from "@utils";
+import { handleError } from "@utils";
 import { useFluentTheme } from "../providers/FluentThemeProvider";
-import { useHeaderStyles, useContainerStyles } from "../../styles/commonStyles";
-
-// Styles using Fluent Design tokens
-const useStyles = makeStyles({
-  container: {
-    maxWidth: "1200px",
-    margin: "0 auto",
-    padding: tokens.spacingVerticalXXL,
-    background: tokens.colorNeutralBackground1,
-    borderRadius: tokens.borderRadiusXLarge,
-    boxShadow: tokens.shadow64,
-    minHeight: "90vh",
-    position: "relative",
-    ...({
-      backdropFilter: "blur(20px)",
-      WebkitBackdropFilter: "blur(20px)",
-    }),
-  },
-
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: tokens.spacingVerticalXL,
-    paddingBottom: tokens.spacingVerticalM,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-  },
-
-  headerTitle: {
-    display: "flex",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalM,
-    color: tokens.colorNeutralForeground1,
-  },
-
-  headerStats: {
-    display: "flex",
-    alignItems: "center",
-    gap: tokens.spacingHorizontalM,
-  },
-
-  statsBadge: {
-    backgroundColor: tokens.colorBrandBackground2,
-    color: tokens.colorBrandForeground2,
-  },
-
-  tabContainer: {
-    marginBottom: tokens.spacingVerticalXL,
-  },
-
-  tabContent: {
-    marginTop: tokens.spacingVerticalL,
-    minHeight: "500px",
-  },
-
-  loadingContainer: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: "300px",
-    flexDirection: "column",
-    gap: tokens.spacingVerticalM,
-  },
-
-  // Platform-specific enhancements
-  windowsContainer: {
-    background: "rgba(243, 242, 241, 0.85)",
-    backdropFilter: "blur(30px)",
-    border: `1px solid ${tokens.colorNeutralStroke1}`,
-  },
-
-  macosContainer: {
-    background: "rgba(255, 255, 255, 0.8)",
-    backdropFilter: "blur(30px)",
-    border: `1px solid rgba(0, 0, 0, 0.1)`,
-  },
-
-  darkWindowsContainer: {
-    background: "rgba(32, 31, 30, 0.85)",
-  },
-
-  darkMacosContainer: {
-    background: "rgba(30, 30, 30, 0.8)",
-  },
-});
+import {
+  useContainerStyles,
+  useHeaderStyles,
+  useCardStyles,
+  useLayoutStyles
+} from "../../styles/commonStyles";
 
 export default function AssembleEditor() {
-  const styles = useStyles();
   const { platform, isDark } = useFluentTheme();
-  const headerStyles = useHeaderStyles();
   const containerStyles = useContainerStyles();
-  
-  // Container reference for responsive design
+  const headerStyles = useHeaderStyles();
+  const cardStyles = useCardStyles();
+  const layoutStyles = useLayoutStyles();
+
   const containerRef = useRef(null);
   const [fixedWidthPx, setFixedWidthPx] = useState(null);
 
@@ -180,7 +99,7 @@ export default function AssembleEditor() {
   useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
-    
+
     (async () => {
       try {
         const srtPath = await getSetting("paths.srt");
@@ -205,7 +124,7 @@ export default function AssembleEditor() {
         if (!cancelled) setIsLoading(false);
       }
     })();
-    
+
     return () => {
       cancelled = true;
     };
@@ -221,14 +140,14 @@ export default function AssembleEditor() {
           setAudioDur(0);
           return;
         }
-        
+
         const mp3Path = await getSetting("paths.mp3");
         if (!mp3Path) {
           console.log("[assemble] No MP3 path found");
           setAudioDur(0);
           return;
         }
-        
+
         const dur = await getMp3DurationSafe(mp3Path);
         if (!cancelled && dur) {
           setAudioDur(Number(dur));
@@ -244,7 +163,7 @@ export default function AssembleEditor() {
         }
       }
     })();
-    
+
     return () => {
       cancelled = true;
     };
@@ -288,16 +207,8 @@ export default function AssembleEditor() {
     }),
   };
 
-  const getContainerClass = () => {
-    return mergeClasses(
-      styles.container,
-      platform === 'windows' && (isDark ? styles.darkWindowsContainer : styles.windowsContainer),
-      platform === 'macos' && (isDark ? styles.darkMacosContainer : styles.macosContainer)
-    );
-  };
-
   return (
-    <div className={containerStyles.container} style={{ overflowX: "hidden", maxWidth: "100vw" }}>
+    <div className={containerStyles.container} style={{ overflowX: "hidden", maxWidth: "100vw" }} ref={containerRef}>
       {/* 헤더 */}
       <div className={headerStyles.pageHeader}>
         <div className={headerStyles.pageTitleWithIcon}>
@@ -310,65 +221,52 @@ export default function AssembleEditor() {
 
       {/* Loading State */}
       {isLoading && (
-        <div className={styles.loadingContainer}>
-          <Spinner size="large" />
-          <Body1>프로젝트를 불러오는 중...</Body1>
+        <div className={layoutStyles.centerFlex} style={{ minHeight: "300px" }}>
+          <div className={layoutStyles.verticalStack}>
+            <Spinner size="large" />
+            <Body1>프로젝트를 불러오는 중...</Body1>
+          </div>
         </div>
       )}
 
       {/* Top Status Bar */}
       {!isLoading && (
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: tokens.spacingVerticalM,
-          backgroundColor: tokens.colorNeutralBackground2,
-          borderRadius: tokens.borderRadiusLarge,
-          border: `1px solid ${tokens.colorNeutralStroke2}`,
-          marginBottom: tokens.spacingVerticalM
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalL }}>
-            {/* File Status */}
-            <div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS }}>
-              <Badge
-                appearance={srtConnected ? "filled" : "outline"}
-                color={srtConnected ? "success" : "subtle"}
-                size="small"
-              >
-                SRT {srtConnected ? "연결됨" : "미연결"}
-              </Badge>
-              <Badge
-                appearance={mp3Connected ? "filled" : "outline"}
-                color={mp3Connected ? "success" : "subtle"}
-                size="small"
-              >
-                MP3 {mp3Connected ? "연결됨" : "미연결"}
-              </Badge>
+        <StandardCard style={{ marginBottom: tokens.spacingVerticalL }}>
+          <div className={layoutStyles.horizontalStack} style={{ justifyContent: "space-between" }}>
+            <div className={layoutStyles.horizontalStack}>
+              {/* File Status */}
+              <div className={layoutStyles.horizontalStack}>
+                <StatusBadge
+                  variant={srtConnected ? "success" : "subtle"}
+                  text={`SRT ${srtConnected ? "연결됨" : "미연결"}`}
+                />
+                <StatusBadge
+                  variant={mp3Connected ? "success" : "subtle"}
+                  text={`MP3 ${mp3Connected ? "연결됨" : "미연결"}`}
+                />
+              </div>
+
+              {/* Mode Toggle */}
+              <div className={layoutStyles.horizontalStack}>
+                <Body2>모드:</Body2>
+                <Button
+                  appearance={autoMatch ? "primary" : "outline"}
+                  size="small"
+                  onClick={() => setAutoMatch(!autoMatch)}
+                >
+                  {autoMatch ? "자동" : "수동"}
+                </Button>
+              </div>
             </div>
 
-            {/* Mode Toggle */}
-            <div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS }}>
-              <Body2>모드:</Body2>
-              <Button
-                appearance={autoMatch ? "primary" : "outline"}
-                size="small"
-                onClick={() => setAutoMatch(!autoMatch)}
-              >
-                {autoMatch ? "자동" : "수동"}
-              </Button>
-            </div>
+            {/* Render Button */}
+            <PrimaryButton
+              disabled={!srtConnected || !mp3Connected || scenes.length === 0}
+            >
+              🎬 영상 렌더링
+            </PrimaryButton>
           </div>
-
-          {/* Render Button */}
-          <Button
-            appearance="primary"
-            size="medium"
-            disabled={!srtConnected || !mp3Connected || scenes.length === 0}
-          >
-            🎬 영상 렌더링
-          </Button>
-        </div>
+        </StandardCard>
       )}
 
       {/* 2-Tab Structure */}
@@ -387,30 +285,23 @@ export default function AssembleEditor() {
 
           {/* Tab Content */}
           <div style={{ flex: 1, minHeight: 0 }}>
-            <KeepAlivePane active={selectedTab === "prepare"}>
-              {/* Tab 1: 준비 - 2열 구조 */}
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: tokens.spacingHorizontalL,
-                height: "100%"
-              }}>
+            {selectedTab === "prepare" && (
+              <div>
+                {/* Tab 1: 준비 - 2열 구조 */}
+              <div className={layoutStyles.gridTwo} style={{ height: "100%" }}>
                 {/* 좌측 - 파일 관리 */}
-                <Card style={{
-                  padding: tokens.spacingVerticalL,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: tokens.spacingVerticalM
-                }}>
-                  <Title3>파일 관리</Title3>
-                  <Body2>SRT와 MP3 파일을 연결하세요</Body2>
+                <StandardCard>
+                  <Title3 style={{ marginBottom: tokens.spacingVerticalS }}>파일 관리</Title3>
+                  <Body2 style={{ color: tokens.colorNeutralForeground2, marginBottom: tokens.spacingVerticalM }}>
+                    SRT와 MP3 파일을 연결하세요
+                  </Body2>
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM }}>
-                    <Button appearance="primary" size="large" style={{ height: "48px" }}>
+                  <div className={layoutStyles.verticalStack}>
+                    <PrimaryButton size="large" style={{ height: "48px" }}>
                       📄 대본에서 가져오기
-                    </Button>
+                    </PrimaryButton>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: tokens.spacingHorizontalM }}>
+                    <div className={layoutStyles.gridTwo}>
                       <Button appearance="outline" size="medium">
                         📁 SRT 선택
                       </Button>
@@ -420,16 +311,14 @@ export default function AssembleEditor() {
                     </div>
 
                     {/* File Status Display */}
-                    <div style={{
-                      padding: tokens.spacingVerticalM,
+                    <StandardCard style={{
                       backgroundColor: tokens.colorNeutralBackground2,
-                      borderRadius: tokens.borderRadiusMedium,
-                      border: `1px solid ${tokens.colorNeutralStroke2}`
+                      padding: tokens.spacingVerticalM
                     }}>
                       <Body2 style={{ fontWeight: 600, marginBottom: tokens.spacingVerticalS }}>
                         연결 상태
                       </Body2>
-                      <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXS }}>
+                      <div className={layoutStyles.verticalStack} style={{ gap: tokens.spacingVerticalXS }}>
                         <Body2>SRT: {srtConnected ? "✅ 연결됨" : "❌ 미연결"}</Body2>
                         <Body2>MP3: {mp3Connected ? "✅ 연결됨" : "❌ 미연결"}</Body2>
                         <Body2>씬 수: {scenes.length}개</Body2>
@@ -437,75 +326,75 @@ export default function AssembleEditor() {
                           <Body2>오디오 길이: {audioDur.toFixed(1)}초</Body2>
                         )}
                       </div>
-                    </div>
+                    </StandardCard>
                   </div>
-                </Card>
+                </StandardCard>
 
                 {/* 우측 - AI 키워드 & 소스 */}
-                <Card style={{
-                  padding: tokens.spacingVerticalL,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: tokens.spacingVerticalM
-                }}>
-                  <Title3>AI 키워드 & 소스</Title3>
-                  <Body2>키워드를 추출하고 영상을 다운로드하세요</Body2>
+                <StandardCard>
+                  <Title3 style={{ marginBottom: tokens.spacingVerticalS }}>AI 키워드 & 소스</Title3>
+                  <Body2 style={{ color: tokens.colorNeutralForeground2, marginBottom: tokens.spacingVerticalM }}>
+                    키워드를 추출하고 영상을 다운로드하세요
+                  </Body2>
 
                   {/* AI Keywords Section */}
-                  <div>
-                    <Body2 style={{ fontWeight: 600, marginBottom: tokens.spacingVerticalS }}>
-                      AI 키워드 추출
-                    </Body2>
-                    <Button
-                      appearance="primary"
-                      size="large"
-                      style={{ width: "100%", height: "48px" }}
-                      disabled={!srtConnected}
-                    >
-                      🤖 키워드 추출 시작
-                    </Button>
-                  </div>
+                  <div className={layoutStyles.verticalStack}>
+                    <div>
+                      <Body2 style={{ fontWeight: 600, marginBottom: tokens.spacingVerticalS }}>
+                        AI 키워드 추출
+                      </Body2>
+                      <PrimaryButton
+                        size="large"
+                        style={{ width: "100%", height: "48px" }}
+                        disabled={!srtConnected}
+                      >
+                        🤖 키워드 추출 시작
+                      </PrimaryButton>
+                    </div>
 
-                  {/* Video Sources */}
-                  <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                    <Body2 style={{ fontWeight: 600, marginBottom: tokens.spacingVerticalS }}>
-                      영상 소스 ({assets.length}개)
-                    </Body2>
-                    <div style={{
-                      flex: 1,
-                      border: `1px dashed ${tokens.colorNeutralStroke2}`,
-                      borderRadius: tokens.borderRadiusMedium,
-                      padding: tokens.spacingVerticalM,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      minHeight: "300px",
-                      backgroundColor: tokens.colorNeutralBackground1
-                    }}>
-                      {assets.length > 0 ? (
-                        <div style={{ textAlign: "center" }}>
-                          <Body1 style={{ color: tokens.colorBrandForeground1, fontWeight: 600 }}>
-                            ✅ {assets.length}개 영상 준비완료
-                          </Body1>
-                          <Body2 style={{ color: tokens.colorNeutralForeground2, marginTop: tokens.spacingVerticalXS }}>
-                            편집 탭에서 배치하세요
-                          </Body2>
-                        </div>
-                      ) : (
-                        <div style={{ textAlign: "center" }}>
-                          <Body2 style={{ color: tokens.colorNeutralForeground3 }}>
-                            키워드 추출 후 영상이 표시됩니다
-                          </Body2>
-                        </div>
-                      )}
+                    {/* Video Sources */}
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                      <Body2 style={{ fontWeight: 600, marginBottom: tokens.spacingVerticalS }}>
+                        영상 소스 ({assets.length}개)
+                      </Body2>
+                      <div style={{
+                        flex: 1,
+                        border: `1px dashed ${tokens.colorNeutralStroke2}`,
+                        borderRadius: tokens.borderRadiusMedium,
+                        padding: tokens.spacingVerticalM,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        minHeight: "300px",
+                        backgroundColor: tokens.colorNeutralBackground1
+                      }}>
+                        {assets.length > 0 ? (
+                          <div style={{ textAlign: "center" }}>
+                            <Body1 style={{ color: tokens.colorBrandForeground1, fontWeight: 600 }}>
+                              ✅ {assets.length}개 영상 준비완료
+                            </Body1>
+                            <Body2 style={{ color: tokens.colorNeutralForeground2, marginTop: tokens.spacingVerticalXS }}>
+                              편집 탭에서 배치하세요
+                            </Body2>
+                          </div>
+                        ) : (
+                          <div style={{ textAlign: "center" }}>
+                            <Body2 style={{ color: tokens.colorNeutralForeground3 }}>
+                              키워드 추출 후 영상이 표시됩니다
+                            </Body2>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </Card>
+                </StandardCard>
               </div>
-            </KeepAlivePane>
+              </div>
+            )}
 
-            <KeepAlivePane active={selectedTab === "edit"}>
-              {/* Tab 2: 편집 - 상하 구조 (70:30) */}
+            {selectedTab === "edit" && (
+              <div>
+                {/* Tab 2: 편집 - 상하 구조 (70:30) */}
               <div style={{
                 display: "flex",
                 flexDirection: "column",
@@ -520,7 +409,7 @@ export default function AssembleEditor() {
                   gap: tokens.spacingHorizontalM
                 }}>
                   {/* 씬 리스트 */}
-                  <Card style={{ padding: tokens.spacingVerticalM }}>
+                  <StandardCard>
                     <Title3 style={{ marginBottom: tokens.spacingVerticalS }}>씬 리스트</Title3>
                     <Body2 style={{ color: tokens.colorNeutralForeground2, marginBottom: tokens.spacingVerticalM }}>
                       총 {totalDur.toFixed(1)}초
@@ -557,10 +446,10 @@ export default function AssembleEditor() {
                         </Body2>
                       )}
                     </div>
-                  </Card>
+                  </StandardCard>
 
                   {/* 타임라인 뷰 */}
-                  <Card style={{ padding: tokens.spacingVerticalM }}>
+                  <StandardCard>
                     <Title3 style={{ marginBottom: tokens.spacingVerticalS }}>타임라인</Title3>
                     <div style={{
                       height: "350px",
@@ -575,12 +464,12 @@ export default function AssembleEditor() {
                         타임라인이 여기에 표시됩니다
                       </Body2>
                     </div>
-                  </Card>
+                  </StandardCard>
 
                   {/* 속성 패널 */}
-                  <Card style={{ padding: tokens.spacingVerticalM }}>
+                  <StandardCard>
                     <Title3 style={{ marginBottom: tokens.spacingVerticalS }}>속성</Title3>
-                    <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalS }}>
+                    <div className={layoutStyles.verticalStack}>
                       <Button appearance="outline" size="small">
                         🎥 영상 교체
                       </Button>
@@ -591,7 +480,7 @@ export default function AssembleEditor() {
                         🔄 전환효과
                       </Button>
                     </div>
-                  </Card>
+                  </StandardCard>
                 </div>
 
                 {/* 하단 - 미리보기 & 렌더링 (30%) */}
@@ -602,7 +491,7 @@ export default function AssembleEditor() {
                   gap: tokens.spacingHorizontalM
                 }}>
                   {/* 미리보기 */}
-                  <Card style={{ padding: tokens.spacingVerticalM }}>
+                  <StandardCard>
                     <Title3 style={{ marginBottom: tokens.spacingVerticalS }}>미리보기</Title3>
                     <div style={{
                       aspectRatio: "16/9",
@@ -617,30 +506,29 @@ export default function AssembleEditor() {
                         영상 미리보기
                       </Body2>
                     </div>
-                  </Card>
+                  </StandardCard>
 
                   {/* 렌더링 설정 */}
-                  <Card style={{ padding: tokens.spacingVerticalM }}>
+                  <StandardCard>
                     <Title3 style={{ marginBottom: tokens.spacingVerticalS }}>렌더링</Title3>
-                    <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalS }}>
+                    <div className={layoutStyles.verticalStack}>
                       <Button appearance="outline" size="small">
                         📐 해상도
                       </Button>
                       <Button appearance="outline" size="small">
                         💾 출력 경로
                       </Button>
-                      <Button
-                        appearance="primary"
-                        size="medium"
+                      <PrimaryButton
                         disabled={!srtConnected || !mp3Connected}
                       >
                         🎬 렌더링 시작
-                      </Button>
+                      </PrimaryButton>
                     </div>
-                  </Card>
+                  </StandardCard>
                 </div>
               </div>
-            </KeepAlivePane>
+              </div>
+            )}
           </div>
         </div>
       )}

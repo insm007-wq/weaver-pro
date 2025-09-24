@@ -4,7 +4,7 @@ import {
   Text,
   tokens,
 } from "@fluentui/react-components";
-import { MODE_CONFIGS } from "../constants/modeConstants";
+import { MODE_CONFIGS } from "../../../constants/modeConstants";
 
 function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact = false }) {
 
