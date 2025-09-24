@@ -6,11 +6,6 @@ import {
   tokens,
   Divider,
 } from "@fluentui/react-components";
-import {
-  ChevronUpRegular,
-  ChevronDownRegular,
-  DismissRegular,
-} from "@fluentui/react-icons";
 
 function ResultsSidebar({
   fullVideoState,
@@ -23,8 +18,7 @@ function ResultsSidebar({
   onClose,
   horizontal = false
 }) {
-  const [isProgressExpanded, setIsProgressExpanded] = useState(true);
-  const [isScriptExpanded, setIsScriptExpanded] = useState(true);
+  
 
   // 표시할 내용이 있는지 확인
   const hasProgress = fullVideoState?.isGenerating || fullVideoState?.currentStep !== "idle";
