@@ -60,7 +60,6 @@ function ScriptVoiceGenerator() {
   const [form, setForm] = useState(makeDefaultForm());
   const [globalSettings, setGlobalSettings] = useState({});
   const [selectedMode, setSelectedMode] = useState("automation_mode"); // 기본값: 완전 자동화 모드
-  const [showResultsSidebar, setShowResultsSidebar] = useState(true);
 
   // 전체 영상 생성 상태 (모드별 분기 지원)
   const [fullVideoState, setFullVideoState] = useState({
@@ -92,18 +91,6 @@ function ScriptVoiceGenerator() {
   const { doc, setDoc, isLoading, error, setIsLoading, setError, getSelectedPromptContent, runGenerate } = useScriptGeneration();
   const { voices, voiceLoading, voiceError, previewVoice, retryVoiceLoad } = useVoiceSettings(form);
 
-  // 사이드바 자동 표시 로직
-  useEffect(() => {
-    // 생성이 시작되거나 결과가 있으면 사이드바를 자동으로 표시
-    const shouldShowSidebar = fullVideoState?.isGenerating ||
-                              fullVideoState?.currentStep !== "idle" ||
-                              doc ||
-                              isLoading;
-
-    if (shouldShowSidebar && !showResultsSidebar) {
-      setShowResultsSidebar(true);
-    }
-  }, [fullVideoState?.isGenerating, fullVideoState?.currentStep, doc, isLoading, showResultsSidebar]);
 
   // 폼 변경 핸들러
   const onChange = useCallback((k, v) => {
@@ -550,112 +537,90 @@ function ScriptVoiceGenerator() {
 
   return (
     <ErrorBoundary>
-      <div className={containerStyles.container}>
+      <div className={containerStyles.container} style={{ overflowX: "hidden", maxWidth: "100vw" }}>
         {/* 헤더 */}
         <div className={headerStyles.pageHeader}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <div className={headerStyles.pageTitleWithIcon}>
-                <DocumentEditRegular />
-                대본 & 음성 생성
-              </div>
-              <div className={headerStyles.pageDescription}>SRT 자막 + MP3 내레이션을 한 번에 생성합니다</div>
-            </div>
-            <Button
-              appearance="subtle"
-              size="small"
-              onClick={() => setShowResultsSidebar(!showResultsSidebar)}
-              style={{
-                borderRadius: 6,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                marginTop: 4
-              }}
-            >
-              📊 결과 패널 {showResultsSidebar ? "숨기기" : "보이기"}
-            </Button>
+          <div className={headerStyles.pageTitleWithIcon}>
+            <DocumentEditRegular />
+            대본 & 음성 생성
           </div>
+          <div className={headerStyles.pageDescription}>SRT 자막 + MP3 내레이션을 한 번에 생성합니다</div>
           <div className={headerStyles.divider} />
         </div>
 
-        {/* 2열 구조 + 하단 결과 레이아웃 */}
-        <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL }}>
+        {/* 세로 흐름 레이아웃 */}
+        <div style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: tokens.spacingVerticalL,
+          width: "100%",
+          maxWidth: "100%",
+          overflowX: "hidden",
+          overflowY: "visible", // 드롭다운 메뉴가 보이도록
+          position: "relative"
+        }}>
 
-          {/* 상단: 2열 메인 콘텐츠 영역 */}
+          {/* 1행: 생성 모드 + 대본 생성 시작 (2열) */}
           <div style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
             gap: tokens.spacingHorizontalL,
-            alignItems: "start"
+            alignItems: "stretch", // 높이를 맞춤
+            width: "100%",
+            maxWidth: "100%",
+            overflowX: "hidden"
           }}>
-            {/* 좌측: 설정 영역 */}
-            <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL }}>
-              {/* 컴팩트 모드 선택기 */}
-              <ModeSelector
-                selectedMode={selectedMode}
-                onModeChange={setSelectedMode}
-                form={form}
-                isGenerating={fullVideoState.isGenerating}
-                compact={true}
-              />
+            {/* 생성 모드 */}
+            <ModeSelector
+              selectedMode={selectedMode}
+              onModeChange={setSelectedMode}
+              form={form}
+              isGenerating={fullVideoState.isGenerating}
+              compact={true}
+            />
 
-              {/* 기본 설정 카드 */}
-              <BasicSettingsCard
-                form={form}
-                onChange={onChange}
-                promptNames={promptNames}
-                promptLoading={promptLoading}
-              />
-
-              {/* 음성 설정 카드 */}
-              <VoiceSettingsCard
-                form={form}
-                voices={voices}
-                voiceLoading={voiceLoading}
-                voiceError={voiceError}
-                onChange={onChange}
-                onPreviewVoice={previewVoice}
-                onRetryVoiceLoad={retryVoiceLoad}
-              />
-            </div>
-
-            {/* 우측: 실행 영역 */}
-            <div style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: tokens.spacingVerticalL,
-              position: "sticky",
-              top: 20
-            }}>
-              <UnifiedActionCard
-                selectedMode={selectedMode}
-                form={form}
-                isLoading={isLoading}
-                fullVideoState={fullVideoState}
-                onAutomationGenerate={runFullVideoGeneration}
-                onScriptGenerate={() => runScriptMode(form)}
-                centered={true}
-              />
-            </div>
+            {/* 대본 생성 시작 */}
+            <UnifiedActionCard
+              selectedMode={selectedMode}
+              form={form}
+              isLoading={isLoading}
+              fullVideoState={fullVideoState}
+              onAutomationGenerate={runFullVideoGeneration}
+              onScriptGenerate={() => runScriptMode(form)}
+              centered={true}
+            />
           </div>
 
-          {/* 하단: 결과 영역 */}
-          {showResultsSidebar && (
-            <div style={{ width: "100%" }}>
-              <ResultsSidebar
-                fullVideoState={fullVideoState}
-                doc={doc}
-                isLoading={isLoading}
-                form={form}
-                globalSettings={globalSettings}
-                resetFullVideoState={resetFullVideoState}
-                api={api}
-                onClose={() => setShowResultsSidebar(false)}
-                horizontal={true}
-              />
-            </div>
-          )}
+          {/* 2행: 기본 설정 (1열) */}
+          <BasicSettingsCard
+            form={form}
+            onChange={onChange}
+            promptNames={promptNames}
+            promptLoading={promptLoading}
+          />
+
+          {/* 3행: 음성 설정 (1열) */}
+          <VoiceSettingsCard
+            form={form}
+            voices={voices}
+            voiceLoading={voiceLoading}
+            voiceError={voiceError}
+            onChange={onChange}
+            onPreviewVoice={previewVoice}
+            onRetryVoiceLoad={retryVoiceLoad}
+          />
+
+          {/* 4행: 실시간 결과 (전체 폭) */}
+          <ResultsSidebar
+            fullVideoState={fullVideoState}
+            doc={doc}
+            isLoading={isLoading}
+            form={form}
+            globalSettings={globalSettings}
+            resetFullVideoState={resetFullVideoState}
+            api={api}
+            horizontal={true}
+          />
         </div>
       </div>
     </ErrorBoundary>

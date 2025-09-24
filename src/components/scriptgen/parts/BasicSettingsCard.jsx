@@ -62,17 +62,20 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
     <Card
       className={cardStyles.settingsCard}
       style={{
-        // 🔧 카드 안쪽 여백/간격 미세 조정: 더 깔끔하게
-        padding: "20px",
+        // 🔧 카드 안쪽 여백/간격 미세 조정: 더 컴팩트하게
+        padding: "12px 16px",
         borderRadius: "16px",
         borderColor: tokens.colorNeutralStroke2,
+        height: "fit-content",
+        display: "flex",
+        flexDirection: "column"
       }}
     >
       {/* 헤더: 아이콘 + 타이틀 간격 정리, 타이포 살짝 강조 */}
       <div
         className={settingsStyles.sectionHeader}
         style={{
-          marginBottom: tokens.spacingVerticalM, // 🔧 살짝 줄여 컴팩트하게
+          marginBottom: tokens.spacingVerticalS, // 🔧 더 줄여서 컴팩트하게
         }}
       >
         <div
@@ -85,7 +88,7 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
         >
           <SettingsRegular />
           <Text
-            size={500} // 🔧 400 → 500: 시각적으로 또렷하게 (과하지 않게)
+            size={400} // 생성 모드와 동일한 크기
             weight="semibold"
             style={{ letterSpacing: 0.2 }}
           >
@@ -109,7 +112,7 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
       <div
         className={layoutStyles.gridTwo}
         style={{
-          gap: "16px", // 🔧 기존 대비 살짝 컴팩트
+          gap: "12px", // 🔧 더 컴팩트하게 간격 줄임
           alignItems: "start",
         }}
       >

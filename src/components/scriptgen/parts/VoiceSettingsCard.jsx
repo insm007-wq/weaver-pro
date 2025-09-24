@@ -27,16 +27,19 @@ function VoiceSettingsCard({ form, voices, voiceLoading, voiceError, onChange, o
     <Card
       className={cardStyles.settingsCard}
       style={{
-        padding: "18px",
+        padding: "12px 16px",
         borderRadius: 16,
         borderColor: tokens.colorNeutralStroke2,
+        height: "fit-content",
+        display: "flex",
+        flexDirection: "column"
       }}
     >
       {/* 헤더 */}
-      <div className={settingsStyles.sectionHeader} style={{ marginBottom: 8 }}>
+      <div className={settingsStyles.sectionHeader} style={{ marginBottom: 6 }}>
         <div className={settingsStyles.sectionTitle} style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <MicRegular />
-          <Text size={500} weight="semibold" style={{ letterSpacing: 0.2 }}>
+          <Text size={400} weight="semibold" style={{ letterSpacing: 0.2 }}>
             음성 설정
           </Text>
         </div>
@@ -51,8 +54,8 @@ function VoiceSettingsCard({ form, voices, voiceLoading, voiceError, onChange, o
           display: "flex",
           alignItems: "center",
           gap: 8,
-          minHeight: 28,
-          marginBottom: 8,
+          minHeight: 24,
+          marginBottom: 6,
         }}
       >
         {voiceLoading && (
@@ -71,7 +74,7 @@ function VoiceSettingsCard({ form, voices, voiceLoading, voiceError, onChange, o
       </div>
 
       {/* 폼: 2열 그리드 */}
-      <div className={layoutStyles.gridTwo} style={{ gap: 16, alignItems: "start" }}>
+      <div className={layoutStyles.gridTwo} style={{ gap: 12, alignItems: "start" }}>
         {/* TTS 엔진 */}
         <Field
           label={

@@ -62,6 +62,9 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
         borderRadius: 12,
         padding: tokens.spacingVerticalM,
         marginBottom: tokens.spacingVerticalM,
+        height: "fit-content",
+        display: "flex",
+        flexDirection: "column"
       }}>
         <div style={{ marginBottom: tokens.spacingVerticalS }}>
           <Text size={400} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
@@ -140,13 +143,10 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
             borderRadius: 6,
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
+            justifyContent: "center",
           }}>
             <Text size={200} style={{ color: tokens.colorNeutralForeground2 }}>
               {modes.find(m => m.key === selectedMode)?.description}
-            </Text>
-            <Text size={100} style={{ color: tokens.colorNeutralForeground3, fontWeight: 500 }}>
-              ⏱️ {modes.find(m => m.key === selectedMode)?.estimatedTime}
             </Text>
           </div>
         )}
