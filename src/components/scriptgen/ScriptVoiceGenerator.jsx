@@ -31,7 +31,7 @@ import { ErrorBoundary } from "../common";
 
 // 컴포넌트 imports
 import ModeSelector from "./parts/ModeSelector";
-import UnifiedActionCard from "./parts/UnifiedActionCard";
+import ActionCard from "./parts/ActionCard";
 import BasicSettingsCard from "./parts/BasicSettingsCard";
 import VoiceSettingsCard from "./parts/VoiceSettingsCard";
 import ResultsSidebar from "./parts/ResultsSidebar";
@@ -561,7 +561,7 @@ function ScriptVoiceGenerator() {
           position: "relative"
         }}>
 
-          {/* 1행: 생성 모드 + 대본 생성 시작 (2열) */}
+          {/* 1행: 생성 모드 + 실행 버튼 (2열) */}
           <div style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
@@ -580,8 +580,8 @@ function ScriptVoiceGenerator() {
               compact={true}
             />
 
-            {/* 대본 생성 시작 */}
-            <UnifiedActionCard
+            {/* 실행 버튼 */}
+            <ActionCard
               selectedMode={selectedMode}
               form={form}
               isLoading={isLoading}

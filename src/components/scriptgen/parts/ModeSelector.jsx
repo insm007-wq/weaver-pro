@@ -38,6 +38,7 @@ const modes = [
 ];
 
 function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact = false }) {
+
   // 유효성 검사
   const hasValidTopic = form.topic?.trim();
   const hasValidReference = form.referenceScript?.trim() && form.referenceScript.trim().length >= 50;
