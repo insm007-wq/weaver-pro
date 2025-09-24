@@ -18,6 +18,8 @@ import {
   VideoRegular,
   MicRegular,
   ImageRegular,
+  DismissRegular,
+  EyeRegular,
 } from "@fluentui/react-icons";
 
 /* =======================================================================
@@ -247,6 +249,7 @@ export default function FullVideoProgressPanel({
 
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [finalElapsedTime, setFinalElapsedTime] = useState(null);
+  const [isVisible, setIsVisible] = useState(true);
 
   // 로그 자동 스크롤용 ref
   const logWrapRef = useRef(null);
@@ -323,6 +326,60 @@ export default function FullVideoProgressPanel({
     steps.reduce((acc, k) => acc + (fullVideoState.progress?.[k] || 0), 0) / steps.length
   );
 
+  // 숨겨진 상태일 때 축소된 패널 표시
+  if (!isVisible) {
+    return (
+      <Card
+        style={{
+          background: tokens.colorNeutralBackground1,
+          border: `1px solid ${tokens.colorNeutralStroke2}`,
+          borderRadius: 8,
+          margin: "16px 0",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            padding: "12px 16px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            background: `linear-gradient(90deg, ${tokens.colorNeutralBackground1} 0%, ${tokens.colorNeutralBackground2} 100%)`,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <Badge appearance="outline" color={isError ? "red" : isComplete ? "green" : "brand"}>
+              {isError ? "오류" : isComplete ? "완료" : "진행중"}
+            </Badge>
+            <Text size={300} style={{ color: tokens.colorNeutralForeground2 }}>
+              {headingTitle} - {isComplete
+                ? `완료 (${elapsedText})`
+                : isError
+                ? `오류 발생 (${elapsedText})`
+                : `진행 중… (${elapsedText} 경과)`}
+            </Text>
+            {!isComplete && !isError && (
+              <div style={{ width: 80 }}>
+                <ProgressBar value={avgProgress} tone="brand" />
+              </div>
+            )}
+          </div>
+
+          <Button
+            appearance="subtle"
+            size="small"
+            icon={<EyeRegular />}
+            onClick={() => setIsVisible(true)}
+            style={{ borderRadius: 6 }}
+            aria-label="패널 보이기"
+          >
+            보이기
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <Card
       style={{
@@ -340,35 +397,55 @@ export default function FullVideoProgressPanel({
           padding: "16px 20px",
           borderBottom: `1px solid ${tokens.colorNeutralStroke3}`,
           background: `linear-gradient(180deg, ${tokens.colorNeutralBackground1} 0%, ${tokens.colorNeutralBackground2} 100%)`,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start"
         }}
       >
-        <Text weight="semibold" size={500} style={{ color: tokens.colorNeutralForeground1 }}>
-          {headingTitle}
-        </Text>
-        <div style={{ marginTop: 8, display: "flex", gap: 10, alignItems: "center" }}>
-          <Badge appearance="outline" color={isError ? "red" : isComplete ? "green" : "brand"}>
-            {isError ? "오류" : isComplete ? "완료" : "진행중"}
-          </Badge>
-          <Text size={300} style={{ color: tokens.colorNeutralForeground2 }}>
-            {isComplete
-              ? `완료 (${elapsedText})`
-              : isError
-              ? `오류 발생 (${elapsedText})`
-              : `진행 중… (${elapsedText} 경과)`}
+        <div style={{ flex: 1 }}>
+          <Text weight="semibold" size={500} style={{ color: tokens.colorNeutralForeground1 }}>
+            {headingTitle}
           </Text>
-          {etaText && !isComplete && !isError && (
-            <Text size={300} style={{ color: tokens.colorBrandForegroundLink, fontWeight: 600 }}>
-              ⏰ {etaText}
+          <div style={{ marginTop: 8, display: "flex", gap: 10, alignItems: "center" }}>
+            <Badge appearance="outline" color={isError ? "red" : isComplete ? "green" : "brand"}>
+              {isError ? "오류" : isComplete ? "완료" : "진행중"}
+            </Badge>
+            <Text size={300} style={{ color: tokens.colorNeutralForeground2 }}>
+              {isComplete
+                ? `완료 (${elapsedText})`
+                : isError
+                ? `오류 발생 (${elapsedText})`
+                : `진행 중… (${elapsedText} 경과)`}
             </Text>
-          )}
+            {etaText && !isComplete && !isError && (
+              <Text size={300} style={{ color: tokens.colorBrandForegroundLink, fontWeight: 600 }}>
+                ⏰ {etaText}
+              </Text>
+            )}
+          </div>
         </div>
+
+        {/* 숨기기 버튼 */}
+        <Button
+          appearance="subtle"
+          size="small"
+          icon={<DismissRegular />}
+          onClick={() => setIsVisible(false)}
+          style={{
+            borderRadius: 6,
+            marginTop: -4
+          }}
+          aria-label="패널 숨기기"
+        >
+          숨기기
+        </Button>
       </div>
 
       {/* 체브론 스텝 + 전체 진행률 */}
       <div style={{ padding: "14px 20px 8px" }}>
         <ChevronSteps steps={steps} currentStep={fullVideoState.currentStep} progress={fullVideoState.progress} />
         <div style={{ marginTop: 10 }}>
-          <ProgressBar value={avgProgress} tone={isError ? "danger" : "brand"} />
+          <ProgressBar value={avgProgress} tone={isError ? "danger" : isComplete ? "success" : "brand"} />
         </div>
       </div>
 
@@ -392,7 +469,7 @@ export default function FullVideoProgressPanel({
           const badge = m.error
             ? { text: "오류", color: "red" }
             : m.status === "done"
-            ? { text: "완료", color: "brand" }
+            ? { text: "완료", color: "green" }
             : { text: "진행중", color: "brand" };
 
           return (
