@@ -1,14 +1,6 @@
-/**
- * 기본 설정 카드 컴포넌트 (UI 다듬기 버전)
- * - 기능/로직 동일, 시각/크기/여백만 개선
- * - 드롭다운/인풋 사이즈: large -> medium (살짝 작게)
- * - 섹션 헤더/설명 캡션/행간/간격 톤 정리
- */
-
 import React from "react";
 import { Card, Text, Field, Input, Dropdown, Option, Spinner, Switch, Textarea, tokens } from "@fluentui/react-components";
 import { SettingsRegular } from "@fluentui/react-icons";
-import { useCardStyles, useSettingsStyles, useLayoutStyles } from "../../../styles/commonStyles";
 import { STYLE_OPTIONS, DURATION_OPTIONS } from "../../../constants/scriptSettings";
 
 /** 영상 길이별 최적 장면 수 자동 계산 (원본 유지) */
@@ -52,9 +44,6 @@ const getDynamicSceneOptions = (durationMin) => {
  * 기본 설정 카드 (UI만 개선)
  */
 function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
-  const cardStyles = useCardStyles();
-  const settingsStyles = useSettingsStyles();
-  const layoutStyles = useLayoutStyles();
 
   const sceneOptions = getDynamicSceneOptions(form.durationMin);
 
@@ -73,13 +62,11 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
     >
       {/* 헤더: 아이콘 + 타이틀 간격 정리, 타이포 살짝 강조 */}
       <div
-        className={settingsStyles.sectionHeader}
         style={{
-          marginBottom: tokens.spacingVerticalS, // 🔧 더 줄여서 컴팩트하게
+          marginBottom: tokens.spacingVerticalS,
         }}
       >
         <div
-          className={settingsStyles.sectionTitle}
           style={{
             display: "flex",
             alignItems: "center",
@@ -110,9 +97,10 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
 
       {/* 2열 그리드 유지 + 행간/열간 미세 조정 */}
       <div
-        className={layoutStyles.gridTwo}
         style={{
-          gap: "12px", // 🔧 더 컴팩트하게 간격 줄임
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "12px",
           alignItems: "start",
         }}
       >

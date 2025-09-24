@@ -1,31 +1,6 @@
-/**
- * 대본 & 음성 생성 메인 컴포넌트
- *
- * @description
- * AI를 활용한 대본 생성과 TTS 음성 생성을 통합한 메인 컴포넌트
- * 자동화 모드(대본→음성→이미지→영상)와 대본 생성 모드(대본→음성→자막)를 모두 지원합니다.
- *
- * @features
- * - 🤖 AI 대본 생성 (Anthropic Claude, OpenAI GPT 지원)
- * - 🎤 TTS 엔진 지원 (Google TTS)
- * - 📝 SRT 자막 자동 생성
- * - 🎬 완전 자동화 영상 생성 (4단계)
- * - 📊 실시간 진행률 표시
- * - 🎨 타이핑 시뮬레이션 UI
- *
- * @requires
- * - API: llm/generateScript, tts:synthesize, script/toSrt, audio/mergeFiles, files:writeText
- * - Hooks: useToast, useApi, useScriptGeneration, useVoiceSettings, usePromptSettings
- * - Utils: audioSubtitleGenerator, scriptGenerator, automationSteps
- *
- * @author Weaver Pro Team
- * @version 2.0.0 (Optimized)
- * @since 2024-01-01
- */
-
 import React, { useEffect, useState, useCallback } from "react";
 import { Text, tokens, Button, Card } from "@fluentui/react-components";
-import { useHeaderStyles, useCardStyles, useContainerStyles } from "../../styles/commonStyles";
+import { useHeaderStyles, useContainerStyles } from "../../styles/commonStyles";
 import { DocumentEditRegular, VideoRegular, EyeRegular } from "@fluentui/react-icons";
 import { ErrorBoundary } from "../common";
 
@@ -53,7 +28,6 @@ import { generateAudioStep, generateImagesStep, generateVideoStep } from "../../
 function ScriptVoiceGenerator() {
   // 스타일 훅들
   const headerStyles = useHeaderStyles();
-  const cardStyles = useCardStyles();
   const containerStyles = useContainerStyles();
 
   // 상태 관리
@@ -98,40 +72,6 @@ function ScriptVoiceGenerator() {
     setForm((p) => ({ ...p, [k]: v }));
   }, []);
 
-  // 실시간 타이핑 시뮬레이션 함수
-  const startTypingSimulation = useCallback((text) => {
-    setTypingState({
-      currentText: "",
-      isTyping: true,
-      fullText: text,
-    });
-
-    let currentIndex = 0;
-    const typingInterval = setInterval(() => {
-      if (currentIndex >= text.length) {
-        clearInterval(typingInterval);
-        setTypingState((prev) => ({ ...prev, isTyping: false }));
-        return;
-      }
-
-      setTypingState((prev) => ({
-        ...prev,
-        currentText: text.substring(0, currentIndex + 1),
-      }));
-
-      currentIndex++;
-    }, 30);
-
-    return () => clearInterval(typingInterval);
-  }, []);
-
-  const stopTypingSimulation = useCallback(() => {
-    setTypingState({
-      currentText: "",
-      isTyping: false,
-      fullText: "",
-    });
-  }, []);
 
 
   /**
@@ -209,7 +149,7 @@ function ScriptVoiceGenerator() {
         setIsLoading(false);
       }
     },
-    [api, getSelectedPromptContent, setDoc, setError, setIsLoading]
+[runGenerate, form, voices, api, setError, setIsLoading, addLog]
   );
 
   // 상태 업데이트 헬퍼 함수들

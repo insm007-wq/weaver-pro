@@ -2,40 +2,9 @@ import React from "react";
 import {
   Card,
   Text,
-  Button,
   tokens,
 } from "@fluentui/react-components";
-import {
-  VideoRegular,
-  DocumentEditRegular,
-  SparkleRegular,
-  PlayRegular
-} from "@fluentui/react-icons";
-
-const modes = [
-  {
-    key: "automation_mode",
-    title: "🎬 완전 자동화",
-    subtitle: "대본부터 영상까지 한번에",
-    description: "AI가 대본 생성 → 음성 합성 → 이미지 생성 → 영상 합성까지 자동으로 처리합니다",
-    steps: ["대본 생성", "음성 합성", "이미지 생성", "영상 합성"],
-    icon: VideoRegular,
-    color: "brand",
-    gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-    estimatedTime: "8-12분"
-  },
-  {
-    key: "script_mode",
-    title: "📝 대본 생성",
-    subtitle: "대본과 음성만 빠르게",
-    description: "AI 대본 생성 → 음성 합성 → 자막 생성으로 빠르게 콘텐츠를 준비합니다",
-    steps: ["대본 생성", "음성 합성", "자막 생성"],
-    icon: DocumentEditRegular,
-    color: "success",
-    gradient: "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)",
-    estimatedTime: "3-5분"
-  }
-];
+import { MODE_CONFIGS } from "../constants/modeConstants";
 
 function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact = false }) {
 
@@ -81,7 +50,7 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
           padding: 4,
           gap: 4,
         }}>
-          {modes.map((mode) => {
+          {Object.values(MODE_CONFIGS).map((mode) => {
             const isSelected = selectedMode === mode.key;
             const status = getValidationStatus(mode.key);
             const Icon = mode.icon;
@@ -147,7 +116,7 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
             justifyContent: "center",
           }}>
             <Text size={200} style={{ color: tokens.colorNeutralForeground2 }}>
-              {modes.find(m => m.key === selectedMode)?.description}
+              {MODE_CONFIGS[selectedMode]?.description}
             </Text>
           </div>
         )}
@@ -182,7 +151,7 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
         gridTemplateColumns: "1fr 1fr",
         gap: tokens.spacingHorizontalL,
       }}>
-        {modes.map((mode) => {
+        {Object.values(MODE_CONFIGS).map((mode) => {
           const isSelected = selectedMode === mode.key;
           const status = getValidationStatus(mode.key);
           const Icon = mode.icon;
@@ -334,7 +303,7 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
           textAlign: "center"
         }}>
           <Text size={300} style={{ color: tokens.colorNeutralForeground2 }}>
-            선택됨: <strong>{modes.find(m => m.key === selectedMode)?.title}</strong>
+            선택됨: <strong>{MODE_CONFIGS[selectedMode]?.title}</strong>
           </Text>
         </div>
       )}
