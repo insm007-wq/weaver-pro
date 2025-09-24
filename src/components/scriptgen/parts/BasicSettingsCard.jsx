@@ -49,18 +49,16 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
 
   return (
     <Card
-      className={cardStyles.settingsCard}
       style={{
-        // 🔧 카드 안쪽 여백/간격 미세 조정: 더 컴팩트하게
         padding: "12px 16px",
         borderRadius: "16px",
-        borderColor: tokens.colorNeutralStroke2,
+        border: `1px solid ${tokens.colorNeutralStroke2}`,
         height: "fit-content",
         display: "flex",
         flexDirection: "column"
       }}
     >
-      {/* 헤더: 아이콘 + 타이틀 간격 정리, 타이포 살짝 강조 */}
+      
       <div
         style={{
           marginBottom: tokens.spacingVerticalS,
@@ -75,7 +73,7 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
         >
           <SettingsRegular />
           <Text
-            size={400} // 생성 모드와 동일한 크기
+            size={400}
             weight="semibold"
             style={{ letterSpacing: 0.2 }}
           >
@@ -174,8 +172,7 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
         </Field>
 
         {/* 최대 장면 수 (자동 계산) */}
-        <Field
-          label={
+        <Field label={
             <Text size={300} weight="semibold">
               최대 장면 수
             </Text>

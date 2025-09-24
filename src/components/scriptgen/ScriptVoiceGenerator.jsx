@@ -72,7 +72,21 @@ function ScriptVoiceGenerator() {
     setForm((p) => ({ ...p, [k]: v }));
   }, []);
 
+  // 상태 업데이트 헬퍼 함수들
+  const updateFullVideoState = (updates) => {
+    setFullVideoState((prev) => ({
+      ...prev,
+      ...updates,
+      logs: updates.logs ? [...prev.logs, ...updates.logs] : prev.logs,
+    }));
+  };
 
+  const addLog = (message, type = "info") => {
+    const timestamp = new Date().toLocaleTimeString();
+    updateFullVideoState({
+      logs: [{ timestamp, message, type }],
+    });
+  };
 
   /**
    * 대본 생성 모드 실행 함수
@@ -149,24 +163,8 @@ function ScriptVoiceGenerator() {
         setIsLoading(false);
       }
     },
-[runGenerate, form, voices, api, setError, setIsLoading, addLog]
+    [runGenerate, form, voices, api, setError, setIsLoading, addLog]
   );
-
-  // 상태 업데이트 헬퍼 함수들
-  const updateFullVideoState = (updates) => {
-    setFullVideoState((prev) => ({
-      ...prev,
-      ...updates,
-      logs: updates.logs ? [...prev.logs, ...updates.logs] : prev.logs,
-    }));
-  };
-
-  const addLog = (message, type = "info") => {
-    const timestamp = new Date().toLocaleTimeString();
-    updateFullVideoState({
-      logs: [{ timestamp, message, type }],
-    });
-  };
 
   const resetFullVideoState = (clearLogs = false) => {
     setFullVideoState(prev => ({
