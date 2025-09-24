@@ -177,7 +177,7 @@ function StreamingScriptViewer({ fullVideoState = {}, doc, isLoading, form = {},
           </div>
 
           <Button
-            appearance="subtle"
+            appearance="secondary"
             size="small"
             icon={<EyeRegular />}
             onClick={() => setIsVisible(true)}

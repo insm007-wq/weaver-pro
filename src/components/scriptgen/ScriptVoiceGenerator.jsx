@@ -30,13 +30,11 @@ import { DocumentEditRegular, VideoRegular } from "@fluentui/react-icons";
 import { ErrorBoundary } from "../common";
 
 // 컴포넌트 imports
-import ScriptGenerationCard from "./parts/ScriptGenerationCard";
+import ModeSelector from "./parts/ModeSelector";
+import UnifiedActionCard from "./parts/UnifiedActionCard";
 import BasicSettingsCard from "./parts/BasicSettingsCard";
 import VoiceSettingsCard from "./parts/VoiceSettingsCard";
-import GenerationPreviewCard from "./parts/GenerationPreviewCard";
-import AdvancedSettingsCard from "./parts/AdvancedSettingsCard";
-import FullVideoProgressPanel from "./parts/FullVideoProgressPanel";
-import StreamingScriptViewer from "./parts/StreamingScriptViewer";
+import ResultsSidebar from "./parts/ResultsSidebar";
 
 // 훅 imports
 import { useScriptGeneration } from "../../hooks/useScriptGeneration";
@@ -45,7 +43,7 @@ import { usePromptSettings } from "../../hooks/usePromptSettings";
 import { useApi } from "../../hooks/useApi";
 
 // 상수 및 유틸리티 imports
-import { ADVANCED_PRESETS, makeDefaultForm } from "../../constants/scriptSettings";
+import { makeDefaultForm } from "../../constants/scriptSettings";
 import { generateAudioAndSubtitles } from "../../utils/audioSubtitleGenerator";
 import { generateAudioStep, generateImagesStep, generateVideoStep } from "../../utils/automationSteps";
 
@@ -60,9 +58,9 @@ function ScriptVoiceGenerator() {
 
   // 상태 관리
   const [form, setForm] = useState(makeDefaultForm());
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [selectedPreset, setSelectedPreset] = useState("");
   const [globalSettings, setGlobalSettings] = useState({});
+  const [selectedMode, setSelectedMode] = useState("automation_mode"); // 기본값: 완전 자동화 모드
+  const [showResultsSidebar, setShowResultsSidebar] = useState(true);
 
   // 전체 영상 생성 상태 (모드별 분기 지원)
   const [fullVideoState, setFullVideoState] = useState({
@@ -93,6 +91,19 @@ function ScriptVoiceGenerator() {
   const { promptNames, promptLoading } = usePromptSettings();
   const { doc, setDoc, isLoading, error, setIsLoading, setError, getSelectedPromptContent, runGenerate } = useScriptGeneration();
   const { voices, voiceLoading, voiceError, previewVoice, retryVoiceLoad } = useVoiceSettings(form);
+
+  // 사이드바 자동 표시 로직
+  useEffect(() => {
+    // 생성이 시작되거나 결과가 있으면 사이드바를 자동으로 표시
+    const shouldShowSidebar = fullVideoState?.isGenerating ||
+                              fullVideoState?.currentStep !== "idle" ||
+                              doc ||
+                              isLoading;
+
+    if (shouldShowSidebar && !showResultsSidebar) {
+      setShowResultsSidebar(true);
+    }
+  }, [fullVideoState?.isGenerating, fullVideoState?.currentStep, doc, isLoading, showResultsSidebar]);
 
   // 폼 변경 핸들러
   const onChange = useCallback((k, v) => {
@@ -134,15 +145,6 @@ function ScriptVoiceGenerator() {
     });
   }, []);
 
-  // 프리셋 적용 함수
-  const applyPreset = (presetName) => {
-    const preset = ADVANCED_PRESETS.find((p) => p.name === presetName);
-    if (preset) {
-      setForm((prev) => ({ ...prev, ...preset.settings }));
-      setSelectedPreset(presetName);
-      console.log(`${presetName} 프리셋을 적용했습니다.`);
-    }
-  };
 
   /**
    * 대본 생성 모드 실행 함수
@@ -551,215 +553,109 @@ function ScriptVoiceGenerator() {
       <div className={containerStyles.container}>
         {/* 헤더 */}
         <div className={headerStyles.pageHeader}>
-          <div className={headerStyles.pageTitleWithIcon}>
-            <DocumentEditRegular />
-            대본 & 음성 생성
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div className={headerStyles.pageTitleWithIcon}>
+                <DocumentEditRegular />
+                대본 & 음성 생성
+              </div>
+              <div className={headerStyles.pageDescription}>SRT 자막 + MP3 내레이션을 한 번에 생성합니다</div>
+            </div>
+            <Button
+              appearance="subtle"
+              size="small"
+              onClick={() => setShowResultsSidebar(!showResultsSidebar)}
+              style={{
+                borderRadius: 6,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginTop: 4
+              }}
+            >
+              📊 결과 패널 {showResultsSidebar ? "숨기기" : "보이기"}
+            </Button>
           </div>
-          <div className={headerStyles.pageDescription}>SRT 자막 + MP3 내레이션을 한 번에 생성합니다</div>
           <div className={headerStyles.divider} />
         </div>
 
-        {/* 진행률 패널 */}
-        <FullVideoProgressPanel fullVideoState={fullVideoState} resetFullVideoState={resetFullVideoState} api={api} />
+        {/* 2열 구조 + 하단 결과 레이아웃 */}
+        <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL }}>
 
-        {/* 스트리밍 뷰어 */}
-        <StreamingScriptViewer
-          fullVideoState={fullVideoState}
-          doc={doc}
-          isLoading={isLoading}
-          form={form}
-          globalSettings={globalSettings}
-          onClose={() => {
-            setDoc(null);
-            resetFullVideoState();
-          }}
-        />
-
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: tokens.spacingHorizontalXL }}>
-          {/* 좌측: 메인 설정 영역 */}
-          <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL }}>
-            {/* 완전 자동화 섹션 */}
-            <Card
-              className={cardStyles.settingsCard}
-              style={{
-                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                color: "#fff",
-                position: "relative",
-                overflow: "hidden",
-                minHeight: 200,
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "center",
-              }}
-            >
-              {/* 배경 장식 원들 */}
-              <div
-                style={{
-                  position: "absolute",
-                  top: -50,
-                  right: -50,
-                  width: 150,
-                  height: 150,
-                  background: "rgba(255,255,255,0.1)",
-                  borderRadius: "50%",
-                }}
-              />
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: -30,
-                  left: -30,
-                  width: 100,
-                  height: 100,
-                  background: "rgba(255,255,255,0.1)",
-                  borderRadius: "50%",
-                }}
+          {/* 상단: 2열 메인 콘텐츠 영역 */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: tokens.spacingHorizontalL,
+            alignItems: "start"
+          }}>
+            {/* 좌측: 설정 영역 */}
+            <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL }}>
+              {/* 컴팩트 모드 선택기 */}
+              <ModeSelector
+                selectedMode={selectedMode}
+                onModeChange={setSelectedMode}
+                form={form}
+                isGenerating={fullVideoState.isGenerating}
+                compact={true}
               />
 
-              <div style={{ position: "relative", zIndex: 1 }}>
-                <Text weight="bold" size={600} style={{ color: "#fff", marginBottom: 8, display: "block" }}>
-                  🎬 완전 자동화 영상 생성
-                </Text>
-                <Text size={300} style={{ color: "rgba(255,255,255,0.9)", lineHeight: 1.4 }}>
-                  원클릭으로 대본 → 음성 → 이미지 → 영상까지 자동 생성
-                  <br />
-                </Text>
-              </div>
+              {/* 기본 설정 카드 */}
+              <BasicSettingsCard
+                form={form}
+                onChange={onChange}
+                promptNames={promptNames}
+                promptLoading={promptLoading}
+              />
 
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  marginTop: tokens.spacingVerticalXL,
-                  position: "relative",
-                  zIndex: 1,
-                }}
-              >
-                <Button
-                  appearance="secondary"
-                  size="large"
-                  icon={<VideoRegular />}
-                  onClick={() => {
-                    console.log("🎬 완전 자동화 버튼 클릭됨! (automation_mode)");
-                    runFullVideoGeneration();
-                  }}
-                  disabled={(() => {
-                    const hasValidTopic = form.topic?.trim();
-                    const hasValidReference = form.referenceScript?.trim() && form.referenceScript.trim().length >= 50;
-                    const isReferenceOnlyMode = hasValidReference && !hasValidTopic;
+              {/* 음성 설정 카드 */}
+              <VoiceSettingsCard
+                form={form}
+                voices={voices}
+                voiceLoading={voiceLoading}
+                voiceError={voiceError}
+                onChange={onChange}
+                onPreviewVoice={previewVoice}
+                onRetryVoiceLoad={retryVoiceLoad}
+              />
+            </div>
 
-                    return fullVideoState.isGenerating ||
-                           (!hasValidTopic && !hasValidReference) ||
-                           (!isReferenceOnlyMode && !form.promptName);
-                  })()}
-                  style={{
-                    backgroundColor: "#fff",
-                    color: "#667eea",
-                    border: "none",
-                    padding: "16px 24px",
-                    fontWeight: "bold",
-                    fontSize: "16px",
-                  }}
-                >
-                  {fullVideoState.isGenerating ? "생성 중..." : "🚀 완전 자동화 시작"}
-                </Button>
-              </div>
-
-              {/* 설정 정보 표시 */}
-              <div
-                style={{
-                  marginTop: 16,
-                  background: "rgba(255,255,255,0.1)",
-                  padding: 12,
-                  borderRadius: 8,
-                  position: "relative",
-                  zIndex: 1,
-                }}
-              >
-                {form.topic?.trim() ? (
-                  <Text size={200} style={{ display: "block", color: "rgba(255,255,255,0.95)", marginBottom: 4 }}>
-                    📋 주제: {form.topic}
-                  </Text>
-                ) : (
-                  <Text size={200} style={{ display: "block", color: "rgba(255,255,255,0.9)", marginBottom: 4 }}>
-                    ⚠️ 영상 주제를 입력해주세요.
-                  </Text>
-                )}
-
-                {form.promptName ? (
-                  <Text size={200} style={{ display: "block", color: "rgba(255,255,255,0.8)" }}>
-                    🤖 프롬프트: {form.promptName}
-                  </Text>
-                ) : (
-                  <Text size={200} style={{ display: "block", color: "rgba(255,255,255,0.9)" }}>
-                    ⚠️ 대본 생성 프롬프트를 선택해주세요.
-                  </Text>
-                )}
-
-                {/* ✅ 레퍼런스 대본 상태 표시 */}
-                {form.referenceScript && form.referenceScript.trim() ? (
-                  <Text size={200} style={{ display: "block", color: "rgba(255,255,255,0.8)", marginTop: 4 }}>
-                    📜 레퍼런스: 적용됨 ({form.referenceScript.trim().length.toLocaleString()}자)
-                  </Text>
-                ) : (
-                  <Text size={200} style={{ display: "block", color: "rgba(255,255,255,0.6)", marginTop: 4 }}>
-                    📜 레퍼런스: 사용 안함
-                  </Text>
-                )}
-              </div>
-            </Card>
-
-            {/* 기본 설정 카드 */}
-            <BasicSettingsCard form={form} onChange={onChange} promptNames={promptNames} promptLoading={promptLoading} />
-
-            {/* TTS 및 보이스 설정 카드 */}
-            <VoiceSettingsCard
-              form={form}
-              voices={voices}
-              voiceLoading={voiceLoading}
-              voiceError={voiceError}
-              onChange={onChange}
-              onPreviewVoice={previewVoice}
-              onRetryVoiceLoad={retryVoiceLoad}
-            />
-
-            {/* 고급 설정 & 자동화 카드 */}
-            <AdvancedSettingsCard
-              showAdvanced={showAdvanced}
-              onToggleAdvanced={setShowAdvanced}
-              selectedPreset={selectedPreset}
-              onApplyPreset={applyPreset}
-              presets={ADVANCED_PRESETS}
-            />
+            {/* 우측: 실행 영역 */}
+            <div style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: tokens.spacingVerticalL,
+              position: "sticky",
+              top: 20
+            }}>
+              <UnifiedActionCard
+                selectedMode={selectedMode}
+                form={form}
+                isLoading={isLoading}
+                fullVideoState={fullVideoState}
+                onAutomationGenerate={runFullVideoGeneration}
+                onScriptGenerate={() => runScriptMode(form)}
+                centered={true}
+              />
+            </div>
           </div>
 
-          {/* 우측: 상태 및 결과 패널 */}
-          <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL }}>
-            {/* 예상 결과 카드 */}
-            <GenerationPreviewCard
-              form={form}
-              doc={doc}
-              isGenerating={fullVideoState.isGenerating}
-              hasJustCompleted={fullVideoState.currentStep === "completed"}
-            />
-
-            {/* 대본만 생성 카드 */}
-            <ScriptGenerationCard
-              form={form}
-              isLoading={isLoading}
-              fullVideoState={fullVideoState}
-              onGenerate={() => {
-                console.log("📝 대본 생성 버튼 클릭됨! (script_mode)");
-                console.log("🎯 전달되는 form 데이터:", {
-                  topic: form.topic,
-                  durationMin: form.durationMin,
-                  maxScenes: form.maxScenes,
-                  promptName: form.promptName
-                });
-                runScriptMode(form);
-              }}
-            />
-          </div>
+          {/* 하단: 결과 영역 */}
+          {showResultsSidebar && (
+            <div style={{ width: "100%" }}>
+              <ResultsSidebar
+                fullVideoState={fullVideoState}
+                doc={doc}
+                isLoading={isLoading}
+                form={form}
+                globalSettings={globalSettings}
+                resetFullVideoState={resetFullVideoState}
+                api={api}
+                onClose={() => setShowResultsSidebar(false)}
+                horizontal={true}
+              />
+            </div>
+          )}
         </div>
       </div>
     </ErrorBoundary>
