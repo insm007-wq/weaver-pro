@@ -113,15 +113,24 @@ function ScriptVoiceGenerator() {
       setError("");
       setIsLoading(true);
 
-      // 대본 생성 모드 상태 설정
-      setFullVideoState((prev) => ({
-        ...prev,
+      // 대본 생성 모드 상태 초기화 및 설정
+      setDoc(null); // 이전 대본 초기화
+      setFullVideoState({
         isGenerating: true,
         mode: "script_mode",
         currentStep: "script",
         progress: { script: 0, audio: 0, images: 0, video: 0, subtitle: 0 },
+        results: {
+          script: null,
+          audio: null,
+          images: [],
+          video: null,
+        },
+        streamingScript: "",
+        error: null,
         startTime: new Date(),
-      }));
+        logs: [],
+      });
       console.log("✅ fullVideoState mode가 script_mode로 설정됨");
 
       try {
@@ -228,14 +237,26 @@ function ScriptVoiceGenerator() {
     const abortController = new AbortController();
     setCurrentOperation(abortController);
 
-    // 로그는 보존하고 상태만 리셋
-    resetFullVideoState(false);
-    updateFullVideoState({
+    // 완전 자동화 모드 상태 초기화 및 설정
+    setDoc(null); // 이전 대본 초기화
+    setError("");
+    setIsLoading(true);
+
+    setFullVideoState({
       isGenerating: true,
       mode: "automation_mode",
       currentStep: "script",
-      startTime: new Date(),
       progress: { script: 0, audio: 0, images: 0, video: 0, subtitle: 0 },
+      results: {
+        script: null,
+        audio: null,
+        images: [],
+        video: null,
+      },
+      streamingScript: "",
+      error: null,
+      startTime: new Date(),
+      logs: [],
     });
     console.log("✅ fullVideoState mode가 automation_mode로 설정됨");
     addLog("🎬 완전 자동화 영상 생성을 시작합니다...");

@@ -289,102 +289,105 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
 
         {/* 레퍼런스 대본 (선택) - 전체 너비 */}
         <div style={{ gridColumn: "1 / -1", marginTop: tokens.spacingVerticalM }}>
-          <Field
-            label={
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 8,
+            }}
+          >
+            <Switch
+              checked={form.showReferenceScript || false}
+              onChange={(_, data) => onChange("showReferenceScript", data.checked)}
+            />
+            <Text
+              size={300}
+              weight="semibold"
+              style={{
+                cursor: "default",
+                userSelect: "none",
+                pointerEvents: "none"
+              }}
+            >
+              레퍼런스 대본 (선택사항)
+            </Text>
+          </div>
+
+          {form.showReferenceScript && (
+            <Field>
+              <Text
+                size={200}
+                style={{
+                  color: tokens.colorNeutralForeground3,
+                  marginBottom: tokens.spacingVerticalXS,
+                  display: "block",
+                }}
+              >
+                {form.topic && form.topic.trim()
+                  ? "🎭 레퍼런스의 톤앤매너를 분석해 새로운 주제에 적용한 대본을 생성합니다."
+                  : "📈 레퍼런스를 분석해 구조/스타일을 개선한 버전을 생성합니다."}
+              </Text>
+
+              <Textarea
+                value={form.referenceScript || ""}
+                onChange={(e) => handleSafeChange("referenceScript", e.target.value)}
+                placeholder="예시: '안녕하세요! 오늘은 맛있는 요리를 만들어볼게요. 먼저 재료를 준비해주세요...'"
+                rows={6}
+                resize="none"
+                style={{
+                  minHeight: 120,
+                  borderColor: validationErrors.referenceScript?.length > 0
+                    ? tokens.colorPaletteRedBorder2
+                    : tokens.colorNeutralStroke2,
+                  borderRadius: 12,
+                }}
+                aria-invalid={validationErrors.referenceScript?.length > 0}
+              />
+              {validationErrors.referenceScript?.length > 0 && (
+                <Text size={200} style={{ color: tokens.colorPaletteRedForeground2, marginTop: 4 }}>
+                  {validationErrors.referenceScript[0]}
+                </Text>
+              )}
+
+              {/* 글자 수/상태 바: 상단 경계선 약화 */}
               <div
                 style={{
                   display: "flex",
+                  justifyContent: "space-between",
                   alignItems: "center",
-                  gap: 8,
+                  marginTop: tokens.spacingVerticalXS,
+                  paddingTop: 8,
+                  borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
                 }}
               >
-                <Switch
-                  checked={form.showReferenceScript || false}
-                  onChange={(_, data) => onChange("showReferenceScript", data.checked)}
-                  label={
-                    <Text size={300} weight="semibold">
-                      레퍼런스 대본 (선택사항)
-                    </Text>
-                  }
-                />
-              </div>
-            }
-          >
-            {form.showReferenceScript && (
-              <>
-                <Text
-                  size={200}
-                  style={{
-                    color: tokens.colorNeutralForeground3,
-                    marginBottom: tokens.spacingVerticalXS,
-                    display: "block",
-                  }}
-                >
-                  {form.topic && form.topic.trim()
-                    ? "🎭 레퍼런스의 톤앤매너를 분석해 새로운 주제에 적용한 대본을 생성합니다."
-                    : "📈 레퍼런스를 분석해 구조/스타일을 개선한 버전을 생성합니다."}
+                <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                  {form.referenceScript && form.referenceScript.trim()
+                    ? `📊 ${form.referenceScript.trim().length.toLocaleString()}자 입력됨`
+                    : form.topic && form.topic.trim()
+                    ? "📝 레퍼런스 대본을 입력하면 해당 스타일로 새로운 주제의 대본을 생성합니다"
+                    : "📝 레퍼런스만 입력하면 개선본 생성, 주제도 함께 입력하면 새로운 주제로 스타일 적용"}
                 </Text>
 
-                <Textarea
-                  value={form.referenceScript || ""}
-                  onChange={(e) => handleSafeChange("referenceScript", e.target.value)}
-                  placeholder="예시: '안녕하세요! 오늘은 맛있는 요리를 만들어볼게요. 먼저 재료를 준비해주세요...'"
-                  rows={6}
-                  resize="vertical"
-                  style={{
-                    minHeight: 120,
-                    borderColor: validationErrors.referenceScript?.length > 0
-                      ? tokens.colorPaletteRedBorder2
-                      : tokens.colorNeutralStroke2,
-                    borderRadius: 12,
-                  }}
-                  aria-invalid={validationErrors.referenceScript?.length > 0}
-                />
-                {validationErrors.referenceScript?.length > 0 && (
-                  <Text size={200} style={{ color: tokens.colorPaletteRedForeground2, marginTop: 4 }}>
-                    {validationErrors.referenceScript[0]}
+                {form.referenceScript && form.referenceScript.trim() && (
+                  <Text
+                    size={200}
+                    style={{
+                      color:
+                        form.referenceScript.trim().length > 500 ? tokens.colorPaletteGreenForeground2 : tokens.colorNeutralForeground3,
+                      fontWeight: form.referenceScript.trim().length > 500 ? 600 : 400,
+                    }}
+                  >
+                    {form.referenceScript.trim().length > 500
+                      ? form.topic && form.topic.trim()
+                        ? "✅ 스타일 가이드 준비완료"
+                        : "✅ 개선 준비완료"
+                      : "권장: 500자 이상"}
                   </Text>
                 )}
-
-                {/* 글자 수/상태 바: 상단 경계선 약화 */}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginTop: tokens.spacingVerticalXS,
-                    paddingTop: 8,
-                    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
-                  }}
-                >
-                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                    {form.referenceScript && form.referenceScript.trim()
-                      ? `📊 ${form.referenceScript.trim().length.toLocaleString()}자 입력됨`
-                      : form.topic && form.topic.trim()
-                      ? "📝 레퍼런스 대본을 입력하면 해당 스타일로 새로운 주제의 대본을 생성합니다"
-                      : "📝 레퍼런스만 입력하면 개선본 생성, 주제도 함께 입력하면 새로운 주제로 스타일 적용"}
-                  </Text>
-
-                  {form.referenceScript && form.referenceScript.trim() && (
-                    <Text
-                      size={200}
-                      style={{
-                        color:
-                          form.referenceScript.trim().length > 500 ? tokens.colorPaletteGreenForeground2 : tokens.colorNeutralForeground3,
-                        fontWeight: form.referenceScript.trim().length > 500 ? 600 : 400,
-                      }}
-                    >
-                      {form.referenceScript.trim().length > 500
-                        ? form.topic && form.topic.trim()
-                          ? "✅ 스타일 가이드 준비완료"
-                          : "✅ 개선 준비완료"
-                        : "권장: 500자 이상"}
-                    </Text>
-                  )}
-                </div>
-              </>
-            )}
-          </Field>
+              </div>
+            </Field>
+          )}
         </div>
       </div>
     </Card>

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Card,
   Text,
@@ -83,20 +83,9 @@ function ResultsSidebar({
             padding: "20px",
           }}
         >
-          {/* 진행률 섹션 */}
+          {/* 진행률 섹션 - 헤더와 디바이더 제거 */}
           {hasProgress && (
             <div>
-              <div
-                style={{
-                  padding: "12px 0",
-                  marginBottom: tokens.spacingVerticalM,
-                  borderBottom: `1px solid ${tokens.colorNeutralStroke3}`,
-                }}
-              >
-                <Text size={300} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
-                  🔄 진행 상황
-                </Text>
-              </div>
               <MiniProgressPanel
                 fullVideoState={fullVideoState}
                 resetFullVideoState={resetFullVideoState}
@@ -105,20 +94,9 @@ function ResultsSidebar({
             </div>
           )}
 
-          {/* 대본 결과 섹션 */}
+          {/* 대본 결과 섹션 - 헤더와 디바이더 제거 */}
           {hasScript && (
             <div>
-              <div
-                style={{
-                  padding: "12px 0",
-                  marginBottom: tokens.spacingVerticalM,
-                  borderBottom: `1px solid ${tokens.colorNeutralStroke3}`,
-                }}
-              >
-                <Text size={300} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
-                  📝 대본 결과
-                </Text>
-              </div>
               <CompactScriptViewer
                 fullVideoState={fullVideoState}
                 doc={doc}
@@ -184,84 +162,216 @@ function ResultsSidebar({
           padding: "0",
         }}
       >
-        {/* 진행률 섹션 */}
+        {/* 진행률 섹션 - 헤더와 접기/펼치기 제거 */}
         {hasProgress && (
-          <div style={{ borderBottom: hasScript ? `1px solid ${tokens.colorNeutralStroke3}` : "none" }}>
-            <div
-              style={{
-                padding: "12px 20px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                cursor: "pointer",
-                background: "transparent",
-              }}
-              onClick={() => setIsProgressExpanded(!isProgressExpanded)}
-            >
-              <Text size={300} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
-                🔄 진행 상황
-              </Text>
-              <Button
-                appearance="subtle"
-                size="small"
-                icon={isProgressExpanded ? <ChevronUpRegular /> : <ChevronDownRegular />}
-                aria-label={isProgressExpanded ? "접기" : "펼치기"}
-              />
-            </div>
-
-            {isProgressExpanded && (
-              <div style={{ padding: "0 20px 16px" }}>
-                <MiniProgressPanel
-                  fullVideoState={fullVideoState}
-                  resetFullVideoState={resetFullVideoState}
-                  api={api}
-                />
-              </div>
-            )}
+          <div style={{ padding: "0 20px 16px" }}>
+            <MiniProgressPanel
+              fullVideoState={fullVideoState}
+              resetFullVideoState={resetFullVideoState}
+              api={api}
+            />
           </div>
         )}
 
-        {/* 대본 결과 섹션 */}
+        {/* 대본 결과 섹션 - 헤더와 접기/펼치기 제거 */}
         {hasScript && (
-          <div>
-            <div
-              style={{
-                padding: "12px 20px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                cursor: "pointer",
-                background: "transparent",
-              }}
-              onClick={() => setIsScriptExpanded(!isScriptExpanded)}
-            >
-              <Text size={300} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
-                📝 대본 결과
-              </Text>
-              <Button
-                appearance="subtle"
-                size="small"
-                icon={isScriptExpanded ? <ChevronUpRegular /> : <ChevronDownRegular />}
-                aria-label={isScriptExpanded ? "접기" : "펼치기"}
-              />
-            </div>
-
-            {isScriptExpanded && (
-              <div style={{ padding: "0 20px 16px", height: "100%" }}>
-                <CompactScriptViewer
-                  fullVideoState={fullVideoState}
-                  doc={doc}
-                  isLoading={isLoading}
-                  form={form}
-                  globalSettings={globalSettings}
-                />
-              </div>
-            )}
+          <div style={{ padding: "0 20px 16px", height: "100%" }}>
+            <CompactScriptViewer
+              fullVideoState={fullVideoState}
+              doc={doc}
+              isLoading={isLoading}
+              form={form}
+              globalSettings={globalSettings}
+            />
           </div>
         )}
       </div>
     </Card>
   );
+}
+
+// 카운트다운 타이머 컴포넌트 (개선된 로직)
+function CountdownTimer({ targetTimeMs, size, color }) {
+  const [timeLeft, setTimeLeft] = useState(targetTimeMs);
+
+  useEffect(() => {
+    if (targetTimeMs <= 0) {
+      setTimeLeft(0);
+      return;
+    }
+
+    // 새로운 targetTime이 현재 timeLeft와 크게 다르면 즉시 업데이트
+    const diff = Math.abs(targetTimeMs - timeLeft);
+    if (diff > 5000) { // 5초 이상 차이나면 즉시 업데이트
+      setTimeLeft(targetTimeMs);
+    }
+
+    const interval = setInterval(() => {
+      setTimeLeft(prev => {
+        const newTime = prev - 1000;
+        return newTime <= 0 ? 0 : newTime;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [targetTimeMs]);
+
+  const formatTime = (ms) => {
+    if (ms <= 0) return "완료";
+
+    const minutes = Math.floor(ms / 60000);
+    const seconds = Math.floor((ms % 60000) / 1000);
+
+    if (minutes > 0) {
+      return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    } else {
+      return `${seconds}초`;
+    }
+  };
+
+  return (
+    <Text size={size} style={{ color, fontFamily: 'monospace', fontWeight: 600 }}>
+      {formatTime(timeLeft)}
+    </Text>
+  );
+}
+
+// 카운트다운 시간 계산 함수 (수정된 로직)
+function getCountdownTime(currentStep, mode, fullVideoState) {
+  if (!fullVideoState?.startTime || !fullVideoState?.progress) {
+    return 0;
+  }
+
+  const now = new Date();
+  const elapsedMs = now - new Date(fullVideoState.startTime);
+  const currentProgress = fullVideoState.progress[currentStep] || 0;
+
+  // 진행률이 75% 이상이면 "곧 완료" 상태
+  if (currentProgress >= 75) {
+    return Math.max(0, 30000 - (currentProgress - 75) * 1200); // 30초에서 시작해서 0으로
+  }
+
+  if (currentProgress <= 0) {
+    // 진행률이 0%이면 기본 예상치 사용
+    const defaultTimes = {
+      automation_mode: {
+        script: 180000, // 3분
+        audio: 240000,  // 4봄
+        images: 360000, // 6봄
+        video: 180000   // 3봄
+      },
+      script_mode: {
+        script: 180000, // 3봄
+        audio: 240000,  // 4봄
+        subtitle: 90000 // 1.5봄
+      }
+    };
+
+    return defaultTimes[mode]?.[currentStep] || 180000;
+  }
+
+  if (currentProgress >= 100) {
+    return 0;
+  }
+
+  // 진행률 1-74% 구간에서만 실시간 계산 사용
+  // 계산된 시간이 너무 길면 제한
+  const estimatedTotalMs = (elapsedMs / currentProgress) * 100;
+  const remainingMs = Math.max(0, estimatedTotalMs - elapsedMs);
+
+  // 최대 10분으로 제한
+  return Math.min(remainingMs, 600000);
+}
+
+// 동적 예상 시간 계산 함수
+function getEstimatedTime(currentStep, mode, fullVideoState) {
+  if (!fullVideoState?.startTime || !fullVideoState?.progress) {
+    return "계산 중...";
+  }
+
+  const now = new Date();
+  const elapsedMs = now - new Date(fullVideoState.startTime);
+  const elapsedMin = Math.floor(elapsedMs / 1000 / 60);
+  const elapsedSec = Math.floor((elapsedMs / 1000) % 60);
+
+  // 현재 단계의 진행률
+  const currentProgress = fullVideoState.progress[currentStep] || 0;
+
+  if (currentProgress <= 0) {
+    // 진행률이 0%이면 과거 데이터 기반 추정
+    const estimates = getHistoricalEstimates(currentStep, mode);
+    return estimates;
+  }
+
+  if (currentProgress >= 100) {
+    return "완료";
+  }
+
+  // 실시간 계산: (경과시간 / 진행률) * (100 - 진행률)
+  const estimatedTotalMs = (elapsedMs / currentProgress) * 100;
+  const remainingMs = estimatedTotalMs - elapsedMs;
+  const remainingMin = Math.max(0, Math.floor(remainingMs / 1000 / 60));
+  const remainingSec = Math.max(0, Math.floor((remainingMs / 1000) % 60));
+
+  if (remainingMin > 0) {
+    return `약 ${remainingMin}분 ${remainingSec}초`;
+  } else if (remainingSec > 10) {
+    return `약 ${remainingSec}초`;
+  } else {
+    return "곧 완료";
+  }
+}
+
+// 과거 데이터 기반 추정치 (fallback)
+function getHistoricalEstimates(currentStep, mode) {
+  const estimates = {
+    automation_mode: {
+      script: "2-4분",
+      audio: "3-5분",
+      images: "5-8분",
+      video: "2-4분"
+    },
+    script_mode: {
+      script: "2-4분",
+      audio: "3-5분",
+      subtitle: "1-2분"
+    }
+  };
+
+  return estimates[mode]?.[currentStep] || "예상 중...";
+}
+
+// 전체 작업 예상 시간 계산
+function getTotalEstimatedTime(mode, fullVideoState) {
+  if (!fullVideoState?.startTime) return "계산 중...";
+
+  const steps = mode === "automation_mode"
+    ? ["script", "audio", "images", "video"]
+    : ["script", "audio", "subtitle"];
+
+  const now = new Date();
+  const elapsedMs = now - new Date(fullVideoState.startTime);
+
+  // 전체 평균 진행률
+  const totalProgress = steps.reduce((acc, step) =>
+    acc + (fullVideoState.progress?.[step] || 0), 0) / steps.length;
+
+  if (totalProgress <= 0) {
+    const totalEstimates = {
+      automation_mode: "10-15분",
+      script_mode: "5-8분"
+    };
+    return totalEstimates[mode] || "계산 중...";
+  }
+
+  if (totalProgress >= 100) return "완료";
+
+  // 전체 작업 예상 시간
+  const estimatedTotalMs = (elapsedMs / totalProgress) * 100;
+  const remainingMs = Math.max(0, estimatedTotalMs - elapsedMs);
+  const remainingMin = Math.floor(remainingMs / 1000 / 60);
+
+  return remainingMin > 0 ? `약 ${remainingMin}분 남음` : "곧 완료";
 }
 
 // 미니 진행률 패널 컴포넌트
@@ -301,9 +411,24 @@ function MiniProgressPanel({ fullVideoState, resetFullVideoState, api }) {
             animation: !isComplete && !isError ? "pulse 2s infinite" : "none",
           }}
         />
-        <Text size={200} weight="semibold">
-          {isError ? "오류 발생" : isComplete ? "완료" : "진행 중..."}
-        </Text>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Text
+            size={200}
+            weight="semibold"
+            style={{
+              animation: !isComplete && !isError && fullVideoState.isGenerating ? "blinking 1.5s ease-in-out infinite" : "none",
+            }}
+          >
+            {isError ? "오류 발생" : isComplete ? "완료" : "진행 중"}
+          </Text>
+          {!isComplete && !isError && fullVideoState.isGenerating && (
+            <CountdownTimer
+              targetTimeMs={getCountdownTime(fullVideoState.currentStep, fullVideoState.mode, fullVideoState)}
+              size={100}
+              color={tokens.colorBrandForeground1}
+            />
+          )}
+        </div>
         <Text size={100} style={{ color: tokens.colorNeutralForeground3 }}>
           {avgProgress}%
         </Text>
@@ -314,15 +439,15 @@ function MiniProgressPanel({ fullVideoState, resetFullVideoState, api }) {
         현재: {getStepDisplayName(fullVideoState.currentStep)}
       </Text>
 
-      {/* 미니 진행바 */}
+      {/* 미니 진행바 - 더 크고 파란색으로 */}
       <div
         style={{
           width: "100%",
-          height: 4,
-          borderRadius: 2,
+          height: 8,
+          borderRadius: 4,
           background: tokens.colorNeutralBackground3,
           overflow: "hidden",
-          marginBottom: 8,
+          marginBottom: 10,
         }}
       >
         <div
@@ -333,61 +458,38 @@ function MiniProgressPanel({ fullVideoState, resetFullVideoState, api }) {
               ? tokens.colorPaletteRedForeground1
               : isComplete
               ? tokens.colorPaletteGreenForeground1
-              : tokens.colorBrandForeground1,
+              : tokens.colorBrandBackground, // 파란색 진행바
             transition: "width 300ms ease-out",
           }}
         />
       </div>
 
-      {/* 단계별 미니 표시 */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
-        {steps.map((step, index) => {
-          const progress = fullVideoState.progress?.[step] || 0;
-          const isActive = fullVideoState.currentStep === step;
-          const isDone = progress >= 100;
 
-          return (
-            <div
-              key={step}
-              style={{
-                flex: 1,
-                height: 2,
-                borderRadius: 1,
-                background: isDone
-                  ? tokens.colorPaletteGreenBackground3
-                  : isActive
-                  ? tokens.colorBrandBackground
-                  : tokens.colorNeutralBackground3,
-              }}
-            />
-          );
-        })}
-      </div>
-
-      {/* 최근 로그 */}
+      {/* 최근 로그 - 완료 메시지 위치 조정 */}
       {fullVideoState.logs && fullVideoState.logs.length > 0 && (
         <div
           style={{
             background: tokens.colorNeutralBackground2,
             borderRadius: 6,
             padding: 8,
-            maxHeight: 100,
+            maxHeight: 150, // 로그 더 많이 보이게
             overflowY: "auto",
+            marginBottom: 12, // 완료 메시지와 간격 추가
           }}
         >
-          <Text size={100} weight="semibold" style={{ marginBottom: 4, display: "block" }}>
-            최근 활동:
+          <Text size={200} weight="semibold" style={{ marginBottom: 6, display: "block" }}>
+            진행 로그:
           </Text>
-          {fullVideoState.logs.slice(-3).map((log, idx) => (
+          {(fullVideoState.logs || []).map((log, idx) => (
             <Text
               key={idx}
-              size={100}
+              size={200}
               style={{
                 display: "block",
-                color: tokens.colorNeutralForeground3,
+                color: tokens.colorNeutralForeground2,
                 fontFamily: "monospace",
-                fontSize: "10px",
-                lineHeight: 1.3,
+                fontSize: "13px",
+                lineHeight: 1.4,
               }}
             >
               {log.message}
@@ -396,11 +498,11 @@ function MiniProgressPanel({ fullVideoState, resetFullVideoState, api }) {
         </div>
       )}
 
-      {/* 완료 시 액션 버튼 */}
+      {/* 완료 시 액션 버튼 - 높이 증가 */}
       {isComplete && (
         <Button
           appearance="outline"
-          size="small"
+          size="medium"
           onClick={async () => {
             try {
               const result = await api?.invoke?.("project:openOutputFolder");
@@ -411,9 +513,11 @@ function MiniProgressPanel({ fullVideoState, resetFullVideoState, api }) {
           }}
           style={{
             width: "100%",
-            marginTop: 8,
-            borderRadius: 6,
-            fontSize: "11px",
+            marginTop: 0, // 상단 여백 제거
+            borderRadius: 8,
+            fontSize: "13px",
+            minHeight: "36px", // 버튼 높이 증가
+            fontWeight: 600,
           }}
         >
           📂 결과 폴더 열기
@@ -425,6 +529,10 @@ function MiniProgressPanel({ fullVideoState, resetFullVideoState, api }) {
           0%, 100% { opacity: 1; transform: scale(1); }
           50% { opacity: 0.7; transform: scale(1.1); }
         }
+        @keyframes blinking {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
       `}</style>
     </div>
   );
@@ -432,6 +540,7 @@ function MiniProgressPanel({ fullVideoState, resetFullVideoState, api }) {
 
 // 컴팩트 스크립트 뷰어 컴포넌트
 function CompactScriptViewer({ fullVideoState, doc, isLoading, form, globalSettings }) {
+  const [showAllScenes, setShowAllScenes] = useState(false);
   const generatingNow = isLoading || (fullVideoState?.isGenerating && fullVideoState?.currentStep === "script");
   const completedNow = !!doc;
 
@@ -463,18 +572,26 @@ function CompactScriptViewer({ fullVideoState, doc, isLoading, form, globalSetti
             </Text>
           )}
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {doc?.scenes?.slice(0, 3).map((scene, index) => (
+          <div
+            style={{
+              maxHeight: showAllScenes ? "none" : "300px",
+              overflowY: showAllScenes ? "visible" : "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8
+            }}
+          >
+            {(showAllScenes ? doc?.scenes : doc?.scenes?.slice(0, 3))?.map((scene, index) => (
               <div
                 key={`scene-${index}-${scene?.id || 'no-id'}`}
                 style={{
-                  padding: 8,
+                  padding: 10,
                   background: tokens.colorNeutralBackground1,
                   borderRadius: 6,
                   border: `1px solid ${tokens.colorNeutralStroke1}`,
                 }}
               >
-                <Text size={100} weight="semibold" style={{ color: tokens.colorBrandForeground1, marginBottom: 4, display: "block" }}>
+                <Text size={250} weight="semibold" style={{ color: tokens.colorBrandForeground1, marginBottom: 6, display: "block" }}>
                   장면 {index + 1}
                   {scene?.duration && (
                     <span style={{ color: tokens.colorNeutralForeground3, fontWeight: "normal", marginLeft: 4 }}>
@@ -483,14 +600,14 @@ function CompactScriptViewer({ fullVideoState, doc, isLoading, form, globalSetti
                   )}
                 </Text>
                 <Text
-                  size={100}
+                  size={250}
                   style={{
                     color: tokens.colorNeutralForeground2,
-                    lineHeight: 1.4,
-                    display: "-webkit-box",
-                    WebkitLineClamp: 3,
-                    WebkitBoxOrient: "vertical",
-                    overflow: "hidden",
+                    lineHeight: 1.5,
+                    display: showAllScenes ? "block" : "-webkit-box",
+                    WebkitLineClamp: showAllScenes ? "none" : 2,
+                    WebkitBoxOrient: showAllScenes ? "initial" : "vertical",
+                    overflow: showAllScenes ? "visible" : "hidden",
                   }}
                 >
                   {scene?.text}
@@ -499,9 +616,22 @@ function CompactScriptViewer({ fullVideoState, doc, isLoading, form, globalSetti
             ))}
 
             {doc?.scenes?.length > 3 && (
-              <Text size={100} style={{ color: tokens.colorNeutralForeground3, textAlign: "center", fontStyle: "italic" }}>
-                + {doc.scenes.length - 3}개 장면 더...
-              </Text>
+              <Button
+                appearance="subtle"
+                size="small"
+                onClick={() => setShowAllScenes(!showAllScenes)}
+                style={{
+                  marginTop: 4,
+                  alignSelf: "center",
+                  fontSize: "12px",
+                  minHeight: "28px"
+                }}
+              >
+                {showAllScenes
+                  ? "접기"
+                  : `+ ${doc.scenes.length - 3}개 장면 더 보기`
+                }
+              </Button>
             )}
           </div>
         </div>
