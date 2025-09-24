@@ -74,6 +74,7 @@ export function useVoiceSettings(form) {
   const [voices, setVoices] = useState([]);
   const [voiceLoading, setVoiceLoading] = useState(true);
   const [voiceError, setVoiceError] = useState(null);
+  const [currentAudio, setCurrentAudio] = useState(null);
 
   // 초기 목소리 로드
   useEffect(() => {
@@ -187,10 +188,23 @@ export function useVoiceSettings(form) {
         const audioBlob = new Blob([Uint8Array.from(atob(res.data.parts[0].base64), (c) => c.charCodeAt(0))], { type: "audio/mpeg" });
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
-        audio.onended = () => URL.revokeObjectURL(audioUrl);
+
+        // 현재 재생 중인 오디오를 중지
+        if (currentAudio) {
+          currentAudio.pause();
+          currentAudio.currentTime = 0;
+        }
+
+        setCurrentAudio(audio);
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          setCurrentAudio(null);
+        };
+
         audio.play().catch((err) => {
           console.error("오디오 재생 실패:", err);
           console.error("목소리 미리듣기 재생에 실패했습니다.");
+          setCurrentAudio(null);
         });
         console.log("✅ 목소리 미리듣기 재생 성공");
       } else {
@@ -200,7 +214,16 @@ export function useVoiceSettings(form) {
       console.error("목소리 미리듣기 실패:", error);
       console.error("목소리 미리듣기에 실패했습니다.");
     }
-  }, [form.ttsEngine, form.speed]);
+  }, [form.ttsEngine, form.speed, api, currentAudio]);
+
+  const stopVoice = useCallback(() => {
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      setCurrentAudio(null);
+      console.log("🛑 음성 재생이 중지되었습니다.");
+    }
+  }, [currentAudio]);
 
   const retryVoiceLoad = useCallback(async () => {
     try {
@@ -233,6 +256,7 @@ export function useVoiceSettings(form) {
     voiceLoading,
     voiceError,
     previewVoice,
+    stopVoice,
     retryVoiceLoad,
   };
 }

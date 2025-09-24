@@ -1,9 +1,9 @@
 import React from "react";
 import { Card, Text, Dropdown, Option, Field, Badge, Button, Spinner, tokens } from "@fluentui/react-components";
-import { MicRegular, PlayRegular, ShieldError24Regular } from "@fluentui/react-icons";
+import { MicRegular, PlayRegular, StopRegular, ShieldError24Regular } from "@fluentui/react-icons";
 import { useCardStyles, useSettingsStyles, useLayoutStyles } from "../../../styles/commonStyles";
 
-function VoiceSettingsCard({ form, voices, voiceLoading, voiceError, onChange, onPreviewVoice, onRetryVoiceLoad }) {
+function VoiceSettingsCard({ form, voices, voiceLoading, voiceError, onChange, onPreviewVoice, onStopVoice, onRetryVoiceLoad }) {
   const cardStyles = useCardStyles();
   const settingsStyles = useSettingsStyles();
   const layoutStyles = useLayoutStyles();
@@ -224,14 +224,28 @@ function VoiceSettingsCard({ form, voices, voiceLoading, voiceError, onChange, o
                   </Text>
                 </div>
 
-                <Button
-                  appearance="secondary"
-                  size="small"
-                  icon={<PlayRegular />}
-                  onClick={() => onPreviewVoice(selectedVoice.id, selectedVoice.name)}
-                >
-                  미리듣기
-                </Button>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Button
+                    appearance="secondary"
+                    size="small"
+                    icon={<PlayRegular />}
+                    onClick={() => onPreviewVoice(selectedVoice.id, selectedVoice.name)}
+                  >
+                    미리듣기
+                  </Button>
+                  <Button
+                    appearance="outline"
+                    size="small"
+                    icon={<StopRegular />}
+                    onClick={onStopVoice}
+                    style={{
+                      color: tokens.colorPaletteRedForeground1,
+                      borderColor: tokens.colorPaletteRedBorder1
+                    }}
+                  >
+                    중지
+                  </Button>
+                </div>
               </div>
             )}
           </Field>

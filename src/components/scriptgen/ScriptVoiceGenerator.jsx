@@ -26,7 +26,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Text, tokens, Button, Card } from "@fluentui/react-components";
 import { useHeaderStyles, useCardStyles, useContainerStyles } from "../../styles/commonStyles";
-import { DocumentEditRegular, VideoRegular } from "@fluentui/react-icons";
+import { DocumentEditRegular, VideoRegular, EyeRegular } from "@fluentui/react-icons";
 import { ErrorBoundary } from "../common";
 
 // 컴포넌트 imports
@@ -60,6 +60,7 @@ function ScriptVoiceGenerator() {
   const [form, setForm] = useState(makeDefaultForm());
   const [globalSettings, setGlobalSettings] = useState({});
   const [selectedMode, setSelectedMode] = useState("automation_mode"); // 기본값: 완전 자동화 모드
+  const [showResultsSidebar, setShowResultsSidebar] = useState(true);
 
   // 전체 영상 생성 상태 (모드별 분기 지원)
   const [fullVideoState, setFullVideoState] = useState({
@@ -89,7 +90,7 @@ function ScriptVoiceGenerator() {
   const api = useApi();
   const { promptNames, promptLoading } = usePromptSettings();
   const { doc, setDoc, isLoading, error, setIsLoading, setError, getSelectedPromptContent, runGenerate } = useScriptGeneration();
-  const { voices, voiceLoading, voiceError, previewVoice, retryVoiceLoad } = useVoiceSettings(form);
+  const { voices, voiceLoading, voiceError, previewVoice, stopVoice, retryVoiceLoad } = useVoiceSettings(form);
 
 
   // 폼 변경 핸들러
@@ -607,20 +608,63 @@ function ScriptVoiceGenerator() {
             voiceError={voiceError}
             onChange={onChange}
             onPreviewVoice={previewVoice}
+            onStopVoice={stopVoice}
             onRetryVoiceLoad={retryVoiceLoad}
           />
 
           {/* 4행: 실시간 결과 (전체 폭) */}
-          <ResultsSidebar
-            fullVideoState={fullVideoState}
-            doc={doc}
-            isLoading={isLoading}
-            form={form}
-            globalSettings={globalSettings}
-            resetFullVideoState={resetFullVideoState}
-            api={api}
-            horizontal={true}
-          />
+          {showResultsSidebar && (
+            <ResultsSidebar
+              fullVideoState={fullVideoState}
+              doc={doc}
+              isLoading={isLoading}
+              form={form}
+              globalSettings={globalSettings}
+              resetFullVideoState={resetFullVideoState}
+              api={api}
+              onClose={() => setShowResultsSidebar(false)}
+              horizontal={true}
+            />
+          )}
+
+          {/* 결과 패널이 숨겨져 있을 때 보이기 카드 */}
+          {!showResultsSidebar && (fullVideoState.isGenerating || doc || isLoading) && (
+            <Card
+              onClick={() => setShowResultsSidebar(true)}
+              style={{
+                padding: "16px 20px",
+                borderRadius: 16,
+                border: `1px solid ${tokens.colorNeutralStroke2}`,
+                background: tokens.colorNeutralBackground1,
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                minHeight: "56px"
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <EyeRegular
+                  style={{
+                    fontSize: 20,
+                    color: tokens.colorBrandForeground1
+                  }}
+                />
+                <div>
+                  <Text size={300} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
+                    실시간 결과 보기
+                  </Text>
+                  <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 2 }}>
+                    진행 상황과 대본 결과를 확인하세요
+                  </Text>
+                </div>
+              </div>
+              <Text size={200} style={{ color: tokens.colorBrandForeground1 }}>
+                클릭하여 열기
+              </Text>
+            </Card>
+          )}
         </div>
       </div>
     </ErrorBoundary>

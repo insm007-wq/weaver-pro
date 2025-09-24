@@ -52,35 +52,38 @@ function ResultsSidebar({
           style={{
             padding: "16px 20px",
             borderBottom: `1px solid ${tokens.colorNeutralStroke3}`,
-            background: `linear-gradient(180deg, ${tokens.colorNeutralBackground1} 0%, ${tokens.colorNeutralBackground2} 100%)`,
+            background: tokens.colorNeutralBackground1,
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
           }}
         >
-          <Text size={400} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
-            📊 실시간 결과
-          </Text>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Text size={400} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
+              📊 실시간 결과
+            </Text>
+          </div>
           <Button
             appearance="subtle"
             size="small"
-            icon={<DismissRegular />}
             onClick={onClose}
             style={{ borderRadius: 6 }}
-            aria-label="결과 패널 닫기"
-          />
+            aria-label="숨기기"
+          >
+            숨기기
+          </Button>
         </div>
 
-        {/* 2열 그리드 콘텐츠 */}
+        {/* 1열 콘텐츠 */}
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: tokens.spacingHorizontalL,
+            display: "flex",
+            flexDirection: "column",
+            gap: tokens.spacingVerticalL,
             padding: "20px",
           }}
         >
-          {/* 좌측: 진행률 섹션 */}
+          {/* 진행률 섹션 */}
           {hasProgress && (
             <div>
               <div
@@ -102,7 +105,7 @@ function ResultsSidebar({
             </div>
           )}
 
-          {/* 우측: 대본 결과 섹션 */}
+          {/* 대본 결과 섹션 */}
           {hasScript && (
             <div>
               <div
@@ -151,23 +154,26 @@ function ResultsSidebar({
         style={{
           padding: "16px 20px",
           borderBottom: `1px solid ${tokens.colorNeutralStroke3}`,
-          background: `linear-gradient(180deg, ${tokens.colorNeutralBackground1} 0%, ${tokens.colorNeutralBackground2} 100%)`,
+          background: tokens.colorNeutralBackground1,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
         }}
       >
-        <Text size={400} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
-          📊 실시간 결과
-        </Text>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Text size={400} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
+            📊 실시간 결과
+          </Text>
+        </div>
         <Button
           appearance="subtle"
           size="small"
-          icon={<DismissRegular />}
           onClick={onClose}
           style={{ borderRadius: 6 }}
-          aria-label="결과 패널 닫기"
-        />
+          aria-label="숨기기"
+        >
+          숨기기
+        </Button>
       </div>
 
       {/* 스크롤 가능한 콘텐츠 영역 */}
@@ -188,7 +194,7 @@ function ResultsSidebar({
                 justifyContent: "space-between",
                 alignItems: "center",
                 cursor: "pointer",
-                background: isProgressExpanded ? tokens.colorNeutralBackground2 : "transparent",
+                background: "transparent",
               }}
               onClick={() => setIsProgressExpanded(!isProgressExpanded)}
             >
@@ -225,7 +231,7 @@ function ResultsSidebar({
                 justifyContent: "space-between",
                 alignItems: "center",
                 cursor: "pointer",
-                background: isScriptExpanded ? tokens.colorNeutralBackground2 : "transparent",
+                background: "transparent",
               }}
               onClick={() => setIsScriptExpanded(!isScriptExpanded)}
             >
