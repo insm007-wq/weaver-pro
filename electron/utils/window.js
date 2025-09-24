@@ -30,14 +30,34 @@ function createMainWindow() {
   Menu.setApplicationMenu(null);
 
   // Vite 서버 URL 확인 (포트가 변경될 수 있음)
-  const url = process.env.VITE_DEV_SERVER_URL || "http://localhost:5174";
+  const url = process.env.VITE_DEV_SERVER_URL ||
+    process.env.VITE_PORT ? `http://localhost:${process.env.VITE_PORT}` :
+    "http://localhost:5173";
+
   console.log("[window] Loading URL:", url);
-  win.loadURL(url).catch(err => {
+
+  // 포트 폴백 시도 함수
+  const tryPorts = async (ports) => {
+    for (const port of ports) {
+      try {
+        const testUrl = `http://localhost:${port}`;
+        console.log(`[window] Trying port ${port}...`);
+        await win.loadURL(testUrl);
+        console.log(`[window] Successfully connected to port ${port}`);
+        return;
+      } catch (err) {
+        console.warn(`[window] Failed to connect to port ${port}:`, err.message);
+      }
+    }
+    console.error("[window] All ports failed, no Vite server found");
+  };
+
+  // URL 로드 시도
+  win.loadURL(url).catch(async (err) => {
     console.error("[window] Failed to load URL:", err);
-    // 실패 시 5173 포트도 시도
-    win.loadURL("http://localhost:5173").catch(err2 => {
-      console.error("[window] Also failed with port 5173:", err2);
-    });
+    // 여러 포트로 폴백 시도
+    const fallbackPorts = [5173, 5174, 5175, 3000, 4000];
+    await tryPorts(fallbackPorts);
   });
 
   /* =============================================================================
