@@ -1,75 +1,40 @@
-import React, { useMemo, useState, useRef, useLayoutEffect, useEffect, useCallback } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   tokens,
-  Card,
-  CardHeader,
   Body1,
   Body2,
-  Title3,
+  Text,
   Caption1,
-  Button,
-  TabList,
-  Tab,
-  Divider,
-  Badge,
   Spinner,
 } from "@fluentui/react-components";
 import {
   StandardCard,
-  PrimaryButton,
-  StatusBadge
+  PrimaryButton
 } from "../common";
 import {
   Target24Regular,
-  Settings24Regular,
-  Video24Regular,
 } from "@fluentui/react-icons";
 
 
 // Utils
 import { parseSrtToScenes } from "../../utils/parseSrt";
 import { getSetting, readTextAny, getMp3DurationSafe } from "../../utils/ipcSafe";
-import { runAutoMatch } from "../../utils/autoMatchEngine";
-import { clampSelectedIndex } from "../../utils/sceneIndex";
 import { handleError } from "@utils";
-import { useFluentTheme } from "../providers/FluentThemeProvider";
 import {
   useContainerStyles,
   useHeaderStyles,
-  useCardStyles,
   useLayoutStyles
 } from "../../styles/commonStyles";
 
 export default function AssembleEditor() {
-  const { platform, isDark } = useFluentTheme();
   const containerStyles = useContainerStyles();
   const headerStyles = useHeaderStyles();
-  const cardStyles = useCardStyles();
   const layoutStyles = useLayoutStyles();
 
-  const containerRef = useRef(null);
-  const [fixedWidthPx, setFixedWidthPx] = useState(null);
-
-  useLayoutEffect(() => {
-    if (!fixedWidthPx && containerRef.current) {
-      const px = Math.round(containerRef.current.getBoundingClientRect().width);
-      if (px > 0) setFixedWidthPx(px);
-    }
-  }, [fixedWidthPx]);
 
   // State management
-  const [selectedTab, setSelectedTab] = useState("prepare");
   const [scenes, setScenes] = useState([]);
-  const [selectedSceneIdx, setSelectedSceneIdx] = useState(0);
   const [assets, setAssets] = useState([]);
-  const [autoMatch, setAutoMatch] = useState(true);
-  const [autoOpts, setAutoOpts] = useState({
-    emptyOnly: true,
-    byKeywords: true,
-    byOrder: true,
-    overwrite: false,
-  });
-  const [autoStats, setAutoStats] = useState(null);
   const [srtConnected, setSrtConnected] = useState(false);
   const [mp3Connected, setMp3Connected] = useState(false);
   const [audioDur, setAudioDur] = useState(0);
@@ -81,19 +46,12 @@ export default function AssembleEditor() {
     [scenes]
   );
 
-  const selectScene = (i) => setSelectedSceneIdx(i);
   const addAssets = (items) => setAssets((prev) => [...prev, ...items]);
-
-  // Scene index safety
-  useEffect(() => {
-    setSelectedSceneIdx((old) => clampSelectedIndex(scenes, old));
-  }, [scenes]);
 
   // Development helper
   useEffect(() => {
     window.__scenes = scenes;
-    window.__autoStats = autoStats;
-  }, [scenes, autoStats]);
+  }, [scenes]);
 
   // SRT loading and parsing
   useEffect(() => {
@@ -169,46 +127,21 @@ export default function AssembleEditor() {
     };
   }, [mp3Connected]);
 
-  // Auto assignment engine
-  const runAutoAssign = useCallback(() => {
-    if (!autoMatch) return;
-    setScenes((prev) => {
-      const { scenes: next, stats } = runAutoMatch({ scenes: prev, assets, opts: autoOpts });
-      setAutoStats(stats);
-      return next;
-    });
-  }, [assets, autoMatch, autoOpts]);
 
-  useEffect(() => {
-    runAutoAssign();
-  }, [runAutoAssign]);
-
-  useEffect(() => {
-    if (!autoMatch) return;
-    setScenes((prev) => {
-      const { scenes: next, stats } = runAutoMatch({ scenes: prev, assets, opts: autoOpts });
-      setAutoStats(stats);
-      return next;
-    });
-  }, [scenes.length, autoMatch, assets, autoOpts]);
-
-  // Tab change handler
-  const onTabSelect = (event, data) => {
-    setSelectedTab(data.value);
+  // File upload handlers
+  const handleSrtUpload = async (file) => {
+    // TODO: SRT 파일 업로드 처리
+    console.log("SRT file uploaded:", file);
   };
 
-  // Container style with platform-specific enhancements
-  const containerStyle = {
-    ...(fixedWidthPx && {
-      width: `${fixedWidthPx}px`,
-      minWidth: `${fixedWidthPx}px`,
-      maxWidth: `${fixedWidthPx}px`,
-      flex: `0 0 ${fixedWidthPx}px`,
-    }),
+  const handleMp3Upload = async (file) => {
+    // TODO: MP3 파일 업로드 처리
+    console.log("MP3 file uploaded:", file);
   };
+
 
   return (
-    <div className={containerStyles.container} style={{ overflowX: "hidden", maxWidth: "100vw" }} ref={containerRef}>
+    <div className={containerStyles.container} style={{ overflowX: "hidden", maxWidth: "100vw" }}>
       {/* 헤더 */}
       <div className={headerStyles.pageHeader}>
         <div className={headerStyles.pageTitleWithIcon}>
@@ -229,307 +162,251 @@ export default function AssembleEditor() {
         </div>
       )}
 
-      {/* Top Status Bar */}
+
+      {/* 메인 컨텐츠 - 1열 구조 */}
       {!isLoading && (
-        <StandardCard style={{ marginBottom: tokens.spacingVerticalL }}>
-          <div className={layoutStyles.horizontalStack} style={{ justifyContent: "space-between" }}>
-            <div className={layoutStyles.horizontalStack}>
-              {/* File Status */}
-              <div className={layoutStyles.horizontalStack}>
-                <StatusBadge
-                  variant={srtConnected ? "success" : "subtle"}
-                  text={`SRT ${srtConnected ? "연결됨" : "미연결"}`}
-                />
-                <StatusBadge
-                  variant={mp3Connected ? "success" : "subtle"}
-                  text={`MP3 ${mp3Connected ? "연결됨" : "미연결"}`}
-                />
+        <div className={layoutStyles.verticalStack}>
+          {/* 파일 업로드 섹션 */}
+          <StandardCard>
+            <Text size={400} weight="semibold" style={{ marginBottom: tokens.spacingVerticalS, display: "block" }}>파일 업로드</Text>
+
+            {/* 파일 업로드 영역 - 2열 그리드 */}
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: tokens.spacingHorizontalL,
+              marginBottom: tokens.spacingVerticalL
+            }}>
+              {/* SRT 파일 업로드 */}
+              <div className={layoutStyles.verticalStack}>
+                <Text size={400} weight="semibold" style={{ display: "block" }}>SRT 자막 파일</Text>
+                <div
+                  style={{
+                    border: `2px dashed ${tokens.colorNeutralStroke2}`,
+                    borderRadius: tokens.borderRadiusMedium,
+                    padding: tokens.spacingVerticalL,
+                    textAlign: "center",
+                    cursor: "pointer",
+                    backgroundColor: srtConnected ? tokens.colorPaletteLightGreenBackground2 : tokens.colorNeutralBackground2,
+                    transition: "all 0.2s ease"
+                  }}
+                  onClick={() => document.getElementById('srt-input').click()}
+                >
+                  <input
+                    id="srt-input"
+                    type="file"
+                    accept=".srt"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      if (e.target.files[0]) {
+                        handleSrtUpload(e.target.files[0]);
+                      }
+                    }}
+                  />
+                  <Body1 style={{ marginBottom: tokens.spacingVerticalS }}>
+                    {srtConnected ? "✅ SRT 연결됨" : "📁 SRT 파일 업로드"}
+                  </Body1>
+                  <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                    {srtConnected ? `${scenes.length}개 씬 로드됨` : "클릭하거나 파일을 드래그하세요"}
+                  </Caption1>
+                </div>
               </div>
 
-              {/* Mode Toggle */}
-              <div className={layoutStyles.horizontalStack}>
-                <Body2>모드:</Body2>
-                <Button
-                  appearance={autoMatch ? "primary" : "outline"}
-                  size="small"
-                  onClick={() => setAutoMatch(!autoMatch)}
+              {/* MP3 파일 업로드 */}
+              <div className={layoutStyles.verticalStack}>
+                <Text size={400} weight="semibold" style={{ display: "block" }}>MP3 오디오 파일</Text>
+                <div
+                  style={{
+                    border: `2px dashed ${tokens.colorNeutralStroke2}`,
+                    borderRadius: tokens.borderRadiusMedium,
+                    padding: tokens.spacingVerticalL,
+                    textAlign: "center",
+                    cursor: "pointer",
+                    backgroundColor: mp3Connected ? tokens.colorPaletteLightGreenBackground2 : tokens.colorNeutralBackground2,
+                    transition: "all 0.2s ease"
+                  }}
+                  onClick={() => document.getElementById('mp3-input').click()}
                 >
-                  {autoMatch ? "자동" : "수동"}
-                </Button>
+                  <input
+                    id="mp3-input"
+                    type="file"
+                    accept=".mp3,.wav,.m4a"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      if (e.target.files[0]) {
+                        handleMp3Upload(e.target.files[0]);
+                      }
+                    }}
+                  />
+                  <Body1 style={{ marginBottom: tokens.spacingVerticalS }}>
+                    {mp3Connected ? "✅ 오디오 연결됨" : "🎵 오디오 파일 업로드"}
+                  </Body1>
+                  <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                    {mp3Connected && audioDur > 0
+                      ? `${audioDur.toFixed(1)}초 길이`
+                      : "MP3, WAV, M4A 지원"}
+                  </Caption1>
+                </div>
               </div>
             </div>
 
-            {/* Render Button */}
-            <PrimaryButton
-              disabled={!srtConnected || !mp3Connected || scenes.length === 0}
-            >
-              🎬 영상 렌더링
-            </PrimaryButton>
-          </div>
-        </StandardCard>
-      )}
-
-      {/* 2-Tab Structure */}
-      {!isLoading && (
-        <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 300px)" }}>
-          <TabList selectedValue={selectedTab} onTabSelect={onTabSelect}>
-            <Tab value="prepare" icon={<Settings24Regular />}>
-              준비
-            </Tab>
-            <Tab value="edit" icon={<Video24Regular />}>
-              편집
-            </Tab>
-          </TabList>
-
-          <Divider style={{ margin: `${tokens.spacingVerticalM} 0` }} />
-
-          {/* Tab Content */}
-          <div style={{ flex: 1, minHeight: 0 }}>
-            {selectedTab === "prepare" && (
-              <div>
-                {/* Tab 1: 준비 - 2열 구조 */}
-              <div className={layoutStyles.gridTwo} style={{ height: "100%" }}>
-                {/* 좌측 - 파일 관리 */}
-                <StandardCard>
-                  <Title3 style={{ marginBottom: tokens.spacingVerticalS }}>파일 관리</Title3>
-                  <Body2 style={{ color: tokens.colorNeutralForeground2, marginBottom: tokens.spacingVerticalM }}>
-                    SRT와 MP3 파일을 연결하세요
-                  </Body2>
-
-                  <div className={layoutStyles.verticalStack}>
-                    <PrimaryButton size="large" style={{ height: "48px" }}>
-                      📄 대본에서 가져오기
-                    </PrimaryButton>
-
-                    <div className={layoutStyles.gridTwo}>
-                      <Button appearance="outline" size="medium">
-                        📁 SRT 선택
-                      </Button>
-                      <Button appearance="outline" size="medium">
-                        🎵 MP3 선택
-                      </Button>
-                    </div>
-
-                    {/* File Status Display */}
-                    <StandardCard style={{
-                      backgroundColor: tokens.colorNeutralBackground2,
-                      padding: tokens.spacingVerticalM
-                    }}>
-                      <Body2 style={{ fontWeight: 600, marginBottom: tokens.spacingVerticalS }}>
-                        연결 상태
-                      </Body2>
-                      <div className={layoutStyles.verticalStack} style={{ gap: tokens.spacingVerticalXS }}>
-                        <Body2>SRT: {srtConnected ? "✅ 연결됨" : "❌ 미연결"}</Body2>
-                        <Body2>MP3: {mp3Connected ? "✅ 연결됨" : "❌ 미연결"}</Body2>
-                        <Body2>씬 수: {scenes.length}개</Body2>
-                        {audioDur > 0 && (
-                          <Body2>오디오 길이: {audioDur.toFixed(1)}초</Body2>
-                        )}
-                      </div>
-                    </StandardCard>
-                  </div>
-                </StandardCard>
-
-                {/* 우측 - AI 키워드 & 소스 */}
-                <StandardCard>
-                  <Title3 style={{ marginBottom: tokens.spacingVerticalS }}>AI 키워드 & 소스</Title3>
-                  <Body2 style={{ color: tokens.colorNeutralForeground2, marginBottom: tokens.spacingVerticalM }}>
-                    키워드를 추출하고 영상을 다운로드하세요
-                  </Body2>
-
-                  {/* AI Keywords Section */}
-                  <div className={layoutStyles.verticalStack}>
-                    <div>
-                      <Body2 style={{ fontWeight: 600, marginBottom: tokens.spacingVerticalS }}>
-                        AI 키워드 추출
-                      </Body2>
-                      <PrimaryButton
-                        size="large"
-                        style={{ width: "100%", height: "48px" }}
-                        disabled={!srtConnected}
-                      >
-                        🤖 키워드 추출 시작
-                      </PrimaryButton>
-                    </div>
-
-                    {/* Video Sources */}
-                    <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                      <Body2 style={{ fontWeight: 600, marginBottom: tokens.spacingVerticalS }}>
-                        영상 소스 ({assets.length}개)
-                      </Body2>
-                      <div style={{
-                        flex: 1,
-                        border: `1px dashed ${tokens.colorNeutralStroke2}`,
-                        borderRadius: tokens.borderRadiusMedium,
-                        padding: tokens.spacingVerticalM,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        minHeight: "300px",
-                        backgroundColor: tokens.colorNeutralBackground1
-                      }}>
-                        {assets.length > 0 ? (
-                          <div style={{ textAlign: "center" }}>
-                            <Body1 style={{ color: tokens.colorBrandForeground1, fontWeight: 600 }}>
-                              ✅ {assets.length}개 영상 준비완료
-                            </Body1>
-                            <Body2 style={{ color: tokens.colorNeutralForeground2, marginTop: tokens.spacingVerticalXS }}>
-                              편집 탭에서 배치하세요
-                            </Body2>
-                          </div>
-                        ) : (
-                          <div style={{ textAlign: "center" }}>
-                            <Body2 style={{ color: tokens.colorNeutralForeground3 }}>
-                              키워드 추출 후 영상이 표시됩니다
-                            </Body2>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </StandardCard>
-              </div>
-              </div>
-            )}
-
-            {selectedTab === "edit" && (
-              <div>
-                {/* Tab 2: 편집 - 상하 구조 (70:30) */}
+            {/* 파일 상태 */}
+            <div style={{
+              padding: tokens.spacingVerticalM,
+              backgroundColor: tokens.colorNeutralBackground2,
+              borderRadius: tokens.borderRadiusMedium,
+              border: `1px solid ${tokens.colorNeutralStroke2}`
+            }}>
+              <Text size={400} weight="semibold" style={{ marginBottom: tokens.spacingVerticalS, display: "block" }}>
+                연결 상태
+              </Text>
               <div style={{
-                display: "flex",
-                flexDirection: "column",
-                height: "100%",
-                gap: tokens.spacingVerticalM
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: tokens.spacingHorizontalM
               }}>
-                {/* 상단 - 메인 편집 영역 (70%) */}
-                <div style={{
-                  flex: "0 0 70%",
-                  display: "grid",
-                  gridTemplateColumns: "1fr 2fr 1fr",
-                  gap: tokens.spacingHorizontalM
-                }}>
-                  {/* 씬 리스트 */}
-                  <StandardCard>
-                    <Title3 style={{ marginBottom: tokens.spacingVerticalS }}>씬 리스트</Title3>
-                    <Body2 style={{ color: tokens.colorNeutralForeground2, marginBottom: tokens.spacingVerticalM }}>
-                      총 {totalDur.toFixed(1)}초
-                    </Body2>
+                <div className={layoutStyles.horizontalStack} style={{ justifyContent: "space-between" }}>
+                  <Body2>SRT 파일:</Body2>
+                  <Body2 style={{ color: srtConnected ? tokens.colorPaletteGreenForeground1 : tokens.colorNeutralForeground3 }}>
+                    {srtConnected ? "연결됨" : "미연결"}
+                  </Body2>
+                </div>
+                <div className={layoutStyles.horizontalStack} style={{ justifyContent: "space-between" }}>
+                  <Body2>MP3 파일:</Body2>
+                  <Body2 style={{ color: mp3Connected ? tokens.colorPaletteGreenForeground1 : tokens.colorNeutralForeground3 }}>
+                    {mp3Connected ? "연결됨" : "미연결"}
+                  </Body2>
+                </div>
+                <div className={layoutStyles.horizontalStack} style={{ justifyContent: "space-between" }}>
+                  <Body2>씬 수:</Body2>
+                  <Body2>{scenes.length}개</Body2>
+                </div>
+                {audioDur > 0 && (
+                  <div className={layoutStyles.horizontalStack} style={{ justifyContent: "space-between" }}>
+                    <Body2>오디오 길이:</Body2>
+                    <Body2>{audioDur.toFixed(1)}초</Body2>
+                  </div>
+                )}
+              </div>
+            </div>
+          </StandardCard>
+
+          {/* AI 키워드 추출 섹션 */}
+          <StandardCard>
+            <Text size={400} weight="semibold" style={{ marginBottom: tokens.spacingVerticalS, display: "block" }}>AI 키워드 추출</Text>
+            <Body2 style={{ color: tokens.colorNeutralForeground2, marginBottom: tokens.spacingVerticalM }}>
+              SRT 파일에서 키워드를 추출하여 영상 소스를 찾습니다
+            </Body2>
+
+            <div className={layoutStyles.verticalStack}>
+              {/* 키워드 추출 버튼 */}
+              <PrimaryButton
+                size="large"
+                style={{ height: "48px", maxWidth: "400px", alignSelf: "center" }}
+                disabled={!srtConnected}
+              >
+                🤖 키워드 추출 시작
+              </PrimaryButton>
+
+              {/* 추출 결과 영역 */}
+              <div style={{
+                minHeight: "300px",
+                border: `1px dashed ${tokens.colorNeutralStroke2}`,
+                borderRadius: tokens.borderRadiusMedium,
+                padding: tokens.spacingVerticalL,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: tokens.colorNeutralBackground1
+              }}>
+                {assets.length > 0 ? (
+                  <div style={{ textAlign: "center", width: "100%" }}>
+                    <Body1 style={{ color: tokens.colorBrandForeground1, fontWeight: 600, marginBottom: tokens.spacingVerticalM }}>
+                      ✅ {assets.length}개 키워드 추출 완료
+                    </Body1>
                     <div style={{
-                      height: "300px",
-                      overflowY: "auto",
-                      border: `1px solid ${tokens.colorNeutralStroke2}`,
-                      borderRadius: tokens.borderRadiusMedium,
-                      padding: tokens.spacingVerticalS
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: tokens.spacingHorizontalS,
+                      justifyContent: "center",
+                      maxWidth: "800px",
+                      margin: "0 auto"
                     }}>
-                      {scenes.length > 0 ? (
-                        scenes.map((scene, index) => (
-                          <div
-                            key={index}
-                            style={{
-                              padding: tokens.spacingVerticalS,
-                              marginBottom: tokens.spacingVerticalXS,
-                              backgroundColor: index === selectedSceneIdx
-                                ? tokens.colorBrandBackground2
-                                : tokens.colorNeutralBackground2,
-                              borderRadius: tokens.borderRadiusMedium,
-                              cursor: "pointer"
-                            }}
-                            onClick={() => setSelectedSceneIdx(index)}
-                          >
-                            <Body2 style={{ fontWeight: 600 }}>씬 {index + 1}</Body2>
-                            <Caption1>{scene.text?.substring(0, 50)}...</Caption1>
-                          </div>
-                        ))
-                      ) : (
-                        <Body2 style={{ color: tokens.colorNeutralForeground3, textAlign: "center", marginTop: "100px" }}>
-                          SRT 파일을 연결하세요
-                        </Body2>
+                      {assets.slice(0, 15).map((asset, index) => (
+                        <div
+                          key={index}
+                          style={{
+                            padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalS}`,
+                            backgroundColor: tokens.colorBrandBackground2,
+                            color: tokens.colorBrandForeground1,
+                            borderRadius: tokens.borderRadiusSmall,
+                            fontSize: tokens.fontSizeBase200
+                          }}
+                        >
+                          {asset.keyword || `키워드 ${index + 1}`}
+                        </div>
+                      ))}
+                      {assets.length > 15 && (
+                        <div style={{
+                          padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalS}`,
+                          backgroundColor: tokens.colorNeutralBackground3,
+                          color: tokens.colorNeutralForeground2,
+                          borderRadius: tokens.borderRadiusSmall,
+                          fontSize: tokens.fontSizeBase200
+                        }}>
+                          +{assets.length - 15}개 더
+                        </div>
                       )}
                     </div>
-                  </StandardCard>
+                  </div>
+                ) : (
+                  <div style={{ textAlign: "center" }}>
+                    <Body2 style={{ color: tokens.colorNeutralForeground3, marginBottom: tokens.spacingVerticalS }}>
+                      {srtConnected
+                        ? "키워드 추출 버튼을 눌러 시작하세요"
+                        : "SRT 파일을 업로드한 후 키워드 추출이 가능합니다"
+                      }
+                    </Body2>
+                    <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                      추출된 키워드로 영상 소스를 자동으로 검색합니다
+                    </Caption1>
+                  </div>
+                )}
+              </div>
 
-                  {/* 타임라인 뷰 */}
-                  <StandardCard>
-                    <Title3 style={{ marginBottom: tokens.spacingVerticalS }}>타임라인</Title3>
-                    <div style={{
-                      height: "350px",
-                      border: `1px solid ${tokens.colorNeutralStroke2}`,
-                      borderRadius: tokens.borderRadiusMedium,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: tokens.colorNeutralBackground1
-                    }}>
-                      <Body2 style={{ color: tokens.colorNeutralForeground3 }}>
-                        타임라인이 여기에 표시됩니다
-                      </Body2>
-                    </div>
-                  </StandardCard>
-
-                  {/* 속성 패널 */}
-                  <StandardCard>
-                    <Title3 style={{ marginBottom: tokens.spacingVerticalS }}>속성</Title3>
-                    <div className={layoutStyles.verticalStack}>
-                      <Button appearance="outline" size="small">
-                        🎥 영상 교체
-                      </Button>
-                      <Button appearance="outline" size="small">
-                        ✨ Ken Burns
-                      </Button>
-                      <Button appearance="outline" size="small">
-                        🔄 전환효과
-                      </Button>
-                    </div>
-                  </StandardCard>
-                </div>
-
-                {/* 하단 - 미리보기 & 렌더링 (30%) */}
+              {/* 추가 정보 */}
+              {srtConnected && scenes.length > 0 && (
                 <div style={{
-                  flex: "0 0 30%",
-                  display: "grid",
-                  gridTemplateColumns: "2fr 1fr",
-                  gap: tokens.spacingHorizontalM
+                  padding: tokens.spacingVerticalM,
+                  backgroundColor: tokens.colorNeutralBackground2,
+                  borderRadius: tokens.borderRadiusMedium,
+                  border: `1px solid ${tokens.colorNeutralStroke2}`,
+                  maxWidth: "600px",
+                  alignSelf: "center"
                 }}>
-                  {/* 미리보기 */}
-                  <StandardCard>
-                    <Title3 style={{ marginBottom: tokens.spacingVerticalS }}>미리보기</Title3>
-                    <div style={{
-                      aspectRatio: "16/9",
-                      backgroundColor: tokens.colorNeutralBackground6,
-                      borderRadius: tokens.borderRadiusMedium,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      border: `1px solid ${tokens.colorNeutralStroke2}`
-                    }}>
-                      <Body2 style={{ color: tokens.colorNeutralForeground3 }}>
-                        영상 미리보기
-                      </Body2>
-                    </div>
-                  </StandardCard>
-
-                  {/* 렌더링 설정 */}
-                  <StandardCard>
-                    <Title3 style={{ marginBottom: tokens.spacingVerticalS }}>렌더링</Title3>
-                    <div className={layoutStyles.verticalStack}>
-                      <Button appearance="outline" size="small">
-                        📐 해상도
-                      </Button>
-                      <Button appearance="outline" size="small">
-                        💾 출력 경로
-                      </Button>
-                      <PrimaryButton
-                        disabled={!srtConnected || !mp3Connected}
-                      >
-                        🎬 렌더링 시작
-                      </PrimaryButton>
-                    </div>
-                  </StandardCard>
+                  <Text size={400} weight="semibold" style={{ marginBottom: tokens.spacingVerticalXS, textAlign: "center", display: "block" }}>
+                    📊 분석 정보
+                  </Text>
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                    gap: tokens.spacingHorizontalS,
+                    textAlign: "center"
+                  }}>
+                    <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
+                      씬 수: {scenes.length}개
+                    </Caption1>
+                    <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
+                      영상 길이: {totalDur.toFixed(1)}초
+                    </Caption1>
+                    <Caption1 style={{ color: tokens.colorNeutralForeground2 }}>
+                      예상 키워드: {Math.min(scenes.length * 2, 20)}개
+                    </Caption1>
+                  </div>
                 </div>
-              </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          </StandardCard>
         </div>
       )}
     </div>
