@@ -3,16 +3,25 @@ import { tokens, Text, Body1, Body2, Caption1, Card, Badge, Spinner } from "@flu
 import { LightbulbFilament24Regular } from "@fluentui/react-icons";
 import { PrimaryButton } from "../../common";
 
-const KeywordExtraction = ({
-  srtConnected,
-  isExtracting,
-  handleExtractKeywords,
-  assets,
-  scenes,
-  currentLlmModel,
-  getLlmDisplayName,
-  ChipsWrap,
-}) => {
+// ChipsWrap 컴포넌트를 KeywordExtraction 내부로 이동
+const ChipsWrap = ({ items }) => (
+  <div
+    style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+      gap: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalXS}`,
+      justifyContent: "center",
+      alignItems: "start",
+      maxWidth: "100%",
+      margin: "0 auto",
+      padding: `0 ${tokens.spacingHorizontalS}`,
+    }}
+  >
+    {items}
+  </div>
+);
+
+const KeywordExtraction = ({ srtConnected, isExtracting, handleExtractKeywords, assets, scenes, currentLlmModel, getLlmDisplayName }) => {
   return (
     <Card
       style={{

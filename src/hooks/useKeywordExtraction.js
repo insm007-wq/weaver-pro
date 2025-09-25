@@ -44,35 +44,60 @@ export const useKeywordExtraction = () => {
 
     setIsExtracting(true);
 
+    // 이전 코드와 동일하게 먼저 assets 초기화
+    setAssets([]);
+
     try {
       // 씬들을 텍스트로 합성
       const combinedText = scenes
         .map((scene, index) => `[씬 ${index + 1}] ${scene.text}`)
         .join("\\n\\n");
 
-      // IPC 호출로 키워드 추출 요청
-      const result = await window.electron.ipcRenderer.invoke("extract-keywords", {
-        text: combinedText,
-        sceneCount: scenes.length,
+      console.log("[키워드 추출] 시작:", scenes.length, "개 씬");
+
+      // IPC 호출로 키워드 추출 요청 (이전 코드와 동일하게)
+      const result = await window.api.invoke("ai:extractKeywords", {
+        subtitles: scenes.map((scene, index) => ({
+          index: index,  // 명시적으로 인덱스 설정
+          text: scene.text,
+          start: scene.start,
+          end: scene.end,
+        })),
       });
 
-      if (result.success && result.keywords) {
-        // 키워드를 asset 형태로 변환
-        const newAssets = result.keywords.map((keyword, index) => ({
-          id: `keyword-${Date.now()}-${index}`,
-          keyword: keyword,
-          type: "keyword",
-          source: "ai-extraction",
-        }));
+      if (result.success && result.keywords && Object.keys(result.keywords).length > 0) {
+        const extractedAssets = [];
 
-        setAssets(newAssets);
-        showSuccess(`🤖 키워드 추출 완료! ${newAssets.length}개의 키워드가 생성되었습니다.`);
+        // 이전 코드와 동일한 방식으로 처리
+        Object.entries(result.keywords).forEach(([index, keywords]) => {
+          if (Array.isArray(keywords)) {
+            keywords.forEach((keyword) => {
+              if (keyword && keyword.trim()) {
+                extractedAssets.push({ keyword: keyword.trim() });
+              }
+            });
+          }
+        });
+
+        // 중복 제거 (이전 코드와 동일한 방식)
+        const uniqueAssets = extractedAssets.filter((asset, index, self) =>
+          index === self.findIndex((a) => a.keyword === asset.keyword)
+        );
+
+        // assets 추가 (이전에는 addAssets 사용했지만 현재는 setAssets)
+        setAssets(uniqueAssets);
+
+        const duration = result.duration ? ` (${Math.round(result.duration / 1000)}초 소요)` : "";
+        console.log(`[키워드 추출] 완료: ${uniqueAssets.length}개 키워드${duration}`);
+        showSuccess(`${uniqueAssets.length}개 키워드가 추출되었습니다.${duration}`);
       } else {
-        throw new Error(result.error || "키워드 추출에 실패했습니다.");
+        console.warn("[키워드 추출] 키워드가 추출되지 않았습니다.");
+        showError("키워드가 추출되지 않았습니다. 자막 내용을 확인해주세요.");
       }
     } catch (error) {
-      console.error("키워드 추출 오류:", error);
-      showError("키워드 추출 중 오류가 발생했습니다. LLM 설정을 확인해주세요.");
+      console.error("[키워드 추출] 실패:", error);
+      const errorMessage = error.message || "알 수 없는 오류가 발생했습니다.";
+      showError(`키워드 추출에 실패했습니다.\n${errorMessage}\n\n전역 설정 > 기본 설정에서 LLM 모델과 API 키를 확인해주세요.`);
     } finally {
       setIsExtracting(false);
     }

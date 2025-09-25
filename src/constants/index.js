@@ -12,7 +12,6 @@
 // ===== 스크립트 생성 관련 상수들 =====
 export {
   DUR_OPTIONS,
-  MAX_SCENE_OPTIONS,
   LLM_OPTIONS,
   STYLE_OPTIONS,
   DURATION_OPTIONS,

@@ -34,11 +34,18 @@ export const useFileManagement = () => {
   }, []);
 
   // SRT 파일 업로드 처리
-  const handleSrtUpload = useCallback(async (e) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  const handleSrtUpload = useCallback(async (fileOrEvent) => {
+    let file;
 
-    const file = files[0];
+    // 파일 객체가 직접 전달된 경우 (DropZone에서)
+    if (fileOrEvent.name) {
+      file = fileOrEvent;
+    } else {
+      // 이벤트 객체가 전달된 경우 (input onChange에서)
+      const files = fileOrEvent.target.files;
+      if (!files || files.length === 0) return;
+      file = files[0];
+    }
     if (!file.name.toLowerCase().endsWith(".srt")) {
       showError("SRT 파일만 업로드 가능합니다.");
       return;
@@ -71,11 +78,18 @@ export const useFileManagement = () => {
   }, []);
 
   // MP3 파일 업로드 처리
-  const handleMp3Upload = useCallback(async (e) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  const handleMp3Upload = useCallback(async (fileOrEvent) => {
+    let file;
 
-    const file = files[0];
+    // 파일 객체가 직접 전달된 경우 (DropZone에서)
+    if (fileOrEvent.name) {
+      file = fileOrEvent;
+    } else {
+      // 이벤트 객체가 전달된 경우 (input onChange에서)
+      const files = fileOrEvent.target.files;
+      if (!files || files.length === 0) return;
+      file = files[0];
+    }
     const validExtensions = [".mp3", ".wav", ".m4a"];
     const isValid = validExtensions.some(ext =>
       file.name.toLowerCase().endsWith(ext)
