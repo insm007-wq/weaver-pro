@@ -58,6 +58,9 @@ export default function AssembleEditor() {
   const [isLoading, setIsLoading] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false); // 키워드 추출 로딩 상태 추가
   const [selectedSceneIdx, setSelectedSceneIdx] = useState(-1);
+  const [srtFilePath, setSrtFilePath] = useState(""); // SRT 파일 경로
+  const [mp3FilePath, setMp3FilePath] = useState(""); // MP3 파일 경로
+  const [currentLlmModel, setCurrentLlmModel] = useState(""); // 현재 LLM 모델
 
   // Refs
   const srtInputRef = useRef(null);
@@ -73,6 +76,30 @@ export default function AssembleEditor() {
   }, [scenes]);
 
   const addAssets = (items) => setAssets((prev) => [...prev, ...items]);
+
+  // 파일명과 경로 정보를 가져오는 헬퍼 함수
+  const getFileInfo = (filePath) => {
+    if (!filePath) return { fileName: "", folderPath: "", displayPath: "" };
+
+    const normalizedPath = filePath.replace(/\\/g, "/");
+    const fileName = normalizedPath.split("/").pop() || "";
+    const folderPath = normalizedPath.substring(0, normalizedPath.lastIndexOf("/"));
+    const displayPath = folderPath.length > 50 ? "..." + folderPath.slice(-47) : folderPath;
+
+    return { fileName, folderPath, displayPath };
+  };
+
+  // LLM 모델명을 사용자 친화적으로 표시하는 헬퍼 함수
+  const getLlmDisplayName = (model) => {
+    const modelMap = {
+      anthropic: "🤖 Anthropic Claude",
+      openai: "🤖 OpenAI GPT",
+      "openai-gpt5mini": "🤖 OpenAI GPT-4o Mini",
+      "google-gemini": "🤖 Google Gemini",
+      gemini: "🤖 Google Gemini",
+    };
+    return modelMap[model] || `🤖 ${model}`;
+  };
 
   // Dev helper
   useEffect(() => {
@@ -99,6 +126,7 @@ export default function AssembleEditor() {
       try {
         const srtPath = await getSetting("paths.srt");
         if (!srtPath) return;
+        if (!cancelled) setSrtFilePath(srtPath); // 파일 경로 상태 설정
         const raw = await readTextAny(srtPath);
         if (cancelled) return;
         const parsed = parseSrtToScenes(raw || "");
@@ -135,8 +163,10 @@ export default function AssembleEditor() {
           console.log("[assemble] No MP3 path found");
           setAudioDur(0);
           setMp3Connected(false);
+          setMp3FilePath(""); // 파일 경로 초기화
           return;
         }
+        if (!cancelled) setMp3FilePath(mp3Path); // 파일 경로 상태 설정
         const dur = await getMp3DurationSafe(mp3Path);
         if (!cancelled && dur) {
           setAudioDur(Number(dur));
@@ -161,6 +191,32 @@ export default function AssembleEditor() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  /* ============================== LLM Model Loading =============================== */
+  useEffect(() => {
+    const loadLlmModel = async () => {
+      try {
+        const llmModel = await getSetting("llmModel");
+        setCurrentLlmModel(llmModel || "anthropic");
+      } catch (error) {
+        console.warn("LLM 모델 로드 실패:", error);
+        setCurrentLlmModel("anthropic"); // 기본값
+      }
+    };
+
+    loadLlmModel();
+
+    // 설정 변경 이벤트 리스너
+    const handleSettingsChanged = () => {
+      loadLlmModel();
+    };
+
+    window.addEventListener("settingsChanged", handleSettingsChanged);
+
+    return () => {
+      window.removeEventListener("settingsChanged", handleSettingsChanged);
+    };
   }, []); // 의존성 배열을 빈 배열로 변경하고, 수동으로 트리거하는 방식 사용
 
   // MP3 상태 재확인 함수
@@ -170,8 +226,10 @@ export default function AssembleEditor() {
       if (!mp3Path) {
         setAudioDur(0);
         setMp3Connected(false);
+        setMp3FilePath(""); // 파일 경로 초기화
         return;
       }
+      setMp3FilePath(mp3Path); // 파일 경로 상태 설정
       const dur = await getMp3DurationSafe(mp3Path);
       if (dur) {
         setAudioDur(Number(dur));
@@ -195,8 +253,10 @@ export default function AssembleEditor() {
       if (!srtPath) {
         setScenes([]);
         setSrtConnected(false);
+        setSrtFilePath(""); // 파일 경로 초기화
         return;
       }
+      setSrtFilePath(srtPath); // 파일 경로 상태 설정
       const raw = await readTextAny(srtPath);
       const parsed = parseSrtToScenes(raw || "");
       if (parsed.length) {
@@ -229,6 +289,7 @@ export default function AssembleEditor() {
 
       // 파일 경로를 설정에 저장
       await setSetting({ key: "paths.srt", value: file.path });
+      setSrtFilePath(file.path); // 파일 경로 상태 설정
 
       // 상태 재확인
       await recheckSrtStatus();
@@ -255,6 +316,7 @@ export default function AssembleEditor() {
 
       // 파일 경로를 설정에 저장
       await setSetting({ key: "paths.mp3", value: file.path });
+      setMp3FilePath(file.path); // 파일 경로 상태 설정
 
       // 상태 재확인
       await recheckMp3Status();
@@ -685,16 +747,6 @@ export default function AssembleEditor() {
         <div className={headerStyles.pageTitleWithIcon}>
           <Target24Regular />
           영상 구성
-          {srtConnected && (
-            <Badge size="extra-small" appearance="filled" color="success" style={{ marginLeft: 8 }}>
-              SRT 연결됨
-            </Badge>
-          )}
-          {mp3Connected && (
-            <Badge size="extra-small" appearance="filled" color="success" style={{ marginLeft: 6 }}>
-              오디오 연결됨
-            </Badge>
-          )}
         </div>
         <div className={headerStyles.pageDescription}>SRT 파일과 오디오를 결합하여 완성된 영상을 만드세요.</div>
         <div className={headerStyles.divider} />
@@ -819,7 +871,17 @@ export default function AssembleEditor() {
               <DropZone
                 icon={<TextDescriptionRegular />}
                 label="SRT 자막 파일"
-                caption={srtConnected ? `${scenes.length}개 씬 로드됨. 총 길이: ${totalDur.toFixed(1)}초` : "SRT 파일 업로드 (.srt)"}
+                caption={
+                  srtConnected && srtFilePath ? (
+                    <div style={{ whiteSpace: "pre-line", textAlign: "center", lineHeight: 1.3, fontSize: "13px" }}>
+                      {`📁 ${getFileInfo(srtFilePath).displayPath}\n📄 ${getFileInfo(srtFilePath).fileName} (${
+                        scenes.length
+                      }개 씬, ${totalDur.toFixed(1)}초)`}
+                    </div>
+                  ) : (
+                    "SRT 파일 업로드 (.srt)"
+                  )
+                }
                 connected={srtConnected}
                 onClick={openSrtPicker}
                 inputRef={srtInputRef}
@@ -831,7 +893,15 @@ export default function AssembleEditor() {
               <DropZone
                 icon={<MusicNote2Regular />}
                 label="오디오 파일 (MP3/WAV/M4A)"
-                caption={mp3Connected && audioDur > 0 ? `${audioDur.toFixed(1)}초 길이` : "MP3, WAV, M4A 지원"}
+                caption={
+                  mp3Connected && mp3FilePath && audioDur > 0 ? (
+                    <div style={{ whiteSpace: "pre-line", textAlign: "center", lineHeight: 1.3, fontSize: "13px" }}>
+                      {`📁 ${getFileInfo(mp3FilePath).displayPath}\n🎵 ${getFileInfo(mp3FilePath).fileName} (${audioDur.toFixed(1)}초)`}
+                    </div>
+                  ) : (
+                    "MP3, WAV, M4A 지원"
+                  )
+                }
                 connected={mp3Connected}
                 onClick={openMp3Picker}
                 inputRef={mp3InputRef}
@@ -907,13 +977,42 @@ export default function AssembleEditor() {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 8,
+                  justifyContent: "space-between",
                 }}
               >
-                <LightbulbFilament24Regular />
-                <Text size={400} weight="semibold" style={{ letterSpacing: 0.2 }}>
-                  AI 키워드 추출
-                </Text>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <LightbulbFilament24Regular />
+                  <Text size={400} weight="semibold" style={{ letterSpacing: 0.2 }}>
+                    AI 키워드 추출
+                  </Text>
+                </div>
+                {currentLlmModel && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "6px 12px",
+                      backgroundColor: tokens.colorBrandBackground2,
+                      border: `1px solid ${tokens.colorBrandStroke1}`,
+                      borderRadius: tokens.borderRadiusMedium,
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      color: tokens.colorBrandForeground1,
+                    }}
+                  >
+                    <div style={{ fontSize: "14px" }}>🤖</div>
+                    <Text size={200} weight="semibold" style={{ color: "inherit" }}>
+                      {getLlmDisplayName(currentLlmModel).replace("🤖 ", "")}
+                    </Text>
+                  </div>
+                )}
               </div>
               <Text
                 size={200}
@@ -1035,18 +1134,27 @@ export default function AssembleEditor() {
                   </div>
                 ) : (
                   // 초기 상태
-                  <div style={{ textAlign: "center", maxWidth: 520 }}>
+                  <div style={{ textAlign: "center", maxWidth: 520, width: "100%", margin: "0 auto" }}>
                     <Body2
                       style={{
                         color: tokens.colorNeutralForeground3,
-                        marginBottom: tokens.spacingVerticalS,
+                        marginBottom: tokens.spacingVerticalM,
+                        display: "block",
+                        textAlign: "center",
                       }}
                     >
                       {srtConnected
                         ? "키워드 추출 버튼을 눌러 영상 소스 검색을 시작하세요"
                         : "SRT 파일을 먼저 업로드해야 키워드 추출이 가능합니다"}
                     </Body2>
-                    <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                    <Caption1
+                      style={{
+                        color: tokens.colorNeutralForeground3,
+                        display: "block",
+                        marginTop: tokens.spacingVerticalS,
+                        textAlign: "center",
+                      }}
+                    >
                       추출된 키워드를 기반으로 영상 제작에 필요한 소스를 자동으로 검색 및 추천합니다.
                     </Caption1>
                   </div>
