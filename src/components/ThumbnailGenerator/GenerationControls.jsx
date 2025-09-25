@@ -44,7 +44,7 @@ const GenerationControls = ({
           <Label weight="semibold">품질 설정</Label>
           <Dropdown value={qualityPreset} onOptionSelect={(_, data) => setQualityPreset(data.optionValue)}>
             {QUALITY_PRESETS.map((preset) => (
-              <Option key={preset.value} value={preset.value}>
+              <Option key={preset.value} value={preset.value} text={`${preset.label} - ${preset.description} • ${preset.estimatedTime}`}>
                 <div>
                   <div style={{ fontWeight: "600" }}>{preset.label}</div>
                   <Caption1>

@@ -216,7 +216,10 @@
       "Bash(netstat:*)",
       "Bash(findstr:*)",
       "Read(//d/download/**)",
-      "Bash(asar extract:*)"
+      "Bash(asar extract:*)",
+      "Read(//c/WeaverPro/1111/audio/**)",
+      "Read(//c/WeaverPro/1111/scripts/**)",
+      "Bash(npm ls:*)"
     ],
     "deny": [],
     "ask": []

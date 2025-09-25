@@ -356,7 +356,7 @@ function ThumbnailTab() {
               style={{ marginTop: tokens.spacingVerticalS }}
             >
               {ENGINE_OPTIONS.map((o) => (
-                <Option key={o.value} value={o.value}>
+                <Option key={o.value} value={o.value} text={`${o.text} ${o.subtext}`}>
                   {o.text} <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{o.subtext}</Caption1>
                 </Option>
               ))}
@@ -377,7 +377,7 @@ function ThumbnailTab() {
               style={{ marginTop: tokens.spacingVerticalS }}
             >
               {ANALYSIS_ENGINE_OPTIONS.map((o) => (
-                <Option key={o.value} value={o.value}>
+                <Option key={o.value} value={o.value} text={`${o.text} ${o.subtext}`}>
                   {o.text} <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{o.subtext}</Caption1>
                 </Option>
               ))}

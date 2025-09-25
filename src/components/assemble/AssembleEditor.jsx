@@ -33,11 +33,8 @@ import {
 import { parseSrtToScenes } from "../../utils/parseSrt";
 import { getSetting, setSetting, readTextAny, getMp3DurationSafe } from "../../utils/ipcSafe";
 import { handleError } from "@utils";
-import {
-  useContainerStyles,
-  useHeaderStyles,
-  useLayoutStyles,
-} from "../../styles/commonStyles";
+import { useContainerStyles, useHeaderStyles, useLayoutStyles } from "../../styles/commonStyles";
+import { showSuccess, showError } from "../common/GlobalToast";
 
 /**
  * AssembleEditor (UI 개선: 모던, 간결, 시각적 위계 강화)
@@ -240,7 +237,7 @@ export default function AssembleEditor() {
     } catch (error) {
       console.error("SRT 파일 업로드 실패:", error);
       const { message } = handleError(error, "srt_upload_error", {
-        metadata: { fileName: file.name, filePath: file.path }
+        metadata: { fileName: file.name, filePath: file.path },
       });
     }
   };
@@ -266,7 +263,7 @@ export default function AssembleEditor() {
     } catch (error) {
       console.error("MP3 파일 업로드 실패:", error);
       const { message } = handleError(error, "mp3_upload_error", {
-        metadata: { fileName: file.name, filePath: file.path }
+        metadata: { fileName: file.name, filePath: file.path },
       });
     }
   };
@@ -287,18 +284,17 @@ export default function AssembleEditor() {
       console.log("📁 영상 저장 폴더:", videoSaveFolder);
 
       // 예상되는 파일 경로들 확인
-      const expectedSrtPath = `${videoSaveFolder}/subtitle.srt`;
-      const expectedMp3Paths = [
-        `${videoSaveFolder}/${await getProjectName()}.mp3`, // 프로젝트명.mp3
-        `${videoSaveFolder}/merged_audio.mp3`, // 기본 병합 오디오명
-      ];
+      const expectedSrtPath = `${videoSaveFolder}/scripts/subtitle.srt`;
+      const expectedMp3Path = `${videoSaveFolder}/audio/default.mp3`;
 
       let foundSrt = null;
       let foundMp3 = null;
 
       // SRT 파일 확인
+      console.log("🔍 SRT 파일 경로 확인:", expectedSrtPath);
       try {
-        const srtExists = await window.api.fileExists(expectedSrtPath);
+        const srtExists = await window.api.invoke("files:exists", expectedSrtPath);
+        console.log("📄 SRT 파일 존재 여부:", srtExists);
         if (srtExists) {
           foundSrt = expectedSrtPath;
           console.log("✅ SRT 파일 발견:", foundSrt);
@@ -307,18 +303,17 @@ export default function AssembleEditor() {
         console.log("SRT 파일 확인 중 오류:", error);
       }
 
-      // MP3 파일 확인 (여러 가능한 경로 시도)
-      for (const mp3Path of expectedMp3Paths) {
-        try {
-          const mp3Exists = await window.api.fileExists(mp3Path);
-          if (mp3Exists) {
-            foundMp3 = mp3Path;
-            console.log("✅ MP3 파일 발견:", foundMp3);
-            break;
-          }
-        } catch (error) {
-          console.log(`MP3 파일 확인 중 오류 (${mp3Path}):`, error);
+      // MP3 파일 확인
+      console.log("🔍 MP3 파일 경로 확인:", expectedMp3Path);
+      try {
+        const mp3Exists = await window.api.invoke("files:exists", expectedMp3Path);
+        console.log("🎵 MP3 파일 존재 여부:", mp3Exists);
+        if (mp3Exists) {
+          foundMp3 = expectedMp3Path;
+          console.log("✅ MP3 파일 발견:", foundMp3);
         }
+      } catch (error) {
+        console.log(`MP3 파일 확인 중 오류 (${expectedMp3Path}):`, error);
       }
 
       // 파일이 발견되면 설정에 저장
@@ -342,16 +337,18 @@ export default function AssembleEditor() {
         console.warn("⚠️ 대본에서 생성된 파일을 찾을 수 없습니다.");
         console.log("예상 경로들:");
         console.log("- SRT:", expectedSrtPath);
-        expectedMp3Paths.forEach(path => console.log("- MP3:", path));
+        console.log("- MP3:", expectedMp3Path);
+        showError("파일을 찾을 수 없습니다.\n예상 위치:\n• audio/default.mp3\n• scripts/subtitle.srt");
       } else {
         console.log(`✅ ${insertedCount}개 파일이 성공적으로 연결되었습니다.`);
+        showSuccess(`${insertedCount}개 파일이 성공적으로 연결되었습니다.`);
       }
-
     } catch (error) {
       console.error("❌ 대본 파일 가져오기 실패:", error);
       const { message } = handleError(error, "script_import_error", {
-        metadata: { action: "import_from_script" }
+        metadata: { action: "import_from_script" },
       });
+      showError("대본 파일 가져오기에 실패했습니다. 다시 시도해주세요.");
     }
   };
 
@@ -387,25 +384,67 @@ export default function AssembleEditor() {
     } catch (error) {
       console.error("❌ 초기화 실패:", error);
       const { message } = handleError(error, "reset_error", {
-        metadata: { action: "reset_file_connections" }
+        metadata: { action: "reset_file_connections" },
       });
     }
   };
 
-  const handleExtractKeywords = () => {
+  const handleExtractKeywords = async () => {
     if (!srtConnected || isExtracting) return;
     setIsExtracting(true);
-    setAssets([]); // 추출 시작 시 기존 결과 초기화
+    setAssets([]);
 
-    // ************* 실제 키워드 추출 로직 (가상 구현) *************
-    setTimeout(() => {
-      const mockAssets = scenes.slice(0, 10).map((scene, index) => ({
-        keyword: `키워드-${index + 1}-${scene.text.slice(0, 4)}`,
-      }));
-      addAssets(mockAssets);
+    try {
+      console.log("[키워드 추출] 시작:", scenes.length, "개 씬");
+
+      // IPC로 키워드 추출 요청
+      const result = await window.api.invoke("ai:extractKeywords", {
+        subtitles: scenes.map((scene, index) => ({
+          index: index,
+          text: scene.text,
+          start: scene.start,
+          end: scene.end,
+        })),
+      });
+
+      // 성공 여부 확인
+      if (!result.success && result.error) {
+        throw new Error(result.error);
+      }
+
+      if (result.keywords && Object.keys(result.keywords).length > 0) {
+        const extractedAssets = [];
+
+        // 결과를 assets 형태로 변환
+        Object.entries(result.keywords).forEach(([index, keywords]) => {
+          if (Array.isArray(keywords)) {
+            keywords.forEach((keyword) => {
+              if (keyword && keyword.trim()) {
+                extractedAssets.push({ keyword: keyword.trim() });
+              }
+            });
+          }
+        });
+
+        // 중복 제거
+        const uniqueAssets = extractedAssets.filter((asset, index, self) => index === self.findIndex((a) => a.keyword === asset.keyword));
+
+        const duration = result.duration ? ` (${Math.round(result.duration / 1000)}초 소요)` : "";
+        console.log("[키워드 추출] 완료:", uniqueAssets.length, "개 키워드", duration);
+
+        addAssets(uniqueAssets);
+        showSuccess(`${uniqueAssets.length}개 키워드가 추출되었습니다.${duration}`);
+      } else {
+        console.warn("[키워드 추출] 키워드가 추출되지 않았습니다.");
+        showError("키워드가 추출되지 않았습니다. 자막 내용을 확인해주세요.");
+      }
+    } catch (error) {
+      console.error("[키워드 추출] 실패:", error);
+      const errorMessage = error.message || "알 수 없는 오류가 발생했습니다.";
+      showError(`키워드 추출에 실패했습니다.\n${errorMessage}\n\n전역 설정 > 기본 설정에서 LLM 모델과 API 키를 확인해주세요.`);
+    } finally {
       setIsExtracting(false);
-    }, 2000); // 2초간 로딩 시뮬레이션
-    // *************************************************************
+    }
   };
 
   const openSrtPicker = useCallback(() => srtInputRef.current?.click(), []);
@@ -432,7 +471,14 @@ export default function AssembleEditor() {
         {icon}
         <Caption1 style={{ fontWeight: "600", color: tokens.colorNeutralForeground2 }}>{label}</Caption1>
       </div>
-      <Body2 style={{ fontWeight: "700", color: color || tokens.colorNeutralForeground1 }}>{value}</Body2>
+      <Body2
+        style={{
+          fontWeight: "700",
+          color: color || tokens.colorNeutralForeground1,
+        }}
+      >
+        {value}
+      </Body2>
     </div>
   );
 
@@ -472,9 +518,9 @@ export default function AssembleEditor() {
       const files = e.dataTransfer.files;
       if (files && files[0]) {
         // 파일 확장자 체크
-        const acceptedTypes = accept.split(',').map(type => type.trim().toLowerCase());
+        const acceptedTypes = accept.split(",").map((type) => type.trim().toLowerCase());
         const fileName = files[0].name.toLowerCase();
-        const fileExtension = '.' + fileName.split('.').pop();
+        const fileExtension = "." + fileName.split(".").pop();
 
         if (acceptedTypes.includes(fileExtension)) {
           onChange?.(files[0]);
@@ -489,11 +535,12 @@ export default function AssembleEditor() {
         appearance="outline"
         style={{
           height: "100%",
+
           boxShadow: isDragOver
             ? `0 0 0 3px ${tokens.colorBrandStroke1}, 0 8px 32px rgba(0, 120, 212, 0.25)`
             : connected
-              ? `0 0 0 2px ${ringColor}, 0 4px 16px rgba(34, 139, 34, 0.15)`
-              : `0 0 0 1px ${tokens.colorNeutralStroke2}, 0 2px 8px rgba(0, 0, 0, 0.08)`,
+            ? `0 0 0 2px ${ringColor}, 0 4px 16px rgba(34, 139, 34, 0.15)`
+            : `0 0 0 1px ${tokens.colorNeutralStroke2}, 0 2px 8px rgba(0, 0, 0, 0.08)`,
           transition: "all 200ms cubic-bezier(0.23, 1, 0.32, 1)",
           cursor: "pointer",
           backgroundColor: isDragOver ? tokens.colorBrandBackground2 : cardBg,
@@ -527,7 +574,7 @@ export default function AssembleEditor() {
           }
         }}
       >
-        <div // CardContent
+        <div
           style={{
             display: "flex",
             flexDirection: "column",
@@ -546,34 +593,50 @@ export default function AssembleEditor() {
             onChange={(e) => {
               if (e.target.files?.[0]) {
                 onChange?.(e.target.files[0]);
-                // 파일 선택 후 input 리셋 (같은 파일 다시 선택 가능하도록)
                 e.target.value = null;
               }
             }}
             id={inputId}
           />
-          <div style={{
-            color: isDragOver ? tokens.colorBrandForeground1 : iconColor,
-            marginBottom: tokens.spacingVerticalS,
-            transition: "all 200ms ease",
-            fontSize: "24px",
-            filter: connected ? "drop-shadow(0 2px 4px rgba(34, 139, 34, 0.3))" : isDragOver ? "drop-shadow(0 2px 8px rgba(0, 120, 212, 0.4))" : "none",
-            transform: isDragOver ? "scale(1.1)" : "scale(1)",
-          }}>
+          <div
+            style={{
+              color: isDragOver ? tokens.colorBrandForeground1 : iconColor,
+              marginBottom: tokens.spacingVerticalS,
+              transition: "all 200ms ease",
+              fontSize: "24px",
+              filter: connected
+                ? "drop-shadow(0 2px 4px rgba(34, 139, 34, 0.3))"
+                : isDragOver
+                ? "drop-shadow(0 2px 8px rgba(0, 120, 212, 0.4))"
+                : "none",
+              transform: isDragOver ? "scale(1.1)" : "scale(1)",
+            }}
+          >
             {connected ? <CheckmarkCircle20Filled /> : <ArrowUpload24Regular />}
           </div>
-          <Text size={400} weight="semibold" id={inputId} style={{
-            marginBottom: tokens.spacingVerticalS,
-            color: isDragOver ? tokens.colorBrandForeground1 : textColor,
-            transition: "color 200ms ease"
-          }}>
+          <Text
+            size={400}
+            weight="semibold"
+            id={inputId}
+            style={{
+              marginBottom: tokens.spacingVerticalS,
+              color: isDragOver ? tokens.colorBrandForeground1 : textColor,
+              transition: "color 200ms ease",
+            }}
+          >
             {isDragOver ? "파일을 여기에 드롭하세요" : label}
           </Text>
-          <Caption1 style={{
-            color: isDragOver ? tokens.colorBrandForeground2 : connected ? tokens.colorPaletteGreenForeground3 : tokens.colorNeutralForeground3,
-            textAlign: "center",
-            transition: "color 200ms ease"
-          }}>
+          <Caption1
+            style={{
+              color: isDragOver
+                ? tokens.colorBrandForeground2
+                : connected
+                ? tokens.colorPaletteGreenForeground3
+                : tokens.colorNeutralForeground3,
+              textAlign: "center",
+              transition: "color 200ms ease",
+            }}
+          >
             {isDragOver ? `${accept} 파일만 지원됩니다` : caption}
           </Caption1>
         </div>
@@ -585,6 +648,7 @@ export default function AssembleEditor() {
             onClick={onClick}
             style={{
               width: "100%",
+              minWidth: "200px",
               backgroundColor: connected ? tokens.colorPaletteGreenBackground1 : "transparent",
               borderColor: connected ? tokens.colorPaletteGreenBorderActive : tokens.colorBrandStroke1,
               color: connected ? tokens.colorPaletteGreenForeground1 : textColor,
@@ -621,8 +685,16 @@ export default function AssembleEditor() {
         <div className={headerStyles.pageTitleWithIcon}>
           <Target24Regular />
           영상 구성
-          {srtConnected && (<Badge size="extra-small" appearance="filled" color="success" style={{ marginLeft: 8 }}>SRT 연결됨</Badge>)}
-          {mp3Connected && (<Badge size="extra-small" appearance="filled" color="success" style={{ marginLeft: 6 }}>오디오 연결됨</Badge>)}
+          {srtConnected && (
+            <Badge size="extra-small" appearance="filled" color="success" style={{ marginLeft: 8 }}>
+              SRT 연결됨
+            </Badge>
+          )}
+          {mp3Connected && (
+            <Badge size="extra-small" appearance="filled" color="success" style={{ marginLeft: 6 }}>
+              오디오 연결됨
+            </Badge>
+          )}
         </div>
         <div className={headerStyles.pageDescription}>SRT 파일과 오디오를 결합하여 완성된 영상을 만드세요.</div>
         <div className={headerStyles.divider} />
@@ -630,8 +702,22 @@ export default function AssembleEditor() {
 
       {/* Loading */}
       {isLoading && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM, alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: 300,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: tokens.spacingVerticalM,
+              alignItems: "center",
+            }}
+          >
             <Spinner size="large" />
             <Body1 style={{ fontWeight: 600 }}>프로젝트를 불러오는 중입니다...</Body1>
           </div>
@@ -640,8 +726,13 @@ export default function AssembleEditor() {
 
       {/* Main */}
       {!isLoading && (
-        <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXXL }}>
-
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: tokens.spacingVerticalXXL,
+          }}
+        >
           {/* 파일 업로드 섹션 */}
           <Card
             style={{
@@ -650,42 +741,24 @@ export default function AssembleEditor() {
               border: `1px solid ${tokens.colorNeutralStroke2}`,
               height: "fit-content",
               display: "flex",
-              flexDirection: "column"
+              flexDirection: "column",
             }}
           >
-            <div
-              style={{
-                marginBottom: tokens.spacingVerticalS,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
+            <div style={{ marginBottom: tokens.spacingVerticalS }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <FolderOpen24Regular />
-                  <Text
-                    size={400}
-                    weight="semibold"
-                    style={{ letterSpacing: 0.2 }}
-                  >
+                  <Text size={400} weight="semibold" style={{ letterSpacing: 0.2 }}>
                     파일 선택
                   </Text>
                 </div>
-                <div style={{
-                  display: "flex",
-                  gap: tokens.spacingHorizontalS,
-                  alignItems: "center"
-                }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: tokens.spacingHorizontalS,
+                    alignItems: "center",
+                  }}
+                >
                   <Button
                     appearance="subtle"
                     icon={<LinkSquare24Regular />}
@@ -696,9 +769,10 @@ export default function AssembleEditor() {
                       fontWeight: 600,
                       height: "36px",
                       minHeight: "36px",
-                      padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+                      padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalL}`,
                       alignItems: "center",
                       display: "flex",
+                      minWidth: "160px",
                     }}
                   >
                     대본에서 가져오기
@@ -768,25 +842,39 @@ export default function AssembleEditor() {
             </div>
 
             {/* 통계 요약 (CardFooter 활용) */}
-            <CardFooter style={{
-              borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
-              padding: tokens.spacingVerticalS,
-              backgroundColor: tokens.colorNeutralBackground2,
-              display: "flex",
-              justifyContent: "space-around",
-              gap: tokens.spacingHorizontalS,
-            }}>
+            <CardFooter
+              style={{
+                borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+                padding: tokens.spacingVerticalS,
+                backgroundColor: tokens.colorNeutralBackground2,
+                display: "flex",
+                justifyContent: "space-around",
+                gap: tokens.spacingHorizontalS,
+              }}
+            >
               <StatItem
                 label="SRT 자막 파일"
                 value={srtConnected ? "완료" : "미연결"}
                 color={srtConnected ? tokens.colorPaletteLightGreenForeground1 : tokens.colorNeutralForeground3}
-                icon={srtConnected ? <CheckmarkCircle20Filled color={tokens.colorPaletteLightGreenForeground1} /> : <PlugDisconnected20Regular color={tokens.colorNeutralForeground3} />}
+                icon={
+                  srtConnected ? (
+                    <CheckmarkCircle20Filled color={tokens.colorPaletteLightGreenForeground1} />
+                  ) : (
+                    <PlugDisconnected20Regular color={tokens.colorNeutralForeground3} />
+                  )
+                }
               />
               <StatItem
                 label="MP3 파일"
                 value={mp3Connected ? "완료" : "미연결"}
                 color={mp3Connected ? tokens.colorPaletteLightGreenForeground1 : tokens.colorNeutralForeground3}
-                icon={mp3Connected ? <CheckmarkCircle20Filled color={tokens.colorPaletteLightGreenForeground1} /> : <PlugDisconnected20Regular color={tokens.colorNeutralForeground3} />}
+                icon={
+                  mp3Connected ? (
+                    <CheckmarkCircle20Filled color={tokens.colorPaletteLightGreenForeground1} />
+                  ) : (
+                    <PlugDisconnected20Regular color={tokens.colorNeutralForeground3} />
+                  )
+                }
               />
               <StatItem
                 label="씬 수"
@@ -795,7 +883,7 @@ export default function AssembleEditor() {
               />
               <StatItem
                 label="총 영상 길이"
-                value={scenes.length > 0 ? `${totalDur.toFixed(1)}초` : '0초'}
+                value={scenes.length > 0 ? `${totalDur.toFixed(1)}초` : "0초"}
                 color={scenes.length > 0 ? tokens.colorBrandForeground1 : tokens.colorNeutralForeground3}
                 isLast={true}
               />
@@ -810,14 +898,11 @@ export default function AssembleEditor() {
               border: `1px solid ${tokens.colorNeutralStroke2}`,
               height: "fit-content",
               display: "flex",
-              flexDirection: "column"
+              flexDirection: "column",
             }}
           >
-            <div
-              style={{
-                marginBottom: tokens.spacingVerticalS,
-              }}
-            >
+            <div style={{ marginBottom: tokens.spacingVerticalS }}>
+              {" "}
               <div
                 style={{
                   display: "flex",
@@ -826,11 +911,7 @@ export default function AssembleEditor() {
                 }}
               >
                 <LightbulbFilament24Regular />
-                <Text
-                  size={400}
-                  weight="semibold"
-                  style={{ letterSpacing: 0.2 }}
-                >
+                <Text size={400} weight="semibold" style={{ letterSpacing: 0.2 }}>
                   AI 키워드 추출
                 </Text>
               </div>
@@ -846,7 +927,13 @@ export default function AssembleEditor() {
               </Text>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: tokens.spacingVerticalL,
+              }}
+            >
               <PrimaryButton
                 size="large"
                 style={{ height: 48, maxWidth: 480, alignSelf: "center" }}
@@ -890,27 +977,17 @@ export default function AssembleEditor() {
                     </Body1>
 
                     <ChipsWrap
-                      items={assets.slice(0, 30).map((asset, index) => ( // 한 줄에 더 많은 칩 표시 가능하도록 갯수 조정
-                        <Badge
-                          key={index}
-                          appearance="tint" // 칩을 Badge로 대체하여 통일된 디자인 사용
-                          color="brand"
-                          size="medium"
-                          style={{
-                            cursor: "default",
-                            fontSize: tokens.fontSizeBase200,
-                            lineHeight: 1,
-                          }}
-                        >
-                          {asset.keyword || `키워드 ${index + 1}`}
-                        </Badge>
-                      )).concat(
-                        assets.length > 30
-                          ? [
+                      items={assets
+                        .slice(0, 30)
+                        .map(
+                          (
+                            asset,
+                            index // 한 줄에 더 많은 칩 표시 가능하도록 갯수 조정
+                          ) => (
                             <Badge
-                              key="more"
-                              appearance="outline"
-                              color="neutral"
+                              key={index}
+                              appearance="tint" // 칩을 Badge로 대체하여 통일된 디자인 사용
+                              color="brand"
                               size="medium"
                               style={{
                                 cursor: "default",
@@ -918,24 +995,56 @@ export default function AssembleEditor() {
                                 lineHeight: 1,
                               }}
                             >
-                              +{assets.length - 30}개 더
-                            </Badge>,
-                          ]
-                          : []
-                      )}
+                              {asset.keyword || `키워드 ${index + 1}`}
+                            </Badge>
+                          )
+                        )
+                        .concat(
+                          assets.length > 30
+                            ? [
+                                <Badge
+                                  key="more"
+                                  appearance="outline"
+                                  color="neutral"
+                                  size="medium"
+                                  style={{
+                                    cursor: "default",
+                                    fontSize: tokens.fontSizeBase200,
+                                    lineHeight: 1,
+                                  }}
+                                >
+                                  +{assets.length - 30}개 더
+                                </Badge>,
+                              ]
+                            : []
+                        )}
                     />
                   </div>
                 ) : isExtracting ? (
                   // 추출 중 상태
-                  <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM, alignItems: "center" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: tokens.spacingVerticalM,
+                      alignItems: "center",
+                    }}
+                  >
                     <Spinner size="medium" />
                     <Body1 style={{ color: tokens.colorBrandForeground1 }}>키워드를 정밀하게 분석 중입니다...</Body1>
                   </div>
                 ) : (
                   // 초기 상태
                   <div style={{ textAlign: "center", maxWidth: 520 }}>
-                    <Body2 style={{ color: tokens.colorNeutralForeground3, marginBottom: tokens.spacingVerticalS }}>
-                      {srtConnected ? "키워드 추출 버튼을 눌러 영상 소스 검색을 시작하세요" : "SRT 파일을 먼저 업로드해야 키워드 추출이 가능합니다"}
+                    <Body2
+                      style={{
+                        color: tokens.colorNeutralForeground3,
+                        marginBottom: tokens.spacingVerticalS,
+                      }}
+                    >
+                      {srtConnected
+                        ? "키워드 추출 버튼을 눌러 영상 소스 검색을 시작하세요"
+                        : "SRT 파일을 먼저 업로드해야 키워드 추출이 가능합니다"}
                     </Body2>
                     <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
                       추출된 키워드를 기반으로 영상 제작에 필요한 소스를 자동으로 검색 및 추천합니다.

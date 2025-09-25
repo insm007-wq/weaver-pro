@@ -1,5 +1,5 @@
 {
-  "name": "weaver-pro-linear-template",
+  "name": "weaver-pro",
   "version": "1.0.0",
   "main": "electron/main.js",
   "scripts": {
@@ -15,10 +15,11 @@
     "electron:dev:5175": "cross-env VITE_DEV_SERVER_URL=http://localhost:5175 electron ."
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.63.1",
     "@fluentui/react-components": "^9.69.0",
     "@fluentui/react-icons": "^2.0.309",
     "@fluentui/tokens": "^1.0.0-alpha.22",
-    "@google/genai": "^1.17.0",
+    "@google/generative-ai": "^0.24.1",
     "@heroicons/react": "^2.2.0",
     "axios": "^1.11.0",
     "dotenv": "^17.2.1",

@@ -407,7 +407,7 @@ function SubtitleTab() {
               onOptionSelect={(_, data) => updateSetting("horizontalAlign", data.optionValue)}
             >
               {TEXT_ALIGNS.map((align) => (
-                <Option key={align.key} value={align.key}>
+                <Option key={align.key} value={align.key} text={align.text}>
                   {align.icon} {align.text}
                 </Option>
               ))}

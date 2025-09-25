@@ -972,7 +972,7 @@ function ThumbnailGenerator() {
             </Label>
             <Dropdown value={qualityPreset} onOptionSelect={(_, data) => setQualityPreset(data.optionValue)}>
               {QUALITY_PRESETS.map((preset) => (
-                <Option key={preset.value} value={preset.value}>
+                <Option key={preset.value} value={preset.value} text={`${preset.label} - ${preset.description} • ${preset.estimatedTime}`}>
                   <div>
                     <div style={{ fontWeight: tokens.fontWeightSemibold }}>{preset.label}</div>
                     <Caption1>

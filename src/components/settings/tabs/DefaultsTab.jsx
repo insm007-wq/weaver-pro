@@ -438,7 +438,7 @@ export default function DefaultsTab() {
                 onOptionSelect={(_, data) => setSettings((prev) => ({ ...prev, imageModel: data.optionValue }))}
               >
                 {AI_OPTIONS.imageModels.map((model) => (
-                  <Option key={model.value} value={model.value} text={model.text} disabled={model.status === "준비 중"}>
+                  <Option key={model.value} value={model.value} text={`${model.text} (${model.provider}) - ${model.cost}${model.status === "준비 중" ? " - 준비 중" : ""}`} disabled={model.status === "준비 중"}>
                     {model.text}{" "}
                     <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
                       ({model.provider}) - {model.cost}
@@ -458,7 +458,7 @@ export default function DefaultsTab() {
                 onOptionSelect={(_, data) => setSettings((prev) => ({ ...prev, imageResolution: data.optionValue }))}
               >
                 {AI_OPTIONS.imageResolutions.map((res) => (
-                  <Option key={res.value} value={res.value}>
+                  <Option key={res.value} value={res.value} text={`${res.text} (${res.speed})`}>
                     {res.text} <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>({res.speed})</Caption1>
                   </Option>
                 ))}
@@ -475,7 +475,7 @@ export default function DefaultsTab() {
                 onOptionSelect={(_, data) => setSettings((prev) => ({ ...prev, videoModel: data.optionValue }))}
               >
                 {AI_OPTIONS.videoModels.map((model) => (
-                  <Option key={model.value} value={model.value} disabled={model.status === "준비 중"}>
+                  <Option key={model.value} value={model.value} text={`${model.text} (${model.provider})${model.status === "추천" ? ` - ⭐ ${model.status}` : ` - ${model.status}`}`} disabled={model.status === "준비 중"}>
                     {model.text} <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>({model.provider})</Caption1>
                     <Caption1 style={{ color: tokens.colorNeutralForeground3, marginLeft: "4px" }}>
                       {model.status === "추천" ? ` - ⭐ ${model.status}` : ` - ${model.status}`}
@@ -492,7 +492,7 @@ export default function DefaultsTab() {
                 onOptionSelect={(_, data) => setSettings((prev) => ({ ...prev, videoQuality: data.optionValue }))}
               >
                 {AI_OPTIONS.videoQualities.map((quality) => (
-                  <Option key={quality.value} value={quality.value}>
+                  <Option key={quality.value} value={quality.value} text={`${quality.text} (${quality.speed})`}>
                     {quality.text} <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>({quality.speed})</Caption1>
                   </Option>
                 ))}
@@ -509,7 +509,7 @@ export default function DefaultsTab() {
                 onOptionSelect={(_, data) => setSettings((prev) => ({ ...prev, llmModel: data.optionValue }))}
               >
                 {AI_OPTIONS.llmModels.map((model) => (
-                  <Option key={model.value} value={model.value}>
+                  <Option key={model.value} value={model.value} text={`${model.text} (${model.provider} - ${model.cost})`}>
                     {model.text}{" "}
                     <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
                       ({model.provider} - {model.cost})
