@@ -24,11 +24,14 @@ import {
   PlugDisconnected20Regular, // 미연결 아이콘
   ArrowUpload24Regular, // 업로드 아이콘
   LightbulbFilament24Regular, // AI 아이콘 변경
+  LinkSquare24Regular, // 대본 연결 아이콘
+  FolderOpen24Regular, // 파일 선택 아이콘
+  DismissCircle24Regular, // 초기화 아이콘
 } from "@fluentui/react-icons";
 
 // Utils
 import { parseSrtToScenes } from "../../utils/parseSrt";
-import { getSetting, readTextAny, getMp3DurationSafe } from "../../utils/ipcSafe";
+import { getSetting, setSetting, readTextAny, getMp3DurationSafe } from "../../utils/ipcSafe";
 import { handleError } from "@utils";
 import {
   useContainerStyles,
@@ -130,15 +133,11 @@ export default function AssembleEditor() {
     let cancelled = false;
     (async () => {
       try {
-        if (mp3Connected === false) {
-          console.log("[assemble] MP3 connection cleared, skipping load");
-          setAudioDur(0);
-          return;
-        }
         const mp3Path = await getSetting("paths.mp3");
         if (!mp3Path) {
           console.log("[assemble] No MP3 path found");
           setAudioDur(0);
+          setMp3Connected(false);
           return;
         }
         const dur = await getMp3DurationSafe(mp3Path);
@@ -146,6 +145,9 @@ export default function AssembleEditor() {
           setAudioDur(Number(dur));
           setMp3Connected(true);
           console.log("[assemble] MP3 duration:", dur);
+        } else if (!cancelled) {
+          setMp3Connected(false);
+          setAudioDur(0);
         }
       } catch (e) {
         if (!cancelled) {
@@ -153,6 +155,8 @@ export default function AssembleEditor() {
             metadata: { action: "load_audio_duration", cancelled },
           });
           console.warn("MP3 duration query failed:", message);
+          setMp3Connected(false);
+          setAudioDur(0);
         }
       }
     })();
@@ -160,17 +164,232 @@ export default function AssembleEditor() {
     return () => {
       cancelled = true;
     };
-  }, [mp3Connected]);
+  }, []); // 의존성 배열을 빈 배열로 변경하고, 수동으로 트리거하는 방식 사용
+
+  // MP3 상태 재확인 함수
+  const recheckMp3Status = async () => {
+    try {
+      const mp3Path = await getSetting("paths.mp3");
+      if (!mp3Path) {
+        setAudioDur(0);
+        setMp3Connected(false);
+        return;
+      }
+      const dur = await getMp3DurationSafe(mp3Path);
+      if (dur) {
+        setAudioDur(Number(dur));
+        setMp3Connected(true);
+        console.log("[assemble] MP3 재확인 완료 - duration:", dur);
+      } else {
+        setMp3Connected(false);
+        setAudioDur(0);
+      }
+    } catch (error) {
+      console.warn("MP3 상태 재확인 실패:", error);
+      setMp3Connected(false);
+      setAudioDur(0);
+    }
+  };
+
+  // SRT 상태 재확인 함수
+  const recheckSrtStatus = async () => {
+    try {
+      const srtPath = await getSetting("paths.srt");
+      if (!srtPath) {
+        setScenes([]);
+        setSrtConnected(false);
+        return;
+      }
+      const raw = await readTextAny(srtPath);
+      const parsed = parseSrtToScenes(raw || "");
+      if (parsed.length) {
+        setScenes(parsed);
+        setSelectedSceneIdx(0);
+        setSrtConnected(true);
+        console.log("[assemble] SRT 재확인 완료 - scenes:", parsed.length);
+      } else {
+        setSrtConnected(false);
+        setScenes([]);
+      }
+    } catch (error) {
+      console.warn("SRT 상태 재확인 실패:", error);
+      setSrtConnected(false);
+      setScenes([]);
+    }
+  };
 
   /* ============================== Handlers =================================== */
   const handleSrtUpload = async (file) => {
-    // 실제 파일 업로드 및 로직 연결
-    console.log("SRT file uploaded:", file);
+    try {
+      console.log("SRT 파일 업로드:", file.name);
+      console.log("파일 경로:", file.path);
+
+      // 파일 경로가 있는지 확인
+      if (!file.path) {
+        console.error("파일 경로가 없습니다:", file);
+        return;
+      }
+
+      // 파일 경로를 설정에 저장
+      await setSetting({ key: "paths.srt", value: file.path });
+
+      // 상태 재확인
+      await recheckSrtStatus();
+
+      console.log("✅ SRT 파일이 성공적으로 연결되었습니다:", file.path);
+    } catch (error) {
+      console.error("SRT 파일 업로드 실패:", error);
+      const { message } = handleError(error, "srt_upload_error", {
+        metadata: { fileName: file.name, filePath: file.path }
+      });
+    }
   };
 
   const handleMp3Upload = async (file) => {
-    // 실제 파일 업로드 및 로직 연결
-    console.log("MP3 file uploaded:", file);
+    try {
+      console.log("MP3 파일 업로드:", file.name);
+      console.log("파일 경로:", file.path);
+
+      // 파일 경로가 있는지 확인
+      if (!file.path) {
+        console.error("파일 경로가 없습니다:", file);
+        return;
+      }
+
+      // 파일 경로를 설정에 저장
+      await setSetting({ key: "paths.mp3", value: file.path });
+
+      // 상태 재확인
+      await recheckMp3Status();
+
+      console.log("✅ MP3 파일이 성공적으로 연결되었습니다:", file.path);
+    } catch (error) {
+      console.error("MP3 파일 업로드 실패:", error);
+      const { message } = handleError(error, "mp3_upload_error", {
+        metadata: { fileName: file.name, filePath: file.path }
+      });
+    }
+  };
+
+  const handleInsertFromScript = async () => {
+    try {
+      console.log("🔗 대본에서 파일 가져오기 시작...");
+
+      // videoSaveFolder에서 대본 생성된 파일들 찾기
+      const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
+      const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
+
+      if (!videoSaveFolder) {
+        console.warn("⚠️ 영상 저장 폴더가 설정되지 않았습니다.");
+        return;
+      }
+
+      console.log("📁 영상 저장 폴더:", videoSaveFolder);
+
+      // 예상되는 파일 경로들 확인
+      const expectedSrtPath = `${videoSaveFolder}/subtitle.srt`;
+      const expectedMp3Paths = [
+        `${videoSaveFolder}/${await getProjectName()}.mp3`, // 프로젝트명.mp3
+        `${videoSaveFolder}/merged_audio.mp3`, // 기본 병합 오디오명
+      ];
+
+      let foundSrt = null;
+      let foundMp3 = null;
+
+      // SRT 파일 확인
+      try {
+        const srtExists = await window.api.fileExists(expectedSrtPath);
+        if (srtExists) {
+          foundSrt = expectedSrtPath;
+          console.log("✅ SRT 파일 발견:", foundSrt);
+        }
+      } catch (error) {
+        console.log("SRT 파일 확인 중 오류:", error);
+      }
+
+      // MP3 파일 확인 (여러 가능한 경로 시도)
+      for (const mp3Path of expectedMp3Paths) {
+        try {
+          const mp3Exists = await window.api.fileExists(mp3Path);
+          if (mp3Exists) {
+            foundMp3 = mp3Path;
+            console.log("✅ MP3 파일 발견:", foundMp3);
+            break;
+          }
+        } catch (error) {
+          console.log(`MP3 파일 확인 중 오류 (${mp3Path}):`, error);
+        }
+      }
+
+      // 파일이 발견되면 설정에 저장
+      let insertedCount = 0;
+
+      if (foundSrt) {
+        await setSetting({ key: "paths.srt", value: foundSrt });
+        await recheckSrtStatus();
+        insertedCount++;
+        console.log("🎯 SRT 파일 연결 완료:", foundSrt);
+      }
+
+      if (foundMp3) {
+        await setSetting({ key: "paths.mp3", value: foundMp3 });
+        await recheckMp3Status();
+        insertedCount++;
+        console.log("🎯 MP3 파일 연결 완료:", foundMp3);
+      }
+
+      if (insertedCount === 0) {
+        console.warn("⚠️ 대본에서 생성된 파일을 찾을 수 없습니다.");
+        console.log("예상 경로들:");
+        console.log("- SRT:", expectedSrtPath);
+        expectedMp3Paths.forEach(path => console.log("- MP3:", path));
+      } else {
+        console.log(`✅ ${insertedCount}개 파일이 성공적으로 연결되었습니다.`);
+      }
+
+    } catch (error) {
+      console.error("❌ 대본 파일 가져오기 실패:", error);
+      const { message } = handleError(error, "script_import_error", {
+        metadata: { action: "import_from_script" }
+      });
+    }
+  };
+
+  // 프로젝트명 가져오기 헬퍼 함수
+  const getProjectName = async () => {
+    try {
+      const projectName = await window.api.getSetting("projectName");
+      return projectName?.value || projectName || "project";
+    } catch (error) {
+      console.warn("프로젝트명 가져오기 실패:", error);
+      return "project";
+    }
+  };
+
+  // 초기화 함수
+  const handleReset = async () => {
+    try {
+      console.log("🔄 파일 연결 초기화 시작...");
+
+      // 설정에서 경로 제거
+      await setSetting({ key: "paths.srt", value: "" });
+      await setSetting({ key: "paths.mp3", value: "" });
+
+      // 상태 초기화
+      setSrtConnected(false);
+      setMp3Connected(false);
+      setScenes([]);
+      setAssets([]);
+      setAudioDur(0);
+      setSelectedSceneIdx(-1);
+
+      console.log("✅ 파일 연결이 초기화되었습니다.");
+    } catch (error) {
+      console.error("❌ 초기화 실패:", error);
+      const { message } = handleError(error, "reset_error", {
+        metadata: { action: "reset_file_connections" }
+      });
+    }
   };
 
   const handleExtractKeywords = () => {
@@ -203,41 +422,110 @@ export default function AssembleEditor() {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: tokens.spacingVerticalXS,
-        flex: "1 1 120px",
-        padding: tokens.spacingVerticalS,
+        gap: tokens.spacingVerticalXXS,
+        flex: "1 1 100px",
+        padding: tokens.spacingVerticalXS,
         borderRight: isLast ? "none" : `1px solid ${tokens.colorNeutralStroke2}`,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
         {icon}
-        <Body2 style={{ fontWeight: "600", color: tokens.colorNeutralForeground2 }}>{label}</Body2>
+        <Caption1 style={{ fontWeight: "600", color: tokens.colorNeutralForeground2 }}>{label}</Caption1>
       </div>
-      <Body1 style={{ fontWeight: "700", color: color || tokens.colorNeutralForeground1 }}>{value}</Body1>
+      <Body2 style={{ fontWeight: "700", color: color || tokens.colorNeutralForeground1 }}>{value}</Body2>
     </div>
   );
 
   const DropZone = ({ icon, label, caption, connected, onClick, inputRef, accept, onChange, inputId }) => {
-    const iconColor = connected ? tokens.colorPaletteLightGreenForeground1 : tokens.colorNeutralForeground3;
-    const hoverBg = connected ? tokens.colorPaletteLightGreenBackground3 : tokens.colorNeutralBackground3;
-    const ringColor = connected ? tokens.colorPaletteLightGreenBorderActive : tokens.colorBrandStroke1;
-    const cardBg = connected ? tokens.colorPaletteLightGreenBackground2 : tokens.colorNeutralBackground1;
+    // 더 생생한 색상으로 개선
+    const iconColor = connected ? tokens.colorPaletteGreenForeground1 : tokens.colorBrandForeground1;
+    const hoverBg = connected ? tokens.colorPaletteGreenBackground3 : tokens.colorBrandBackground2;
+    const ringColor = connected ? tokens.colorPaletteGreenBorderActive : tokens.colorBrandStroke1;
+    const cardBg = connected ? tokens.colorPaletteGreenBackground1 : tokens.colorNeutralBackground1;
+    const textColor = connected ? tokens.colorPaletteGreenForeground2 : tokens.colorBrandForeground1;
+
+    // 드래그 앤 드롭 상태
+    const [isDragOver, setIsDragOver] = useState(false);
+
+    const handleDragEnter = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(true);
+    };
+
+    const handleDragLeave = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+    };
+
+    const handleDragOver = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const handleDrop = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+
+      const files = e.dataTransfer.files;
+      if (files && files[0]) {
+        // 파일 확장자 체크
+        const acceptedTypes = accept.split(',').map(type => type.trim().toLowerCase());
+        const fileName = files[0].name.toLowerCase();
+        const fileExtension = '.' + fileName.split('.').pop();
+
+        if (acceptedTypes.includes(fileExtension)) {
+          onChange?.(files[0]);
+        } else {
+          console.warn(`지원하지 않는 파일 형식입니다. 허용된 형식: ${accept}`);
+        }
+      }
+    };
 
     return (
       <Card
         appearance="outline"
         style={{
           height: "100%",
-          boxShadow: connected ? `0 0 0 1px ${tokens.colorPaletteLightGreenBorderActive}` : tokens.shadow2,
-          transition: "all 150ms ease-out",
+          boxShadow: isDragOver
+            ? `0 0 0 3px ${tokens.colorBrandStroke1}, 0 8px 32px rgba(0, 120, 212, 0.25)`
+            : connected
+              ? `0 0 0 2px ${ringColor}, 0 4px 16px rgba(34, 139, 34, 0.15)`
+              : `0 0 0 1px ${tokens.colorNeutralStroke2}, 0 2px 8px rgba(0, 0, 0, 0.08)`,
+          transition: "all 200ms cubic-bezier(0.23, 1, 0.32, 1)",
           cursor: "pointer",
-          backgroundColor: cardBg,
+          backgroundColor: isDragOver ? tokens.colorBrandBackground2 : cardBg,
           display: "flex",
           flexDirection: "column",
+          transform: isDragOver ? "scale(1.02)" : "translateY(0)",
+          position: "relative",
+          overflow: "hidden",
         }}
         onClick={onClick}
         tabIndex={0}
         aria-labelledby={inputId}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        onMouseEnter={(e) => {
+          if (!isDragOver) {
+            e.currentTarget.style.transform = "translateY(-2px)";
+            e.currentTarget.style.boxShadow = connected
+              ? `0 0 0 2px ${ringColor}, 0 8px 24px rgba(34, 139, 34, 0.2)`
+              : `0 0 0 1px ${tokens.colorBrandStroke1}, 0 6px 20px rgba(0, 0, 0, 0.12)`;
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!isDragOver) {
+            e.currentTarget.style.transform = "translateY(0)";
+            e.currentTarget.style.boxShadow = connected
+              ? `0 0 0 2px ${ringColor}, 0 4px 16px rgba(34, 139, 34, 0.15)`
+              : `0 0 0 1px ${tokens.colorNeutralStroke2}, 0 2px 8px rgba(0, 0, 0, 0.08)`;
+          }
+        }}
       >
         <div // CardContent
           style={{
@@ -246,7 +534,8 @@ export default function AssembleEditor() {
             alignItems: "center",
             justifyContent: "center",
             flex: 1,
-            padding: tokens.spacingVerticalL,
+            padding: `${tokens.spacingVerticalXL} ${tokens.spacingHorizontalL}`,
+            minHeight: "200px",
           }}
         >
           <input
@@ -264,17 +553,28 @@ export default function AssembleEditor() {
             id={inputId}
           />
           <div style={{
-            color: iconColor,
+            color: isDragOver ? tokens.colorBrandForeground1 : iconColor,
             marginBottom: tokens.spacingVerticalS,
-            transition: "transform 150ms ease",
+            transition: "all 200ms ease",
+            fontSize: "24px",
+            filter: connected ? "drop-shadow(0 2px 4px rgba(34, 139, 34, 0.3))" : isDragOver ? "drop-shadow(0 2px 8px rgba(0, 120, 212, 0.4))" : "none",
+            transform: isDragOver ? "scale(1.1)" : "scale(1)",
           }}>
             {connected ? <CheckmarkCircle20Filled /> : <ArrowUpload24Regular />}
           </div>
-          <Text size={400} weight="semibold" id={inputId} style={{ marginBottom: tokens.spacingVerticalS }}>
-            {label}
+          <Text size={400} weight="semibold" id={inputId} style={{
+            marginBottom: tokens.spacingVerticalS,
+            color: isDragOver ? tokens.colorBrandForeground1 : textColor,
+            transition: "color 200ms ease"
+          }}>
+            {isDragOver ? "파일을 여기에 드롭하세요" : label}
           </Text>
-          <Caption1 style={{ color: tokens.colorNeutralForeground3, textAlign: "center" }}>
-            {caption}
+          <Caption1 style={{
+            color: isDragOver ? tokens.colorBrandForeground2 : connected ? tokens.colorPaletteGreenForeground3 : tokens.colorNeutralForeground3,
+            textAlign: "center",
+            transition: "color 200ms ease"
+          }}>
+            {isDragOver ? `${accept} 파일만 지원됩니다` : caption}
           </Caption1>
         </div>
         <CardFooter>
@@ -283,7 +583,14 @@ export default function AssembleEditor() {
             size="small"
             icon={connected ? <CheckmarkCircle20Filled /> : icon}
             onClick={onClick}
-            style={{ width: "100%" }}
+            style={{
+              width: "100%",
+              backgroundColor: connected ? tokens.colorPaletteGreenBackground1 : "transparent",
+              borderColor: connected ? tokens.colorPaletteGreenBorderActive : tokens.colorBrandStroke1,
+              color: connected ? tokens.colorPaletteGreenForeground1 : textColor,
+              fontWeight: 600,
+              transition: "all 200ms ease",
+            }}
           >
             {connected ? "연결 완료" : "파일 선택"}
           </Button>
@@ -313,7 +620,7 @@ export default function AssembleEditor() {
       <div className={headerStyles.pageHeader}>
         <div className={headerStyles.pageTitleWithIcon}>
           <Target24Regular />
-          <Text size={700} weight="bold">영상 구성 에디터</Text>
+          영상 구성
           {srtConnected && (<Badge size="extra-small" appearance="filled" color="success" style={{ marginLeft: 8 }}>SRT 연결됨</Badge>)}
           {mp3Connected && (<Badge size="extra-small" appearance="filled" color="success" style={{ marginLeft: 6 }}>오디오 연결됨</Badge>)}
         </div>
@@ -336,19 +643,103 @@ export default function AssembleEditor() {
         <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXXL }}>
 
           {/* 파일 업로드 섹션 */}
-          <Card style={{ padding: 0 }}>
-            <CardHeader
-              header={<Text size={500} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>파일 연결</Text>}
-              description={<Caption1 style={{ color: tokens.colorNeutralForeground3 }}>SRT 자막 파일과 오디오 파일을 연결하여 분석을 준비합니다.</Caption1>}
-              style={{ padding: tokens.spacingVerticalL, paddingBottom: tokens.spacingVerticalM }}
-            />
+          <Card
+            style={{
+              padding: "12px 16px",
+              borderRadius: "16px",
+              border: `1px solid ${tokens.colorNeutralStroke2}`,
+              height: "fit-content",
+              display: "flex",
+              flexDirection: "column"
+            }}
+          >
+            <div
+              style={{
+                marginBottom: tokens.spacingVerticalS,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <FolderOpen24Regular />
+                  <Text
+                    size={400}
+                    weight="semibold"
+                    style={{ letterSpacing: 0.2 }}
+                  >
+                    파일 선택
+                  </Text>
+                </div>
+                <div style={{
+                  display: "flex",
+                  gap: tokens.spacingHorizontalS,
+                  alignItems: "center"
+                }}>
+                  <Button
+                    appearance="subtle"
+                    icon={<LinkSquare24Regular />}
+                    onClick={handleInsertFromScript}
+                    size="medium"
+                    style={{
+                      color: tokens.colorBrandForeground1,
+                      fontWeight: 600,
+                      height: "36px",
+                      minHeight: "36px",
+                      padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+                      alignItems: "center",
+                      display: "flex",
+                    }}
+                  >
+                    대본에서 가져오기
+                  </Button>
+                  <Button
+                    appearance="subtle"
+                    icon={<DismissCircle24Regular />}
+                    onClick={handleReset}
+                    size="medium"
+                    style={{
+                      color: tokens.colorNeutralForeground3,
+                      fontWeight: 600,
+                      height: "36px",
+                      minHeight: "36px",
+                      padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+                      alignItems: "center",
+                      display: "flex",
+                    }}
+                  >
+                    초기화
+                  </Button>
+                </div>
+              </div>
+              <Text
+                size={200}
+                style={{
+                  color: tokens.colorNeutralForeground3,
+                  marginTop: 4,
+                  display: "block",
+                }}
+              >
+                파일을 드래그하거나 버튼을 클릭하여 업로드하세요
+              </Text>
+            </div>
 
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
                 gap: tokens.spacingHorizontalL,
-                padding: `0 ${tokens.spacingHorizontalL} ${tokens.spacingVerticalL}`,
+                padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL} ${tokens.spacingVerticalL}`,
               }}
             >
               <DropZone
@@ -379,7 +770,7 @@ export default function AssembleEditor() {
             {/* 통계 요약 (CardFooter 활용) */}
             <CardFooter style={{
               borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
-              padding: tokens.spacingVerticalM,
+              padding: tokens.spacingVerticalS,
               backgroundColor: tokens.colorNeutralBackground2,
               display: "flex",
               justifyContent: "space-around",
@@ -412,14 +803,50 @@ export default function AssembleEditor() {
           </Card>
 
           {/* AI 키워드 추출 섹션 */}
-          <Card style={{ padding: 0 }}>
-            <CardHeader
-              header={<Text size={500} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}><LightbulbFilament24Regular /> AI 키워드 추출</Text>}
-              description={<Caption1 style={{ color: tokens.colorNeutralForeground3 }}>SRT 내용을 분석하여 자동으로 영상 소스 검색 키워드를 추출합니다.</Caption1>}
-              style={{ padding: tokens.spacingVerticalL, paddingBottom: tokens.spacingVerticalM }}
-            />
+          <Card
+            style={{
+              padding: "12px 16px",
+              borderRadius: "16px",
+              border: `1px solid ${tokens.colorNeutralStroke2}`,
+              height: "fit-content",
+              display: "flex",
+              flexDirection: "column"
+            }}
+          >
+            <div
+              style={{
+                marginBottom: tokens.spacingVerticalS,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <LightbulbFilament24Regular />
+                <Text
+                  size={400}
+                  weight="semibold"
+                  style={{ letterSpacing: 0.2 }}
+                >
+                  AI 키워드 추출
+                </Text>
+              </div>
+              <Text
+                size={200}
+                style={{
+                  color: tokens.colorNeutralForeground3,
+                  marginTop: 4,
+                  display: "block",
+                }}
+              >
+                SRT 내용을 분석하여 자동으로 영상 소스 검색 키워드를 추출합니다.
+              </Text>
+            </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL, padding: `0 ${tokens.spacingHorizontalL} ${tokens.spacingVerticalL}` }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL }}>
               <PrimaryButton
                 size="large"
                 style={{ height: 48, maxWidth: 480, alignSelf: "center" }}
