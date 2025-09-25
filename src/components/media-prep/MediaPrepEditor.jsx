@@ -13,12 +13,12 @@ import KeywordExtraction from "./parts/KeywordExtraction";
 import ProjectStats from "./parts/ProjectStats";
 
 /**
- * AssembleEditor (UI 개선: 모던, 간결, 시각적 위계 강화)
+ * MediaPrepEditor (UI 개선: 모던, 간결, 시각적 위계 강화)
  * - Card 컴포넌트 활용 섹션 분리
  * - DropZone 디자인 간소화 및 상태 명확화
  * - 통계 칩 디자인 및 레이아웃 개선
  */
-function AssembleEditor() {
+function MediaPrepEditor() {
   const containerStyles = useContainerStyles();
   const headerStyles = useHeaderStyles();
   const srtInputId = useId("srt-input");
@@ -94,10 +94,10 @@ function AssembleEditor() {
   );
 }
 
-export default function AssembleEditorWithBoundary() {
+export default function MediaPrepEditorWithBoundary() {
   return (
     <PageErrorBoundary>
-      <AssembleEditor />
+      <MediaPrepEditor />
     </PageErrorBoundary>
   );
 }
