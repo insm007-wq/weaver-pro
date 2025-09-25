@@ -219,7 +219,9 @@
       "Bash(asar extract:*)",
       "Read(//c/WeaverPro/1111/audio/**)",
       "Read(//c/WeaverPro/1111/scripts/**)",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "Bash(mv:*)",
+      "Bash(git mv:*)"
     ],
     "deny": [],
     "ask": []
