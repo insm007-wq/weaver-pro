@@ -36,10 +36,6 @@ const useStyles = makeStyles({
     boxShadow: tokens.shadow4,
     transition: 'all 0.2s ease',
     
-    ':hover': {
-      boxShadow: tokens.shadow8,
-      transform: 'translateY(-1px)',
-    }
   },
 
   // 글래스 효과 카드
@@ -53,10 +49,6 @@ const useStyles = makeStyles({
     position: 'relative',
     overflow: 'hidden',
     
-    ':hover': {
-      transform: 'translateY(-4px) scale(1.01)',
-      boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1), 0 1px 0 rgba(255, 255, 255, 0.6) inset',
-    },
 
     '::before': {
       content: '""',
@@ -79,10 +71,6 @@ const useStyles = makeStyles({
     boxShadow: tokens.shadow16,
     transition: 'all 0.2s ease',
     
-    ':hover': {
-      boxShadow: tokens.shadow28,
-      transform: 'translateY(-2px)',
-    }
   },
 
   // 컴팩트 패딩
