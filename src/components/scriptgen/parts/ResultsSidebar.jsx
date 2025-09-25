@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { memo, useState, useEffect, useCallback, useMemo } from "react";
 import {
   Card,
   Text,
@@ -7,17 +7,20 @@ import {
   Divider,
 } from "@fluentui/react-components";
 
-function ResultsSidebar({
-  fullVideoState,
-  doc,
-  isLoading,
-  form,
-  globalSettings,
-  resetFullVideoState,
-  api,
-  onClose,
-  horizontal = false
-}) {
+const ResultsSidebar = memo(
+  ({
+    fullVideoState,
+    doc,
+    isLoading,
+    form,
+    globalSettings,
+    resetFullVideoState,
+    api,
+    onClose,
+    horizontal,
+  }) => {
+    // default parameter 처리
+    const isHorizontal = horizontal === true;
   
 
   // 표시할 내용이 있는지 확인
@@ -30,7 +33,7 @@ function ResultsSidebar({
   }
 
   // 가로형 레이아웃 (하단 배치용)
-  if (horizontal) {
+  if (isHorizontal) {
     return (
       <Card
         style={{
@@ -183,6 +186,7 @@ function ResultsSidebar({
     </Card>
   );
 }
+);
 
 // 카운트다운 타이머 컴포넌트 (개선된 로직)
 function CountdownTimer({ targetTimeMs, size, color }) {
@@ -533,7 +537,7 @@ function MiniProgressPanel({ fullVideoState, resetFullVideoState, api }) {
 }
 
 // 컴팩트 스크립트 뷰어 컴포넌트
-function CompactScriptViewer({ fullVideoState, doc, isLoading, form, globalSettings }) {
+const CompactScriptViewer = memo(({ fullVideoState, doc, isLoading, form, globalSettings }) => {
   const [showAllScenes, setShowAllScenes] = useState(false);
   const generatingNow = isLoading || (fullVideoState?.isGenerating && fullVideoState?.currentStep === "script");
   const completedNow = !!doc;
@@ -670,10 +674,11 @@ function CompactScriptViewer({ fullVideoState, doc, isLoading, form, globalSetti
       )}
     </div>
   );
-}
+  }
+);
 
 // 단계 표시명 매핑
-function getStepDisplayName(step) {
+const getStepDisplayName = (step) => {
   const stepNames = {
     script: "대본 생성",
     audio: "음성 합성",
@@ -686,6 +691,10 @@ function getStepDisplayName(step) {
     idle: "대기",
   };
   return stepNames[step] || step;
-}
+};
+
+// 컴포넌트 이름 설정 (개발자 도구에서 디버깅 편의)
+ResultsSidebar.displayName = "ResultsSidebar";
+CompactScriptViewer.displayName = "CompactScriptViewer";
 
 export default ResultsSidebar;

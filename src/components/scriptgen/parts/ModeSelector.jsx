@@ -1,32 +1,59 @@
-import React from "react";
-import {
-  Card,
-  Text,
-  tokens,
-} from "@fluentui/react-components";
+import React, { memo, useMemo, useCallback, useEffect, useRef } from "react";
+import { Card, Text, tokens } from "@fluentui/react-components";
 import { MODE_CONFIGS } from "../../../constants/modeConstants";
 
-function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact = false }) {
+const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, compact = false, globalSettings, setGlobalSettings, api }) => {
+  // 안전한 폼 데이터 처리
+  const safeForm = useMemo(
+    () => ({
+      topic: form?.topic || "",
+      referenceScript: form?.referenceScript || "",
+      promptName: form?.promptName || "",
+    }),
+    [form?.topic, form?.referenceScript, form?.promptName]
+  );
 
-  // 유효성 검사
-  const hasValidTopic = form.topic?.trim();
-  const hasValidReference = form.referenceScript?.trim() && form.referenceScript.trim().length >= 50;
-  const isReferenceOnlyMode = hasValidReference && !hasValidTopic;
+  // 유효성 검사 메모화
+  const validationState = useMemo(() => {
+    const hasValidTopic = safeForm.topic.trim();
+    const hasValidReference = safeForm.referenceScript.trim() && safeForm.referenceScript.trim().length >= 50;
+    const isReferenceOnlyMode = hasValidReference && !hasValidTopic;
 
-  const getValidationStatus = (mode) => {
-    if (isGenerating) return "generating";
+    return {
+      hasValidTopic,
+      hasValidReference,
+      isReferenceOnlyMode,
+    };
+  }, [safeForm.topic, safeForm.referenceScript]);
 
-    // 공통 검증
-    if (!hasValidTopic && !hasValidReference) return "invalid";
-    if (!isReferenceOnlyMode && !form.promptName) return "invalid";
+  const getValidationStatus = useCallback(
+    (mode) => {
+      if (isGenerating) return "generating";
 
-    return "valid";
-  };
+      // 공통 검증
+      if (!validationState.hasValidTopic && !validationState.hasValidReference) return "invalid";
+      if (!validationState.isReferenceOnlyMode && !safeForm.promptName) return "invalid";
 
-  // 컴팩트 모드 렌더링
-  if (compact) {
-    return (
-      <Card style={{
+      return "valid";
+    },
+    [isGenerating, validationState, safeForm.promptName]
+  );
+
+  // 클릭 핸들러 최적화
+  const handleModeChange = useCallback(
+    (modeKey) => {
+      const status = getValidationStatus(modeKey);
+      if (status !== "generating") {
+        onModeChange(modeKey);
+      }
+    },
+    [getValidationStatus, onModeChange]
+  );
+
+  // 스타일 메모화
+  const styles = useMemo(
+    () => ({
+      compactCard: {
         background: tokens.colorNeutralBackground1,
         border: `1px solid ${tokens.colorNeutralStroke2}`,
         borderRadius: 12,
@@ -34,8 +61,112 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
         marginBottom: tokens.spacingVerticalM,
         height: "fit-content",
         display: "flex",
-        flexDirection: "column"
-      }}>
+        flexDirection: "column",
+      },
+      tabContainer: {
+        display: "flex",
+        background: tokens.colorNeutralBackground2,
+        borderRadius: 8,
+        padding: 4,
+        gap: 4,
+      },
+      modeInfo: {
+        marginTop: tokens.spacingVerticalS,
+        padding: tokens.spacingVerticalS,
+        background: tokens.colorNeutralBackground2,
+        borderRadius: 6,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      },
+      defaultCard: {
+        background: tokens.colorNeutralBackground1,
+        border: `1px solid ${tokens.colorNeutralStroke2}`,
+        borderRadius: 16,
+        padding: tokens.spacingVerticalL,
+        marginBottom: tokens.spacingVerticalL,
+      },
+      gridContainer: {
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: tokens.spacingHorizontalL,
+      },
+      summaryContainer: {
+        marginTop: tokens.spacingVerticalM,
+        padding: tokens.spacingVerticalS,
+        background: tokens.colorNeutralBackground2,
+        borderRadius: 8,
+        textAlign: "center",
+      },
+    }),
+    []
+  );
+
+  // 전역 설정 로드 로직 (무한 루프 방지)
+  const hasLoadedRef = useRef(false);
+
+  useEffect(() => {
+    // 한 번만 로드하도록 제한
+    if (hasLoadedRef.current || !api?.invoke || !setGlobalSettings) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadGlobalSettings = async () => {
+      try {
+        const llmSetting = await api.invoke("settings:get", "llmModel");
+
+        if (!isMounted) return;
+
+        if (llmSetting !== null && llmSetting !== undefined) {
+          let llmValue;
+          if (typeof llmSetting === "object") {
+            llmValue = llmSetting.data || llmSetting.value || llmSetting;
+          } else {
+            llmValue = llmSetting;
+          }
+
+          if (typeof llmValue === "string" && llmValue.trim()) {
+            setGlobalSettings((prev) => {
+              if (prev.llmModel !== llmValue) {
+                return { ...prev, llmModel: llmValue };
+              }
+              return prev;
+            });
+            hasLoadedRef.current = true;
+          }
+        }
+      } catch (error) {
+        if (isMounted) {
+          console.warn("전역 설정 로드 실패:", error);
+        }
+      }
+    };
+
+    loadGlobalSettings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [api]);
+
+  // settings 변경 이벤트 리스너 (한 번만 등록)
+  useEffect(() => {
+    const handleSettingsChange = () => {
+      hasLoadedRef.current = false; // 다시 로드 가능하도록 리셋
+    };
+
+    window.addEventListener("settingsChanged", handleSettingsChange);
+    return () => {
+      window.removeEventListener("settingsChanged", handleSettingsChange);
+    };
+  }, []);
+
+  // 컴팩트 모드 렌더링
+  if (compact) {
+    return (
+      <Card style={styles.compactCard}>
         <div style={{ marginBottom: tokens.spacingVerticalS }}>
           <Text size={400} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
             🎯 생성 모드
@@ -43,13 +174,7 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
         </div>
 
         {/* 가로형 탭 */}
-        <div style={{
-          display: "flex",
-          background: tokens.colorNeutralBackground2,
-          borderRadius: 8,
-          padding: 4,
-          gap: 4,
-        }}>
+        <div style={styles.tabContainer}>
           {Object.values(MODE_CONFIGS).map((mode) => {
             const isSelected = selectedMode === mode.key;
             const status = getValidationStatus(mode.key);
@@ -58,11 +183,7 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
             return (
               <button
                 key={mode.key}
-                onClick={() => {
-                  if (status !== "generating") {
-                    onModeChange(mode.key);
-                  }
-                }}
+                onClick={() => handleModeChange(mode.key)}
                 style={{
                   flex: 1,
                   background: isSelected ? mode.gradient : "transparent",
@@ -86,16 +207,18 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
                 <Icon style={{ fontSize: 18 }} />
                 {mode.title}
                 {isSelected && (
-                  <div style={{
-                    background: "rgba(255,255,255,0.2)",
-                    borderRadius: "50%",
-                    width: 16,
-                    height: 16,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "10px"
-                  }}>
+                  <div
+                    style={{
+                      background: "rgba(255,255,255,0.2)",
+                      borderRadius: "50%",
+                      width: 16,
+                      height: 16,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "10px",
+                    }}
+                  >
                     ✓
                   </div>
                 )}
@@ -106,15 +229,7 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
 
         {/* 선택된 모드 정보 */}
         {selectedMode && (
-          <div style={{
-            marginTop: tokens.spacingVerticalS,
-            padding: tokens.spacingVerticalS,
-            background: tokens.colorNeutralBackground2,
-            borderRadius: 6,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}>
+          <div style={styles.modeInfo}>
             <Text size={200} style={{ color: tokens.colorNeutralForeground2 }}>
               {MODE_CONFIGS[selectedMode]?.description}
             </Text>
@@ -126,31 +241,17 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
 
   // 기본 모드 렌더링 (기존 코드 유지)
   return (
-    <Card style={{
-      background: tokens.colorNeutralBackground1,
-      border: `1px solid ${tokens.colorNeutralStroke2}`,
-      borderRadius: 16,
-      padding: tokens.spacingVerticalL,
-      marginBottom: tokens.spacingVerticalL,
-    }}>
+    <Card style={styles.defaultCard}>
       <div style={{ marginBottom: tokens.spacingVerticalM }}>
         <Text size={500} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
           🎯 생성 모드 선택
         </Text>
-        <Text size={300} style={{
-          color: tokens.colorNeutralForeground3,
-          marginTop: 4,
-          display: "block"
-        }}>
+        <Text size={300} style={{ color: tokens.colorNeutralForeground3, marginTop: 4, display: "block" }}>
           원하는 콘텐츠 생성 방식을 선택하세요
         </Text>
       </div>
 
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr",
-        gap: tokens.spacingHorizontalL,
-      }}>
+      <div style={styles.gridContainer}>
         {Object.values(MODE_CONFIGS).map((mode) => {
           const isSelected = selectedMode === mode.key;
           const status = getValidationStatus(mode.key);
@@ -161,47 +262,34 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
               key={mode.key}
               style={{
                 background: isSelected ? mode.gradient : tokens.colorNeutralBackground2,
-                border: isSelected
-                  ? "2px solid transparent"
-                  : `2px solid ${tokens.colorNeutralStroke2}`,
+                border: isSelected ? "2px solid transparent" : `2px solid ${tokens.colorNeutralStroke2}`,
                 borderRadius: 12,
                 padding: tokens.spacingVerticalM,
                 cursor: status === "generating" ? "not-allowed" : "pointer",
                 transform: isSelected ? "translateY(-2px)" : "none",
-                boxShadow: isSelected
-                  ? "0 8px 24px rgba(0,0,0,0.15)"
-                  : "0 2px 8px rgba(0,0,0,0.08)",
+                boxShadow: isSelected ? "0 8px 24px rgba(0,0,0,0.15)" : "0 2px 8px rgba(0,0,0,0.08)",
                 transition: "all 200ms ease-out",
                 opacity: status === "generating" && !isSelected ? 0.6 : 1,
               }}
-              onClick={() => {
-                if (status !== "generating") {
-                  onModeChange(mode.key);
-                }
-              }}
+              onClick={() => handleModeChange(mode.key)}
             >
-              <div style={{
-                color: isSelected ? "white" : tokens.colorNeutralForeground1,
-                textAlign: "center"
-              }}>
-                <div style={{
-                  marginBottom: tokens.spacingVerticalS,
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  gap: 8
-                }}>
+              <div style={{ color: isSelected ? "white" : tokens.colorNeutralForeground1, textAlign: "center" }}>
+                <div
+                  style={{ marginBottom: tokens.spacingVerticalS, display: "flex", justifyContent: "center", alignItems: "center", gap: 8 }}
+                >
                   <Icon style={{ fontSize: 24 }} />
                   {isSelected && (
-                    <div style={{
-                      background: "rgba(255,255,255,0.2)",
-                      borderRadius: "50%",
-                      width: 20,
-                      height: 20,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center"
-                    }}>
+                    <div
+                      style={{
+                        background: "rgba(255,255,255,0.2)",
+                        borderRadius: "50%",
+                        width: 20,
+                        height: 20,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
                       ✓
                     </div>
                   )}
@@ -213,7 +301,7 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
                   style={{
                     color: "inherit",
                     display: "block",
-                    marginBottom: 4
+                    marginBottom: 4,
                   }}
                 >
                   {mode.title}
@@ -224,7 +312,7 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
                   style={{
                     color: isSelected ? "rgba(255,255,255,0.9)" : tokens.colorNeutralForeground3,
                     display: "block",
-                    marginBottom: tokens.spacingVerticalS
+                    marginBottom: tokens.spacingVerticalS,
                   }}
                 >
                   {mode.subtitle}
@@ -236,7 +324,7 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
                     color: isSelected ? "rgba(255,255,255,0.8)" : tokens.colorNeutralForeground2,
                     lineHeight: 1.4,
                     display: "block",
-                    marginBottom: tokens.spacingVerticalS
+                    marginBottom: tokens.spacingVerticalS,
                   }}
                 >
                   {mode.description}
@@ -244,13 +332,15 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
 
                 {/* 단계 표시 */}
                 <div style={{ marginBottom: tokens.spacingVerticalS }}>
-                  <div style={{
-                    display: "flex",
-                    justifyContent: "center",
-                    alignItems: "center",
-                    gap: 4,
-                    flexWrap: "wrap"
-                  }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      gap: 4,
+                      flexWrap: "wrap",
+                    }}
+                  >
                     {mode.steps.map((step, index) => (
                       <React.Fragment key={step}>
                         <Text
@@ -258,7 +348,7 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
                           style={{
                             color: isSelected ? "rgba(255,255,255,0.7)" : tokens.colorNeutralForeground3,
                             fontSize: "11px",
-                            whiteSpace: "nowrap"
+                            whiteSpace: "nowrap",
                           }}
                         >
                           {step}
@@ -267,7 +357,7 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
                           <Text
                             style={{
                               color: isSelected ? "rgba(255,255,255,0.5)" : tokens.colorNeutralForeground3,
-                              fontSize: "10px"
+                              fontSize: "10px",
                             }}
                           >
                             →
@@ -282,7 +372,7 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
                   size={200}
                   style={{
                     color: isSelected ? "rgba(255,255,255,0.7)" : tokens.colorNeutralForeground3,
-                    fontSize: "11px"
+                    fontSize: "11px",
                   }}
                 >
                   ⏱️ 예상 시간: {mode.estimatedTime}
@@ -295,13 +385,7 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
 
       {/* 선택된 모드 요약 */}
       {selectedMode && (
-        <div style={{
-          marginTop: tokens.spacingVerticalM,
-          padding: tokens.spacingVerticalS,
-          background: tokens.colorNeutralBackground2,
-          borderRadius: 8,
-          textAlign: "center"
-        }}>
+        <div style={styles.summaryContainer}>
           <Text size={300} style={{ color: tokens.colorNeutralForeground2 }}>
             선택됨: <strong>{MODE_CONFIGS[selectedMode]?.title}</strong>
           </Text>
@@ -309,6 +393,9 @@ function ModeSelector({ selectedMode, onModeChange, form, isGenerating, compact 
       )}
     </Card>
   );
-}
+});
+
+// 컴포넌트 이름 설정 (개발자 도구에서 디버깅 편의)
+ModeSelector.displayName = "ModeSelector";
 
 export default ModeSelector;

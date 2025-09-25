@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { memo, useMemo, useState, useCallback, useEffect } from "react";
 import { Card, Text, Field, Input, Dropdown, Option, Spinner, Switch, Textarea, tokens } from "@fluentui/react-components";
 import { SettingsRegular } from "@fluentui/react-icons";
 import { STYLE_OPTIONS, DURATION_OPTIONS } from "../../../constants/scriptSettings";
@@ -44,67 +44,123 @@ const getDynamicSceneOptions = (durationMin) => {
 /**
  * 기본 설정 카드 (UI만 개선)
  */
-function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
+const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, setForm }) => {
   const [validationErrors, setValidationErrors] = useState({});
 
-  const sceneOptions = useMemo(() =>
-    getDynamicSceneOptions(form.durationMin),
-    [form.durationMin]
+  // 안전한 폼 데이터 처리
+  const safeForm = useMemo(
+    () => ({
+      topic: form?.topic || "",
+      style: form?.style || "",
+      durationMin: form?.durationMin || 0,
+      maxScenes: form?.maxScenes || 0,
+      promptName: form?.promptName || "",
+      showReferenceScript: form?.showReferenceScript || false,
+      referenceScript: form?.referenceScript || "",
+    }),
+    [form?.topic, form?.style, form?.durationMin, form?.maxScenes, form?.promptName, form?.showReferenceScript, form?.referenceScript]
   );
 
-  // 안전한 입력 처리 함수
-  const handleSafeChange = (field, value, options = {}) => {
-    const result = validateAndSanitizeText(value, {
-      maxLength: field === 'topic' ? 200 : field === 'referenceScript' ? 100000 : 100,
-      allowEmpty: true,
-      fieldName: field,
-      ...options
-    });
+  const sceneOptions = useMemo(() => getDynamicSceneOptions(safeForm.durationMin), [safeForm.durationMin]);
 
-    // 검증 오류 상태 업데이트
-    setValidationErrors(prev => ({
-      ...prev,
-      [field]: result.errors
-    }));
+  // 안전한 입력 처리 함수 메모화
+  const handleSafeChange = useCallback(
+    (field, value, options = {}) => {
+      const result = validateAndSanitizeText(value, {
+        maxLength: field === "topic" ? 200 : field === "referenceScript" ? 100000 : 100,
+        allowEmpty: true,
+        fieldName: field,
+        ...options,
+      });
 
-    // 정제된 값으로 onChange 호출
-    onChange(field, result.sanitized);
+      // 검증 오류 상태 업데이트
+      setValidationErrors((prev) => ({
+        ...prev,
+        [field]: result.errors,
+      }));
 
-    if (!result.isValid) {
-      console.warn(`입력 검증 실패 [${field}]:`, result.errors);
-    }
-  };
+      // 정제된 값으로 onChange 호출
+      onChange(field, result.sanitized);
 
-  return (
-    <Card
-      style={{
+      if (!result.isValid) {
+        console.warn(`입력 검증 실패 [${field}]:`, result.errors);
+      }
+    },
+    [onChange, setValidationErrors]
+  );
+
+  // 스타일 메모화
+  const styles = useMemo(
+    () => ({
+      cardContainer: {
         padding: "12px 16px",
         borderRadius: "16px",
         border: `1px solid ${tokens.colorNeutralStroke2}`,
         height: "fit-content",
         display: "flex",
-        flexDirection: "column"
-      }}
-    >
-      
-      <div
-        style={{
-          marginBottom: tokens.spacingVerticalS,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
+        flexDirection: "column",
+      },
+      headerContainer: {
+        marginBottom: tokens.spacingVerticalS,
+      },
+      headerContent: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+      },
+      gridContainer: {
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: "12px",
+        alignItems: "start",
+      },
+      fullWidthColumn: {
+        gridColumn: "1 / -1",
+      },
+      referenceContainer: {
+        gridColumn: "1 / -1",
+        marginTop: tokens.spacingVerticalM,
+      },
+      switchContainer: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        marginBottom: 8,
+      },
+      textareaContainer: {
+        minHeight: 120,
+        borderColor: tokens.colorNeutralStroke2,
+        borderRadius: 12,
+      },
+      statusBar: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginTop: tokens.spacingVerticalXS,
+        paddingTop: 8,
+        borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+      },
+      fixedHeightCaption: {
+        minHeight: 22,
+        marginTop: 4,
+      },
+    }),
+    []
+  );
+
+  // 프롬프트 자동 선택 로직 추가
+  useEffect(() => {
+    if (promptNames.length > 0 && !safeForm.promptName) {
+      setForm((prev) => ({ ...prev, promptName: promptNames[0] }));
+    }
+  }, [promptNames, safeForm.promptName, setForm]);
+
+  return (
+    <Card style={styles.cardContainer}>
+      <div style={styles.headerContainer}>
+        <div style={styles.headerContent}>
           <SettingsRegular />
-          <Text
-            size={400}
-            weight="semibold"
-            style={{ letterSpacing: 0.2 }}
-          >
+          <Text size={400} weight="semibold" style={{ letterSpacing: 0.2 }}>
             기본 설정
           </Text>
         </div>
@@ -122,16 +178,9 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
       </div>
 
       {/* 2열 그리드 유지 + 행간/열간 미세 조정 */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "12px",
-          alignItems: "start",
-        }}
-      >
+      <div style={styles.gridContainer}>
         {/* 영상 주제: 전체 너비 */}
-        <div style={{ gridColumn: "1 / -1" }}>
+        <div style={styles.fullWidthColumn}>
           <Field
             label={
               <Text size={300} weight="semibold">
@@ -140,10 +189,10 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
             }
           >
             <Input
-              value={form.topic || ""}
+              value={safeForm.topic}
               onChange={(e) => handleSafeChange("topic", e.target.value)}
               placeholder={
-                form.showReferenceScript
+                safeForm.showReferenceScript
                   ? "주제를 입력하면 레퍼런스 스타일로 새 대본 생성 / 비워두면 레퍼런스 자체를 개선"
                   : "예: 인공지능의 미래와 우리 삶의 변화"
               }
@@ -168,8 +217,8 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
           }
         >
           <Dropdown
-            value={STYLE_OPTIONS.find((s) => s.key === form.style)?.text || "스타일 선택"}
-            selectedOptions={[form.style]}
+            value={STYLE_OPTIONS.find((s) => s.key === safeForm.style)?.text || "스타일 선택"}
+            selectedOptions={[safeForm.style]}
             onOptionSelect={(_, d) => onChange("style", d.optionValue)}
             size="medium" // 🔧 large → medium
             style={{ minHeight: 36 }} // 🔧 시각 높이 맞춤
@@ -191,8 +240,8 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
           }
         >
           <Dropdown
-            value={DURATION_OPTIONS.find((d) => d.key === form.durationMin)?.text || "길이 선택"}
-            selectedOptions={[form.durationMin?.toString()]}
+            value={DURATION_OPTIONS.find((d) => d.key === safeForm.durationMin)?.text || "길이 선택"}
+            selectedOptions={[safeForm.durationMin?.toString()]}
             onOptionSelect={(_, d) => onChange("durationMin", parseInt(d.optionValue))}
             size="medium" // 🔧 large → medium
             style={{ minHeight: 36 }}
@@ -206,19 +255,20 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
         </Field>
 
         {/* 최대 장면 수 (자동 계산) */}
-        <Field label={
+        <Field
+          label={
             <Text size={300} weight="semibold">
               최대 장면 수
             </Text>
           }
         >
           <Dropdown
-            value={sceneOptions.find((s) => s.key === form.maxScenes)?.text || "장면 수 선택"}
-            selectedOptions={[form.maxScenes?.toString()]}
+            value={sceneOptions.find((s) => s.key === safeForm.maxScenes)?.text || "장면 수 선택"}
+            selectedOptions={[safeForm.maxScenes?.toString()]}
             onOptionSelect={(_, d) => onChange("maxScenes", parseInt(d.optionValue))}
             size="medium" // 🔧 large → medium
-            disabled={!form.durationMin}
-            placeholder={form.durationMin ? "장면 수 선택" : "먼저 영상 길이를 선택하세요"}
+            disabled={!safeForm.durationMin}
+            placeholder={safeForm.durationMin ? "장면 수 선택" : "먼저 영상 길이를 선택하세요"}
             style={{ minHeight: 36 }}
           >
             {sceneOptions.map((scene) => (
@@ -238,10 +288,10 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
           </Dropdown>
 
           {/* 권장 안내 캡션: 높이 고정해 레이아웃 안정 */}
-          <div style={{ minHeight: 22, marginTop: 4 }}>
-            {form.durationMin && (
+          <div style={styles.fixedHeightCaption}>
+            {safeForm.durationMin && (
               <Text size={200} style={{ color: tokens.colorNeutralForeground3, display: "block" }}>
-                권장: {getRecommendedScenes(form.durationMin)}개
+                권장: {getRecommendedScenes(safeForm.durationMin)}개
               </Text>
             )}
           </div>
@@ -256,8 +306,8 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
           }
         >
           <Dropdown
-            value={form.promptName || (promptLoading ? "불러오는 중..." : "프롬프트 선택")}
-            selectedOptions={form.promptName ? [form.promptName] : []}
+            value={safeForm.promptName || (promptLoading ? "불러오는 중..." : "프롬프트 선택")}
+            selectedOptions={safeForm.promptName ? [safeForm.promptName] : []}
             onOptionSelect={(_, d) => onChange("promptName", d.optionValue)}
             size="medium" // 🔧 large → medium
             disabled={!!promptLoading || promptNames.length === 0}
@@ -271,7 +321,7 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
           </Dropdown>
 
           {/* 상태 캡션: 높이 고정 */}
-          <div style={{ minHeight: 22, marginTop: 4 }}>
+          <div style={styles.fixedHeightCaption}>
             {promptLoading ? (
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <Spinner size="tiny" />
@@ -288,33 +338,23 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
         </Field>
 
         {/* 레퍼런스 대본 (선택) - 전체 너비 */}
-        <div style={{ gridColumn: "1 / -1", marginTop: tokens.spacingVerticalM }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 8,
-            }}
-          >
-            <Switch
-              checked={form.showReferenceScript || false}
-              onChange={(_, data) => onChange("showReferenceScript", data.checked)}
-            />
+        <div style={styles.referenceContainer}>
+          <div style={styles.switchContainer}>
+            <Switch checked={safeForm.showReferenceScript} onChange={(_, data) => onChange("showReferenceScript", data.checked)} />
             <Text
               size={300}
               weight="semibold"
               style={{
                 cursor: "default",
                 userSelect: "none",
-                pointerEvents: "none"
+                pointerEvents: "none",
               }}
             >
               레퍼런스 대본 (선택사항)
             </Text>
           </div>
 
-          {form.showReferenceScript && (
+          {safeForm.showReferenceScript && (
             <Field>
               <Text
                 size={200}
@@ -324,23 +364,21 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
                   display: "block",
                 }}
               >
-                {form.topic && form.topic.trim()
+                {safeForm.topic.trim()
                   ? "🎭 레퍼런스의 톤앤매너를 분석해 새로운 주제에 적용한 대본을 생성합니다."
                   : "📈 레퍼런스를 분석해 구조/스타일을 개선한 버전을 생성합니다."}
               </Text>
 
               <Textarea
-                value={form.referenceScript || ""}
+                value={safeForm.referenceScript}
                 onChange={(e) => handleSafeChange("referenceScript", e.target.value)}
                 placeholder="예시: '안녕하세요! 오늘은 맛있는 요리를 만들어볼게요. 먼저 재료를 준비해주세요...'"
                 rows={6}
                 resize="none"
                 style={{
-                  minHeight: 120,
-                  borderColor: validationErrors.referenceScript?.length > 0
-                    ? tokens.colorPaletteRedBorder2
-                    : tokens.colorNeutralStroke2,
-                  borderRadius: 12,
+                  ...styles.textareaContainer,
+                  borderColor:
+                    validationErrors.referenceScript?.length > 0 ? tokens.colorPaletteRedBorder2 : styles.textareaContainer.borderColor,
                 }}
                 aria-invalid={validationErrors.referenceScript?.length > 0}
               />
@@ -351,35 +389,26 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
               )}
 
               {/* 글자 수/상태 바: 상단 경계선 약화 */}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginTop: tokens.spacingVerticalXS,
-                  paddingTop: 8,
-                  borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
-                }}
-              >
+              <div style={styles.statusBar}>
                 <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                  {form.referenceScript && form.referenceScript.trim()
-                    ? `📊 ${form.referenceScript.trim().length.toLocaleString()}자 입력됨`
-                    : form.topic && form.topic.trim()
+                  {safeForm.referenceScript.trim()
+                    ? `📊 ${safeForm.referenceScript.trim().length.toLocaleString()}자 입력됨`
+                    : safeForm.topic.trim()
                     ? "📝 레퍼런스 대본을 입력하면 해당 스타일로 새로운 주제의 대본을 생성합니다"
                     : "📝 레퍼런스만 입력하면 개선본 생성, 주제도 함께 입력하면 새로운 주제로 스타일 적용"}
                 </Text>
 
-                {form.referenceScript && form.referenceScript.trim() && (
+                {safeForm.referenceScript.trim() && (
                   <Text
                     size={200}
                     style={{
                       color:
-                        form.referenceScript.trim().length > 500 ? tokens.colorPaletteGreenForeground2 : tokens.colorNeutralForeground3,
-                      fontWeight: form.referenceScript.trim().length > 500 ? 600 : 400,
+                        safeForm.referenceScript.trim().length > 500 ? tokens.colorPaletteGreenForeground2 : tokens.colorNeutralForeground3,
+                      fontWeight: safeForm.referenceScript.trim().length > 500 ? 600 : 400,
                     }}
                   >
-                    {form.referenceScript.trim().length > 500
-                      ? form.topic && form.topic.trim()
+                    {safeForm.referenceScript.trim().length > 500
+                      ? safeForm.topic.trim()
                         ? "✅ 스타일 가이드 준비완료"
                         : "✅ 개선 준비완료"
                       : "권장: 500자 이상"}
@@ -392,6 +421,9 @@ function BasicSettingsCard({ form, onChange, promptNames, promptLoading }) {
       </div>
     </Card>
   );
-}
+});
+
+// 컴포넌트 이름 설정 (개발자 도구에서 디버깅 편의)
+BasicSettingsCard.displayName = "BasicSettingsCard";
 
 export default BasicSettingsCard;

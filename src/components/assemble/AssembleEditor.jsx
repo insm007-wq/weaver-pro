@@ -36,8 +36,6 @@ function AssembleEditor() {
     return Math.max(0, last - first);
   }, [fileManagement.scenes]);
 
-
-
   return (
     <div className={containerStyles.container} style={{ overflowX: "hidden", maxWidth: "100vw" }}>
       {/* Header */}
@@ -51,13 +49,7 @@ function AssembleEditor() {
       </div>
 
       {/* Main */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: tokens.spacingVerticalXXL,
-        }}
-      >
+      <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXXL }}>
         <FileSelection
           srtConnected={fileManagement.srtConnected}
           srtFilePath={fileManagement.srtFilePath}

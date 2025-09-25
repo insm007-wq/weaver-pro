@@ -1,14 +1,26 @@
-import React from "react";
+import { memo, useMemo, useEffect } from "react";
 import { Card, Text, Dropdown, Option, Field, Badge, Button, Spinner, tokens } from "@fluentui/react-components";
 import { MicRegular, PlayRegular, StopRegular, ShieldError24Regular } from "@fluentui/react-icons";
 import { useCardStyles, useSettingsStyles, useLayoutStyles } from "../../../styles/commonStyles";
 
-function VoiceSettingsCard({ form, voices, voiceLoading, voiceError, onChange, onPreviewVoice, onStopVoice, onRetryVoiceLoad }) {
+const VoiceSettingsCard = memo(({ form, voices, voiceLoading, voiceError, onChange, onPreviewVoice, onStopVoice, onRetryVoiceLoad, setForm }) => {
   const cardStyles = useCardStyles();
   const settingsStyles = useSettingsStyles();
   const layoutStyles = useLayoutStyles();
 
-  const selectedVoice = voices.find((v) => v.id === form.voiceId);
+  // 안전한 폼 데이터 처리
+  const safeForm = useMemo(() => ({
+    voiceId: form?.voiceId || ""
+  }), [form?.voiceId]);
+
+  const selectedVoice = useMemo(() => voices.find((v) => v.id === safeForm.voiceId), [voices, safeForm.voiceId]);
+
+  // 음성 자동 선택 로직
+  useEffect(() => {
+    if (voices.length > 0 && !safeForm.voiceId) {
+      setForm((prev) => ({ ...prev, voiceId: voices[0].id }));
+    }
+  }, [voices, safeForm.voiceId, setForm]);
 
   const getVoiceDescription = (voiceName) => {
     const name = voiceName?.toLowerCase() || "";
@@ -291,6 +303,9 @@ function VoiceSettingsCard({ form, voices, voiceLoading, voiceError, onChange, o
       )}
     </Card>
   );
-}
+});
+
+// 컴포넌트 이름 설정 (개발자 도구에서 디버깅 편의)
+VoiceSettingsCard.displayName = "VoiceSettingsCard";
 
 export default VoiceSettingsCard;
