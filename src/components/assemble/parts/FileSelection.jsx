@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState, useCallback, useMemo, memo } from "react";
 import { tokens, Text, Card, Button, Caption1, CardFooter } from "@fluentui/react-components";
 import {
   FolderOpen24Regular,
@@ -10,54 +10,82 @@ import {
   ArrowUpload24Regular,
 } from "@fluentui/react-icons";
 
-// DropZone 컴포넌트를 FileSelection 내부로 이동
-const DropZone = ({ icon, label, caption, connected, onClick, inputRef, accept, onChange, inputId }) => {
-  // 더 생생한 색상으로 개선
-  const iconColor = connected ? tokens.colorPaletteGreenForeground1 : tokens.colorBrandForeground1;
-  const hoverBg = connected ? tokens.colorPaletteGreenBackground3 : tokens.colorBrandBackground2;
-  const ringColor = connected ? tokens.colorPaletteGreenBorderActive : tokens.colorBrandStroke1;
-  const cardBg = connected ? tokens.colorPaletteGreenBackground1 : tokens.colorNeutralBackground1;
-  const textColor = connected ? tokens.colorPaletteGreenForeground2 : tokens.colorBrandForeground1;
+// DropZone 컴포넌트 - 성능 최적화를 위해 메모화
+const DropZone = memo(({ icon, label, caption, connected, onClick, inputRef, accept, onChange, inputId }) => {
+  // 색상 테마 계산 메모화
+  const colorTheme = useMemo(
+    () => ({
+      iconColor: connected ? tokens.colorPaletteGreenForeground1 : tokens.colorBrandForeground1,
+      hoverBg: connected ? tokens.colorPaletteGreenBackground3 : tokens.colorBrandBackground2,
+      ringColor: connected ? tokens.colorPaletteGreenBorderActive : tokens.colorBrandStroke1,
+      cardBg: connected ? tokens.colorPaletteGreenBackground1 : tokens.colorNeutralBackground1,
+      textColor: connected ? tokens.colorPaletteGreenForeground2 : tokens.colorBrandForeground1,
+    }),
+    [connected]
+  );
 
   // 드래그 앤 드롭 상태
   const [isDragOver, setIsDragOver] = useState(false);
 
-  const handleDragEnter = (e) => {
+  // 드래그 이벤트 핸들러 최적화
+  const handleDragEnter = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(true);
-  };
+  }, []);
 
-  const handleDragLeave = (e) => {
+  const handleDragLeave = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragOver(false);
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-
-    const files = e.dataTransfer.files;
-    if (files && files[0]) {
-      // 파일 확장자 체크
-      const acceptedTypes = accept.split(",").map((type) => type.trim().toLowerCase());
-      const fileName = files[0].name.toLowerCase();
-      const fileExtension = "." + fileName.split(".").pop();
-
-      if (acceptedTypes.includes(fileExtension)) {
-        onChange?.(files[0]);
-      } else {
-        console.warn(`지원하지 않는 파일 형식입니다. 허용된 형식: ${accept}`);
-      }
+    // 실제로 컨테이너를 떠날 때만 상태 변경
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setIsDragOver(false);
     }
-  };
+  }, []);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+
+      try {
+        const files = e.dataTransfer.files;
+        if (!files || files.length === 0) {
+          console.warn("드롭된 파일이 없습니다.");
+          return;
+        }
+
+        const file = files[0];
+
+        // 파일 크기 검증 (50MB 제한)
+        const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+        if (file.size > MAX_FILE_SIZE) {
+          console.error(`파일 크기가 너무 큽니다. 최대 ${MAX_FILE_SIZE / 1024 / 1024}MB까지 지원됩니다.`);
+          return;
+        }
+
+        // 파일 확장자 검증 강화
+        const acceptedTypes = accept.split(",").map((type) => type.trim().toLowerCase());
+        const fileName = file.name.toLowerCase();
+        const fileExtension = "." + fileName.split(".").pop();
+
+        if (acceptedTypes.includes(fileExtension)) {
+          onChange?.(file);
+        } else {
+          console.warn(`지원하지 않는 파일 형식입니다. 허용된 형식: ${accept}`);
+        }
+      } catch (error) {
+        console.error("파일 드롭 처리 중 오류:", error);
+      }
+    },
+    [accept, onChange]
+  );
 
   return (
     <Card
@@ -67,11 +95,11 @@ const DropZone = ({ icon, label, caption, connected, onClick, inputRef, accept, 
         boxShadow: isDragOver
           ? `0 0 0 3px ${tokens.colorBrandStroke1}, 0 8px 32px rgba(0, 120, 212, 0.25)`
           : connected
-          ? `0 0 0 2px ${ringColor}, 0 4px 16px rgba(34, 139, 34, 0.15)`
+          ? `0 0 0 2px ${colorTheme.ringColor}, 0 4px 16px rgba(34, 139, 34, 0.15)`
           : `0 0 0 1px ${tokens.colorNeutralStroke2}, 0 2px 8px rgba(0, 0, 0, 0.08)`,
         transition: "all 200ms cubic-bezier(0.23, 1, 0.32, 1)",
         cursor: "pointer",
-        backgroundColor: isDragOver ? tokens.colorBrandBackground2 : cardBg,
+        backgroundColor: isDragOver ? tokens.colorBrandBackground2 : colorTheme.cardBg,
         display: "flex",
         flexDirection: "column",
         transform: isDragOver ? "scale(1.02)" : "translateY(0)",
@@ -85,22 +113,28 @@ const DropZone = ({ icon, label, caption, connected, onClick, inputRef, accept, 
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
-      onMouseEnter={(e) => {
-        if (!isDragOver) {
-          e.currentTarget.style.transform = "translateY(-2px)";
-          e.currentTarget.style.boxShadow = connected
-            ? `0 0 0 2px ${ringColor}, 0 8px 24px rgba(34, 139, 34, 0.2)`
-            : `0 0 0 1px ${tokens.colorBrandStroke1}, 0 6px 20px rgba(0, 0, 0, 0.12)`;
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!isDragOver) {
-          e.currentTarget.style.transform = "translateY(0)";
-          e.currentTarget.style.boxShadow = connected
-            ? `0 0 0 2px ${ringColor}, 0 4px 16px rgba(34, 139, 34, 0.15)`
-            : `0 0 0 1px ${tokens.colorNeutralStroke2}, 0 2px 8px rgba(0, 0, 0, 0.08)`;
-        }
-      }}
+      onMouseEnter={useCallback(
+        (e) => {
+          if (!isDragOver) {
+            e.currentTarget.style.transform = "translateY(-2px)";
+            e.currentTarget.style.boxShadow = connected
+              ? `0 0 0 2px ${colorTheme.ringColor}, 0 8px 24px rgba(34, 139, 34, 0.2)`
+              : `0 0 0 1px ${tokens.colorBrandStroke1}, 0 6px 20px rgba(0, 0, 0, 0.12)`;
+          }
+        },
+        [isDragOver, connected, colorTheme.ringColor]
+      )}
+      onMouseLeave={useCallback(
+        (e) => {
+          if (!isDragOver) {
+            e.currentTarget.style.transform = "translateY(0)";
+            e.currentTarget.style.boxShadow = connected
+              ? `0 0 0 2px ${colorTheme.ringColor}, 0 4px 16px rgba(34, 139, 34, 0.15)`
+              : `0 0 0 1px ${tokens.colorNeutralStroke2}, 0 2px 8px rgba(0, 0, 0, 0.08)`;
+          }
+        },
+        [isDragOver, connected, colorTheme.ringColor]
+      )}
     >
       <div
         style={{
@@ -118,17 +152,32 @@ const DropZone = ({ icon, label, caption, connected, onClick, inputRef, accept, 
           type="file"
           accept={accept}
           style={{ display: "none" }}
-          onChange={(e) => {
-            if (e.target.files?.[0]) {
-              onChange?.(e.target.files[0]);
-              e.target.value = null;
-            }
-          }}
+          onChange={useCallback(
+            (e) => {
+              try {
+                const file = e.target.files?.[0];
+                if (file) {
+                  // 파일 크기 검증
+                  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+                  if (file.size > MAX_FILE_SIZE) {
+                    console.error(`파일 크기가 너무 큽니다. 최대 ${MAX_FILE_SIZE / 1024 / 1024}MB까지 지원됩니다.`);
+                    return;
+                  }
+                  onChange?.(file);
+                  // 동일 파일 재선택 가능하도록 value 초기화
+                  e.target.value = "";
+                }
+              } catch (error) {
+                console.error("파일 선택 처리 중 오류:", error);
+              }
+            },
+            [onChange]
+          )}
           id={inputId}
         />
         <div
           style={{
-            color: isDragOver ? tokens.colorBrandForeground1 : iconColor,
+            color: isDragOver ? tokens.colorBrandForeground1 : colorTheme.iconColor,
             marginBottom: tokens.spacingVerticalS,
             transition: "all 200ms ease",
             fontSize: "24px",
@@ -148,7 +197,7 @@ const DropZone = ({ icon, label, caption, connected, onClick, inputRef, accept, 
           id={inputId}
           style={{
             marginBottom: tokens.spacingVerticalS,
-            color: isDragOver ? tokens.colorBrandForeground1 : textColor,
+            color: isDragOver ? tokens.colorBrandForeground1 : colorTheme.textColor,
             transition: "color 200ms ease",
           }}
         >
@@ -179,7 +228,7 @@ const DropZone = ({ icon, label, caption, connected, onClick, inputRef, accept, 
             minWidth: "200px",
             backgroundColor: connected ? tokens.colorPaletteGreenBackground1 : "transparent",
             borderColor: connected ? tokens.colorPaletteGreenBorderActive : tokens.colorBrandStroke1,
-            color: connected ? tokens.colorPaletteGreenForeground1 : textColor,
+            color: connected ? tokens.colorPaletteGreenForeground1 : colorTheme.textColor,
             fontWeight: 600,
             transition: "all 200ms ease",
           }}
@@ -189,155 +238,173 @@ const DropZone = ({ icon, label, caption, connected, onClick, inputRef, accept, 
       </CardFooter>
     </Card>
   );
-};
+});
 
-const FileSelection = ({
-  srtConnected,
-  srtFilePath,
-  scenes,
-  totalDur,
-  getFileInfo,
-  openSrtPicker,
-  srtInputRef,
-  handleSrtUpload,
-  srtInputId,
-  mp3Connected,
-  mp3FilePath,
-  audioDur,
-  openMp3Picker,
-  mp3InputRef,
-  handleMp3Upload,
-  mp3InputId,
-  handleInsertFromScript,
-  handleReset,
-}) => {
-  return (
-    <Card
-      style={{
-        padding: "12px 16px",
-        borderRadius: "16px",
-        border: `1px solid ${tokens.colorNeutralStroke2}`,
-        height: "fit-content",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <div style={{ marginBottom: tokens.spacingVerticalS }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <FolderOpen24Regular />
-            <Text size={400} weight="semibold" style={{ letterSpacing: 0.2 }}>
-              파일 선택
-            </Text>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              gap: tokens.spacingHorizontalS,
-              alignItems: "center",
-            }}
-          >
-            <Button
-              appearance="subtle"
-              icon={<LinkSquare24Regular />}
-              onClick={handleInsertFromScript}
-              size="medium"
-              style={{
-                color: tokens.colorBrandForeground1,
-                fontWeight: 600,
-                height: "36px",
-                minHeight: "36px",
-                padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalL}`,
-                alignItems: "center",
-                display: "flex",
-                minWidth: "160px",
-              }}
-            >
-              대본에서 가져오기
-            </Button>
-            <Button
-              appearance="subtle"
-              icon={<DismissCircle24Regular />}
-              onClick={handleReset}
-              size="medium"
-              style={{
-                color: tokens.colorNeutralForeground3,
-                fontWeight: 600,
-                height: "36px",
-                minHeight: "36px",
-                padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
-                alignItems: "center",
-                display: "flex",
-              }}
-            >
-              초기화
-            </Button>
-          </div>
-        </div>
-        <Text
-          size={200}
-          style={{
-            color: tokens.colorNeutralForeground3,
-            marginTop: 4,
-            display: "block",
-          }}
-        >
-          파일을 드래그하거나 버튼을 클릭하여 업로드하세요
-        </Text>
-      </div>
+// FileSelection 컴포넌트 메모화로 성능 최적화
+const FileSelection = memo(
+  ({
+    srtConnected,
+    srtFilePath,
+    scenes,
+    totalDur,
+    getFileInfo,
+    openSrtPicker,
+    srtInputRef,
+    handleSrtUpload,
+    srtInputId,
+    mp3Connected,
+    mp3FilePath,
+    audioDur,
+    openMp3Picker,
+    mp3InputRef,
+    handleMp3Upload,
+    mp3InputId,
+    handleInsertFromScript,
+    handleReset,
+  }) => {
+    // 그리드 스타일 메모화
+    const gridStyle = useMemo(
+      () => ({
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+        gap: tokens.spacingHorizontalL,
+        padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL} ${tokens.spacingVerticalL}`,
+      }),
+      []
+    );
 
-      <div
+    // SRT 캡션 메모화
+    const srtCaption = useMemo(() => {
+      if (srtConnected && srtFilePath) {
+        const fileInfo = getFileInfo(srtFilePath);
+        return (
+          <div style={{ whiteSpace: "pre-line", textAlign: "center", lineHeight: 1.3, fontSize: "13px" }}>
+            {`📁 ${fileInfo.displayPath}\n📄 ${fileInfo.fileName} (${scenes.length}개 씬, ${totalDur.toFixed(1)}초)`}
+          </div>
+        );
+      }
+      return "SRT 파일 업로드 (.srt)";
+    }, [srtConnected, srtFilePath, scenes.length, totalDur, getFileInfo]);
+
+    // MP3 캡션 메모화
+    const mp3Caption = useMemo(() => {
+      if (mp3Connected && mp3FilePath && audioDur > 0) {
+        const fileInfo = getFileInfo(mp3FilePath);
+        return (
+          <div style={{ whiteSpace: "pre-line", textAlign: "center", lineHeight: 1.3, fontSize: "13px" }}>
+            {`📁 ${fileInfo.displayPath}\n🎵 ${fileInfo.fileName} (${audioDur.toFixed(1)}초)`}
+          </div>
+        );
+      }
+      return "MP3, WAV, M4A 지원";
+    }, [mp3Connected, mp3FilePath, audioDur, getFileInfo]);
+    return (
+      <Card
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: tokens.spacingHorizontalL,
-          padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL} ${tokens.spacingVerticalL}`,
+          padding: "12px 16px",
+          borderRadius: "16px",
+          border: `1px solid ${tokens.colorNeutralStroke2}`,
+          height: "fit-content",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
-        <DropZone
-          icon={<TextDescriptionRegular />}
-          label="SRT 자막 파일"
-          caption={
-            srtConnected && srtFilePath ? (
-              <div style={{ whiteSpace: "pre-line", textAlign: "center", lineHeight: 1.3, fontSize: "13px" }}>
-                {`📁 ${getFileInfo(srtFilePath).displayPath}\n📄 ${getFileInfo(srtFilePath).fileName} (${
-                  scenes.length
-                }개 씬, ${totalDur.toFixed(1)}초)`}
-              </div>
-            ) : (
-              "SRT 파일 업로드 (.srt)"
-            )
-          }
-          connected={srtConnected}
-          onClick={openSrtPicker}
-          inputRef={srtInputRef}
-          accept=".srt"
-          onChange={handleSrtUpload}
-          inputId={srtInputId}
-        />
+        <div style={{ marginBottom: tokens.spacingVerticalS }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <FolderOpen24Regular />
+              <Text size={400} weight="semibold" style={{ letterSpacing: 0.2 }}>
+                파일 선택
+              </Text>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                gap: tokens.spacingHorizontalS,
+                alignItems: "center",
+              }}
+            >
+              <Button
+                appearance="subtle"
+                icon={<LinkSquare24Regular />}
+                onClick={handleInsertFromScript}
+                size="medium"
+                style={{
+                  color: tokens.colorBrandForeground1,
+                  fontWeight: 600,
+                  height: "36px",
+                  minHeight: "36px",
+                  padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalL}`,
+                  alignItems: "center",
+                  display: "flex",
+                  minWidth: "160px",
+                }}
+              >
+                대본에서 가져오기
+              </Button>
+              <Button
+                appearance="subtle"
+                icon={<DismissCircle24Regular />}
+                onClick={handleReset}
+                size="medium"
+                style={{
+                  color: tokens.colorNeutralForeground3,
+                  fontWeight: 600,
+                  height: "36px",
+                  minHeight: "36px",
+                  padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+                  alignItems: "center",
+                  display: "flex",
+                }}
+              >
+                초기화
+              </Button>
+            </div>
+          </div>
+          <Text
+            size={200}
+            style={{
+              color: tokens.colorNeutralForeground3,
+              marginTop: 4,
+              display: "block",
+            }}
+          >
+            파일을 드래그하거나 버튼을 클릭하여 업로드하세요
+          </Text>
+        </div>
 
-        <DropZone
-          icon={<MusicNote2Regular />}
-          label="오디오 파일 (MP3/WAV/M4A)"
-          caption={
-            mp3Connected && mp3FilePath && audioDur > 0 ? (
-              <div style={{ whiteSpace: "pre-line", textAlign: "center", lineHeight: 1.3, fontSize: "13px" }}>
-                {`📁 ${getFileInfo(mp3FilePath).displayPath}\n🎵 ${getFileInfo(mp3FilePath).fileName} (${audioDur.toFixed(1)}초)`}
-              </div>
-            ) : (
-              "MP3, WAV, M4A 지원"
-            )
-          }
-          connected={mp3Connected}
-          onClick={openMp3Picker}
-          inputRef={mp3InputRef}
-          accept=".mp3,.wav,.m4a"
-          onChange={handleMp3Upload}
-          inputId={mp3InputId}
-        />
-      </div>
-    </Card>
-  );
-};
+        <div style={gridStyle}>
+          <DropZone
+            icon={<TextDescriptionRegular />}
+            label="SRT 자막 파일"
+            caption={srtCaption}
+            connected={srtConnected}
+            onClick={openSrtPicker}
+            inputRef={srtInputRef}
+            accept=".srt"
+            onChange={handleSrtUpload}
+            inputId={srtInputId}
+          />
+
+          <DropZone
+            icon={<MusicNote2Regular />}
+            label="오디오 파일 (MP3/WAV/M4A)"
+            caption={mp3Caption}
+            connected={mp3Connected}
+            onClick={openMp3Picker}
+            inputRef={mp3InputRef}
+            accept=".mp3,.wav,.m4a"
+            onChange={handleMp3Upload}
+            inputId={mp3InputId}
+          />
+        </div>
+      </Card>
+    );
+  }
+);
+
+// 컴포넌트 이름 설정 (개발자 도구에서 디버깅 편의)
+FileSelection.displayName = "FileSelection";
+DropZone.displayName = "DropZone";
 
 export default FileSelection;
