@@ -22,10 +22,7 @@ export { usePersistProject } from './usePersistProject';
 
 // ===== UI 상태 관련 훅들 =====
 export { useProgress } from './useProgress';
-export { useProgressTracking } from './useProgressTracking';
 export { default as useFullscreen } from './useFullscreen';
-export { default as useAutoHeight } from './useAutoHeight';
-export { usePreviewSync } from './usePreviewSync';
 
 // ===== 폼 상태 관련 훅들 =====
 export { useFormState } from './useFormState';
@@ -33,13 +30,15 @@ export { useAutoMatch } from './useAutoMatch';
 
 // ===== 비즈니스 로직 훅들 =====
 export { default as usePrompts } from './usePrompts';
-export { useThumbnailGeneration } from './useThumbnailGeneration';
-export { useImageAnalysis } from './useImageAnalysis';
 
 // ===== 스크립트 생성 관련 훅들 =====
 export { useScriptGeneration } from './useScriptGeneration';
 export { useVoiceSettings } from './useVoiceSettings';
 export { usePromptSettings } from './usePromptSettings';
+
+// ===== AssembleEditor 관련 훅들 =====
+export { useFileManagement } from './useFileManagement';
+export { useKeywordExtraction } from './useKeywordExtraction';
 
 // ===== 카테고리별 네임스페이스 export =====
 export * as api from './api';

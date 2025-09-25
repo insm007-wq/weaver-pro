@@ -7,27 +7,29 @@ import {
   Caption1,
   Spinner,
   Badge,
-  // Card 및 CardHeader, CardFooter 등을 활용하여 더 세련된 섹션 구성
   Card,
   CardHeader,
   CardFooter,
-  Button, // PrimaryButton 대신 Fluent Button 사용 권장 (혹은 기존 Common 컴포넌트 유지)
+  Button,
   Field,
   useId,
 } from "@fluentui/react-components";
-import { PrimaryButton } from "../common"; // 기존 컴포넌트 유지
+import { PrimaryButton } from "../common";
 import {
   Target24Regular,
   MusicNote2Regular,
   TextDescriptionRegular,
-  CheckmarkCircle20Filled, // 연결 성공 아이콘 (Filled로 강조)
-  PlugDisconnected20Regular, // 미연결 아이콘
-  ArrowUpload24Regular, // 업로드 아이콘
-  LightbulbFilament24Regular, // AI 아이콘 변경
-  LinkSquare24Regular, // 대본 연결 아이콘
-  FolderOpen24Regular, // 파일 선택 아이콘
-  DismissCircle24Regular, // 초기화 아이콘
+  CheckmarkCircle20Filled,
+  PlugDisconnected20Regular,
+  ArrowUpload24Regular,
+  LightbulbFilament24Regular,
+  LinkSquare24Regular,
+  FolderOpen24Regular,
+  DismissCircle24Regular,
 } from "@fluentui/react-icons";
+
+// Hooks
+import { useFileManagement, useKeywordExtraction } from "../../hooks";
 
 // Utils
 import { parseSrtToScenes } from "../../utils/parseSrt";
@@ -35,6 +37,8 @@ import { getSetting, setSetting, readTextAny, getMp3DurationSafe } from "../../u
 import { handleError } from "@utils";
 import { useContainerStyles, useHeaderStyles, useLayoutStyles } from "../../styles/commonStyles";
 import { showSuccess, showError } from "../common/GlobalToast";
+import FileSelection from "./parts/FileSelection";
+import KeywordExtraction from "./parts/KeywordExtraction";
 
 /**
  * AssembleEditor (UI 개선: 모던, 간결, 시각적 위계 강화)
@@ -49,56 +53,84 @@ export default function AssembleEditor() {
   const srtInputId = useId("srt-input");
   const mp3InputId = useId("mp3-input");
 
-  // State
-  const [scenes, setScenes] = useState([]);
-  const [assets, setAssets] = useState([]);
-  const [srtConnected, setSrtConnected] = useState(false);
-  const [mp3Connected, setMp3Connected] = useState(false);
-  const [audioDur, setAudioDur] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isExtracting, setIsExtracting] = useState(false); // 키워드 추출 로딩 상태 추가
+  // Custom Hooks
+  const fileManagement = useFileManagement();
+  const keywordExtraction = useKeywordExtraction();
+
+  // Local state (remaining after hooks extraction)
   const [selectedSceneIdx, setSelectedSceneIdx] = useState(-1);
-  const [srtFilePath, setSrtFilePath] = useState(""); // SRT 파일 경로
-  const [mp3FilePath, setMp3FilePath] = useState(""); // MP3 파일 경로
-  const [currentLlmModel, setCurrentLlmModel] = useState(""); // 현재 LLM 모델
 
-  // Refs
-  const srtInputRef = useRef(null);
-  const mp3InputRef = useRef(null);
-
-  // Derived
+  // Derived values using hook data
   const totalDur = useMemo(() => {
-    if (!scenes.length) return 0;
-    // ... 기존 로직 유지
-    const first = Number(scenes[0].start) || 0;
-    const last = Number(scenes[scenes.length - 1].end) || 0;
+    if (!fileManagement.scenes.length) return 0;
+    const first = Number(fileManagement.scenes[0].start) || 0;
+    const last = Number(fileManagement.scenes[fileManagement.scenes.length - 1].end) || 0;
     return Math.max(0, last - first);
-  }, [scenes]);
+  }, [fileManagement.scenes]);
 
-  const addAssets = (items) => setAssets((prev) => [...prev, ...items]);
+  // 키워드를 프로젝트 설정에 저장하는 함수
+  const saveKeywordsToProject = async (keywords) => {
+    try {
+      const currentProjectId = await getSetting("currentProjectId");
+      if (!currentProjectId) {
+        console.warn("[키워드 저장] 현재 프로젝트 ID를 찾을 수 없습니다.");
+        return false;
+      }
 
-  // 파일명과 경로 정보를 가져오는 헬퍼 함수
-  const getFileInfo = (filePath) => {
-    if (!filePath) return { fileName: "", folderPath: "", displayPath: "" };
+      const projects = (await getSetting("projects")) || [];
+      const projectIndex = projects.findIndex((p) => p.id === currentProjectId);
 
-    const normalizedPath = filePath.replace(/\\/g, "/");
-    const fileName = normalizedPath.split("/").pop() || "";
-    const folderPath = normalizedPath.substring(0, normalizedPath.lastIndexOf("/"));
-    const displayPath = folderPath.length > 50 ? "..." + folderPath.slice(-47) : folderPath;
+      if (projectIndex === -1) {
+        console.warn("[키워드 저장] 현재 프로젝트를 찾을 수 없습니다.");
+        return false;
+      }
 
-    return { fileName, folderPath, displayPath };
+      // 키워드 데이터 구조화
+      const keywordData = {
+        keywords: keywords.map((asset) => asset.keyword),
+        extractedAt: new Date().toISOString(),
+        totalCount: keywords.length,
+        sourceScenes: scenes.length,
+      };
+
+      // 프로젝트에 키워드 데이터 추가/업데이트
+      projects[projectIndex].extractedKeywords = keywordData;
+
+      // 설정 저장
+      await window.api.invoke("settings:update", { projects });
+      console.log("[키워드 저장] 성공:", keywords.length, "개 키워드 저장됨");
+      return true;
+    } catch (error) {
+      console.error("[키워드 저장] 실패:", error);
+      return false;
+    }
   };
 
-  // LLM 모델명을 사용자 친화적으로 표시하는 헬퍼 함수
-  const getLlmDisplayName = (model) => {
-    const modelMap = {
-      anthropic: "🤖 Anthropic Claude",
-      openai: "🤖 OpenAI GPT",
-      "openai-gpt5mini": "🤖 OpenAI GPT-4o Mini",
-      "google-gemini": "🤖 Google Gemini",
-      gemini: "🤖 Google Gemini",
-    };
-    return modelMap[model] || `🤖 ${model}`;
+  // 프로젝트에서 저장된 키워드를 로드하는 함수
+  const loadKeywordsFromProject = async () => {
+    try {
+      const currentProjectId = await getSetting("currentProjectId");
+      if (!currentProjectId) return null;
+
+      const projects = (await getSetting("projects")) || [];
+      const currentProject = projects.find((p) => p.id === currentProjectId);
+
+      if (!currentProject?.extractedKeywords) return null;
+
+      const keywordData = currentProject.extractedKeywords;
+      const loadedAssets = keywordData.keywords.map((keyword) => ({ keyword }));
+
+      console.log("[키워드 로드] 성공:", loadedAssets.length, "개 키워드 로드됨");
+      return {
+        assets: loadedAssets,
+        extractedAt: keywordData.extractedAt,
+        totalCount: keywordData.totalCount,
+        sourceScenes: keywordData.sourceScenes,
+      };
+    } catch (error) {
+      console.error("[키워드 로드] 실패:", error);
+      return null;
+    }
   };
 
   // Dev helper
@@ -218,6 +250,35 @@ export default function AssembleEditor() {
       window.removeEventListener("settingsChanged", handleSettingsChanged);
     };
   }, []); // 의존성 배열을 빈 배열로 변경하고, 수동으로 트리거하는 방식 사용
+
+  /* ============================== Keywords Loading =============================== */
+  useEffect(() => {
+    const loadSavedKeywords = async () => {
+      try {
+        const keywordData = await loadKeywordsFromProject();
+        if (keywordData && keywordData.assets.length > 0) {
+          setAssets(keywordData.assets);
+
+          // 저장된 키워드 로드 성공 메시지
+          const extractedDate = new Date(keywordData.extractedAt).toLocaleDateString("ko-KR");
+          showSuccess(`이전에 추출된 키워드 ${keywordData.totalCount}개를 불러왔습니다. (${extractedDate})`);
+
+          console.log("[키워드 복원] 성공:", {
+            count: keywordData.totalCount,
+            extractedAt: keywordData.extractedAt,
+            sourceScenes: keywordData.sourceScenes,
+          });
+        }
+      } catch (error) {
+        console.warn("[키워드 복원] 실패:", error);
+      }
+    };
+
+    // 컴포넌트 마운트 시 약간의 지연 후 키워드 로드
+    const timeoutId = setTimeout(loadSavedKeywords, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, []);
 
   // MP3 상태 재확인 함수
   const recheckMp3Status = async () => {
@@ -425,6 +486,33 @@ export default function AssembleEditor() {
     }
   };
 
+  // 저장된 키워드를 프로젝트에서 삭제하는 함수
+  const clearKeywordsFromProject = async () => {
+    try {
+      const currentProjectId = await getSetting("currentProjectId");
+      if (!currentProjectId) return false;
+
+      const projects = (await getSetting("projects")) || [];
+      const projectIndex = projects.findIndex((p) => p.id === currentProjectId);
+
+      if (projectIndex === -1) return false;
+
+      // 프로젝트에서 키워드 데이터 삭제
+      if (projects[projectIndex].extractedKeywords) {
+        delete projects[projectIndex].extractedKeywords;
+
+        // 설정 저장
+        await window.api.invoke("settings:update", { projects });
+        console.log("[키워드 삭제] 저장된 키워드 데이터가 삭제되었습니다.");
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("[키워드 삭제] 실패:", error);
+      return false;
+    }
+  };
+
   // 초기화 함수
   const handleReset = async () => {
     try {
@@ -433,6 +521,9 @@ export default function AssembleEditor() {
       // 설정에서 경로 제거
       await setSetting({ key: "paths.srt", value: "" });
       await setSetting({ key: "paths.mp3", value: "" });
+
+      // 저장된 키워드 데이터 삭제
+      await clearKeywordsFromProject();
 
       // 상태 초기화
       setSrtConnected(false);
@@ -495,7 +586,14 @@ export default function AssembleEditor() {
         console.log("[키워드 추출] 완료:", uniqueAssets.length, "개 키워드", duration);
 
         addAssets(uniqueAssets);
-        showSuccess(`${uniqueAssets.length}개 키워드가 추출되었습니다.${duration}`);
+
+        // 키워드를 프로젝트에 자동 저장
+        const saveResult = await saveKeywordsToProject(uniqueAssets);
+        if (saveResult) {
+          showSuccess(`${uniqueAssets.length}개 키워드가 추출되어 저장되었습니다.${duration}`);
+        } else {
+          showSuccess(`${uniqueAssets.length}개 키워드가 추출되었습니다.${duration} (저장 실패)`);
+        }
       } else {
         console.warn("[키워드 추출] 키워드가 추출되지 않았습니다.");
         showError("키워드가 추출되지 않았습니다. 자막 내용을 확인해주세요.");
@@ -728,12 +826,14 @@ export default function AssembleEditor() {
   const ChipsWrap = ({ items }) => (
     <div
       style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: tokens.spacingHorizontalS,
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+        gap: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalXS}`,
         justifyContent: "center",
+        alignItems: "start",
         maxWidth: "100%",
         margin: "0 auto",
+        padding: `0 ${tokens.spacingHorizontalS}`,
       }}
     >
       {items}
@@ -746,9 +846,9 @@ export default function AssembleEditor() {
       <div className={headerStyles.pageHeader}>
         <div className={headerStyles.pageTitleWithIcon}>
           <Target24Regular />
-          영상 구성
+          미디어 준비
         </div>
-        <div className={headerStyles.pageDescription}>SRT 파일과 오디오를 결합하여 완성된 영상을 만드세요.</div>
+        <div className={headerStyles.pageDescription}>자막과 오디오 파일을 업로드하고 AI로 키워드를 추출하여 영상 제작을 준비하세요.</div>
         <div className={headerStyles.divider} />
       </div>
 
@@ -785,136 +885,41 @@ export default function AssembleEditor() {
             gap: tokens.spacingVerticalXXL,
           }}
         >
-          {/* 파일 업로드 섹션 */}
+          {/* 파일 선택 섹션 */}
+          <FileSelection
+            DropZone={DropZone}
+            srtConnected={fileManagement.srtConnected}
+            srtFilePath={fileManagement.srtFilePath}
+            scenes={fileManagement.scenes}
+            totalDur={totalDur}
+            getFileInfo={fileManagement.getFileInfo}
+            openSrtPicker={fileManagement.openSrtPicker}
+            srtInputRef={fileManagement.srtInputRef}
+            handleSrtUpload={fileManagement.handleSrtUpload}
+            srtInputId={srtInputId}
+            mp3Connected={fileManagement.mp3Connected}
+            mp3FilePath={fileManagement.mp3FilePath}
+            audioDur={fileManagement.audioDur}
+            openMp3Picker={fileManagement.openMp3Picker}
+            mp3InputRef={fileManagement.mp3InputRef}
+            handleMp3Upload={fileManagement.handleMp3Upload}
+            mp3InputId={mp3InputId}
+            handleInsertFromScript={fileManagement.handleInsertFromScript}
+            handleReset={fileManagement.handleReset}
+          />
+
+          {/* 통계 요약 카드 */}
           <Card
             style={{
               padding: "12px 16px",
               borderRadius: "16px",
               border: `1px solid ${tokens.colorNeutralStroke2}`,
               height: "fit-content",
-              display: "flex",
-              flexDirection: "column",
             }}
           >
-            <div style={{ marginBottom: tokens.spacingVerticalS }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <FolderOpen24Regular />
-                  <Text size={400} weight="semibold" style={{ letterSpacing: 0.2 }}>
-                    파일 선택
-                  </Text>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: tokens.spacingHorizontalS,
-                    alignItems: "center",
-                  }}
-                >
-                  <Button
-                    appearance="subtle"
-                    icon={<LinkSquare24Regular />}
-                    onClick={handleInsertFromScript}
-                    size="medium"
-                    style={{
-                      color: tokens.colorBrandForeground1,
-                      fontWeight: 600,
-                      height: "36px",
-                      minHeight: "36px",
-                      padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalL}`,
-                      alignItems: "center",
-                      display: "flex",
-                      minWidth: "160px",
-                    }}
-                  >
-                    대본에서 가져오기
-                  </Button>
-                  <Button
-                    appearance="subtle"
-                    icon={<DismissCircle24Regular />}
-                    onClick={handleReset}
-                    size="medium"
-                    style={{
-                      color: tokens.colorNeutralForeground3,
-                      fontWeight: 600,
-                      height: "36px",
-                      minHeight: "36px",
-                      padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
-                      alignItems: "center",
-                      display: "flex",
-                    }}
-                  >
-                    초기화
-                  </Button>
-                </div>
-              </div>
-              <Text
-                size={200}
-                style={{
-                  color: tokens.colorNeutralForeground3,
-                  marginTop: 4,
-                  display: "block",
-                }}
-              >
-                파일을 드래그하거나 버튼을 클릭하여 업로드하세요
-              </Text>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-                gap: tokens.spacingHorizontalL,
-                padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL} ${tokens.spacingVerticalL}`,
-              }}
-            >
-              <DropZone
-                icon={<TextDescriptionRegular />}
-                label="SRT 자막 파일"
-                caption={
-                  srtConnected && srtFilePath ? (
-                    <div style={{ whiteSpace: "pre-line", textAlign: "center", lineHeight: 1.3, fontSize: "13px" }}>
-                      {`📁 ${getFileInfo(srtFilePath).displayPath}\n📄 ${getFileInfo(srtFilePath).fileName} (${
-                        scenes.length
-                      }개 씬, ${totalDur.toFixed(1)}초)`}
-                    </div>
-                  ) : (
-                    "SRT 파일 업로드 (.srt)"
-                  )
-                }
-                connected={srtConnected}
-                onClick={openSrtPicker}
-                inputRef={srtInputRef}
-                accept=".srt"
-                onChange={handleSrtUpload}
-                inputId={srtInputId}
-              />
-
-              <DropZone
-                icon={<MusicNote2Regular />}
-                label="오디오 파일 (MP3/WAV/M4A)"
-                caption={
-                  mp3Connected && mp3FilePath && audioDur > 0 ? (
-                    <div style={{ whiteSpace: "pre-line", textAlign: "center", lineHeight: 1.3, fontSize: "13px" }}>
-                      {`📁 ${getFileInfo(mp3FilePath).displayPath}\n🎵 ${getFileInfo(mp3FilePath).fileName} (${audioDur.toFixed(1)}초)`}
-                    </div>
-                  ) : (
-                    "MP3, WAV, M4A 지원"
-                  )
-                }
-                connected={mp3Connected}
-                onClick={openMp3Picker}
-                inputRef={mp3InputRef}
-                accept=".mp3,.wav,.m4a"
-                onChange={handleMp3Upload}
-                inputId={mp3InputId}
-              />
-            </div>
-
-            {/* 통계 요약 (CardFooter 활용) */}
             <CardFooter
               style={{
-                borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+                borderTop: "none",
                 padding: tokens.spacingVerticalS,
                 backgroundColor: tokens.colorNeutralBackground2,
                 display: "flex",
@@ -924,10 +929,10 @@ export default function AssembleEditor() {
             >
               <StatItem
                 label="SRT 자막 파일"
-                value={srtConnected ? "완료" : "미연결"}
-                color={srtConnected ? tokens.colorPaletteLightGreenForeground1 : tokens.colorNeutralForeground3}
+                value={fileManagement.srtConnected ? "완료" : "미연결"}
+                color={fileManagement.srtConnected ? tokens.colorPaletteLightGreenForeground1 : tokens.colorNeutralForeground3}
                 icon={
-                  srtConnected ? (
+                  fileManagement.srtConnected ? (
                     <CheckmarkCircle20Filled color={tokens.colorPaletteLightGreenForeground1} />
                   ) : (
                     <PlugDisconnected20Regular color={tokens.colorNeutralForeground3} />
@@ -936,10 +941,10 @@ export default function AssembleEditor() {
               />
               <StatItem
                 label="MP3 파일"
-                value={mp3Connected ? "완료" : "미연결"}
-                color={mp3Connected ? tokens.colorPaletteLightGreenForeground1 : tokens.colorNeutralForeground3}
+                value={fileManagement.mp3Connected ? "완료" : "미연결"}
+                color={fileManagement.mp3Connected ? tokens.colorPaletteLightGreenForeground1 : tokens.colorNeutralForeground3}
                 icon={
-                  mp3Connected ? (
+                  fileManagement.mp3Connected ? (
                     <CheckmarkCircle20Filled color={tokens.colorPaletteLightGreenForeground1} />
                   ) : (
                     <PlugDisconnected20Regular color={tokens.colorNeutralForeground3} />
@@ -948,220 +953,29 @@ export default function AssembleEditor() {
               />
               <StatItem
                 label="씬 수"
-                value={`${scenes.length}개`}
-                color={scenes.length > 0 ? tokens.colorBrandForeground1 : tokens.colorNeutralForeground3}
+                value={`${fileManagement.scenes.length}개`}
+                color={fileManagement.scenes.length > 0 ? tokens.colorBrandForeground1 : tokens.colorNeutralForeground3}
               />
               <StatItem
                 label="총 영상 길이"
-                value={scenes.length > 0 ? `${totalDur.toFixed(1)}초` : "0초"}
-                color={scenes.length > 0 ? tokens.colorBrandForeground1 : tokens.colorNeutralForeground3}
+                value={fileManagement.scenes.length > 0 ? `${totalDur.toFixed(1)}초` : "0초"}
+                color={fileManagement.scenes.length > 0 ? tokens.colorBrandForeground1 : tokens.colorNeutralForeground3}
                 isLast={true}
               />
             </CardFooter>
           </Card>
 
-          {/* AI 키워드 추출 섹션 */}
-          <Card
-            style={{
-              padding: "12px 16px",
-              borderRadius: "16px",
-              border: `1px solid ${tokens.colorNeutralStroke2}`,
-              height: "fit-content",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <div style={{ marginBottom: tokens.spacingVerticalS }}>
-              {" "}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <LightbulbFilament24Regular />
-                  <Text size={400} weight="semibold" style={{ letterSpacing: 0.2 }}>
-                    AI 키워드 추출
-                  </Text>
-                </div>
-                {currentLlmModel && (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      padding: "6px 12px",
-                      backgroundColor: tokens.colorBrandBackground2,
-                      border: `1px solid ${tokens.colorBrandStroke1}`,
-                      borderRadius: tokens.borderRadiusMedium,
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      color: tokens.colorBrandForeground1,
-                    }}
-                  >
-                    <div style={{ fontSize: "14px" }}>🤖</div>
-                    <Text size={200} weight="semibold" style={{ color: "inherit" }}>
-                      {getLlmDisplayName(currentLlmModel).replace("🤖 ", "")}
-                    </Text>
-                  </div>
-                )}
-              </div>
-              <Text
-                size={200}
-                style={{
-                  color: tokens.colorNeutralForeground3,
-                  marginTop: 4,
-                  display: "block",
-                }}
-              >
-                SRT 내용을 분석하여 자동으로 영상 소스 검색 키워드를 추출합니다.
-              </Text>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: tokens.spacingVerticalL,
-              }}
-            >
-              <PrimaryButton
-                size="large"
-                style={{ height: 48, maxWidth: 480, alignSelf: "center" }}
-                disabled={!srtConnected || isExtracting}
-                onClick={handleExtractKeywords}
-              >
-                {isExtracting ? (
-                  <>
-                    <Spinner size="tiny" style={{ marginRight: tokens.spacingHorizontalS }} />
-                    키워드 추출 중...
-                  </>
-                ) : (
-                  "🤖 키워드 추출 시작"
-                )}
-              </PrimaryButton>
-
-              {/* 결과 영역 */}
-              <div
-                style={{
-                  minHeight: 200,
-                  border: `1px solid ${tokens.colorNeutralStroke2}`,
-                  borderRadius: tokens.borderRadiusLarge,
-                  padding: tokens.spacingVerticalL,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: tokens.colorNeutralBackground2, // 배경색을 더 밝게 변경
-                  boxShadow: "inset 0 1px 2px rgba(0,0,0,0.06)",
-                }}
-              >
-                {assets.length > 0 ? (
-                  <div style={{ textAlign: "center", width: "100%" }}>
-                    <Body1
-                      style={{
-                        color: tokens.colorBrandForeground1,
-                        fontWeight: 600,
-                        marginBottom: tokens.spacingVerticalM,
-                      }}
-                    >
-                      ✅ {assets.length}개 키워드 추출 완료
-                    </Body1>
-
-                    <ChipsWrap
-                      items={assets
-                        .slice(0, 30)
-                        .map(
-                          (
-                            asset,
-                            index // 한 줄에 더 많은 칩 표시 가능하도록 갯수 조정
-                          ) => (
-                            <Badge
-                              key={index}
-                              appearance="tint" // 칩을 Badge로 대체하여 통일된 디자인 사용
-                              color="brand"
-                              size="medium"
-                              style={{
-                                cursor: "default",
-                                fontSize: tokens.fontSizeBase200,
-                                lineHeight: 1,
-                              }}
-                            >
-                              {asset.keyword || `키워드 ${index + 1}`}
-                            </Badge>
-                          )
-                        )
-                        .concat(
-                          assets.length > 30
-                            ? [
-                                <Badge
-                                  key="more"
-                                  appearance="outline"
-                                  color="neutral"
-                                  size="medium"
-                                  style={{
-                                    cursor: "default",
-                                    fontSize: tokens.fontSizeBase200,
-                                    lineHeight: 1,
-                                  }}
-                                >
-                                  +{assets.length - 30}개 더
-                                </Badge>,
-                              ]
-                            : []
-                        )}
-                    />
-                  </div>
-                ) : isExtracting ? (
-                  // 추출 중 상태
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: tokens.spacingVerticalM,
-                      alignItems: "center",
-                    }}
-                  >
-                    <Spinner size="medium" />
-                    <Body1 style={{ color: tokens.colorBrandForeground1 }}>키워드를 정밀하게 분석 중입니다...</Body1>
-                  </div>
-                ) : (
-                  // 초기 상태
-                  <div style={{ textAlign: "center", maxWidth: 520, width: "100%", margin: "0 auto" }}>
-                    <Body2
-                      style={{
-                        color: tokens.colorNeutralForeground3,
-                        marginBottom: tokens.spacingVerticalM,
-                        display: "block",
-                        textAlign: "center",
-                      }}
-                    >
-                      {srtConnected
-                        ? "키워드 추출 버튼을 눌러 영상 소스 검색을 시작하세요"
-                        : "SRT 파일을 먼저 업로드해야 키워드 추출이 가능합니다"}
-                    </Body2>
-                    <Caption1
-                      style={{
-                        color: tokens.colorNeutralForeground3,
-                        display: "block",
-                        marginTop: tokens.spacingVerticalS,
-                        textAlign: "center",
-                      }}
-                    >
-                      추출된 키워드를 기반으로 영상 제작에 필요한 소스를 자동으로 검색 및 추천합니다.
-                    </Caption1>
-                  </div>
-                )}
-              </div>
-            </div>
-          </Card>
+          {/* 키워드 추출 섹션 */}
+          <KeywordExtraction
+            srtConnected={fileManagement.srtConnected}
+            isExtracting={keywordExtraction.isExtracting}
+            handleExtractKeywords={() => keywordExtraction.handleExtractKeywords(fileManagement.scenes)}
+            assets={keywordExtraction.assets}
+            scenes={fileManagement.scenes}
+            currentLlmModel={keywordExtraction.currentLlmModel}
+            getLlmDisplayName={keywordExtraction.getLlmDisplayName}
+            ChipsWrap={ChipsWrap}
+          />
         </div>
       )}
     </div>

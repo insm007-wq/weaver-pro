@@ -243,8 +243,8 @@ export default function Sidebar({ onSelectMenu }) {
     },
     {
       icon: <WandRegular />,
-      label: "영상 구성",
-      desc: "AI 전략 설정 및 타임라인 생성",
+      label: "미디어 준비",
+      desc: "자막과 오디오 업로드, AI 키워드 추출",
       key: "assemble",
       color: tokens.colorPalettePurpleForeground1,
     },

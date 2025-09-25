@@ -70,7 +70,6 @@ function ScriptVoiceGenerator() {
   const { doc, setDoc, isLoading, error, setIsLoading, setError, getSelectedPromptContent, runGenerate } = useScriptGeneration();
   const { voices, voiceLoading, voiceError, previewVoice, stopVoice, retryVoiceLoad } = useVoiceSettings(form);
 
-
   // 폼 변경 핸들러
   const onChange = useCallback((k, v) => {
     setForm((p) => ({ ...p, [k]: v }));
@@ -177,14 +176,14 @@ function ScriptVoiceGenerator() {
             voices,
             setFullVideoState,
             api,
-              addLog,
+            addLog,
           });
         } else {
           throw new Error("대본이 생성되지 않았습니다. 먼저 대본을 생성해주세요.");
         }
       } catch (error) {
         // AbortError는 정상적인 취소이므로 에러로 처리하지 않음
-        if (error.name === 'AbortError') {
+        if (error.name === "AbortError") {
           console.log("✅ 대본 생성 작업이 취소되었습니다.");
           addLog("⏹️ 작업이 취소되었습니다.", "info");
         } else {
@@ -201,7 +200,7 @@ function ScriptVoiceGenerator() {
   );
 
   const resetFullVideoState = (clearLogs = false) => {
-    setFullVideoState(prev => ({
+    setFullVideoState((prev) => ({
       isGenerating: false,
       mode: "idle",
       currentStep: "idle",
@@ -308,7 +307,7 @@ function ScriptVoiceGenerator() {
             audio: `${videoSaveFolder}\\audio`,
             images: `${videoSaveFolder}\\images`,
             output: `${videoSaveFolder}\\output`,
-            temp: `${videoSaveFolder}\\temp`
+            temp: `${videoSaveFolder}\\temp`,
           };
 
           addLog(`🎯 현재 프로젝트: ${currentProjectId}`);
@@ -374,7 +373,7 @@ function ScriptVoiceGenerator() {
             // 경로 검증
             const pathValidation = validatePath(`${videoSaveFolder}\\output`, videoSaveFolder);
             if (!pathValidation.isValid) {
-              throw new Error(`안전하지 않은 출력 경로: ${pathValidation.errors.join(', ')}`);
+              throw new Error(`안전하지 않은 출력 경로: ${pathValidation.errors.join(", ")}`);
             }
 
             await api.invoke("shell:openPath", pathValidation.sanitized);
@@ -390,7 +389,7 @@ function ScriptVoiceGenerator() {
       console.log("🎉 완전 자동화 영상 생성 완료! 출력 폴더를 확인해보세요.");
     } catch (error) {
       // AbortError는 정상적인 취소이므로 에러로 처리하지 않음
-      if (error.name === 'AbortError') {
+      if (error.name === "AbortError") {
         console.log("✅ 자동화 영상 생성 작업이 취소되었습니다.");
         addLog("⏹️ 작업이 취소되었습니다.", "info");
         updateFullVideoState({
@@ -400,7 +399,7 @@ function ScriptVoiceGenerator() {
       } else {
         updateFullVideoState({
           currentStep: "error",
-          failedStep: fullVideoState?.currentStep || 'unknown',
+          failedStep: fullVideoState?.currentStep || "unknown",
           error: error.message,
           isGenerating: false,
         });
@@ -461,16 +460,16 @@ function ScriptVoiceGenerator() {
         if (llmSetting !== null && llmSetting !== undefined) {
           // 응답이 객체 형태인 경우 data 또는 value 속성에서 실제 값 추출
           let llmValue;
-          if (typeof llmSetting === 'object') {
+          if (typeof llmSetting === "object") {
             llmValue = llmSetting.data || llmSetting.value || llmSetting;
           } else {
             llmValue = llmSetting;
           }
 
           // 유효한 문자열 값인 경우에만 업데이트
-          if (typeof llmValue === 'string' && llmValue.trim()) {
+          if (typeof llmValue === "string" && llmValue.trim()) {
             setGlobalSettings({ llmModel: llmValue });
-            setForm(prev => {
+            setForm((prev) => {
               if (prev.aiEngine !== llmValue) {
                 console.log("🔄 LLM 변경됨:", prev.aiEngine, "→", llmValue);
                 return { ...prev, aiEngine: llmValue };
@@ -497,11 +496,11 @@ function ScriptVoiceGenerator() {
     loadGlobalSettings();
 
     // 전역 설정 변경 이벤트 리스너 등록
-    window.addEventListener('settingsChanged', handleSettingsChange);
+    window.addEventListener("settingsChanged", handleSettingsChange);
 
     return () => {
       isMounted = false;
-      window.removeEventListener('settingsChanged', handleSettingsChange);
+      window.removeEventListener("settingsChanged", handleSettingsChange);
     };
   }, []); // 빈 의존성 배열 - 마운트시에만 실행
 
@@ -552,138 +551,136 @@ function ScriptVoiceGenerator() {
     <ErrorBoundary>
       <AsyncErrorBoundary
         onError={(error, errorInfo) => {
-          console.error('비동기 에러 발생:', error, errorInfo);
-          addLog(`❌ 예상치 못한 오류: ${error.message}`, 'error');
+          console.error("비동기 에러 발생:", error, errorInfo);
+          addLog(`❌ 예상치 못한 오류: ${error.message}`, "error");
         }}
       >
         <div className={containerStyles.container} style={{ overflowX: "hidden", maxWidth: "100vw" }}>
-        {/* 헤더 */}
-        <div className={headerStyles.pageHeader}>
-          <div className={headerStyles.pageTitleWithIcon}>
-            <DocumentEditRegular />
-            대본 & 음성 생성
-          </div>
-          <div className={headerStyles.pageDescription}>SRT 자막 + MP3 내레이션을 한 번에 생성합니다</div>
-          <div className={headerStyles.divider} />
-        </div>
-
-        {/* 세로 흐름 레이아웃 */}
-        <div style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: tokens.spacingVerticalL,
-          width: "100%",
-          maxWidth: "100%",
-          overflowX: "hidden",
-          overflowY: "visible", // 드롭다운 메뉴가 보이도록
-          position: "relative"
-        }}>
-
-          {/* 1행: 생성 모드 + 실행 버튼 (2열) */}
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: tokens.spacingHorizontalL,
-            alignItems: "stretch", // 높이를 맞춤
-            width: "100%",
-            maxWidth: "100%",
-            overflowX: "hidden"
-          }}>
-            {/* 생성 모드 */}
-            <ModeSelector
-              selectedMode={selectedMode}
-              onModeChange={setSelectedMode}
-              form={form}
-              isGenerating={fullVideoState.isGenerating}
-              compact={true}
-            />
-
-            {/* 실행 버튼 */}
-            <ActionCard
-              selectedMode={selectedMode}
-              form={form}
-              isLoading={isLoading}
-              fullVideoState={fullVideoState}
-              onAutomationGenerate={runFullVideoGeneration}
-              onScriptGenerate={() => runScriptMode(form)}
-              centered={true}
-            />
+          {/* 헤더 */}
+          <div className={headerStyles.pageHeader}>
+            <div className={headerStyles.pageTitleWithIcon}>
+              <DocumentEditRegular />
+              대본 & 음성 생성
+            </div>
+            <div className={headerStyles.pageDescription}>SRT 자막 + MP3 내레이션을 한 번에 생성합니다</div>
+            <div className={headerStyles.divider} />
           </div>
 
-          {/* 2행: 기본 설정 (1열) */}
-          <BasicSettingsCard
-            form={form}
-            onChange={onChange}
-            promptNames={promptNames}
-            promptLoading={promptLoading}
-          />
-
-          {/* 3행: 음성 설정 (1열) */}
-          <VoiceSettingsCard
-            form={form}
-            voices={voices}
-            voiceLoading={voiceLoading}
-            voiceError={voiceError}
-            onChange={onChange}
-            onPreviewVoice={previewVoice}
-            onStopVoice={stopVoice}
-            onRetryVoiceLoad={retryVoiceLoad}
-          />
-
-          {/* 4행: 실시간 결과 (전체 폭) */}
-          {showResultsSidebar && (
-            <ResultsSidebar
-              fullVideoState={fullVideoState}
-              doc={doc}
-              isLoading={isLoading}
-              form={form}
-              globalSettings={globalSettings}
-              resetFullVideoState={resetFullVideoState}
-              api={api}
-              onClose={() => setShowResultsSidebar(false)}
-              horizontal={true}
-            />
-          )}
-
-          {/* 결과 패널이 숨겨져 있을 때 보이기 카드 */}
-          {!showResultsSidebar && (fullVideoState.isGenerating || doc || isLoading) && (
-            <Card
-              onClick={() => setShowResultsSidebar(true)}
+          {/* 세로 흐름 레이아웃 */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: tokens.spacingVerticalL,
+              width: "100%",
+              maxWidth: "100%",
+              overflowX: "hidden",
+              overflowY: "visible",
+              position: "relative",
+            }}
+          >
+            {/* 1행: 생성 모드 + 실행 버튼 (2열) */}
+            <div
               style={{
-                padding: "16px 20px",
-                borderRadius: 16,
-                border: `1px solid ${tokens.colorNeutralStroke2}`,
-                background: tokens.colorNeutralBackground1,
-                cursor: "pointer",
-                transition: "all 0.2s ease",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                minHeight: "56px"
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: tokens.spacingHorizontalL,
+                alignItems: "stretch",
+                width: "100%",
+                maxWidth: "100%",
+                overflowX: "hidden",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <EyeRegular
-                  style={{
-                    fontSize: 20,
-                    color: tokens.colorBrandForeground1
-                  }}
-                />
-                <div>
-                  <Text size={300} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
-                    실시간 결과 보기
-                  </Text>
-                  <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 2 }}>
-                    진행 상황과 대본 결과를 확인하세요
-                  </Text>
+              {/* 생성 모드 */}
+              <ModeSelector
+                selectedMode={selectedMode}
+                onModeChange={setSelectedMode}
+                form={form}
+                isGenerating={fullVideoState.isGenerating}
+                compact={true}
+              />
+
+              {/* 실행 버튼 */}
+              <ActionCard
+                selectedMode={selectedMode}
+                form={form}
+                isLoading={isLoading}
+                fullVideoState={fullVideoState}
+                onAutomationGenerate={runFullVideoGeneration}
+                onScriptGenerate={() => runScriptMode(form)}
+                centered={true}
+              />
+            </div>
+
+            {/* 2행: 기본 설정 (1열) */}
+            <BasicSettingsCard form={form} onChange={onChange} promptNames={promptNames} promptLoading={promptLoading} />
+
+            {/* 3행: 음성 설정 (1열) */}
+            <VoiceSettingsCard
+              form={form}
+              voices={voices}
+              voiceLoading={voiceLoading}
+              voiceError={voiceError}
+              onChange={onChange}
+              onPreviewVoice={previewVoice}
+              onStopVoice={stopVoice}
+              onRetryVoiceLoad={retryVoiceLoad}
+            />
+
+            {/* 4행: 실시간 결과 (전체 폭) */}
+            {showResultsSidebar && (
+              <ResultsSidebar
+                fullVideoState={fullVideoState}
+                doc={doc}
+                isLoading={isLoading}
+                form={form}
+                globalSettings={globalSettings}
+                resetFullVideoState={resetFullVideoState}
+                api={api}
+                onClose={() => setShowResultsSidebar(false)}
+                horizontal={true}
+              />
+            )}
+
+            {/* 결과 패널이 숨겨져 있을 때 보이기 카드 */}
+            {!showResultsSidebar && (fullVideoState.isGenerating || doc || isLoading) && (
+              <Card
+                onClick={() => setShowResultsSidebar(true)}
+                style={{
+                  padding: "16px 20px",
+                  borderRadius: 16,
+                  border: `1px solid ${tokens.colorNeutralStroke2}`,
+                  background: tokens.colorNeutralBackground1,
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  minHeight: "56px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <EyeRegular
+                    style={{
+                      fontSize: 20,
+                      color: tokens.colorBrandForeground1,
+                    }}
+                  />
+                  <div>
+                    <Text size={300} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
+                      실시간 결과 보기
+                    </Text>
+                    <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 2 }}>
+                      진행 상황과 대본 결과를 확인하세요
+                    </Text>
+                  </div>
                 </div>
-              </div>
-              <Text size={200} style={{ color: tokens.colorBrandForeground1 }}>
-                클릭하여 열기
-              </Text>
-            </Card>
-          )}
-        </div>
+                <Text size={200} style={{ color: tokens.colorBrandForeground1 }}>
+                  클릭하여 열기
+                </Text>
+              </Card>
+            )}
+          </div>
         </div>
       </AsyncErrorBoundary>
     </ErrorBoundary>
