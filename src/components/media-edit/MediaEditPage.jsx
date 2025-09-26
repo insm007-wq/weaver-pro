@@ -410,33 +410,80 @@ function MediaEditPage() {
               >
                 {selectedScene ? (
                   videoUrl && selectedScene.asset?.type === 'video' ? (
-                    // 실제 비디오 표시
-                    <video
-                      ref={videoRef}
-                      key={videoUrl}
-                      src={videoUrl}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "contain",
-                        borderRadius: 8,
-                        cursor: "pointer",
-                      }}
-                      controls={false}
-                      autoPlay={false}
-                      muted
-                      playsInline
-                      onClick={handleVideoToggle}
-                      onError={(e) => {
-                        console.error("[비디오 재생] 오류:", e);
-                        console.error("[비디오 재생] 비디오 URL:", videoUrl);
-                      }}
-                      onLoadedData={() => {
-                        console.log("[비디오 재생] 로드됨:", videoUrl);
-                      }}
-                      onPlay={() => setIsPlaying(true)}
-                      onPause={() => setIsPlaying(false)}
-                    />
+                    // 실제 비디오 표시 (자막 오버레이 포함)
+                    <div style={{ position: "relative", width: "100%", height: "100%" }}>
+                      <video
+                        ref={videoRef}
+                        key={videoUrl}
+                        src={videoUrl}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "contain",
+                          borderRadius: 8,
+                          cursor: "pointer",
+                        }}
+                        controls={false}
+                        autoPlay={false}
+                        muted={false}
+                        playsInline
+                        onClick={handleVideoToggle}
+                        onError={(e) => {
+                          console.error("[비디오 재생] 오류:", e);
+                          console.error("[비디오 재생] 비디오 URL:", videoUrl);
+                        }}
+                        onLoadedData={() => {
+                          console.log("[비디오 재생] 로드됨:", videoUrl);
+                        }}
+                        onPlay={() => setIsPlaying(true)}
+                        onPause={() => setIsPlaying(false)}
+                      />
+                      {/* 자막 오버레이 */}
+                      {selectedScene.text && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            bottom: "20px",
+                            left: "50%",
+                            transform: "translateX(-50%)",
+                            backgroundColor: "rgba(0, 0, 0, 0.8)",
+                            color: "white",
+                            padding: "12px 20px",
+                            borderRadius: "8px",
+                            fontSize: "16px",
+                            lineHeight: "1.4",
+                            maxWidth: "80%",
+                            textAlign: "center",
+                            pointerEvents: "none",
+                            boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+                          }}
+                        >
+                          {selectedScene.text}
+                        </div>
+                      )}
+                      {/* 재생/일시정지 아이콘 오버레이 */}
+                      {!isPlaying && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: "50%",
+                            left: "50%",
+                            transform: "translate(-50%, -50%)",
+                            backgroundColor: "rgba(0, 0, 0, 0.6)",
+                            borderRadius: "50%",
+                            width: "60px",
+                            height: "60px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            pointerEvents: "none",
+                            transition: "opacity 0.3s ease",
+                          }}
+                        >
+                          <PlayRegular style={{ fontSize: 24, color: "white", marginLeft: "3px" }} />
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     // 텍스트 기반 프리뷰 (비디오가 없거나 이미지인 경우)
                     <div style={{ textAlign: "center", color: "white", padding: 20 }}>
