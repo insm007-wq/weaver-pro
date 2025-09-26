@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Text, Button, Card, Spinner, ProgressBar, Badge, Avatar, Divider } from "@fluentui/react-components";
+import { Text, Button, Card, Spinner, ProgressBar, Badge, Avatar, Divider, Slider, Dropdown, Option } from "@fluentui/react-components";
 import { useHeaderStyles, useContainerStyles } from "../../styles/commonStyles";
-import { RocketRegular, VideoRegular, ImageRegular, ArrowDownloadRegular, CheckmarkCircleRegular, HistoryRegular, DocumentRegular } from "@fluentui/react-icons";
+import { RocketRegular, VideoRegular, ImageRegular, ArrowDownloadRegular, CheckmarkCircleRegular, HistoryRegular, DocumentRegular, SettingsRegular } from "@fluentui/react-icons";
 import { PageErrorBoundary } from "../common/ErrorBoundary";
 import { showError, showSuccess } from "../common/GlobalToast";
 
@@ -21,7 +21,13 @@ function MediaDownloadPage() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState({});
   const [downloadedVideos, setDownloadedVideos] = useState([]);
-  const [downloadHistory, setDownloadHistory] = useState([]);
+  // 다운로드 옵션
+  const [downloadOptions, setDownloadOptions] = useState({
+    videosPerKeyword: 1, // 키워드당 영상 개수
+    maxFileSize: 50, // MB 단위
+    minResolution: "720p", // 최소 해상도
+    preferredQuality: "high" // 화질 선호도: low, medium, high
+  });
   const [keywordsLoaded, setKeywordsLoaded] = useState(false);
 
   // 키워드 JSON에서 로드
@@ -147,9 +153,9 @@ function MediaDownloadPage() {
               keyword,
               provider: selectedProvider,
               filename,
-              thumbnail: `https://via.placeholder.com/160x90/6366f1/white?text=${encodeURIComponent(keyword)}`,
-              size: "다운로드됨", // 실제 크기는 나중에 추가 가능
-              success: true
+              thumbnail: `https://via.placeholder.com/160x90/6366f1/white?text=${encodeURIComponent(keyword.split('_')[0])}`,
+              success: true,
+              ...progressData // width, height, size, quality 등 포함
             }
           ]);
         } else if (status === 'failed') {
@@ -160,9 +166,9 @@ function MediaDownloadPage() {
               provider: selectedProvider,
               filename: filename || `${keyword}_failed`,
               thumbnail: `https://via.placeholder.com/160x90/dc2626/white?text=Error`,
-              size: "실패",
               success: false,
-              error
+              error,
+              ...progressData
             }
           ]);
         }
@@ -174,7 +180,8 @@ function MediaDownloadPage() {
       // 실제 영상 다운로드 시작
       const result = await window.api.downloadVideosByKeywords({
         keywords: keywordArray,
-        provider: selectedProvider
+        provider: selectedProvider,
+        options: downloadOptions
       });
 
       // 진행률 리스너 해제
@@ -182,17 +189,6 @@ function MediaDownloadPage() {
 
       if (result.success) {
         console.log(`[영상 다운로드] 완료: ${result.summary.success}/${result.summary.total}개 성공`);
-
-        // 다운로드 히스토리에 추가
-        const historyEntry = {
-          timestamp: new Date().toISOString(),
-          provider: selectedProvider,
-          keywords: keywordArray,
-          results: result.results,
-          summary: result.summary
-        };
-        setDownloadHistory(prev => [historyEntry, ...prev.slice(0, 9)]); // 최근 10개만 유지
-
         showSuccess(`영상 다운로드 완료: ${result.summary.success}/${result.summary.total}개 성공`);
       } else {
         console.error("[영상 다운로드] 전체 실패:", result.error);
@@ -259,6 +255,97 @@ function MediaDownloadPage() {
                 />
                 Pixabay
               </Button>
+            </div>
+          </Card>
+
+          {/* 다운로드 옵션 */}
+          <Card style={{ padding: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+              <SettingsRegular style={{ fontSize: "18px" }} />
+              <Text size={400} weight="semibold">다운로드 옵션</Text>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              {/* 키워드당 영상 개수 */}
+              <div>
+                <Text size={300} weight="medium" style={{ marginBottom: "8px" }}>
+                  키워드당 영상 개수: {downloadOptions.videosPerKeyword}개
+                </Text>
+                <Slider
+                  min={1}
+                  max={5}
+                  step={1}
+                  value={downloadOptions.videosPerKeyword}
+                  onChange={(_, data) => setDownloadOptions(prev => ({
+                    ...prev,
+                    videosPerKeyword: data.value
+                  }))}
+                  style={{ width: "100%" }}
+                />
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#666", marginTop: "4px" }}>
+                  <span>1개</span>
+                  <span>5개</span>
+                </div>
+              </div>
+
+              {/* 최대 파일 크기 */}
+              <div>
+                <Text size={300} weight="medium" style={{ marginBottom: "8px" }}>
+                  최대 파일 크기: {downloadOptions.maxFileSize}MB
+                </Text>
+                <Slider
+                  min={10}
+                  max={200}
+                  step={10}
+                  value={downloadOptions.maxFileSize}
+                  onChange={(_, data) => setDownloadOptions(prev => ({
+                    ...prev,
+                    maxFileSize: data.value
+                  }))}
+                  style={{ width: "100%" }}
+                />
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#666", marginTop: "4px" }}>
+                  <span>10MB</span>
+                  <span>200MB</span>
+                </div>
+              </div>
+
+              {/* 최소 해상도 */}
+              <div style={{ display: "flex", gap: "16px" }}>
+                <div style={{ flex: 1 }}>
+                  <Text size={300} weight="medium" style={{ marginBottom: "8px" }}>최소 해상도</Text>
+                  <Dropdown
+                    value={downloadOptions.minResolution}
+                    onOptionSelect={(_, data) => setDownloadOptions(prev => ({
+                      ...prev,
+                      minResolution: data.optionValue
+                    }))}
+                    style={{ width: "100%" }}
+                  >
+                    <Option value="480p">480p (SD)</Option>
+                    <Option value="720p">720p (HD)</Option>
+                    <Option value="1080p">1080p (FHD)</Option>
+                    <Option value="1440p">1440p (QHD)</Option>
+                  </Dropdown>
+                </div>
+
+                {/* 화질 선호도 */}
+                <div style={{ flex: 1 }}>
+                  <Text size={300} weight="medium" style={{ marginBottom: "8px" }}>화질 선호도</Text>
+                  <Dropdown
+                    value={downloadOptions.preferredQuality}
+                    onOptionSelect={(_, data) => setDownloadOptions(prev => ({
+                      ...prev,
+                      preferredQuality: data.optionValue
+                    }))}
+                    style={{ width: "100%" }}
+                  >
+                    <Option value="low">용량 우선</Option>
+                    <Option value="medium">균형</Option>
+                    <Option value="high">화질 우선</Option>
+                  </Dropdown>
+                </div>
+              </div>
             </div>
           </Card>
 
@@ -409,8 +496,17 @@ function MediaDownloadPage() {
                     <div style={{ flex: 1 }}>
                       <Text size={200} weight="medium">{video.keyword}</Text>
                       <Text size={100} style={{ color: "#666" }}>
-                        {video.provider} • {video.size}
+                        {video.provider} • {video.width && video.height ? `${video.width}×${video.height}` : 'Unknown'} •
+                        {video.size ? ` ${Math.round(video.size / 1024 / 1024)}MB` : ' Unknown size'}
+                        {video.quality && ` • ${video.quality}`}
                       </Text>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                      {video.success ? (
+                        <CheckmarkCircleRegular style={{ fontSize: "16px", color: "#107c10" }} />
+                      ) : (
+                        <Badge appearance="filled" color="danger" size="small">실패</Badge>
+                      )}
                     </div>
                     <Button size="small" appearance="subtle">
                       열기
@@ -431,63 +527,6 @@ function MediaDownloadPage() {
               </div>
             </Card>
           )}
-
-          {/* 다운로드 히스토리 */}
-          <Card style={{ padding: "20px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
-              <HistoryRegular style={{ fontSize: "18px" }} />
-              <Text size={400} weight="semibold">다운로드 기록</Text>
-              <Badge appearance="filled" size="small">
-                {downloadHistory.length}
-              </Badge>
-            </div>
-
-            {downloadHistory.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "20px" }}>
-                <Text size={300} style={{ color: "#666" }}>
-                  아직 다운로드 기록이 없습니다
-                </Text>
-              </div>
-            ) : (
-              <>
-                <div style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
-                  maxHeight: "200px",
-                  overflowY: "auto"
-                }}>
-                  {downloadHistory.slice(0, 5).map((item) => (
-                    <div
-                      key={item.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "12px",
-                        padding: "8px 12px",
-                        border: "1px solid #e5e5e5",
-                        borderRadius: "6px",
-                        backgroundColor: "#fafafa"
-                      }}
-                    >
-                      <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#107c10" }}></div>
-                      <div style={{ flex: 1 }}>
-                        <Text size={200}>{item.keyword}</Text>
-                        <Text size={100} style={{ color: "#666" }}>
-                          {item.provider} • {item.date}
-                        </Text>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {downloadHistory.length > 5 && (
-                  <Text size={100} style={{ color: "#666", textAlign: "center", marginTop: "8px" }}>
-                    +{downloadHistory.length - 5}개 더
-                  </Text>
-                )}
-              </>
-            )}
-          </Card>
 
           {/* 초기 상태 안내 */}
           {!isDownloading && downloadedVideos.length === 0 && (

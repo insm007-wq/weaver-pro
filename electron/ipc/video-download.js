@@ -31,9 +31,77 @@ function assertVideoSaveFolder() {
 }
 
 // ---------------------------------------------------------------------------
+// 해상도 문자열을 픽셀로 변환
+// ---------------------------------------------------------------------------
+function parseResolution(resolution) {
+  const resolutions = {
+    "480p": { width: 854, height: 480 },
+    "720p": { width: 1280, height: 720 },
+    "1080p": { width: 1920, height: 1080 },
+    "1440p": { width: 2560, height: 1440 }
+  };
+  return resolutions[resolution] || resolutions["720p"];
+}
+
+// ---------------------------------------------------------------------------
+// 파일 크기를 MB로 변환
+// ---------------------------------------------------------------------------
+function bytesToMB(bytes) {
+  return bytes / (1024 * 1024);
+}
+
+// ---------------------------------------------------------------------------
+// 비디오 필터링 및 정렬 (옵션 기반)
+// ---------------------------------------------------------------------------
+function filterAndSortVideos(videos, options = {}) {
+  const {
+    maxFileSize = 50, // MB
+    minResolution = "720p",
+    preferredQuality = "high"
+  } = options;
+
+  const minRes = parseResolution(minResolution);
+
+  // 필터링
+  let filtered = videos.filter(video => {
+    // 최소 해상도 확인
+    if (video.width < minRes.width || video.height < minRes.height) {
+      return false;
+    }
+
+    // 최대 파일 크기 확인
+    if (video.size > 0 && bytesToMB(video.size) > maxFileSize) {
+      return false;
+    }
+
+    return true;
+  });
+
+  // 화질 선호도에 따른 정렬
+  filtered.sort((a, b) => {
+    if (preferredQuality === "high") {
+      // 화질 우선: 해상도 높은 순
+      const aRes = a.width * a.height;
+      const bRes = b.width * b.height;
+      return bRes - aRes;
+    } else if (preferredQuality === "low") {
+      // 용량 우선: 파일 크기 작은 순
+      return (a.size || 0) - (b.size || 0);
+    } else {
+      // 균형: 해상도와 용량을 고려한 점수
+      const aScore = (a.width * a.height) / Math.max(a.size || 1, 1);
+      const bScore = (b.width * b.height) / Math.max(b.size || 1, 1);
+      return bScore - aScore;
+    }
+  });
+
+  return filtered;
+}
+
+// ---------------------------------------------------------------------------
 // Pexels 영상 검색
 // ---------------------------------------------------------------------------
-async function searchPexelsVideos(apiKey, query, perPage = 3) {
+async function searchPexelsVideos(apiKey, query, perPage = 3, options = {}) {
   try {
     if (!apiKey) throw new Error("Pexels API 키가 없습니다.");
 
@@ -41,33 +109,34 @@ async function searchPexelsVideos(apiKey, query, perPage = 3) {
       headers: { Authorization: apiKey },
       params: {
         query,
-        per_page: Math.min(perPage, 10),
+        per_page: Math.min(perPage * 3, 30), // 필터링을 위해 더 많이 가져옴
         locale: "ko-KR",
       },
       timeout: 15000,
     });
 
-    const videos = [];
+    const allVideos = [];
     for (const video of response.data?.videos || []) {
       const mp4Files = (video.video_files || [])
-        .filter((file) => file.file_type === "video/mp4" && file.link)
-        .sort((a, b) => (b.width || 0) - (a.width || 0)); // 큰 해상도 우선
+        .filter((file) => file.file_type === "video/mp4" && file.link);
 
-      if (mp4Files.length > 0) {
-        const bestFile = mp4Files[0];
-        videos.push({
+      for (const file of mp4Files) {
+        allVideos.push({
           provider: "pexels",
           id: video.id,
-          url: bestFile.link,
-          filename: `pexels-${video.id}-${bestFile.width}x${bestFile.height}.mp4`,
-          width: bestFile.width || 0,
-          height: bestFile.height || 0,
-          size: bestFile.file_size || 0,
-          quality: bestFile.quality || "",
+          url: file.link,
+          filename: `pexels-${video.id}-${file.width}x${file.height}.mp4`,
+          width: file.width || 0,
+          height: file.height || 0,
+          size: file.file_size || 0,
+          quality: file.quality || "",
         });
       }
     }
-    return videos;
+
+    // 옵션에 따라 필터링 및 정렬 후 개수 제한
+    const filtered = filterAndSortVideos(allVideos, options);
+    return filtered.slice(0, perPage);
   } catch (error) {
     console.error(`[Pexels 검색] "${query}" 실패:`, error.message);
     throw error;
@@ -77,7 +146,7 @@ async function searchPexelsVideos(apiKey, query, perPage = 3) {
 // ---------------------------------------------------------------------------
 // Pixabay 영상 검색
 // ---------------------------------------------------------------------------
-async function searchPixabayVideos(apiKey, query, perPage = 3) {
+async function searchPixabayVideos(apiKey, query, perPage = 3, options = {}) {
   try {
     if (!apiKey) throw new Error("Pixabay API 키가 없습니다.");
 
@@ -85,20 +154,20 @@ async function searchPixabayVideos(apiKey, query, perPage = 3) {
       params: {
         key: apiKey,
         q: query,
-        per_page: Math.min(perPage, 20),
+        per_page: Math.min(perPage * 3, 60), // 필터링을 위해 더 많이 가져옴
         video_type: "film",
         safesearch: "true",
       },
       timeout: 15000,
     });
 
-    const videos = [];
+    const allVideos = [];
     for (const hit of response.data?.hits || []) {
-      const videoSizes = ["large", "medium", "small"];
+      const videoSizes = ["large", "medium", "small", "tiny"];
       for (const size of videoSizes) {
         const videoFile = hit.videos?.[size];
         if (videoFile?.url) {
-          videos.push({
+          allVideos.push({
             provider: "pixabay",
             id: hit.id,
             url: videoFile.url,
@@ -112,11 +181,13 @@ async function searchPixabayVideos(apiKey, query, perPage = 3) {
               .map((t) => t.trim())
               .filter(Boolean),
           });
-          break; // 첫 사용 가능한 사이즈만
         }
       }
     }
-    return videos;
+
+    // 옵션에 따라 필터링 및 정렬 후 개수 제한
+    const filtered = filterAndSortVideos(allVideos, options);
+    return filtered.slice(0, perPage);
   } catch (error) {
     console.error(`[Pixabay 검색] "${query}" 실패:`, error.message);
     throw error;
@@ -237,7 +308,7 @@ const SUPPORTED_PROVIDERS = {
 // ---------------------------------------------------------------------------
 // 키워드별 영상 검색 및 다운로드
 // ---------------------------------------------------------------------------
-async function downloadVideosForKeywords(keywords, provider, onProgress) {
+async function downloadVideosForKeywords(keywords, provider, options = {}, onProgress) {
   if (!Array.isArray(keywords) || keywords.length === 0) {
     throw new Error("키워드가 제공되지 않았습니다.");
   }
@@ -286,7 +357,8 @@ async function downloadVideosForKeywords(keywords, provider, onProgress) {
       while (!videos && attempts < maxAttempts) {
         attempts++;
         try {
-          videos = await providerInfo.searchFunction(apiKey, keyword, 3);
+          const videosPerKeyword = options.videosPerKeyword || 1;
+          videos = await providerInfo.searchFunction(apiKey, keyword, videosPerKeyword, options);
         } catch (e) {
           console.warn(`[영상 다운로드] "${keyword}" 검색 실패 (시도 ${attempts}/${maxAttempts}):`, e.message);
           if (attempts >= maxAttempts) throw e;
@@ -308,52 +380,66 @@ async function downloadVideosForKeywords(keywords, provider, onProgress) {
         continue;
       }
 
-      const video = videos[0];
+      // 여러 영상이 있으면 각각 다운로드
+      for (let videoIndex = 0; videoIndex < videos.length; videoIndex++) {
+        const video = videos[videoIndex];
+        const videoKeyword = videos.length > 1 ? `${keyword}_${videoIndex + 1}` : keyword;
 
-      onProgress?.({
-        keyword,
-        status: "downloading",
-        progress: 0,
-        totalKeywords: keywords.length,
-        currentIndex: i,
-        filename: video.filename,
-      });
-
-      const downloadResult = await downloadVideoOptimized(video.url, `${keyword}_${video.filename}`, (progress) => {
         onProgress?.({
-          keyword,
+          keyword: videoKeyword,
           status: "downloading",
-          progress,
+          progress: 0,
           totalKeywords: keywords.length,
           currentIndex: i,
           filename: video.filename,
+          videoIndex: videoIndex + 1,
+          totalVideos: videos.length,
         });
-      });
 
-      results.push({
-        keyword,
-        ...downloadResult,
-        provider: video.provider,
-        originalFilename: video.filename,
-      });
+        const downloadResult = await downloadVideoOptimized(video.url, `${videoKeyword}_${video.filename}`, (progress) => {
+          onProgress?.({
+            keyword: videoKeyword,
+            status: "downloading",
+            progress,
+            totalKeywords: keywords.length,
+            currentIndex: i,
+            filename: video.filename,
+            videoIndex: videoIndex + 1,
+            totalVideos: videos.length,
+          });
+        });
 
-      if (downloadResult.success) {
-        successCount++;
-        console.log(`[영상 다운로드] "${keyword}" 완료 ✓`);
-      } else {
-        failureCount++;
-        console.warn(`[영상 다운로드] "${keyword}" 실패: ${downloadResult.error}`);
+        results.push({
+          keyword: videoKeyword,
+          ...downloadResult,
+          provider: video.provider,
+          originalFilename: video.filename,
+          width: video.width,
+          height: video.height,
+          size: video.size,
+          quality: video.quality,
+        });
+
+        if (downloadResult.success) {
+          successCount++;
+          console.log(`[영상 다운로드] "${videoKeyword}" 완료 ✓ (${video.width}x${video.height}, ${Math.round(video.size / 1024 / 1024)}MB)`);
+        } else {
+          failureCount++;
+          console.warn(`[영상 다운로드] "${videoKeyword}" 실패: ${downloadResult.error}`);
+        }
+
+        onProgress?.({
+          keyword: videoKeyword,
+          status: downloadResult.success ? "completed" : "failed",
+          progress: 100,
+          totalKeywords: keywords.length,
+          currentIndex: i,
+          filename: downloadResult.filename,
+          error: downloadResult.success ? undefined : downloadResult.error,
+          videoIndex: videoIndex + 1,
+          totalVideos: videos.length,
+        });
       }
-
-      onProgress?.({
-        keyword,
-        status: downloadResult.success ? "completed" : "failed",
-        progress: 100,
-        totalKeywords: keywords.length,
-        currentIndex: i,
-        filename: downloadResult.filename,
-        error: downloadResult.success ? undefined : downloadResult.error,
-      });
     } catch (error) {
       console.error(`[영상 다운로드] "${keyword}" 처리 실패:`, error.message);
       failureCount++;
@@ -397,7 +483,7 @@ function registerVideoDownloadIPC() {
   ipcMain.handle("video:downloadByKeywords", async (event, payload) => {
     const startTime = Date.now();
     try {
-      const { keywords, provider = "pexels" } = payload || {};
+      const { keywords, provider = "pexels", options = {} } = payload || {};
 
       if (!Array.isArray(keywords) || keywords.length === 0) {
         return {
@@ -420,8 +506,9 @@ function registerVideoDownloadIPC() {
       }
 
       console.log(`[영상 다운로드 IPC] 시작: ${cleanedKeywords.length}개 키워드, ${provider} 프로바이더`);
+      console.log(`[영상 다운로드 IPC] 옵션:`, options);
 
-      const result = await downloadVideosForKeywords(cleanedKeywords, provider, (progress) => {
+      const result = await downloadVideosForKeywords(cleanedKeywords, provider, options, (progress) => {
         try {
           event.sender.send("video:downloadProgress", progress);
         } catch (e) {
