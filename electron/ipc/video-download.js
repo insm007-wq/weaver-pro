@@ -35,12 +35,12 @@ function assertVideoSaveFolder() {
 // ---------------------------------------------------------------------------
 function parseResolution(resolution) {
   const resolutions = {
-    "480p": { width: 854, height: 480 },
-    "720p": { width: 1280, height: 720 },
-    "1080p": { width: 1920, height: 1080 },
-    "1440p": { width: 2560, height: 1440 }
+    "480p": { width: 854, height: 480, maxWidth: 1279, maxHeight: 719 },
+    "720p": { width: 1280, height: 720, maxWidth: 1919, maxHeight: 1079 },
+    "1080p": { width: 1920, height: 1080, maxWidth: 2559, maxHeight: 1439 },
+    "1440p": { width: 2560, height: 1440, maxWidth: 9999, maxHeight: 9999 }
   };
-  return resolutions[resolution] || resolutions["720p"];
+  return resolutions[resolution] || resolutions["1080p"];
 }
 
 // ---------------------------------------------------------------------------
@@ -51,21 +51,46 @@ function bytesToMB(bytes) {
 }
 
 // ---------------------------------------------------------------------------
+// 화면 비율 계산 및 확인
+// ---------------------------------------------------------------------------
+function checkAspectRatio(width, height, targetRatio) {
+  if (!width || !height || targetRatio === "any") return true;
+
+  const ratio = width / height;
+  const tolerance = 0.1; // 10% 허용 오차
+
+  const ratios = {
+    "16:9": 16/9,
+    "4:3": 4/3,
+    "1:1": 1,
+    "9:16": 9/16
+  };
+
+  const target = ratios[targetRatio];
+  if (!target) return true;
+
+  return Math.abs(ratio - target) <= tolerance;
+}
+
+// ---------------------------------------------------------------------------
 // 비디오 필터링 및 정렬 (옵션 기반)
 // ---------------------------------------------------------------------------
 function filterAndSortVideos(videos, options = {}) {
   const {
-    maxFileSize = 50, // MB
-    minResolution = "720p",
-    preferredQuality = "high"
+    maxFileSize = 20, // 20MB (1080p 영상 기준)
+    minResolution = "1080p", // 1080p FHD (선명한 고화질)
+    aspectRatio = "16:9" // 16:9 와이드 (표준 비율)
   } = options;
 
   const minRes = parseResolution(minResolution);
 
   // 필터링
   let filtered = videos.filter(video => {
-    // 최소 해상도 확인
+    // 해상도 범위 확인 (최소~최대)
     if (video.width < minRes.width || video.height < minRes.height) {
+      return false;
+    }
+    if (video.width > minRes.maxWidth || video.height > minRes.maxHeight) {
       return false;
     }
 
@@ -74,25 +99,19 @@ function filterAndSortVideos(videos, options = {}) {
       return false;
     }
 
+    // 화면 비율 확인
+    if (!checkAspectRatio(video.width, video.height, aspectRatio)) {
+      return false;
+    }
+
     return true;
   });
 
-  // 화질 선호도에 따른 정렬
+  // 간단한 정렬: 해상도 높은 순 (최고 화질 우선)
   filtered.sort((a, b) => {
-    if (preferredQuality === "high") {
-      // 화질 우선: 해상도 높은 순
-      const aRes = a.width * a.height;
-      const bRes = b.width * b.height;
-      return bRes - aRes;
-    } else if (preferredQuality === "low") {
-      // 용량 우선: 파일 크기 작은 순
-      return (a.size || 0) - (b.size || 0);
-    } else {
-      // 균형: 해상도와 용량을 고려한 점수
-      const aScore = (a.width * a.height) / Math.max(a.size || 1, 1);
-      const bScore = (b.width * b.height) / Math.max(b.size || 1, 1);
-      return bScore - aScore;
-    }
+    const aRes = a.width * a.height;
+    const bRes = b.width * b.height;
+    return bRes - aRes;
   });
 
   return filtered;
@@ -130,6 +149,7 @@ async function searchPexelsVideos(apiKey, query, perPage = 3, options = {}) {
           height: file.height || 0,
           size: file.file_size || 0,
           quality: file.quality || "",
+          thumbnail: video.image || `https://via.placeholder.com/160x90/6366f1/white?text=${encodeURIComponent('Pexels')}`,
         });
       }
     }
@@ -176,6 +196,7 @@ async function searchPixabayVideos(apiKey, query, perPage = 3, options = {}) {
             height: videoFile.height || 0,
             size: videoFile.size || 0,
             quality: size,
+            thumbnail: hit.webformatURL || hit.previewURL || `https://via.placeholder.com/160x90/02BE6E/white?text=${encodeURIComponent('Pixabay')}`,
             tags: (hit.tags || "")
               .split(",")
               .map((t) => t.trim())
@@ -383,7 +404,9 @@ async function downloadVideosForKeywords(keywords, provider, options = {}, onPro
       // 여러 영상이 있으면 각각 다운로드
       for (let videoIndex = 0; videoIndex < videos.length; videoIndex++) {
         const video = videos[videoIndex];
-        const videoKeyword = videos.length > 1 ? `${keyword}_${videoIndex + 1}` : keyword;
+        // 일관된 키워드 처리: 항상 원본 키워드 유지, 인덱스는 파일명에만 적용
+        const videoKeyword = keyword;
+        const videoSuffix = videos.length > 1 ? `_${videoIndex + 1}` : "";
 
         onProgress?.({
           keyword: videoKeyword,
@@ -394,9 +417,17 @@ async function downloadVideosForKeywords(keywords, provider, options = {}, onPro
           filename: video.filename,
           videoIndex: videoIndex + 1,
           totalVideos: videos.length,
+          videoSuffix,
         });
 
-        const downloadResult = await downloadVideoOptimized(video.url, `${videoKeyword}_${video.filename}`, (progress) => {
+        // 새로운 파일명 구조: 키워드_프로바이더_해상도.mp4
+        const safeKeyword = keyword.replace(/[^\w가-힣-]/g, "_");
+        const keywordNumber = videoIndex + 1; // 1부터 시작
+        const keywordName = videos.length > 1 ? `${safeKeyword}${keywordNumber}` : safeKeyword;
+        const resolution = `${video.width}x${video.height}`;
+        const finalFilename = `${keywordName}_${video.provider}_${resolution}.mp4`;
+
+        const downloadResult = await downloadVideoOptimized(video.url, finalFilename, (progress) => {
           onProgress?.({
             keyword: videoKeyword,
             status: "downloading",
@@ -406,6 +437,7 @@ async function downloadVideosForKeywords(keywords, provider, options = {}, onPro
             filename: video.filename,
             videoIndex: videoIndex + 1,
             totalVideos: videos.length,
+            videoSuffix,
           });
         });
 
@@ -418,14 +450,15 @@ async function downloadVideosForKeywords(keywords, provider, options = {}, onPro
           height: video.height,
           size: video.size,
           quality: video.quality,
+          videoSuffix, // UI에서 구분할 수 있도록
         });
 
         if (downloadResult.success) {
           successCount++;
-          console.log(`[영상 다운로드] "${videoKeyword}" 완료 ✓ (${video.width}x${video.height}, ${Math.round(video.size / 1024 / 1024)}MB)`);
+          console.log(`[영상 다운로드] "${keyword}${videoSuffix}" 완료 ✓ (${video.width}x${video.height}, ${Math.round(video.size / 1024 / 1024)}MB)`);
         } else {
           failureCount++;
-          console.warn(`[영상 다운로드] "${videoKeyword}" 실패: ${downloadResult.error}`);
+          console.warn(`[영상 다운로드] "${keyword}${videoSuffix}" 실패: ${downloadResult.error}`);
         }
 
         onProgress?.({
@@ -438,6 +471,14 @@ async function downloadVideosForKeywords(keywords, provider, options = {}, onPro
           error: downloadResult.success ? undefined : downloadResult.error,
           videoIndex: videoIndex + 1,
           totalVideos: videos.length,
+          videoSuffix,
+          // 영상 정보 추가
+          width: video.width,
+          height: video.height,
+          size: video.size,
+          quality: video.quality,
+          thumbnail: video.thumbnail,
+          originalFilename: video.filename
         });
       }
     } catch (error) {
