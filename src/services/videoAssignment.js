@@ -103,16 +103,22 @@ function calculateSceneVideoScore(scene, videoInfo) {
  */
 export async function discoverAvailableVideos() {
   try {
+    console.log("[영상 발견] 시작");
     const videoSaveFolder = await getSetting("videoSaveFolder");
+    console.log("[영상 발견] videoSaveFolder:", videoSaveFolder);
+
     if (!videoSaveFolder) {
       console.warn("[영상 발견] videoSaveFolder가 설정되지 않음");
       return [];
     }
 
     const videoPath = `${videoSaveFolder}/video`;
+    console.log("[영상 발견] 영상 경로:", videoPath);
 
     // 디렉토리 존재 확인
     const dirExists = await window.api?.checkPathExists?.(videoPath);
+    console.log("[영상 발견] 디렉토리 존재 확인:", dirExists);
+
     if (!dirExists?.exists) {
       console.warn("[영상 발견] 영상 디렉토리가 존재하지 않음:", videoPath);
       return [];
