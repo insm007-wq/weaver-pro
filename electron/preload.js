@@ -240,6 +240,7 @@ contextBridge.exposeInMainWorld("api", {
   // 파일 유틸
   // ========================================================================
   checkPathExists: (p) => ipcRenderer.invoke("files:exists", p),
+  listDirectory: (dirPath) => ipcRenderer.invoke("files:listDirectory", dirPath),
   nextAvailableName: (opts) => ipcRenderer.invoke("files:nextAvailableName", opts),
   todayStr: () => ipcRenderer.invoke("files:todayStr"),
   mkDirRecursive: (dirPath) => ipcRenderer.invoke("fs:mkDirRecursive", { dirPath }),

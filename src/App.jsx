@@ -13,7 +13,7 @@ const ThumbnailGenerator = lazy(() => import("./components/ThumbnailGenerator/Th
 const ScriptVoiceGenerator = lazy(() => import("./components/scriptgen/ScriptVoiceGenerator"));
 const MediaPrepEditor = lazy(() => import("./components/media-prep/MediaPrepEditor"));
 const MediaDownloadPage = lazy(() => import("./components/media-down/MediaDownloadPage"));
-const RefineEditor = lazy(() => import("./components/refine/RefineEditor"));
+const MediaEditPage = lazy(() => import("./components/media-edit/MediaEditPage"));
 const FinalizePage = lazy(() => import("./components/finalize/FinalizePage"));
 
 const useStyles = makeStyles({
@@ -200,7 +200,7 @@ function App() {
                 </KeepAlivePane>
 
                 <KeepAlivePane active={currentPage === "refine"}>
-                  <RefineEditor />
+                  <MediaEditPage />
                 </KeepAlivePane>
 
                 <KeepAlivePane active={currentPage === "finalize"}>

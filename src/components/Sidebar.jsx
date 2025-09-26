@@ -255,13 +255,13 @@ export default function Sidebar({ onSelectMenu }) {
       key: "draft",
       color: tokens.colorPaletteMagentaForeground1,
     },
-    // {
-    //   icon: <VideoRegular />,
-    //   label: "편집 및 다듬기",
-    //   desc: "세부 편집 및 교체",
-    //   key: "refine",
-    //   color: tokens.colorPaletteRedForeground1,
-    // },
+    {
+      icon: <VideoRegular />,
+      label: "편집 및 다듬기",
+      desc: "세부 편집 및 교체",
+      key: "refine",
+      color: tokens.colorPaletteRedForeground1,
+    },
     {
       icon: <TrophyRegular />,
       label: "최종 완성",

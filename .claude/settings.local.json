@@ -226,7 +226,8 @@
       "WebFetch(domain:uxwing.com)",
       "Bash(curl:*)",
       "Read(//c/WeaverPro/1111/**)",
-      "Read(//c/Users/paul/Desktop/**)"
+      "Read(//c/Users/paul/Desktop/**)",
+      "Bash(tasklist:*)"
     ],
     "deny": [],
     "ask": []

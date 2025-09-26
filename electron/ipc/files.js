@@ -666,6 +666,56 @@ ipcMain.handle("files:writeText", async (_evt, { filePath, content }) => {
   }
 });
 
+/** 디렉토리 목록 조회 */
+ipcMain.handle("files:listDirectory", async (_evt, dirPath) => {
+  try {
+    console.log("📂 files:listDirectory 호출됨:", dirPath);
+
+    if (!dirPath || typeof dirPath !== "string") {
+      return { success: false, message: "dirPath_required" };
+    }
+
+    // 디렉토리 존재 확인
+    if (!fs.existsSync(dirPath)) {
+      return { success: false, message: "directory_not_found" };
+    }
+
+    const stats = await fs.promises.stat(dirPath);
+    if (!stats.isDirectory()) {
+      return { success: false, message: "path_is_not_directory" };
+    }
+
+    // 디렉토리 내용 읽기
+    const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+    const files = [];
+
+    for (const entry of entries) {
+      try {
+        const fullPath = path.join(dirPath, entry.name);
+        const entryStats = await fs.promises.stat(fullPath);
+
+        files.push({
+          name: entry.name,
+          isFile: entry.isFile(),
+          isDirectory: entry.isDirectory(),
+          size: entry.isFile() ? entryStats.size : 0,
+          modified: entryStats.mtime,
+          path: fullPath
+        });
+      } catch (err) {
+        console.warn("파일 상태 읽기 실패:", entry.name, err.message);
+        // 개별 파일 오류는 무시하고 계속 진행
+      }
+    }
+
+    console.log(`✅ files:listDirectory 완료: ${files.length}개 항목 발견`);
+    return { success: true, files };
+  } catch (error) {
+    console.error("❌ files:listDirectory 실패:", error);
+    return { success: false, message: error.message };
+  }
+});
+
 /* ============================== exports ============================== */
 module.exports = {
   getProjectRoot,
