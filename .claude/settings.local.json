@@ -221,7 +221,11 @@
       "Read(//c/WeaverPro/1111/scripts/**)",
       "Bash(npm ls:*)",
       "Bash(mv:*)",
-      "Bash(git mv:*)"
+      "Bash(git mv:*)",
+      "WebFetch(domain:www.flaticon.com)",
+      "WebFetch(domain:uxwing.com)",
+      "Bash(curl:*)",
+      "Read(//c/WeaverPro/1111/**)"
     ],
     "deny": [],
     "ask": []
