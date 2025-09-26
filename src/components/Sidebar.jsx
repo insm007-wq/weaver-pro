@@ -250,18 +250,18 @@ export default function Sidebar({ onSelectMenu }) {
     },
     {
       icon: <RocketRegular />,
-      label: "초안 내보내기",
+      label: "미디어 구성",
       desc: "Draft 영상 렌더링",
       key: "draft",
       color: tokens.colorPaletteMagentaForeground1,
     },
-    {
-      icon: <VideoRegular />,
-      label: "편집 및 다듬기",
-      desc: "세부 편집 및 교체",
-      key: "refine",
-      color: tokens.colorPaletteRedForeground1,
-    },
+    // {
+    //   icon: <VideoRegular />,
+    //   label: "편집 및 다듬기",
+    //   desc: "세부 편집 및 교체",
+    //   key: "refine",
+    //   color: tokens.colorPaletteRedForeground1,
+    // },
     {
       icon: <TrophyRegular />,
       label: "최종 완성",
@@ -269,13 +269,13 @@ export default function Sidebar({ onSelectMenu }) {
       key: "finalize",
       color: tokens.colorPaletteYellowForeground1,
     },
-    {
-      icon: <WrenchScrewdriverRegular />,
-      label: "프로젝트 설정",
-      desc: "프롬프트 및 모델 설정",
-      key: "projectSettings",
-      color: tokens.colorNeutralForeground2,
-    },
+    // {
+    //   icon: <WrenchScrewdriverRegular />,
+    //   label: "프로젝트 설정",
+    //   desc: "프롬프트 및 모델 설정",
+    //   key: "projectSettings",
+    //   color: tokens.colorNeutralForeground2,
+    // },
   ];
 
   const handleMenuClick = (key) => {

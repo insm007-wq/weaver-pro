@@ -17,6 +17,7 @@ function createMainWindow() {
     width: 1280,
     height: 850,
     backgroundColor: "#f5f7fa",
+    icon: path.join(__dirname, "..", "assets", "icon.png"), // 크로스 플랫폼용 아이콘
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

@@ -135,14 +135,14 @@ export default function DraftPage({ scenes: propScenes = [] }) {
         {/* 상단 헤더 */}
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-xl font-semibold text-slate-800">Weaver Pro</h1>
-          <div className="text-sm text-slate-500">초안 내보내기</div>
+          <div className="text-sm text-slate-500">미디어 구성</div>
         </div>
 
         {/* 폭 안정화: 기본(360/1fr/260), 2xl(380/1fr/280) */}
         <div className="grid gap-6 grid-cols-[360px,1fr,260px] 2xl:grid-cols-[380px,1fr,280px]">
           {/* 좌측: 옵션 */}
           <section className="space-y-4">
-            <h2 className="text-lg font-semibold text-slate-800 mb-1">초안 내보내기</h2>
+            <h2 className="text-lg font-semibold text-slate-800 mb-1">미디어 구성</h2>
 
             <div className="rounded-2xl border border-slate-200 shadow-sm p-5">
               <Label>해상도</Label>
@@ -227,7 +227,7 @@ export default function DraftPage({ scenes: propScenes = [] }) {
 
             {/* 하단 미니 진행 요약 */}
             <div className="rounded-2xl border border-slate-200 shadow-sm p-5">
-              <h3 className="text-base font-semibold text-slate-800">초안 내보내기</h3>
+              <h3 className="text-base font-semibold text-slate-800">미디어 구성</h3>
               <div className="mt-3 flex items-center justify-between text-sm text-slate-600">
                 <div>길이 {secToTime(totalDuration)}</div>
                 <div>{estSizeMB} MB</div>
@@ -245,7 +245,7 @@ export default function DraftPage({ scenes: propScenes = [] }) {
 
           {/* 중앙: 진행 + 미리보기 */}
           <section className="space-y-4 min-w-0">
-            <h2 className="text-lg font-semibold text-slate-800 mb-1">초안 내보내기</h2>
+            <h2 className="text-lg font-semibold text-slate-800 mb-1">미디어 구성</h2>
 
             <div className="rounded-2xl border border-slate-200 shadow-sm p-6">
               <div className="flex items-center justify-center">
