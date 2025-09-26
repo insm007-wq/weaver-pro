@@ -166,7 +166,7 @@ if (!gotLock) {
       console.log("[main] ERROR: initOnReady not found in startup-cleanup module");
     }
 
-    // ✅ 미디어 구성(프리뷰) IPC 등록
+    // ✅ 미디어 다운로드(프리뷰) IPC 등록
     // - 채널: preview:compose / preview:cancel / (send) preview:progress
     const preview = safeRequire("ipc/preview", () => require("./ipc/preview"));
     await tryRegister("preview", preview, "register");

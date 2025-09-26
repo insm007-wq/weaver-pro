@@ -250,7 +250,7 @@ export default function Sidebar({ onSelectMenu }) {
     },
     {
       icon: <RocketRegular />,
-      label: "미디어 구성",
+      label: "미디어 다운로드",
       desc: "Draft 영상 렌더링",
       key: "draft",
       color: tokens.colorPaletteMagentaForeground1,

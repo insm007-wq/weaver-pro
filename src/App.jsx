@@ -12,7 +12,7 @@ const HeaderBar = lazy(() => import("./components/HeaderBar"));
 const ThumbnailGenerator = lazy(() => import("./components/ThumbnailGenerator/ThumbnailGenerator"));
 const ScriptVoiceGenerator = lazy(() => import("./components/scriptgen/ScriptVoiceGenerator"));
 const MediaPrepEditor = lazy(() => import("./components/media-prep/MediaPrepEditor"));
-const DraftExportPage = lazy(() => import("./components/draftexport/DraftExportPage"));
+const MediaDownloadPage = lazy(() => import("./components/media-down/MediaDownloadPage"));
 const RefineEditor = lazy(() => import("./components/refine/RefineEditor"));
 const FinalizePage = lazy(() => import("./components/finalize/FinalizePage"));
 
@@ -196,7 +196,7 @@ function App() {
                 </KeepAlivePane>
 
                 <KeepAlivePane active={currentPage === "draft"}>
-                  <DraftExportPage />
+                  <MediaDownloadPage />
                 </KeepAlivePane>
 
                 <KeepAlivePane active={currentPage === "refine"}>
