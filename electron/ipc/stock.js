@@ -331,4 +331,4 @@ function registerStockIPC() {
   console.log("[ipc] stock.registerStockIPC: OK");
 }
 
-module.exports = { registerStockIPC };
+module.exports = { registerStockIPC, searchPexels, searchPixabay };

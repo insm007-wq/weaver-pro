@@ -128,6 +128,10 @@ if (!gotLock) {
     const stock = safeRequire("ipc/stock", () => require("./ipc/stock"));
     await tryRegister("stock", stock, "registerStockIPC");
 
+    // 영상 다운로드
+    const videoDownload = safeRequire("ipc/video-download", () => require("./ipc/video-download"));
+    await tryRegister("video-download", videoDownload, "registerVideoDownloadIPC");
+
     // AI 키워드/용어 번역 (ai:extractKeywords / ai:translateTerms 모두 이 모듈)
     const aiKeywords = safeRequire("ipc/ai-keywords", () => require("./ipc/ai-keywords"));
     await tryRegister("ai-keywords", aiKeywords, "registerAIKeywords");

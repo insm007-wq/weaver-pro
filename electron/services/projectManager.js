@@ -69,6 +69,7 @@ class ProjectManager {
           scripts: path.join(projectDir, 'scripts'),
           audio: path.join(projectDir, 'audio'),
           images: path.join(projectDir, 'images'),
+          video: path.join(projectDir, 'video'),
           temp: path.join(projectDir, 'temp')
         },
         options: options
@@ -109,6 +110,7 @@ class ProjectManager {
       'scripts',     // 대본 파일 (JSON, SRT 등)
       'audio',       // 음성 파일들
       'images',      // 생성된 이미지들
+      'video',       // 다운로드된 영상 파일들
       'temp'         // 임시 파일들
     ];
 
@@ -195,6 +197,7 @@ class ProjectManager {
               scripts: path.join(newProjectDir, 'scripts'),
               audio: path.join(newProjectDir, 'audio'),
               images: path.join(newProjectDir, 'images'),
+              video: path.join(newProjectDir, 'video'),
               temp: path.join(newProjectDir, 'temp')
             };
 
@@ -247,6 +250,7 @@ class ProjectManager {
             scripts: path.join(projectDir, 'scripts'),
             audio: path.join(projectDir, 'audio'),
             images: path.join(projectDir, 'images'),
+            video: path.join(projectDir, 'video'),
             temp: path.join(projectDir, 'temp')
           };
 

@@ -285,6 +285,25 @@ contextBridge.exposeInMainWorld("api", {
   stockSearch: (payload) => ipcRenderer.invoke("stock:search", payload),
 
   // ========================================================================
+  // 영상 다운로드
+  // ========================================================================
+  downloadVideosByKeywords: (payload) => ipcRenderer.invoke("video:downloadByKeywords", payload),
+
+  // 영상 다운로드 진행률 수신
+  onVideoDownloadProgress: (handler) => {
+    if (typeof handler !== "function") return () => {};
+    const wrapped = (_e, payload) => {
+      try {
+        handler(payload);
+      } catch (err) {
+        console.warn("[preload] video:downloadProgress handler error:", err);
+      }
+    };
+    ipcRenderer.on("video:downloadProgress", wrapped);
+    return () => ipcRenderer.removeListener("video:downloadProgress", wrapped);
+  },
+
+  // ========================================================================
   // 스크립트/오디오/TTS
   // ========================================================================
   scriptToSrt: (payload) => ipcRenderer.invoke("script/toSrt", payload),

@@ -3,6 +3,7 @@ import { Text, Button, Card, Spinner, ProgressBar, Badge, Avatar, Divider } from
 import { useHeaderStyles, useContainerStyles } from "../../styles/commonStyles";
 import { RocketRegular, VideoRegular, ImageRegular, ArrowDownloadRegular, CheckmarkCircleRegular, HistoryRegular, DocumentRegular } from "@fluentui/react-icons";
 import { PageErrorBoundary } from "../common/ErrorBoundary";
+import { showError, showSuccess } from "../common/GlobalToast";
 
 /**
  * 미디어 다운로드 페이지
@@ -31,22 +32,21 @@ function MediaDownloadPage() {
 
   const loadKeywordsFromJSON = async () => {
     try {
-      // 실제로는 IPC로 JSON 파일 로드
-      if (window?.api?.loadKeywords) {
-        const data = await window.api.loadKeywords();
-        setKeywords(data.keywords || []);
+      // settings.json에서 추출된 키워드 로드
+      const extractedKeywords = await window.api.getSetting("extractedKeywords");
+
+      if (extractedKeywords && Array.isArray(extractedKeywords) && extractedKeywords.length > 0) {
+        console.log(`[미디어 다운로드] settings.json에서 ${extractedKeywords.length}개 키워드 로드됨`);
+        setKeywords(extractedKeywords);
       } else {
-        // 개발 시 Mock 데이터
-        const mockKeywords = [
-          "비즈니스", "기술", "혁신", "성장", "미래",
-          "사람들", "회의", "협력", "창의성", "성공",
-          "데이터", "분석", "전략", "마케팅", "브랜드"
-        ];
-        setKeywords(mockKeywords);
+        console.log("[미디어 다운로드] 추출된 키워드가 없습니다. 미디어 준비에서 키워드를 먼저 추출해주세요.");
+        // 키워드가 없을 때 안내 메시지용 빈 배열
+        setKeywords([]);
       }
       setKeywordsLoaded(true);
     } catch (error) {
       console.error("키워드 로드 실패:", error);
+      setKeywords([]);
       setKeywordsLoaded(true);
     }
   };
@@ -108,7 +108,15 @@ function MediaDownloadPage() {
 
   // 다운로드 시작
   const startDownload = async () => {
-    if (selectedKeywords.size === 0) return;
+    if (selectedKeywords.size === 0) {
+      showError("다운로드할 키워드를 선택해주세요.");
+      return;
+    }
+
+    if (keywords.length === 0) {
+      showError("추출된 키워드가 없습니다. 먼저 미디어 준비에서 키워드를 추출해주세요.");
+      return;
+    }
 
     setIsDownloading(true);
     setDownloadProgress({});
@@ -116,42 +124,87 @@ function MediaDownloadPage() {
 
     const keywordArray = Array.from(selectedKeywords);
 
-    // 시뮬레이션 - 실제로는 IPC로 백엔드 서비스 호출
-    for (let i = 0; i < keywordArray.length; i++) {
-      const keyword = keywordArray[i];
+    try {
+      // 진행률 리스너 등록
+      const progressHandler = (progressData) => {
+        const { keyword, status, progress, filename, error } = progressData;
 
-      // 진행률 업데이트
-      setDownloadProgress(prev => ({
-        ...prev,
-        [keyword]: { status: 'downloading', progress: 0 }
-      }));
-
-      // 다운로드 시뮬레이션
-      for (let progress = 0; progress <= 100; progress += 20) {
-        await new Promise(resolve => setTimeout(resolve, 200));
         setDownloadProgress(prev => ({
           ...prev,
-          [keyword]: { status: 'downloading', progress }
+          [keyword]: {
+            status,
+            progress: progress || 0,
+            filename,
+            error
+          }
         }));
+
+        // 완료된 영상을 결과에 추가
+        if (status === 'completed' && filename) {
+          setDownloadedVideos(prev => [
+            ...prev.filter(v => v.keyword !== keyword), // 중복 제거
+            {
+              keyword,
+              provider: selectedProvider,
+              filename,
+              thumbnail: `https://via.placeholder.com/160x90/6366f1/white?text=${encodeURIComponent(keyword)}`,
+              size: "다운로드됨", // 실제 크기는 나중에 추가 가능
+              success: true
+            }
+          ]);
+        } else if (status === 'failed') {
+          setDownloadedVideos(prev => [
+            ...prev.filter(v => v.keyword !== keyword), // 중복 제거
+            {
+              keyword,
+              provider: selectedProvider,
+              filename: filename || `${keyword}_failed`,
+              thumbnail: `https://via.placeholder.com/160x90/dc2626/white?text=Error`,
+              size: "실패",
+              success: false,
+              error
+            }
+          ]);
+        }
+      };
+
+      // 진행률 리스너 등록
+      const unsubscribe = window.api.onVideoDownloadProgress(progressHandler);
+
+      // 실제 영상 다운로드 시작
+      const result = await window.api.downloadVideosByKeywords({
+        keywords: keywordArray,
+        provider: selectedProvider
+      });
+
+      // 진행률 리스너 해제
+      unsubscribe();
+
+      if (result.success) {
+        console.log(`[영상 다운로드] 완료: ${result.summary.success}/${result.summary.total}개 성공`);
+
+        // 다운로드 히스토리에 추가
+        const historyEntry = {
+          timestamp: new Date().toISOString(),
+          provider: selectedProvider,
+          keywords: keywordArray,
+          results: result.results,
+          summary: result.summary
+        };
+        setDownloadHistory(prev => [historyEntry, ...prev.slice(0, 9)]); // 최근 10개만 유지
+
+        showSuccess(`영상 다운로드 완료: ${result.summary.success}/${result.summary.total}개 성공`);
+      } else {
+        console.error("[영상 다운로드] 전체 실패:", result.error);
+        showError(`영상 다운로드 실패: ${result.error}`);
       }
 
-      // 완료 처리
-      setDownloadProgress(prev => ({
-        ...prev,
-        [keyword]: { status: 'completed', progress: 100 }
-      }));
-
-      // 다운로드된 영상 추가 (시뮬레이션)
-      setDownloadedVideos(prev => [...prev, {
-        keyword,
-        provider: selectedProvider,
-        filename: `${keyword}_${selectedProvider}_${Date.now()}.mp4`,
-        thumbnail: `https://via.placeholder.com/160x90/6366f1/white?text=${keyword}`,
-        size: Math.floor(Math.random() * 50 + 10) + "MB"
-      }]);
+    } catch (error) {
+      console.error("[영상 다운로드] 예외 발생:", error);
+      showError(`영상 다운로드 중 오류가 발생했습니다: ${error.message}`);
+    } finally {
+      setIsDownloading(false);
     }
-
-    setIsDownloading(false);
   };
 
   return (

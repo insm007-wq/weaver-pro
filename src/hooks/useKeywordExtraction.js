@@ -87,6 +87,16 @@ export const useKeywordExtraction = () => {
         // assets 추가 (이전에는 addAssets 사용했지만 현재는 setAssets)
         setAssets(uniqueAssets);
 
+        // 🔥 키워드를 settings.json에 저장
+        try {
+          const keywordList = uniqueAssets.map(asset => asset.keyword);
+          await window.api.setSetting({ key: "extractedKeywords", value: keywordList });
+          console.log(`[키워드 저장] settings.json에 ${keywordList.length}개 키워드 저장됨`);
+        } catch (saveError) {
+          console.error("[키워드 저장] settings.json 저장 실패:", saveError);
+          // 저장 실패해도 UI는 계속 진행 (키워드 추출 자체는 성공)
+        }
+
         const duration = result.duration ? ` (${Math.round(result.duration / 1000)}초 소요)` : "";
         console.log(`[키워드 추출] 완료: ${uniqueAssets.length}개 키워드${duration}`);
         showSuccess(`${uniqueAssets.length}개 키워드가 추출되었습니다.${duration}`);
