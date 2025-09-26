@@ -66,7 +66,7 @@ export const useFileManagement = () => {
       setSrtFilePath(file.path);
 
       // 설정 저장
-      await setSetting("paths.srt", file.path);
+      await setSetting({ key: "paths.srt", value: file.path });
 
       showSuccess(`SRT 파일이 업로드되었습니다. (${parsedScenes.length}개 씬)`);
     } catch (error) {
@@ -109,7 +109,7 @@ export const useFileManagement = () => {
       setAudioDur(duration);
 
       // 설정 저장
-      await setSetting("paths.mp3", file.path);
+      await setSetting({ key: "paths.mp3", value: file.path });
 
       showSuccess(`오디오 파일이 업로드되었습니다. (${duration.toFixed(1)}초)`);
     } catch (error) {
@@ -137,41 +137,65 @@ export const useFileManagement = () => {
   const handleInsertFromScript = useCallback(async () => {
     setIsLoading(true);
     try {
-      const savedSrtPath = await getSetting("paths.srt");
-      const savedMp3Path = await getSetting("paths.mp3");
+      // videoSaveFolder 설정에서 기본 경로 가져오기
+      const videoSaveFolder = await getSetting("videoSaveFolder");
+      console.log("[대본에서 가져오기] videoSaveFolder:", videoSaveFolder);
+
+      if (!videoSaveFolder) {
+        showError("비디오 저장 폴더가 설정되지 않았습니다. 설정 탭에서 먼저 폴더를 설정해주세요.");
+        return;
+      }
+
+      // 파일 경로 구성
+      const srtPath = `${videoSaveFolder}/scripts/subtitle.srt`;
+      const mp3Path = `${videoSaveFolder}/audio/default.mp3`;
+
+      console.log("[대본에서 가져오기] 구성된 경로:", { srtPath, mp3Path });
 
       let loadedSrt = false;
       let loadedMp3 = false;
 
       // SRT 파일 로드
-      if (savedSrtPath) {
-        try {
-          const content = await readTextAny(savedSrtPath);
+      try {
+        console.log("[SRT 로드] 파일 존재 확인 시작:", srtPath);
+        const srtExists = await window.api?.checkPathExists?.(srtPath);
+        console.log("[SRT 로드] 파일 존재 확인 결과:", srtExists);
+        if (srtExists?.exists && srtExists?.isFile) {
+          const content = await readTextAny(srtPath);
           const parsedScenes = parseSrtToScenes(content);
 
           if (parsedScenes.length > 0) {
             setScenes(parsedScenes);
             setSrtConnected(true);
-            setSrtFilePath(savedSrtPath);
+            setSrtFilePath(srtPath);
             loadedSrt = true;
           }
-        } catch (error) {
-          console.error("저장된 SRT 로드 실패:", error);
+        } else {
+          console.warn("SRT 파일이 존재하지 않음:", srtPath);
         }
+      } catch (error) {
+        console.error("SRT 로드 실패:", error);
       }
 
       // MP3 파일 로드
-      if (savedMp3Path) {
-        try {
-          const duration = await getMp3DurationSafe(savedMp3Path);
+      try {
+        console.log("[MP3 로드] 파일 존재 확인 시작:", mp3Path);
+        const mp3Exists = await window.api?.checkPathExists?.(mp3Path);
+        console.log("[MP3 로드] 파일 존재 확인 결과:", mp3Exists);
+        if (mp3Exists?.exists && mp3Exists?.isFile) {
+          const duration = await getMp3DurationSafe(mp3Path);
           setMp3Connected(true);
-          setMp3FilePath(savedMp3Path);
+          setMp3FilePath(mp3Path);
           setAudioDur(duration);
           loadedMp3 = true;
-        } catch (error) {
-          console.error("저장된 MP3 로드 실패:", error);
+        } else {
+          console.warn("MP3 파일이 존재하지 않음:", mp3Path);
         }
+      } catch (error) {
+        console.error("MP3 로드 실패:", error);
       }
+
+      console.log("[대본에서 가져오기] 최종 결과:", { loadedSrt, loadedMp3 });
 
       if (loadedSrt && loadedMp3) {
         showSuccess("대본에서 파일들을 성공적으로 가져왔습니다.");

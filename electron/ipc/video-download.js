@@ -187,6 +187,9 @@ async function searchPixabayVideos(apiKey, query, perPage = 3, options = {}) {
       for (const size of videoSizes) {
         const videoFile = hit.videos?.[size];
         if (videoFile?.url) {
+          // Pixabay 썸네일 우선순위: webformatURL > previewURL > userImageURL
+          const thumbnail = hit.webformatURL || hit.previewURL || hit.userImageURL || `https://via.placeholder.com/160x90/02BE6E/white?text=${encodeURIComponent('Pixabay')}`;
+
           allVideos.push({
             provider: "pixabay",
             id: hit.id,
@@ -196,7 +199,7 @@ async function searchPixabayVideos(apiKey, query, perPage = 3, options = {}) {
             height: videoFile.height || 0,
             size: videoFile.size || 0,
             quality: size,
-            thumbnail: hit.webformatURL || hit.previewURL || `https://via.placeholder.com/160x90/02BE6E/white?text=${encodeURIComponent('Pixabay')}`,
+            thumbnail,
             tags: (hit.tags || "")
               .split(",")
               .map((t) => t.trim())

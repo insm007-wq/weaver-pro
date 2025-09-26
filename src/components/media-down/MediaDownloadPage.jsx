@@ -9,6 +9,7 @@ import {
   CheckmarkCircleRegular,
   SettingsRegular,
   InfoRegular,
+  ArrowClockwiseRegular,
 } from "@fluentui/react-icons";
 import { PageErrorBoundary } from "../common/ErrorBoundary";
 import { showError, showSuccess } from "../common/GlobalToast";
@@ -40,10 +41,39 @@ function MediaDownloadPage() {
   });
   const [keywordsLoaded, setKeywordsLoaded] = useState(false);
 
-  // ===== 초기 로드 (기존 유지)
+  // ===== 초기 로드 및 설정 변경 감지
   useEffect(() => {
     loadKeywordsFromJSON();
     loadDownloadHistory();
+
+    // 설정 변경 이벤트 리스너 추가
+    const handleSettingsChanged = (payload) => {
+      if (payload?.key === "extractedKeywords") {
+        console.log("[미디어 다운로드] 키워드 설정 변경 감지, 새로고침 중...");
+        loadKeywordsFromJSON();
+      }
+    };
+
+    // 설정 변경 이벤트 구독
+    if (window.api?.on) {
+      window.api.on("settings:changed", handleSettingsChanged);
+    }
+
+    // 페이지 포커스 시 키워드 새로고침
+    const handleFocus = () => {
+      console.log("[미디어 다운로드] 페이지 포커스, 키워드 새로고침");
+      loadKeywordsFromJSON();
+    };
+
+    window.addEventListener("focus", handleFocus);
+
+    // 클린업
+    return () => {
+      if (window.api?.off) {
+        window.api.off("settings:changed", handleSettingsChanged);
+      }
+      window.removeEventListener("focus", handleFocus);
+    };
   }, []);
 
   const loadKeywordsFromJSON = async () => {
@@ -107,6 +137,8 @@ function MediaDownloadPage() {
 
         if (status === "completed" && filename) {
           const uniqueKey = `${keyword}_${videoIndex || 1}`;
+          const thumbnailSrc = toImgSrc(p.thumbnail);
+
           setDownloadedVideos((prev) => [
             ...prev.filter((v) => v.uniqueKey !== uniqueKey),
             {
@@ -114,7 +146,7 @@ function MediaDownloadPage() {
               uniqueKey,
               provider: selectedProvider,
               filename,
-              thumbnail: toImgSrc(p.thumbnail) || `https://via.placeholder.com/160x90/6366f1/white?text=${encodeURIComponent(keyword)}`,
+              thumbnail: thumbnailSrc || `https://via.placeholder.com/160x90/6366f1/white?text=${encodeURIComponent(keyword)}`,
               success: true,
               width: p.width || 0,
               height: p.height || 0,
@@ -277,9 +309,14 @@ function MediaDownloadPage() {
                 {selectedKeywords.size}/{keywords.length}
               </Badge>
             </div>
-            <Button appearance="subtle" size="small" onClick={selectAllKeywords}>
-              {selectedKeywords.size === keywords.length ? "전체 해제" : "전체 선택"}
-            </Button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Button appearance="subtle" size="small" onClick={loadKeywordsFromJSON}>
+                <ArrowClockwiseRegular style={{ fontSize: 16 }} />
+              </Button>
+              <Button appearance="subtle" size="small" onClick={selectAllKeywords}>
+                {selectedKeywords.size === keywords.length ? "전체 해제" : "전체 선택"}
+              </Button>
+            </div>
           </div>
 
           <div
