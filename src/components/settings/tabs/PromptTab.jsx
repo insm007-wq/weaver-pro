@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Text, Button, Dropdown, Option, Field, Input, Textarea, Card, tokens, Divider } from "@fluentui/react-components";
 import {
   AddRegular,
@@ -95,10 +95,15 @@ const DEFAULT_PAIR_NAME = "기본프롬프트(기본)";
  * @param {Array} list - 프롬프트 배열
  * @returns {Array} 고유한 사용자 프롬프트 이름 배열 (한국어 정렬)
  */
-const uniqueUserNames = (list) =>
-  Array.from(new Set(list.filter((p) => !p.isDefault).map((p) => p.name)))
+const uniqueUserNames = (list) => {
+  if (!Array.isArray(list)) {
+    console.warn("[PromptTab] uniqueUserNames: list is not an array:", list);
+    return [];
+  }
+  return Array.from(new Set(list.filter((p) => !p.isDefault).map((p) => p.name)))
     .filter(Boolean)
     .sort((a, b) => a.localeCompare(b, "ko"));
+};
 
 /* ================= 메인 컴포넌트 ================= */
 function PromptTab() {
@@ -259,13 +264,20 @@ function PromptTab() {
     }
   };
 
+
   /* ============ 드롭다운 옵션 ============ */
 
   /**
    * 사용자 정의 프롬프트 이름 목록 (메모이제이션)
    * 프롬프트 배열이 변경될 때만 재계산
    */
-  const nameOptions = React.useMemo(() => uniqueUserNames(prompts), [prompts]);
+  const nameOptions = React.useMemo(() => {
+    if (!Array.isArray(prompts)) {
+      console.warn("[PromptTab] prompts is not an array in useMemo:", prompts);
+      return [];
+    }
+    return uniqueUserNames(prompts);
+  }, [prompts]);
 
   /* ============ CRUD 기능들 ============ */
 
@@ -327,7 +339,9 @@ function PromptTab() {
       await loadPrompts();
 
       // 남은 프롬프트가 있으면 첫 번째를 활성화, 없으면 기본 상태로
-      const remaining = uniqueUserNames((await api.invoke("prompts:getAll"))?.data || []);
+      const getAllResult = await api.invoke("prompts:getAll");
+      const allPrompts = getAllResult?.data || getAllResult || [];
+      const remaining = uniqueUserNames(allPrompts);
       if (remaining.length) {
         await activatePair(remaining[0]);
       } else {
@@ -353,19 +367,19 @@ function PromptTab() {
 
   /**
    * 현재 에디터의 프롬프트 내용을 저장
-   * 이름이 없거나 기본 프롬프트인 경우 자동으로 새 이름 생성
+   * 유효한 프롬프트 이름이 있을 때만 저장 가능
    */
   const handleSaveAll = async () => {
     try {
-      let name = selectedName;
+      const name = selectedName;
 
-      // 이름이 없거나 기본 프롬프트인 경우 새 이름 생성
+      // 이름이 없거나 기본 프롬프트인 경우 저장 불가
       if (!name || name === DEFAULT_PAIR_NAME) {
-        let suffix = 1;
-        const baseName = "새 프롬프트";
-        const exists = new Set(nameOptions);
-        while (exists.has(suffix === 1 ? baseName : `${baseName} ${suffix}`)) suffix += 1;
-        name = suffix === 1 ? baseName : `${baseName} ${suffix}`;
+        showGlobalToast({
+          type: "warning",
+          text: "저장하려면 먼저 '새 프롬프트'를 생성하거나 기존 프롬프트를 선택해주세요.",
+        });
+        return;
       }
 
       await savePair(name, scriptPrompt, referencePrompt);
@@ -505,9 +519,9 @@ function PromptTab() {
               appearance="primary"
               icon={isSaving ? <LoadingSpinner size="tiny" /> : <SaveRegular />}
               onClick={handleSaveAll}
-              disabled={isSaving || !scriptPrompt || !referencePrompt}
+              disabled={isSaving || !scriptPrompt || !referencePrompt || !selectedName || selectedName === DEFAULT_PAIR_NAME}
             >
-              저장하기
+              {isSaving ? "저장 중..." : "저장하기"}
             </Button>
           </div>
         </div>
