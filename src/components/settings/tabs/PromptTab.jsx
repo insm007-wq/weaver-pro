@@ -512,36 +512,38 @@ function PromptTab() {
             </div>
           )}
 
-          {/* 관리 액션 버튼 */}
-          <div
-            style={{
-              display: "flex",
-              gap: tokens.spacingHorizontalS,
-              alignItems: "flex-end",
-              flexShrink: 0,
-              flexGrow: 0,
-            }}
-          >
-            <Button appearance="secondary" icon={<AddRegular />} onClick={() => setShowInlineCreate((v) => !v)}>
-              새 프롬프트
-            </Button>
-            <Button
-              appearance="secondary"
-              icon={<DeleteRegular />}
-              onClick={handleDelete}
-              disabled={!selectedName || !nameOptions.includes(selectedName)}
+          {/* 관리 액션 버튼 - 새 프롬프트 생성 시 숨김 */}
+          {!showInlineCreate && (
+            <div
+              style={{
+                display: "flex",
+                gap: tokens.spacingHorizontalS,
+                alignItems: "flex-end",
+                flexShrink: 0,
+                flexGrow: 0,
+              }}
             >
-              삭제
-            </Button>
-            <Button
-              appearance="primary"
-              icon={isSaving ? <LoadingSpinner size="tiny" /> : <SaveRegular />}
-              onClick={handleSaveAll}
-              disabled={isSaving || !scriptPrompt || !referencePrompt || !selectedName || selectedName === DEFAULT_PAIR_NAME}
-            >
-              {isSaving ? "저장 중..." : "저장하기"}
-            </Button>
-          </div>
+              <Button appearance="secondary" icon={<AddRegular />} onClick={() => setShowInlineCreate((v) => !v)}>
+                새 프롬프트
+              </Button>
+              <Button
+                appearance="secondary"
+                icon={<DeleteRegular />}
+                onClick={handleDelete}
+                disabled={!selectedName || !nameOptions.includes(selectedName)}
+              >
+                삭제
+              </Button>
+              <Button
+                appearance="primary"
+                icon={isSaving ? <LoadingSpinner size="tiny" /> : <SaveRegular />}
+                onClick={handleSaveAll}
+                disabled={isSaving || !scriptPrompt || !referencePrompt || !selectedName || selectedName === DEFAULT_PAIR_NAME}
+              >
+                {isSaving ? "저장 중..." : "저장하기"}
+              </Button>
+            </div>
+          )}
         </div>
       </Card>
 
