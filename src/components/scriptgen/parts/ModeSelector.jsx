@@ -107,7 +107,7 @@ const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, com
 
   useEffect(() => {
     // 한 번만 로드하도록 제한
-    if (hasLoadedRef.current || !api?.invoke || !setGlobalSettings) {
+    if (hasLoadedRef.current || !window.api?.invoke || !setGlobalSettings) {
       return;
     }
 
@@ -115,7 +115,8 @@ const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, com
 
     const loadGlobalSettings = async () => {
       try {
-        const llmSetting = await api.invoke("settings:get", "llmModel");
+        const result = await window.api.invoke("settings:get", "llmModel");
+        const llmSetting = result?.data || result;
 
         if (!isMounted) return;
 
@@ -149,19 +150,44 @@ const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, com
     return () => {
       isMounted = false;
     };
-  }, [api]);
+  }, []); // 의존성 배열을 비워서 무한 호출 방지
 
   // settings 변경 이벤트 리스너 (한 번만 등록)
   useEffect(() => {
-    const handleSettingsChange = () => {
-      hasLoadedRef.current = false; // 다시 로드 가능하도록 리셋
+    const handleSettingsChange = async () => {
+      if (!window.api?.invoke || !setGlobalSettings) return;
+
+      try {
+        const result = await window.api.invoke("settings:get", "llmModel");
+        const llmSetting = result?.data || result;
+
+        if (llmSetting !== null && llmSetting !== undefined) {
+          let llmValue;
+          if (typeof llmSetting === "object") {
+            llmValue = llmSetting.data || llmSetting.value || llmSetting;
+          } else {
+            llmValue = llmSetting;
+          }
+
+          if (typeof llmValue === "string" && llmValue.trim()) {
+            setGlobalSettings((prev) => {
+              if (prev.llmModel !== llmValue) {
+                return { ...prev, llmModel: llmValue };
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (error) {
+        console.warn("설정 변경 시 전역 설정 로드 실패:", error);
+      }
     };
 
     window.addEventListener("settingsChanged", handleSettingsChange);
     return () => {
       window.removeEventListener("settingsChanged", handleSettingsChange);
     };
-  }, []);
+  }, []); // 의존성 배열을 비워서 한 번만 등록
 
   // 컴팩트 모드 렌더링
   if (compact) {
@@ -274,9 +300,7 @@ const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, com
               onClick={() => handleModeChange(mode.key)}
             >
               <div style={{ color: isSelected ? "white" : tokens.colorNeutralForeground1, textAlign: "center" }}>
-                <div
-                  style={{ marginBottom: tokens.spacingVerticalS, display: "flex", justifyContent: "center", alignItems: "center", gap: 8 }}
-                >
+                <div style={{ marginBottom: tokens.spacingVerticalS, display: "flex", justifyContent: "center", alignItems: "center", gap: 8 }}>
                   <Icon style={{ fontSize: 24 }} />
                   {isSelected && (
                     <div
