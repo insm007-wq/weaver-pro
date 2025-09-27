@@ -143,8 +143,8 @@ function PromptTab() {
   }, []);
 
   /**
-   * 프롬프트 데이터 로드 완료 후 초기 상태 설정
-   * 기본 프롬프트 설정 및 첫 번째 사용자 프롬프트 활성화
+   * 프롬프트 데이터 초기 로드 완료 후 상태 설정
+   * 초기 로딩 시에만 실행되고, 이후 수동 상태 관리
    */
   useEffect(() => {
     if (!didInitRef.current && Array.isArray(prompts)) {
@@ -256,6 +256,7 @@ function PromptTab() {
       // 에디터 내용 업데이트
       setScriptPrompt(res.data?.script?.content ?? "");
       setReferencePrompt(res.data?.reference?.content ?? "");
+
       setIsSaving(false);
       return res;
     } catch (e) {
@@ -299,6 +300,7 @@ function PromptTab() {
       await savePair(base, catDefault("script"), catDefault("reference"));
       setShowInlineCreate(false);
       setNewName("");
+
       showGlobalToast({
         type: "success",
         text: "프롬프트가 생성되었습니다.",
@@ -335,16 +337,16 @@ function PromptTab() {
         return;
       }
 
-      // 프롬프트 목록 새로고침
-      await loadPrompts();
+      // 삭제 이후 직접 상태를 관리 (useEffect 자동 호출 방지)
+      const updated = prompts.filter(p => p.name !== selectedName);
+      setPrompts(updated);  // prompts 업데이트 → 자동으로 UI 갱신됨
 
-      // 남은 프롬프트가 있으면 첫 번째를 활성화, 없으면 기본 상태로
-      const getAllResult = await api.invoke("prompts:getAll");
-      const allPrompts = getAllResult?.data || getAllResult || [];
-      const remaining = uniqueUserNames(allPrompts);
-      if (remaining.length) {
-        await activatePair(remaining[0]);
+      const remainingNames = uniqueUserNames(updated);
+
+      if (remainingNames.length > 0) {
+        await activatePair(remainingNames[0]);
       } else {
+        // 프롬프트가 하나도 없으면 기본값으로 세팅
         setSelectedName(DEFAULT_PAIR_NAME);
         setSelectedScriptId("");
         setSelectedReferenceId("");
@@ -383,6 +385,7 @@ function PromptTab() {
       }
 
       await savePair(name, scriptPrompt, referencePrompt);
+
       showGlobalToast({
         type: "success",
         text: "성공적으로 저장되었습니다! 🎉",
@@ -447,19 +450,34 @@ function PromptTab() {
           <div style={{ flex: "1 1 auto", minWidth: "200px" }}>
             <Field label="사용자 프롬프트 선택">
               <Dropdown
-                selectedOptions={selectedName && nameOptions.includes(selectedName) ? [selectedName] : []}
-                value={selectedName || (nameOptions[0] ?? "")}
+                selectedOptions={
+                  nameOptions.length > 0 && selectedName && nameOptions.includes(selectedName)
+                    ? [selectedName]
+                    : []
+                }
+                value={
+                  nameOptions.length > 0
+                    ? (selectedName && nameOptions.includes(selectedName) ? selectedName : "")
+                    : ""
+                }
                 onOptionSelect={async (_, d) => {
                   const name = d?.optionValue;
                   if (name) await activatePair(name);
                 }}
-                placeholder="프롬프트를 선택하세요"
+                placeholder={nameOptions.length > 0 ? "프롬프트를 선택하세요" : "먼저 '새 프롬프트'를 생성해주세요"}
+                disabled={nameOptions.length === 0}
               >
-                {nameOptions.map((nm) => (
-                  <Option key={nm} value={nm}>
-                    {nm}
+                {nameOptions.length > 0 ? (
+                  nameOptions.map((nm) => (
+                    <Option key={nm} value={nm}>
+                      {nm}
+                    </Option>
+                  ))
+                ) : (
+                  <Option value="" disabled>
+                    프롬프트가 없습니다. '새 프롬프트'를 생성해주세요.
                   </Option>
-                ))}
+                )}
               </Dropdown>
             </Field>
           </div>
