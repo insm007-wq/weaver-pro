@@ -38,17 +38,26 @@ function MediaEditPage() {
 
   // 비디오 ref
   const videoRef = useRef(null);
+  const hasTriedLoadRef = useRef(false);
 
   // 선택된 씬 정보
   const selectedScene = scenes[selectedSceneIndex] || null;
 
-  // 페이지 로드시 자동으로 프로젝트 파일들 로드
+  // 페이지 로드시 자동으로 프로젝트 파일들 로드 (한 번만)
   useEffect(() => {
-    if (!srtConnected && !mp3Connected && !isLoading) {
-      console.log("[MediaEditPage] 페이지 로드시 자동으로 프로젝트 파일 로드 시도");
-      handleInsertFromScript();
+    if (!hasTriedLoadRef.current) {
+      hasTriedLoadRef.current = true;
+      // 약간의 지연을 두어 컴포넌트가 완전히 마운트된 후 실행
+      const timer = setTimeout(() => {
+        if (!srtConnected && !mp3Connected && !isLoading) {
+          console.log("[MediaEditPage] 페이지 로드시 자동으로 프로젝트 파일 로드 시도");
+          handleInsertFromScript();
+        }
+      }, 100);
+
+      return () => clearTimeout(timer);
     }
-  }, [srtConnected, mp3Connected, isLoading, handleInsertFromScript]);
+  }, []); // 의존성 배열을 비워서 마운트 시에만 실행
 
   // 선택된 씬의 영상 URL 로드
   useEffect(() => {
