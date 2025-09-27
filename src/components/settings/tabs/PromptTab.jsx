@@ -9,6 +9,7 @@ import {
   DismissCircleRegular,
   EditRegular,
   BrainCircuitRegular,
+  ShieldCheckmarkRegular,
 } from "@fluentui/react-icons";
 import { useApi } from "../../../hooks/useApi";
 import { LoadingSpinner } from "../../common/LoadingSpinner";
@@ -91,16 +92,27 @@ const catDefault = (cat) => (cat === "script" ? DEFAULT_GENERATE_PROMPT : DEFAUL
 const DEFAULT_PAIR_NAME = "기본프롬프트(기본)";
 
 /**
- * 사용자 정의 프롬프트 이름들을 중복 제거하고 정렬하여 반환
+ * 선택된 프롬프트가 기본 프롬프트인지 확인
+ * @param {string} selectedName - 선택된 프롬프트 이름
+ * @param {Array} prompts - 프롬프트 배열
+ * @returns {boolean} 기본 프롬프트 여부
+ */
+const isDefaultPrompt = (selectedName, prompts) => {
+  if (!selectedName || !Array.isArray(prompts)) return false;
+  return prompts.some((p) => p.name === selectedName && p.isDefault);
+};
+
+/**
+ * 모든 프롬프트 이름들을 중복 제거하고 정렬하여 반환 (기본 프롬프트 포함)
  * @param {Array} list - 프롬프트 배열
- * @returns {Array} 고유한 사용자 프롬프트 이름 배열 (한국어 정렬)
+ * @returns {Array} 고유한 프롬프트 이름 배열 (한국어 정렬, 기본 프롬프트 포함)
  */
 const uniqueUserNames = (list) => {
   if (!Array.isArray(list)) {
     console.warn("[PromptTab] uniqueUserNames: list is not an array:", list);
     return [];
   }
-  return Array.from(new Set(list.filter((p) => !p.isDefault).map((p) => p.name)))
+  return Array.from(new Set(list.map((p) => p.name))) // 모든 프롬프트 포함 (기본 프롬프트도 포함)
     .filter(Boolean)
     .sort((a, b) => a.localeCompare(b, "ko"));
 };
@@ -320,10 +332,19 @@ function PromptTab() {
    */
   const handleDelete = async () => {
     try {
-      if (!selectedName || selectedName === DEFAULT_PAIR_NAME) {
+      if (!selectedName) {
         showGlobalToast({
           type: "warning",
-          text: "삭제할 사용자 프롬프트가 없습니다.",
+          text: "삭제할 프롬프트를 선택해주세요.",
+        });
+        return;
+      }
+
+      // 기본 프롬프트인지 확인
+      if (isDefaultPrompt(selectedName, prompts)) {
+        showGlobalToast({
+          type: "warning",
+          text: "기본 프롬프트는 삭제할 수 없습니다.",
         });
         return;
       }
@@ -375,11 +396,20 @@ function PromptTab() {
     try {
       const name = selectedName;
 
-      // 이름이 없거나 기본 프롬프트인 경우 저장 불가
-      if (!name || name === DEFAULT_PAIR_NAME) {
+      // 이름이 없는 경우
+      if (!name) {
         showGlobalToast({
           type: "warning",
           text: "저장하려면 먼저 '새 프롬프트'를 생성하거나 기존 프롬프트를 선택해주세요.",
+        });
+        return;
+      }
+
+      // 기본 프롬프트인 경우 저장 불가
+      if (isDefaultPrompt(name, prompts)) {
+        showGlobalToast({
+          type: "warning",
+          text: "기본 프롬프트는 편집할 수 없습니다. 새 프롬프트를 생성해주세요.",
         });
         return;
       }
@@ -468,11 +498,17 @@ function PromptTab() {
                 disabled={nameOptions.length === 0}
               >
                 {nameOptions.length > 0 ? (
-                  nameOptions.map((nm) => (
-                    <Option key={nm} value={nm}>
-                      {nm}
-                    </Option>
-                  ))
+                  nameOptions.map((nm) => {
+                    const isDefault = isDefaultPrompt(nm, prompts);
+                    return (
+                      <Option key={nm} value={nm}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          {isDefault && <ShieldCheckmarkRegular style={{ color: tokens.colorPaletteGoldForeground1, fontSize: 14 }} />}
+                          <span>{nm}</span>
+                        </div>
+                      </Option>
+                    );
+                  })
                 ) : (
                   <Option value="" disabled>
                     프롬프트가 없습니다. '새 프롬프트'를 생성해주세요.
@@ -530,7 +566,7 @@ function PromptTab() {
                 appearance="secondary"
                 icon={<DeleteRegular />}
                 onClick={handleDelete}
-                disabled={!selectedName || !nameOptions.includes(selectedName)}
+                disabled={!selectedName || !nameOptions.includes(selectedName) || isDefaultPrompt(selectedName, prompts)}
               >
                 삭제
               </Button>
@@ -538,9 +574,9 @@ function PromptTab() {
                 appearance="primary"
                 icon={isSaving ? <LoadingSpinner size="tiny" /> : <SaveRegular />}
                 onClick={handleSaveAll}
-                disabled={isSaving || !scriptPrompt || !referencePrompt || !selectedName || selectedName === DEFAULT_PAIR_NAME}
+                disabled={isSaving || !scriptPrompt || !referencePrompt || !selectedName || isDefaultPrompt(selectedName, prompts)}
               >
-                {isSaving ? "저장 중..." : "저장하기"}
+                {isSaving ? "저장 중..." : isDefaultPrompt(selectedName, prompts) ? "기본 프롬프트는 편집 불가" : "저장하기"}
               </Button>
             </div>
           )}

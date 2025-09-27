@@ -66,7 +66,7 @@ export function usePromptSettings() {
           const names = Array.from(
             new Set(
               list
-                .filter((p) => !p.isDefault && p.name?.trim())
+                .filter((p) => p.name?.trim()) // 모든 프롬프트 포함 (기본 프롬프트도 포함)
                 .map((p) => p.name.trim())
             )
           ).sort((a, b) => a.localeCompare(b, "ko"));
