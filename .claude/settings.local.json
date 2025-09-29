@@ -227,7 +227,8 @@
       "Bash(curl:*)",
       "Read(//c/WeaverPro/1111/**)",
       "Read(//c/Users/paul/Desktop/**)",
-      "Bash(tasklist:*)"
+      "Bash(tasklist:*)",
+      "Bash(cross-env:*)"
     ],
     "deny": [],
     "ask": []

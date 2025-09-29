@@ -195,24 +195,57 @@ async function cleanupOldBackups() {
   }
 }
 
+// 기본 프롬프트 생성 함수
+function createDefaultPrompts() {
+  const { DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT } = require("../../src/constants/prompts");
+  const now = Date.now();
+
+  return [
+    {
+      id: generatePromptId(),
+      name: "기본 프롬프트",
+      category: "script",
+      content: DEFAULT_GENERATE_PROMPT,
+      isDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generatePromptId(),
+      name: "기본 프롬프트",
+      category: "reference",
+      content: DEFAULT_REFERENCE_PROMPT,
+      isDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    }
+  ];
+}
+
 // 모든 프롬프트 조회 (중복 자동 정리)
 ipcMain.handle("prompts:getAll", async (_e) => {
   try {
     let prompts = store.get("prompts", []);
 
-    // 기본 프롬프트가 없으면 생성
-    if (!Array.isArray(prompts) || prompts.length === 0) {
-      prompts = getDefaultPrompts();
-      store.set("prompts", prompts);
-      broadcastChanged({ key: "prompts", value: prompts });
-    } else {
-      // 중복 제거(최신 우선)
+    // 중복 제거(최신 우선)
+    if (Array.isArray(prompts) && prompts.length > 0) {
       const deduped = dedupePrompts(prompts);
       if (deduped.length !== prompts.length) {
         prompts = deduped;
         store.set("prompts", prompts);
         broadcastChanged({ key: "prompts", value: prompts });
       }
+    } else {
+      prompts = [];
+    }
+
+    // 기본 프롬프트가 없으면 실제 데이터로 생성하여 저장
+    const hasDefaultPrompt = prompts.some(p => p.name === "기본 프롬프트");
+    if (!hasDefaultPrompt) {
+      const defaultPrompts = createDefaultPrompts();
+      prompts = [...defaultPrompts, ...prompts];
+      store.set("prompts", prompts);
+      broadcastChanged({ key: "prompts", value: prompts });
     }
 
     return { ok: true, data: prompts };
@@ -409,7 +442,8 @@ ipcMain.handle("prompts:getPairByName", async (_e, name) => {
 
     const prompts = dedupePrompts(store.get("prompts", []));
     const pick = (cat) => {
-      const list = prompts.filter((p) => !p.isDefault && p.name === nm && p.category === cat);
+      // 기본 프롬프트도 선택 가능하도록 변경
+      const list = prompts.filter((p) => p.name === nm && p.category === cat);
       if (!list.length) return null;
       return list.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0];
     };
@@ -434,7 +468,8 @@ ipcMain.handle("prompts:savePair", async (_e, payload) => {
     const upsert = (cat, content) => {
       if (content == null) return null; // 지정 안 하면 건너뜀
       const now = Date.now();
-      const idx = prompts.findIndex((p) => !p.isDefault && p.name === nm && p.category === cat);
+      // 기본 프롬프트도 수정 가능하도록 변경
+      const idx = prompts.findIndex((p) => p.name === nm && p.category === cat);
       if (idx >= 0) {
         prompts[idx] = { ...prompts[idx], content: String(content).trim(), updatedAt: now };
         return prompts[idx];

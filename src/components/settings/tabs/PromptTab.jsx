@@ -98,7 +98,12 @@ const DEFAULT_PAIR_NAME = "기본프롬프트(기본)";
  * @returns {boolean} 기본 프롬프트 여부
  */
 const isDefaultPrompt = (selectedName, prompts) => {
-  if (!selectedName || !Array.isArray(prompts)) return false;
+  if (!selectedName) return false;
+
+  // "기본 프롬프트"는 항상 기본 프롬프트로 간주
+  if (selectedName === "기본 프롬프트") return true;
+
+  if (!Array.isArray(prompts)) return false;
   return prompts.some((p) => p.name === selectedName && p.isDefault);
 };
 
@@ -168,14 +173,15 @@ function PromptTab() {
       setScriptPrompt(dScript?.content?.trim() ?? catDefault("script"));
       setReferencePrompt(dRef?.content?.trim() ?? catDefault("reference"));
 
-      // 사용자 프롬프트가 있으면 첫 번째를 활성화, 없으면 기본 상태
-      const names = uniqueUserNames(prompts);
-      if (names.length) {
-        activatePair(names[0]);
+      // 사용자 프롬프트가 있으면 첫 번째 사용자 프롬프트 선택, 없으면 기본 프롬프트 선택
+      const userNames = uniqueUserNames(prompts);
+
+      if (userNames.length > 0) {
+        // 사용자 프롬프트가 있으면 첫 번째 사용자 프롬프트 선택
+        activatePair(userNames[0]);
       } else {
-        setSelectedName(DEFAULT_PAIR_NAME);
-        setSelectedScriptId("");
-        setSelectedReferenceId("");
+        // 사용자 프롬프트가 없으면 기본 프롬프트 선택
+        activatePair("기본 프롬프트");
       }
 
       didInitRef.current = true;
@@ -210,6 +216,9 @@ function PromptTab() {
   const activatePair = async (name) => {
     try {
       setSelectedName(name);
+
+      // "기본 프롬프트"도 다른 프롬프트와 동일하게 API로 로드
+
       const res = await api.invoke("prompts:getPairByName", name);
       if (!isOk(res)) throw new Error(res?.message || "load failed");
 
@@ -287,9 +296,17 @@ function PromptTab() {
   const nameOptions = React.useMemo(() => {
     if (!Array.isArray(prompts)) {
       console.warn("[PromptTab] prompts is not an array in useMemo:", prompts);
-      return [];
+      return ["기본 프롬프트"]; // 빈 배열이어도 기본 프롬프트는 항상 포함
     }
-    return uniqueUserNames(prompts);
+
+    const userNames = uniqueUserNames(prompts);
+
+    // 기본 프롬프트가 없으면 항상 추가 (맨 앞에 표시)
+    if (!userNames.includes("기본 프롬프트")) {
+      userNames.unshift("기본 프롬프트");
+    }
+
+    return userNames;
   }, [prompts]);
 
   /* ============ CRUD 기능들 ============ */
@@ -363,9 +380,10 @@ function PromptTab() {
       setPrompts(updated);  // prompts 업데이트 → 자동으로 UI 갱신됨
 
       const remainingNames = uniqueUserNames(updated);
+      const allNames = remainingNames.length === 0 ? ["기본 프롬프트"] : remainingNames;
 
-      if (remainingNames.length > 0) {
-        await activatePair(remainingNames[0]);
+      if (allNames.length > 0) {
+        await activatePair(allNames[0]);
       } else {
         // 프롬프트가 하나도 없으면 기본값으로 세팅
         setSelectedName(DEFAULT_PAIR_NAME);
@@ -405,14 +423,7 @@ function PromptTab() {
         return;
       }
 
-      // 기본 프롬프트인 경우 저장 불가
-      if (isDefaultPrompt(name, prompts)) {
-        showGlobalToast({
-          type: "warning",
-          text: "기본 프롬프트는 편집할 수 없습니다. 새 프롬프트를 생성해주세요.",
-        });
-        return;
-      }
+      // 기본 프롬프트도 수정 가능하도록 허용
 
       await savePair(name, scriptPrompt, referencePrompt);
 
@@ -574,9 +585,9 @@ function PromptTab() {
                 appearance="primary"
                 icon={isSaving ? <LoadingSpinner size="tiny" /> : <SaveRegular />}
                 onClick={handleSaveAll}
-                disabled={isSaving || !scriptPrompt || !referencePrompt || !selectedName || isDefaultPrompt(selectedName, prompts)}
+                disabled={isSaving || !scriptPrompt || !referencePrompt || !selectedName}
               >
-                {isSaving ? "저장 중..." : isDefaultPrompt(selectedName, prompts) ? "기본 프롬프트는 편집 불가" : "저장하기"}
+                {isSaving ? "저장 중..." : "저장하기"}
               </Button>
             </div>
           )}
