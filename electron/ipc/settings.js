@@ -195,6 +195,9 @@ async function cleanupOldBackups() {
   }
 }
 
+// 기본 프롬프트 생성 중 플래그 (동시성 문제 방지)
+let isCreatingDefaultPrompts = false;
+
 // 기본 프롬프트 생성 함수
 function createDefaultPrompts() {
   const { DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT } = require("../../src/constants/prompts");
@@ -239,17 +242,30 @@ ipcMain.handle("prompts:getAll", async (_e) => {
       prompts = [];
     }
 
-    // 기본 프롬프트가 없으면 실제 데이터로 생성하여 저장
+    // 기본 프롬프트가 없으면 실제 데이터로 생성하여 저장 (동시성 안전)
     const hasDefaultPrompt = prompts.some(p => p.name === "기본 프롬프트");
-    if (!hasDefaultPrompt) {
-      const defaultPrompts = createDefaultPrompts();
-      prompts = [...defaultPrompts, ...prompts];
-      store.set("prompts", prompts);
-      broadcastChanged({ key: "prompts", value: prompts });
+    if (!hasDefaultPrompt && !isCreatingDefaultPrompts) {
+      isCreatingDefaultPrompts = true;
+      try {
+        // 다시 한 번 확인 (race condition 방지)
+        const currentPrompts = store.get("prompts", []);
+        const stillNeedsDefault = !currentPrompts.some(p => p.name === "기본 프롬프트");
+
+        if (stillNeedsDefault) {
+          const defaultPrompts = createDefaultPrompts();
+          prompts = [...defaultPrompts, ...prompts];
+          store.set("prompts", prompts);
+          broadcastChanged({ key: "prompts", value: prompts });
+          console.log("[settings] 기본 프롬프트 생성 완료");
+        }
+      } finally {
+        isCreatingDefaultPrompts = false;
+      }
     }
 
     return { ok: true, data: prompts };
   } catch (error) {
+    isCreatingDefaultPrompts = false; // 에러 시에도 플래그 리셋
     return { ok: false, message: String(error?.message || error) };
   }
 });

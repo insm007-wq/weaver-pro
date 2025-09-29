@@ -512,7 +512,7 @@ function PromptTab() {
                   nameOptions.map((nm) => {
                     const isDefault = isDefaultPrompt(nm, prompts);
                     return (
-                      <Option key={nm} value={nm}>
+                      <Option key={nm} value={nm} text={nm}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           {isDefault && <ShieldCheckmarkRegular style={{ color: tokens.colorPaletteGoldForeground1, fontSize: 14 }} />}
                           <span>{nm}</span>

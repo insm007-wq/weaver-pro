@@ -58,8 +58,13 @@ export function usePromptSettings() {
   useEffect(() => {
     let isMounted = true;
     let debounceTimer = null;
+    let isLoading = false; // 로딩 중복 방지
 
     const loadPrompts = async () => {
+      // 이미 로딩 중이면 중복 호출 방지
+      if (isLoading || !isMounted) return;
+
+      isLoading = true;
       try {
         const res = await api.invoke("prompts:getAll");
         if (isMounted && (res?.ok || res?.success) && Array.isArray(res.data)) {
@@ -76,21 +81,24 @@ export function usePromptSettings() {
       } catch (error) {
         console.error("프롬프트 로딩 실패:", error);
       } finally {
+        isLoading = false;
         if (isMounted) setPromptLoading(false);
       }
     };
 
-    // 디바운스된 로드 함수
+    // 디바운스된 로드 함수 (중복 호출 방지 강화)
     const debouncedLoadPrompts = () => {
+      if (!isMounted) return;
+
       if (debounceTimer) {
         clearTimeout(debounceTimer);
       }
       debounceTimer = setTimeout(() => {
-        if (isMounted) {
+        if (isMounted && !isLoading) {
           console.log("[usePromptSettings] 프롬프트 변경 감지, 다시 로드");
           loadPrompts();
         }
-      }, 300); // 300ms 디바운스
+      }, 500); // 디바운스 시간을 500ms로 증가 (안정성 강화)
     };
 
     // 초기 로드
@@ -98,21 +106,27 @@ export function usePromptSettings() {
 
     // 설정 변경 이벤트 리스너 추가 (실시간 업데이트)
     const handleSettingsChanged = (payload) => {
-      if (payload?.key === "prompts" && isMounted) {
+      if (payload?.key === "prompts" && isMounted && !isLoading) {
         debouncedLoadPrompts();
       }
     };
 
-    // IPC 이벤트 리스너 등록
+    // IPC 이벤트 리스너 등록 (중복 등록 방지)
     if (window.api?.on) {
+      // 기존 리스너가 있다면 먼저 제거
+      if (window.api?.off) {
+        window.api.off("settings:changed", handleSettingsChanged);
+      }
       window.api.on("settings:changed", handleSettingsChanged);
     }
 
     return () => {
       isMounted = false;
+      isLoading = false;
       // 디바운스 타이머 정리
       if (debounceTimer) {
         clearTimeout(debounceTimer);
+        debounceTimer = null;
       }
       // 컴포넌트 언마운트 시 리스너 제거
       if (window.api?.off) {
