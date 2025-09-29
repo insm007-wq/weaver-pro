@@ -14,8 +14,10 @@ const autoOpenDevtools =
 
 function createMainWindow() {
   const win = new BrowserWindow({
-    width: 1280,
-    height: 850,
+    width: 1440,
+    height: 900,
+    minWidth: 1280,
+    minHeight: 720,
     backgroundColor: "#f5f7fa",
     icon: path.join(__dirname, "..", "assets", "icon.png"), // 크로스 플랫폼용 아이콘
     webPreferences: {
