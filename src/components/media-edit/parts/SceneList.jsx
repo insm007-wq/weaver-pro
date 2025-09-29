@@ -12,6 +12,7 @@ import {
 import { ensureSceneDefaults } from "../../../utils/scenes";
 import { analyzeSceneKeywords, getRecommendedVideosForScene, assignVideosToScenes } from "../../../services/videoAssignment";
 import { showError, showSuccess } from "../../common/GlobalToast";
+import { isVideoFile, isImageFile } from "../../../utils/fileHelpers";
 
 function SceneList({
   scenes,
@@ -32,6 +33,10 @@ function SceneList({
   const [contextMenuSceneIndex, setContextMenuSceneIndex] = useState(-1);
   const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+
+  // 드래그 앤 드롭 상태
+  const [dragOverSceneIndex, setDragOverSceneIndex] = useState(-1);
+  const [isDragging, setIsDragging] = useState(false);
   // 시간 포맷 헬퍼
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -270,6 +275,93 @@ function SceneList({
     showSuccess("미디어가 제거되었습니다.");
   }, [contextMenuSceneIndex, scenes, setScenes]);
 
+  // 드래그 앤 드롭 이벤트 핸들러
+  const handleDragEnter = useCallback((e, index) => {
+    e.preventDefault();
+    setDragOverSceneIndex(index);
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e, index) => {
+    e.preventDefault();
+    // 실제로 씬 카드를 벗어났는지 확인
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      setDragOverSceneIndex(-1);
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const handleDrop = useCallback(async (e, index) => {
+    e.preventDefault();
+    setDragOverSceneIndex(-1);
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) {
+      showError("드롭된 파일이 없습니다.");
+      return;
+    }
+
+    const file = files[0];
+    const fileName = file.name;
+
+    // 파일 타입 검증
+    if (!isVideoFile(fileName) && !isImageFile(fileName)) {
+      showError("지원하지 않는 파일 형식입니다. 이미지 또는 비디오 파일만 지원됩니다.");
+      return;
+    }
+
+    // 파일 크기 검증 (100MB 제한)
+    const maxSize = 100 * 1024 * 1024; // 100MB
+    if (file.size > maxSize) {
+      showError("파일 크기가 너무 큽니다. 100MB 이하의 파일만 지원됩니다.");
+      return;
+    }
+
+    try {
+      // 파일을 프로젝트 폴더에 저장
+      const buffer = await file.arrayBuffer();
+      const fileType = isVideoFile(fileName) ? "video" : "image";
+      const category = fileType === "video" ? "videos" : "images";
+
+      const result = await window.api.invoke("files/saveToProject", {
+        category: category,
+        fileName: fileName,
+        buffer: buffer
+      });
+
+      if (result?.ok && result?.path) {
+        const updatedScenes = [...scenes];
+
+        updatedScenes[index].asset = {
+          path: result.path,
+          filename: fileName,
+          type: fileType,
+          keyword: "드래그 앤 드롭",
+          provider: "local",
+          resolution: "unknown"
+        };
+
+        setScenes(updatedScenes);
+        showSuccess(`씬 ${index + 1}에 ${fileType === "video" ? "영상" : "이미지"}이 연결되었습니다.`);
+      } else {
+        showError(`파일 저장에 실패했습니다: ${result?.message || "알 수 없는 오류"}`);
+      }
+    } catch (error) {
+      console.error("[드래그 앤 드롭] 파일 처리 오류:", error);
+      showError("파일 처리 중 오류가 발생했습니다.");
+    }
+  }, [scenes, setScenes]);
+
   // 컨텍스트 메뉴 외부 클릭시 닫기
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -341,21 +433,63 @@ function SceneList({
             const sceneWithDefaults = ensureSceneDefaults(scene);
             const hasMedia = sceneWithDefaults.asset?.path;
 
+            const isDragOver = dragOverSceneIndex === index;
+
             return (
               <div key={scene.id} style={{ position: "relative" }}>
                 <div
                   style={{
                     padding: 12,
                     borderRadius: 8,
-                    border: `2px solid ${isEditing ? "#ff6b35" : isSelected ? "#0078d4" : "#e1dfdd"}`,
-                    backgroundColor: isEditing ? "#fff4f1" : isSelected ? "#f3f9ff" : "transparent",
+                    border: `2px solid ${
+                      isDragOver
+                        ? "#00bcf2"
+                        : isEditing
+                        ? "#ff6b35"
+                        : isSelected
+                        ? "#0078d4"
+                        : "#e1dfdd"
+                    }`,
+                    backgroundColor: isDragOver
+                      ? "#e8f7ff"
+                      : isEditing
+                      ? "#fff4f1"
+                      : isSelected
+                      ? "#f3f9ff"
+                      : "transparent",
                     cursor: isEditing ? "default" : "pointer",
                     transition: "all 0.2s ease",
+                    position: "relative",
+                    ...(isDragOver && {
+                      transform: "scale(1.02)",
+                      boxShadow: "0 4px 12px rgba(0, 188, 242, 0.3)",
+                    }),
                   }}
                   onClick={isEditing ? undefined : () => onSceneSelect(index)}
                   onDoubleClick={isEditing ? undefined : (e) => handleSceneDoubleClick(index, e)}
                   onContextMenu={(e) => handleContextMenu(e, index)}
+                  onDragEnter={(e) => handleDragEnter(e, index)}
+                  onDragLeave={(e) => handleDragLeave(e, index)}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, index)}
                 >
+                  {/* 드래그 오버 오버레이 */}
+                  {isDragOver && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: "rgba(0, 188, 242, 0.1)",
+                        borderRadius: 6,
+                        border: "2px dashed #00bcf2",
+                        zIndex: 1,
+                        pointerEvents: "none",
+                      }}
+                    />
+                  )}
                 {/* 헤더 영역 */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                   <Avatar size={20} name={`씬 ${index + 1}`} color={hasMedia ? "colorful" : "neutral"} />
