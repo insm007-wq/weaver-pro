@@ -43,21 +43,21 @@ function MediaEditPage() {
     }
   }, []);
 
-  // 선택된 씬의 영상 URL 로드
+  // 선택된 씬의 미디어 URL 로드 (비디오 및 이미지 모두 지원)
   useEffect(() => {
-    const loadVideoUrl = async () => {
-      if (selectedScene?.asset?.path && selectedScene.asset.type === "video") {
+    const loadMediaUrl = async () => {
+      if (selectedScene?.asset?.path) {
         try {
-          console.log("[영상 로드] 시도:", selectedScene.asset.path);
+          console.log("[미디어 로드] 시도:", selectedScene.asset.path, selectedScene.asset.type);
           const url = await window.api?.videoPathToUrl?.(selectedScene.asset.path);
-          console.log("[영상 로드] 생성된 URL:", url);
+          console.log("[미디어 로드] 생성된 URL:", url);
           if (url) {
             setVideoUrl(url);
           } else {
             setVideoUrl(null);
           }
         } catch (error) {
-          console.error("[영상 로드] 실패:", error);
+          console.error("[미디어 로드] 실패:", error);
           setVideoUrl(null);
         }
       } else {
@@ -65,9 +65,9 @@ function MediaEditPage() {
       }
     };
 
-    loadVideoUrl();
+    loadMediaUrl();
 
-    // 클린업: 이전 비디오 URL 해제
+    // 클린업: 이전 미디어 URL 해제
     return () => {
       if (videoUrl && selectedScene?.asset?.path) {
         window.api?.revokeVideoUrl?.(selectedScene.asset.path);

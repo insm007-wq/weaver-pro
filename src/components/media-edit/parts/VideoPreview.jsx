@@ -270,85 +270,135 @@ function VideoPreview({
         }}
       >
         {selectedScene ? (
-          videoUrl && selectedScene.asset?.type === "video" ? (
-            // 실제 비디오 표시 (자막 오버레이 포함)
-            <div style={{ position: "relative", width: "100%", height: "100%" }}>
-              <video
-                ref={videoRef}
-                key={videoUrl}
-                src={videoUrl}
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                  borderRadius: 16,
-                  cursor: "pointer",
-                }}
-                controls={false}
-                autoPlay={false}
-                muted={false}
-                playsInline
-                onClick={handleVideoToggle}
-                onError={(e) => {
-                  console.error("[비디오 재생] 오류:", e);
-                  console.error("[비디오 재생] 비디오 URL:", videoUrl);
-                }}
-                onLoadedData={() => {
-                  console.log("[비디오 재생] 로드됨:", videoUrl);
-                }}
-              />
-              {/* 자막 오버레이 */}
-              {selectedScene.text && (
-                <div
+          selectedScene.asset?.path && videoUrl ? (
+            selectedScene.asset.type === "video" ? (
+              // 비디오 표시 (자막 오버레이 포함)
+              <div style={{ position: "relative", width: "100%", height: "100%" }}>
+                <video
+                  ref={videoRef}
+                  key={videoUrl}
+                  src={videoUrl}
                   style={{
-                    position: "absolute",
-                    bottom: "24px",
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    background: "linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(20, 20, 20, 0.9) 100%)",
-                    backdropFilter: "blur(8px)",
-                    color: "white",
-                    padding: "16px 24px",
-                    borderRadius: "12px",
-                    fontSize: "16px",
-                    fontWeight: "500",
-                    lineHeight: "1.5",
-                    maxWidth: "85%",
-                    textAlign: "center",
-                    pointerEvents: "none",
-                    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)",
-                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    borderRadius: 16,
+                    cursor: "pointer",
                   }}
-                >
-                  {selectedScene.text}
-                </div>
-              )}
-              {/* 재생/일시정지 아이콘 오버레이 */}
-              {!isPlaying && (
-                <div
+                  controls={false}
+                  autoPlay={false}
+                  muted={false}
+                  playsInline
+                  onClick={handleVideoToggle}
+                  onError={(e) => {
+                    console.error("[비디오 재생] 오류:", e);
+                    console.error("[비디오 재생] 비디오 URL:", videoUrl);
+                  }}
+                  onLoadedData={() => {
+                    console.log("[비디오 재생] 로드됨:", videoUrl);
+                  }}
+                />
+                {/* 자막 오버레이 */}
+                {selectedScene.text && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: "24px",
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      background: "linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(20, 20, 20, 0.9) 100%)",
+                      backdropFilter: "blur(8px)",
+                      color: "white",
+                      padding: "16px 24px",
+                      borderRadius: "12px",
+                      fontSize: "16px",
+                      fontWeight: "500",
+                      lineHeight: "1.5",
+                      maxWidth: "85%",
+                      textAlign: "center",
+                      pointerEvents: "none",
+                      boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)",
+                      border: "1px solid rgba(255, 255, 255, 0.1)",
+                    }}
+                  >
+                    {selectedScene.text}
+                  </div>
+                )}
+                {/* 재생/일시정지 아이콘 오버레이 */}
+                {!isPlaying && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "50%",
+                      left: "50%",
+                      transform: "translate(-50%, -50%)",
+                      background: "linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(240, 240, 240, 0.95) 100%)",
+                      backdropFilter: "blur(12px)",
+                      borderRadius: "50%",
+                      width: "72px",
+                      height: "72px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      pointerEvents: "none",
+                      transition: "all 0.3s ease",
+                      boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.3)",
+                      border: "2px solid rgba(255, 255, 255, 0.4)",
+                    }}
+                  >
+                    <PlayRegular style={{ fontSize: 28, color: "#333", marginLeft: "4px" }} />
+                  </div>
+                )}
+              </div>
+            ) : selectedScene.asset.type === "image" ? (
+              // 이미지 표시 (자막 오버레이 포함)
+              <div style={{ position: "relative", width: "100%", height: "100%" }}>
+                <img
+                  key={videoUrl}
+                  src={videoUrl}
                   style={{
-                    position: "absolute",
-                    top: "50%",
-                    left: "50%",
-                    transform: "translate(-50%, -50%)",
-                    background: "linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(240, 240, 240, 0.95) 100%)",
-                    backdropFilter: "blur(12px)",
-                    borderRadius: "50%",
-                    width: "72px",
-                    height: "72px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    pointerEvents: "none",
-                    transition: "all 0.3s ease",
-                    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.3)",
-                    border: "2px solid rgba(255, 255, 255, 0.4)",
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    borderRadius: 16,
                   }}
-                >
-                  <PlayRegular style={{ fontSize: 28, color: "#333", marginLeft: "4px" }} />
-                </div>
-              )}
-            </div>
+                  onError={(e) => {
+                    console.error("[이미지 표시] 오류:", e);
+                    console.error("[이미지 표시] 이미지 URL:", videoUrl);
+                  }}
+                  onLoad={() => {
+                    console.log("[이미지 표시] 로드됨:", videoUrl);
+                  }}
+                  alt={selectedScene.asset.filename || "Scene image"}
+                />
+                {/* 자막 오버레이 */}
+                {selectedScene.text && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: "24px",
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      background: "linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(20, 20, 20, 0.9) 100%)",
+                      backdropFilter: "blur(8px)",
+                      color: "white",
+                      padding: "16px 24px",
+                      borderRadius: "12px",
+                      fontSize: "16px",
+                      fontWeight: "500",
+                      lineHeight: "1.5",
+                      maxWidth: "85%",
+                      textAlign: "center",
+                      pointerEvents: "none",
+                      boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)",
+                      border: "1px solid rgba(255, 255, 255, 0.1)",
+                    }}
+                  >
+                    {selectedScene.text}
+                  </div>
+                )}
+              </div>
+            ) : null
           ) : (
             // 텍스트 기반 프리뷰 (비디오가 없거나 이미지인 경우)
             <div style={{ textAlign: "center", color: "white", padding: 32 }}>
@@ -440,7 +490,7 @@ function VideoPreview({
           appearance="primary"
           icon={isPlaying ? <PauseRegular /> : <PlayRegular />}
           onClick={handleVideoToggle}
-          disabled={!selectedScene || !videoUrl}
+          disabled={!selectedScene || !videoUrl || selectedScene.asset?.type !== "video"}
         >
           {isPlaying ? "일시정지" : "재생"}
         </Button>

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { Text, Button, Card, Badge, Avatar, Input, Textarea } from "@fluentui/react-components";
 import {
   DocumentTextRegular,
@@ -6,6 +6,8 @@ import {
   AutoFitWidthRegular,
   ArrowSyncRegular,
   CheckmarkCircleRegular,
+  VideoRegular,
+  ImageRegular,
 } from "@fluentui/react-icons";
 import { ensureSceneDefaults } from "../../../utils/scenes";
 import { analyzeSceneKeywords, getRecommendedVideosForScene, assignVideosToScenes } from "../../../services/videoAssignment";
@@ -25,6 +27,11 @@ function SceneList({
   const [keywordAnalysis, setKeywordAnalysis] = useState([]);
   const [recommendedVideos, setRecommendedVideos] = useState([]);
   const [isAssigning, setIsAssigning] = useState(false);
+
+  // 컨텍스트 메뉴 상태
+  const [contextMenuSceneIndex, setContextMenuSceneIndex] = useState(-1);
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   // 시간 포맷 헬퍼
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -176,6 +183,108 @@ function SceneList({
     }
   }, [scenes, setScenes]);
 
+  // 우클릭 컨텍스트 메뉴 핸들러
+  const handleContextMenu = useCallback((event, index) => {
+    event.preventDefault();
+    setContextMenuSceneIndex(index);
+    setContextMenuPosition({ x: event.clientX, y: event.clientY });
+    setIsContextMenuOpen(true);
+  }, []);
+
+  // 미디어 교체 핸들러들
+  const handleReplaceWithVideo = useCallback(async () => {
+    if (contextMenuSceneIndex === -1) return;
+
+    try {
+      console.log("[미디어 교체] 영상 선택 시작...");
+
+      const result = await window.api.invoke("files/select", { type: "video" });
+      console.log("[미디어 교체] 파일 선택 결과:", result);
+
+      if (!result?.canceled && result?.filePath) {
+        const updatedScenes = [...scenes];
+        const fileName = result.filePath.split(/[\\/]/).pop();
+        updatedScenes[contextMenuSceneIndex].asset = {
+          path: result.filePath,
+          filename: fileName,
+          type: "video",
+          keyword: "사용자 선택",
+          provider: "local",
+          resolution: "unknown"
+        };
+        setScenes(updatedScenes);
+        showSuccess(`씬 ${contextMenuSceneIndex + 1}에 영상이 연결되었습니다.`);
+      } else if (!result?.canceled) {
+        console.error("[미디어 교체] 파일 선택 실패:", result);
+        showError(`영상 파일 선택에 실패했습니다.`);
+      }
+    } catch (error) {
+      console.error("[미디어 교체] 영상 교체 오류:", error);
+      showError(`영상 교체 중 오류가 발생했습니다: ${error.message}`);
+    } finally {
+      setIsContextMenuOpen(false);
+      setContextMenuSceneIndex(-1);
+    }
+  }, [contextMenuSceneIndex, scenes, setScenes]);
+
+  const handleReplaceWithImage = useCallback(async () => {
+    if (contextMenuSceneIndex === -1) return;
+
+    try {
+      const result = await window.api.invoke("files/select", { type: "image" });
+
+      if (!result?.canceled && result?.filePath) {
+        const updatedScenes = [...scenes];
+        const fileName = result.filePath.split(/[\\\/]/).pop();
+        updatedScenes[contextMenuSceneIndex].asset = {
+          path: result.filePath,
+          filename: fileName,
+          type: "image",
+          keyword: "사용자 선택",
+          provider: "local",
+          resolution: "unknown"
+        };
+        setScenes(updatedScenes);
+        showSuccess(`씬 ${contextMenuSceneIndex + 1}에 이미지가 연결되었습니다.`);
+      } else if (!result?.canceled) {
+        showError("이미지 파일 선택에 실패했습니다.");
+      }
+    } catch (error) {
+      console.error("[미디어 교체] 이미지 교체 오류:", error);
+      showError("이미지 교체 중 오류가 발생했습니다.");
+    } finally {
+      setIsContextMenuOpen(false);
+      setContextMenuSceneIndex(-1);
+    }
+  }, [contextMenuSceneIndex, scenes, setScenes]);
+
+  const handleRemoveMedia = useCallback(() => {
+    if (contextMenuSceneIndex === -1) return;
+
+    const updatedScenes = [...scenes];
+    updatedScenes[contextMenuSceneIndex].asset = null;
+    setScenes(updatedScenes);
+
+    setIsContextMenuOpen(false);
+    setContextMenuSceneIndex(-1);
+    showSuccess("미디어가 제거되었습니다.");
+  }, [contextMenuSceneIndex, scenes, setScenes]);
+
+  // 컨텍스트 메뉴 외부 클릭시 닫기
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isContextMenuOpen) {
+        setIsContextMenuOpen(false);
+        setContextMenuSceneIndex(-1);
+      }
+    };
+
+    if (isContextMenuOpen) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [isContextMenuOpen]);
+
   return (
     <Card
       style={{
@@ -233,19 +342,20 @@ function SceneList({
             const hasMedia = sceneWithDefaults.asset?.path;
 
             return (
-              <div
-                key={scene.id}
-                style={{
-                  padding: 12,
-                  borderRadius: 8,
-                  border: `2px solid ${isEditing ? "#ff6b35" : isSelected ? "#0078d4" : "#e1dfdd"}`,
-                  backgroundColor: isEditing ? "#fff4f1" : isSelected ? "#f3f9ff" : "transparent",
-                  cursor: isEditing ? "default" : "pointer",
-                  transition: "all 0.2s ease",
-                }}
-                onClick={isEditing ? undefined : () => onSceneSelect(index)}
-                onDoubleClick={isEditing ? undefined : (e) => handleSceneDoubleClick(index, e)}
-              >
+              <div key={scene.id} style={{ position: "relative" }}>
+                <div
+                  style={{
+                    padding: 12,
+                    borderRadius: 8,
+                    border: `2px solid ${isEditing ? "#ff6b35" : isSelected ? "#0078d4" : "#e1dfdd"}`,
+                    backgroundColor: isEditing ? "#fff4f1" : isSelected ? "#f3f9ff" : "transparent",
+                    cursor: isEditing ? "default" : "pointer",
+                    transition: "all 0.2s ease",
+                  }}
+                  onClick={isEditing ? undefined : () => onSceneSelect(index)}
+                  onDoubleClick={isEditing ? undefined : (e) => handleSceneDoubleClick(index, e)}
+                  onContextMenu={(e) => handleContextMenu(e, index)}
+                >
                 {/* 헤더 영역 */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                   <Avatar size={20} name={`씬 ${index + 1}`} color={hasMedia ? "colorful" : "neutral"} />
@@ -417,8 +527,85 @@ function SceneList({
                 {!isEditing && !hasMedia && (
                   <div style={{ marginTop: 6 }}>
                     <Text size={200} style={{ color: "#999", fontSize: "11px" }}>
-                      💡 더블클릭하여 편집 • 자동 할당으로 영상 추가
+                      💡 더블클릭하여 편집 • 우클릭으로 미디어 교체
                     </Text>
+                  </div>
+                )}
+                </div>
+
+                {/* 고정 위치 컨텍스트 메뉴 */}
+                {isContextMenuOpen && contextMenuSceneIndex === index && (
+                  <div
+                    style={{
+                      position: "fixed",
+                      left: contextMenuPosition.x,
+                      top: contextMenuPosition.y,
+                      zIndex: 1000,
+                      backgroundColor: "white",
+                      border: "1px solid #e1dfdd",
+                      borderRadius: 8,
+                      boxShadow: "0 4px 16px rgba(0, 0, 0, 0.1)",
+                      padding: 8,
+                      minWidth: 160,
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "8px 12px",
+                        borderRadius: 4,
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        transition: "background-color 0.2s",
+                      }}
+                      onClick={handleReplaceWithVideo}
+                      onMouseEnter={(e) => (e.target.style.backgroundColor = "#f3f9ff")}
+                      onMouseLeave={(e) => (e.target.style.backgroundColor = "transparent")}
+                    >
+                      <VideoRegular style={{ fontSize: 16 }} />
+                      영상으로 교체
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "8px 12px",
+                        borderRadius: 4,
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        transition: "background-color 0.2s",
+                      }}
+                      onClick={handleReplaceWithImage}
+                      onMouseEnter={(e) => (e.target.style.backgroundColor = "#f3f9ff")}
+                      onMouseLeave={(e) => (e.target.style.backgroundColor = "transparent")}
+                    >
+                      <ImageRegular style={{ fontSize: 16 }} />
+                      이미지로 교체
+                    </div>
+                    {hasMedia && (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "8px 12px",
+                          borderRadius: 4,
+                          cursor: "pointer",
+                          fontSize: "14px",
+                          transition: "background-color 0.2s",
+                          color: "#d13438",
+                        }}
+                        onClick={handleRemoveMedia}
+                        onMouseEnter={(e) => (e.target.style.backgroundColor = "#fdf6f6")}
+                        onMouseLeave={(e) => (e.target.style.backgroundColor = "transparent")}
+                      >
+                        미디어 제거
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

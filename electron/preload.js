@@ -234,6 +234,7 @@ contextBridge.exposeInMainWorld("api", {
   // 프로젝트 루트 (날짜 폴더)
   // ========================================================================
   selectDatedProjectRoot: () => ipcRenderer.invoke("files/selectDatedProjectRoot"),
+  selectMediaFile: (options) => ipcRenderer.invoke("files/selectMediaFile", options),
   getProjectRoot: () => ipcRenderer.invoke("files/getProjectRoot"),
 
   // ========================================================================

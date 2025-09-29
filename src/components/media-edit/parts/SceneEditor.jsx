@@ -4,7 +4,6 @@ import {
   SettingsRegular,
   VideoRegular,
   ImageRegular,
-  FolderOpenRegular,
 } from "@fluentui/react-icons";
 
 function SceneEditor({ selectedScene }) {
@@ -96,26 +95,6 @@ function SceneEditor({ selectedScene }) {
                 </Text>
               </div>
             )}
-          </div>
-
-          <Divider />
-
-          {/* 미디어 교체 */}
-          <div>
-            <Text size={400} weight="medium" style={{ marginBottom: 12, fontSize: "15px" }}>
-              미디어 교체
-            </Text>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <Button appearance="secondary" size="small" icon={<VideoRegular />}>
-                영상으로 교체
-              </Button>
-              <Button appearance="secondary" size="small" icon={<ImageRegular />}>
-                이미지로 교체
-              </Button>
-              <Button appearance="secondary" size="small" icon={<FolderOpenRegular />}>
-                파일에서 선택
-              </Button>
-            </div>
           </div>
 
           <Divider />

@@ -5,14 +5,40 @@ function registerFilePickers() {
   const getMainWin = () => BrowserWindow.getAllWindows()[0];
 
   ipcMain.handle("files/select", async (_evt, { type }) => {
-    const filters =
-      type === "srt"
-        ? [{ name: "Subtitles", extensions: ["srt", "vtt"] }]
-        : [{ name: "Audio", extensions: ["mp3"] }]; // 요구: MP3만
+    let filters;
+    let title;
+
+    switch (type) {
+      case "srt":
+        filters = [{ name: "Subtitles", extensions: ["srt", "vtt"] }];
+        title = "SRT 파일 선택";
+        break;
+      case "mp3":
+        filters = [{ name: "Audio", extensions: ["mp3"] }];
+        title = "오디오(MP3) 파일 선택";
+        break;
+      case "video":
+        filters = [
+          { name: "비디오 파일", extensions: ["mp4", "avi", "mov", "mkv", "webm", "m4v"] },
+          { name: "모든 파일", extensions: ["*"] }
+        ];
+        title = "비디오 파일 선택";
+        break;
+      case "image":
+        filters = [
+          { name: "이미지 파일", extensions: ["jpg", "jpeg", "png", "gif", "bmp", "webp"] },
+          { name: "모든 파일", extensions: ["*"] }
+        ];
+        title = "이미지 파일 선택";
+        break;
+      default:
+        filters = [{ name: "모든 파일", extensions: ["*"] }];
+        title = "파일 선택";
+    }
 
     const win = getMainWin();
     const result = await dialog.showOpenDialog(win, {
-      title: type === "srt" ? "SRT 파일 선택" : "오디오(MP3) 파일 선택",
+      title,
       properties: ["openFile"],
       filters,
     });

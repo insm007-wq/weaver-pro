@@ -229,6 +229,73 @@ ipcMain.handle("files:exists", async (_e, filePath) => {
   }
 });
 
+/** ✅ 미디어 파일 선택 다이얼로그 */
+ipcMain.handle("files/selectMediaFile", async (event, options = {}) => {
+  try {
+    const { fileType = "all" } = options;
+
+    let filters = [];
+    switch (fileType) {
+      case "video":
+        filters = [
+          { name: "비디오 파일", extensions: ["mp4", "avi", "mov", "mkv", "webm", "m4v"] },
+          { name: "모든 파일", extensions: ["*"] }
+        ];
+        break;
+      case "image":
+        filters = [
+          { name: "이미지 파일", extensions: ["jpg", "jpeg", "png", "gif", "bmp", "webp"] },
+          { name: "모든 파일", extensions: ["*"] }
+        ];
+        break;
+      default:
+        filters = [
+          { name: "미디어 파일", extensions: ["mp4", "avi", "mov", "mkv", "webm", "m4v", "jpg", "jpeg", "png", "gif", "bmp", "webp"] },
+          { name: "비디오 파일", extensions: ["mp4", "avi", "mov", "mkv", "webm", "m4v"] },
+          { name: "이미지 파일", extensions: ["jpg", "jpeg", "png", "gif", "bmp", "webp"] },
+          { name: "모든 파일", extensions: ["*"] }
+        ];
+    }
+
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      title: "미디어 파일 선택",
+      filters,
+      properties: ["openFile"],
+      buttonLabel: "선택"
+    });
+
+    if (canceled || !filePaths?.length) {
+      return { ok: false, message: "canceled" };
+    }
+
+    const selectedFile = filePaths[0];
+    const fileName = path.basename(selectedFile);
+    const fileExt = path.extname(selectedFile).toLowerCase();
+
+    // 파일 타입 확인
+    const videoExts = [".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"];
+    const imageExts = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"];
+
+    let detectedType = "unknown";
+    if (videoExts.includes(fileExt)) {
+      detectedType = "video";
+    } else if (imageExts.includes(fileExt)) {
+      detectedType = "image";
+    }
+
+    return {
+      ok: true,
+      filePath: selectedFile,
+      fileName,
+      fileType: detectedType,
+      extension: fileExt
+    };
+  } catch (error) {
+    console.error("[files/selectMediaFile] 오류:", error);
+    return { ok: false, message: error.message };
+  }
+});
+
 /** ✅ 베이스 폴더 선택 → 날짜 폴더 생성(덮어쓰기 모드면 YYYY-MM-DD 재사용) */
 ipcMain.handle("files/selectDatedProjectRoot", async () => {
   try {
