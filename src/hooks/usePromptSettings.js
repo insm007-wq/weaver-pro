@@ -57,7 +57,8 @@ export function usePromptSettings() {
 
   useEffect(() => {
     let isMounted = true;
-    
+    let debounceTimer = null;
+
     const loadPrompts = async () => {
       try {
         const res = await api.invoke("prompts:getAll");
@@ -79,10 +80,44 @@ export function usePromptSettings() {
       }
     };
 
+    // 디바운스된 로드 함수
+    const debouncedLoadPrompts = () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      debounceTimer = setTimeout(() => {
+        if (isMounted) {
+          console.log("[usePromptSettings] 프롬프트 변경 감지, 다시 로드");
+          loadPrompts();
+        }
+      }, 300); // 300ms 디바운스
+    };
+
+    // 초기 로드
     loadPrompts();
+
+    // 설정 변경 이벤트 리스너 추가 (실시간 업데이트)
+    const handleSettingsChanged = (payload) => {
+      if (payload?.key === "prompts" && isMounted) {
+        debouncedLoadPrompts();
+      }
+    };
+
+    // IPC 이벤트 리스너 등록
+    if (window.api?.on) {
+      window.api.on("settings:changed", handleSettingsChanged);
+    }
 
     return () => {
       isMounted = false;
+      // 디바운스 타이머 정리
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      // 컴포넌트 언마운트 시 리스너 제거
+      if (window.api?.off) {
+        window.api.off("settings:changed", handleSettingsChanged);
+      }
     };
   }, []);
 
