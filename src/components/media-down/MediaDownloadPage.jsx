@@ -681,15 +681,12 @@ function MediaDownloadPage() {
           )}
 
           {!isDownloading && downloadedVideos.length === 0 && (
-            <div style={{ textAlign: "center", padding: 10 }}>
-              <VideoRegular style={{ fontSize: 42, color: "#666", marginBottom: 12 }} />
-              <Text size={300} weight="medium" style={{ marginBottom: 6 }}>
+            <div style={{ textAlign: "center", padding: 20, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+              <Text size={300} weight="medium" style={{ marginBottom: 4, display: "block" }}>
                 키워드를 선택하고 다운로드를 시작하세요
               </Text>
-              <Text size={200} style={{ color: "#666" }}>
-                {selectedProvider === "pexels" ? "Pexels" : "Pixabay"}에서
-                <br />
-                관련 영상을 자동으로 다운로드합니다
+              <Text size={200} style={{ color: "#666", display: "block", marginTop: 4 }}>
+                Pixabay에서 관련 영상을 자동으로 다운로드합니다
               </Text>
             </div>
           )}
