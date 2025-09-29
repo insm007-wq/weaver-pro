@@ -195,95 +195,21 @@ function calculateSceneVideoScore(scene, videoInfo) {
   return maxScore;
 }
 
-/**
- * 테스트 모드용 영상 데이터 생성
- */
-function generateTestVideoData() {
-  // 이전에 작동했던 형태의 경로 사용
-  const testVideoPath = "C:/WeaverPro/test/videos"; // 실제 경로로 변경 가능
-
-  return [
-    {
-      filename: "nature_pexels_1920x1080.mp4",
-      path: `${testVideoPath}/nature_pexels_1920x1080.mp4`,
-      keyword: "nature",
-      size: 1024000,
-      resolution: "1920x1080",
-      provider: "pexels"
-    },
-    {
-      filename: "sunset_pixabay_1280x720.mp4",
-      path: `${testVideoPath}/sunset_pixabay_1280x720.mp4`,
-      keyword: "sunset",
-      size: 2048000,
-      resolution: "1280x720",
-      provider: "pixabay"
-    },
-    {
-      filename: "ocean_unsplash_1920x1080.mp4",
-      path: `${testVideoPath}/ocean_unsplash_1920x1080.mp4`,
-      keyword: "ocean",
-      size: 3072000,
-      resolution: "1920x1080",
-      provider: "unsplash"
-    },
-    {
-      filename: "city_pexels_1920x1080.mp4",
-      path: `${testVideoPath}/city_pexels_1920x1080.mp4`,
-      keyword: "city",
-      size: 2500000,
-      resolution: "1920x1080",
-      provider: "pexels"
-    },
-    {
-      filename: "people_pixabay_1280x720.mp4",
-      path: `${testVideoPath}/people_pixabay_1280x720.mp4`,
-      keyword: "people",
-      size: 1800000,
-      resolution: "1280x720",
-      provider: "pixabay"
-    },
-    {
-      filename: "technology_unsplash_1920x1080.mp4",
-      path: `${testVideoPath}/technology_unsplash_1920x1080.mp4`,
-      keyword: "technology",
-      size: 3500000,
-      resolution: "1920x1080",
-      provider: "unsplash"
-    }
-  ];
-}
 
 /**
- * videoSaveFolder/video 디렉토리에서 영상 스캔 (테스트 모드 포함)
+ * videoSaveFolder/video 디렉토리에서 영상 스캔
  */
 export async function discoverAvailableVideos() {
   try {
-    console.log("[영상 발견] 🚀 VREW 스타일 영상 발견 시작");
-
-    // 테스트 모드 활성화 여부 확인
-    const isTestMode = false; // 실제 파일 스캔 모드로 변경
-
-    if (isTestMode) {
-      console.log("[영상 발견] 🧪 테스트 모드 활성화 - 가상 영상 데이터 사용");
-      const testVideos = generateTestVideoData();
-      console.log(`[영상 발견] ✅ ${testVideos.length}개 테스트 영상 생성완료`);
-      testVideos.forEach(video => {
-        console.log(`[영상 발견] 📹 ${video.keyword} (${video.resolution})`);
-      });
-      return testVideos;
-    }
-
-    // 실제 파일 스캔 로직
-    console.log("[영상 발견] 실제 파일 스캔 모드");
+    console.log("[영상 발견] 🚀 영상 발견 시작");
 
     // 설정에서 videoSaveFolder 가져오기
     const videoSaveFolder = await getSetting("videoSaveFolder");
     console.log("[영상 발견] videoSaveFolder 설정:", videoSaveFolder);
 
     if (!videoSaveFolder) {
-      console.warn("[영상 발견] videoSaveFolder 설정이 없음 - 테스트 모드로 전환");
-      return generateTestVideoData();
+      console.warn("[영상 발견] videoSaveFolder 설정이 없음");
+      return [];
     }
 
     const videoPath = `${videoSaveFolder}/video`;
@@ -291,8 +217,8 @@ export async function discoverAvailableVideos() {
 
     // 디렉토리 존재 확인
     if (!window?.api?.checkPathExists) {
-      console.error("[영상 발견] window.api.checkPathExists 없음 - 테스트 모드로 전환");
-      return generateTestVideoData();
+      console.error("[영상 발견] window.api.checkPathExists API 없음");
+      return [];
     }
 
     const dirExists = await window.api.checkPathExists(videoPath);
@@ -305,8 +231,8 @@ export async function discoverAvailableVideos() {
 
     // 실제 파일 목록 가져오기
     if (!window?.api?.listDirectory) {
-      console.error("[영상 발견] window.api.listDirectory 없음 - 테스트 모드로 전환");
-      return generateTestVideoData();
+      console.error("[영상 발견] window.api.listDirectory API 없음");
+      return [];
     }
 
     const result = await window.api.listDirectory(videoPath);
@@ -354,8 +280,7 @@ export async function discoverAvailableVideos() {
 
   } catch (error) {
     console.error("[영상 발견] 오류:", error);
-    console.log("[영상 발견] 오류 발생 - 테스트 모드로 폴백");
-    return generateTestVideoData();
+    return [];
   }
 }
 
