@@ -78,15 +78,19 @@ async function detectImageFormat(filePath) {
 
 async function fileToBase64Parts(filePath) {
   try {
-    // Sharp를 사용하여 이미지를 JPEG로 정규화하여 호환성 보장
+    // Sharp를 사용하여 이미지 최적화 (해상도 제한 + JPEG 변환)
     const sharp = require('sharp');
     const buffer = await sharp(filePath)
-      .jpeg({ quality: 90 }) // 높은 품질의 JPEG로 변환
+      .resize(1568, 1568, {
+        fit: 'inside',              // 비율 유지하며 리사이즈
+        withoutEnlargement: true    // 작은 이미지는 확대 안 함
+      })
+      .jpeg({ quality: 85 })        // 최적화된 품질 (육안 차이 없음)
       .toBuffer();
-    
-    return { 
-      mime: "image/jpeg", 
-      b64: buffer.toString("base64") 
+
+    return {
+      mime: "image/jpeg",
+      b64: buffer.toString("base64")
     };
   } catch (error) {
     console.warn(`[이미지 변환 실패] ${filePath}, 원본 파일 사용:`, error.message);
