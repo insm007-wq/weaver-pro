@@ -332,7 +332,6 @@ contextBridge.exposeInMainWorld("api", {
   // ========================================================================
   // 테스트 채널들
   // ========================================================================
-  testOpenAI: (apiKey) => ipcRenderer.invoke("openai:test", apiKey),
   testReplicate: (token) => ipcRenderer.invoke("replicate:test", token),
   testAnthropic: (apiKey) => ipcRenderer.invoke("anthropic:test", apiKey),
   testGoogleTTS: (apiKey) => ipcRenderer.invoke("testGoogleTTS", apiKey),

@@ -6,7 +6,7 @@ export const DEFAULT_SETTINGS = {
   videoModel: "veo-3",
   imageResolution: "1024x1024",
   videoQuality: "1080p",
-  llmModel: "anthropic",
+  llmModel: "replicate",
 };
 
 export const AI_OPTIONS = {
@@ -14,7 +14,6 @@ export const AI_OPTIONS = {
     { value: "flux-dev", text: "Flux Dev (고품질)", cost: "35원/장", provider: "Replicate", status: "available" },
     { value: "flux-schnell", text: "Flux Schnell (속도 우선)", cost: "15원/장", provider: "Replicate", status: "available" },
     { value: "sdxl", text: "Stable Diffusion XL", cost: "무료", provider: "Replicate", status: "available" },
-    { value: "dall-e-3", text: "DALL-E 3 (고품질)", cost: "53~160원/장", provider: "OpenAI", status: "준비 중" },
     { value: "midjourney", text: "Midjourney (예술적)", cost: "별도 요금", provider: "Midjourney", status: "준비 중" },
   ],
 
@@ -40,8 +39,8 @@ export const AI_OPTIONS = {
   ],
 
   llmModels: [
+    { value: "replicate", text: "🦙 Replicate Llama 3", provider: "Replicate", cost: "저렴함" },
     { value: "anthropic", text: "🧠 Anthropic Claude", provider: "Anthropic", cost: "안정성" },
-    { value: "openai-gpt5mini", text: "🤖 OpenAI GPT-5", provider: "OpenAI", cost: "롱폼 특화" },
   ],
 };
 

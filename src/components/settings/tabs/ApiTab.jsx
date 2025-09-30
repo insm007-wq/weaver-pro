@@ -191,7 +191,6 @@ export default function ApiTab() {
   const s = useStyles();
 
   // ===== 상태 =====
-  const [openaiKey, setOpenaiKey] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
   const [replicateKey, setReplicateKey] = useState("");
   const [pexelsKey, setPexelsKey] = useState("");
@@ -199,7 +198,6 @@ export default function ApiTab() {
   const [googleTtsKey, setGoogleTtsKey] = useState("");
 
   const [status, setStatus] = useState({
-    openai: null,
     anthropic: null,
     replicate: null,
     pexels: null,
@@ -208,7 +206,6 @@ export default function ApiTab() {
   });
 
   const [loading, setLoading] = useState({
-    openai: false,
     anthropic: false,
     replicate: false,
     pexels: false,
@@ -219,15 +216,13 @@ export default function ApiTab() {
   // ===== 초기 로드 =====
   useEffect(() => {
     (async () => {
-      const [ok, ak, rk, gk, pxk, pbk] = await Promise.all([
-        window.api.getSecret("openaiKey"),
+      const [ak, rk, gk, pxk, pbk] = await Promise.all([
         window.api.getSecret("anthropicKey"),
         window.api.getSecret("replicateKey"),
         window.api.getSecret("googleTtsApiKey"),
         window.api.getSecret("pexelsApiKey"),
         window.api.getSecret("pixabayApiKey"),
       ]);
-      setOpenaiKey(ok || "");
       setAnthropicKey(ak || "");
       setReplicateKey(rk || "");
       setGoogleTtsKey(gk || "");
@@ -244,10 +239,6 @@ export default function ApiTab() {
   const stringifyErr = (m) => (typeof m === "string" ? m : JSON.stringify(m ?? ""));
 
   // ===== 저장 =====
-  const saveOpenAI = async () => {
-    await saveSecret("openaiKey", openaiKey);
-    setSaved("openai");
-  };
   const saveAnthropic = async () => {
     await saveSecret("anthropicKey", anthropicKey);
     setSaved("anthropic");
@@ -270,25 +261,6 @@ export default function ApiTab() {
   };
 
   // ===== 테스트 =====
-  const testOpenAI = async () => {
-    if (!openaiKey?.trim()) return setStat("openai", false, "키 미입력");
-    setBusy("openai", true);
-    setStat("openai", false, "");
-    try {
-      const res = await window.api.testOpenAI?.(openaiKey.trim());
-      res?.ok
-        ? setStat("openai", true, `연결 성공 (model: ${res?.model ?? "gpt-4"})`)
-        : setStat("openai", false, `실패: ${stringifyErr(res?.message)}`);
-    } catch (e) {
-      const { message } = handleApiError(e, "api_test", {
-        metadata: { service: "openai", action: "test_connection" }
-      });
-      setStat("openai", false, `오류: ${message}`);
-    } finally {
-      setBusy("openai", false);
-    }
-  };
-
   const testAnthropic = async () => {
     if (!anthropicKey?.trim()) return setStat("anthropic", false, "키 미입력");
     setBusy("anthropic", true);
@@ -387,19 +359,6 @@ export default function ApiTab() {
 
 
   const services = [
-    {
-      key: "openai",
-      name: "🧠 OpenAI",
-      description: "GPT 모델을 사용한 텍스트 생성, 번역, 요약 등의 AI 기능",
-      value: openaiKey,
-      setValue: setOpenaiKey,
-      placeholder: "sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-      hint: "OpenAI 플랫폼에서 발급받은 API 키를 입력하세요",
-      onSave: saveOpenAI,
-      onTest: testOpenAI,
-      status: status.openai,
-      loading: loading.openai,
-    },
     {
       key: "anthropic",
       name: "🤖 Anthropic",

@@ -17,38 +17,6 @@ function normalizeError(err) {
 const ok = (extra = {}) => ({ ok: true, ...extra });
 const fail = (status, message) => ({ ok: false, status, message });
 
-/** ✅ OpenAI */
-ipcMain.handle("openai:test", async (_e, apiKey) => {
-  if (!apiKey || typeof apiKey !== "string" || !apiKey.trim().startsWith("sk-")) {
-    return fail(400, "유효한 OpenAI API 키(sk-...)를 입력하세요.");
-  }
-  const url = "https://api.openai.com/v1/chat/completions";
-  const payload = {
-    model: "gpt-5-mini",
-    messages: [{ role: "user", content: "ping" }],
-    max_completion_tokens: 5, // GPT-5 계열
-  };
-  const cfg = {
-    headers: { Authorization: `Bearer ${apiKey.trim()}`, "Content-Type": "application/json" },
-    timeout: 15000,
-  };
-  for (let attempt = 0; attempt <= 2; attempt++) {
-    try {
-      const r = await axios.post(url, payload, cfg);
-      const model = r?.data?.model || r?.data?.choices?.[0]?.model || "gpt-5-mini";
-      return ok({ model });
-    } catch (err) {
-      const { status, message } = normalizeError(err);
-      const retry = status === 429 || (status >= 500 && status < 600);
-      if (attempt < 2 && retry) {
-        await sleep(500 * Math.pow(2, attempt));
-        continue;
-      }
-      return fail(status, message);
-    }
-  }
-});
-
 /** ✅ Replicate */
 ipcMain.handle("replicate:test", async (_e, token) => {
   try {

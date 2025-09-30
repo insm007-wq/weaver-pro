@@ -2,6 +2,7 @@
 const { ipcMain } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const { createReplicate, resolveLatestVersionId } = require("../services/replicateClient");
 
 // ---------- API KEY 로딩 (env → keytar) ----------
 async function readAnthropicKey() {
@@ -21,6 +22,16 @@ async function readGeminiKey() {
     const { getSecret } = require("../services/secrets");
     const v = await getSecret("geminiKey");
     return v || null;
+  } catch {
+    return null;
+  }
+}
+
+async function readReplicateKey() {
+  try {
+    const { getSecret } = require("../services/secrets");
+    const v = await getSecret("replicateKey");
+    return v || process.env.REPLICATE_API_TOKEN || null;
   } catch {
     return null;
   }
@@ -242,38 +253,131 @@ async function analyzeWithGemini({ filePath, description, engineType = 'gemini' 
   }
 }
 
-// ---------- 설정에 따른 분석 엔진 선택 ----------
-async function analyzeWithSelectedEngine({ filePath, description }) {
-  try {
-    // 설정에서 이미지 분석 엔진 가져오기 (매번 새로 읽기)
-    const Store = (await import('electron-store')).default;
-    const store = new Store();
-    store.store = store.store; // 강제 리로드
-    const analysisEngine = store.get('thumbnailAnalysisEngine', 'anthropic');
+// ---------- Replicate 이미지 분석 (LLaVA) ----------
+async function analyzeWithReplicate({ filePath, description }) {
+  console.log('[Replicate] 이미지 분석 시작, 파일:', filePath);
 
-    console.log(`[이미지 분석] 사용 엔진: ${analysisEngine}`);
-    console.log(`[이미지 분석] 설정 값:`, {
-      thumbnailAnalysisEngine: store.get('thumbnailAnalysisEngine'),
-      allSettings: store.store
+  const apiKey = await readReplicateKey();
+  console.log('[Replicate] API 키 상태:', apiKey ? '있음' : '없음');
+
+  if (!apiKey || typeof apiKey !== "string") {
+    console.log('[Replicate] API 키 없음, Anthropic으로 폴백');
+    return { ok: false, message: "no_replicate_key" };
+  }
+
+  if (!filePath) {
+    return { ok: false, message: "image_required" };
+  }
+
+  try {
+    // 이미지 파일을 base64로 변환
+    const { mime, b64 } = await fileToBase64Parts(filePath);
+    if (!b64 || !mime) return { ok: false, message: "invalid_image_file" };
+
+    console.log('[Replicate] 이미지 데이터 준비 완료, MIME:', mime);
+
+    // LLaVA 13B 모델 사용 (더 상세한 분석)
+    const replicate = createReplicate(apiKey);
+
+    // 분석 프롬프트 구성
+    let prompt = PROMPT_V7;
+    if (description && typeof description === "string" && description.trim()) {
+      prompt += `\n\n추가 사용자 설명: ${description.trim()}`;
+    }
+
+    console.log('[Replicate] 분석 요청 전송 중...');
+
+    // LLaVA 13B 사용 (특정 버전 ID 사용)
+    let prediction = await replicate.predictions.create({
+      version: "80537f9eead1a5bfa72d5ac6ea6414379be41d4d4f6679fd776e9535d1eb58bb",
+      input: {
+        image: `data:${mime};base64,${b64}`,
+        prompt: prompt,
+        max_tokens: 1024,
+        temperature: 0.2
+      }
     });
 
-    if (analysisEngine === 'gemini' || analysisEngine === 'gemini-pro' || analysisEngine === 'gemini-lite') {
-      console.log('[이미지 분석] Gemini 엔진 사용:', analysisEngine);
-      const result = await analyzeWithGemini({ filePath, description, engineType: analysisEngine });
-      console.log('[이미지 분석] Gemini 결과:', result?.ok ? '성공' : '실패', result?.message);
-      return result;
-    } else {
-      console.log('[이미지 분석] Anthropic 엔진 사용');
-      const result = await analyzeWithAnthropic({ filePath, description });
-      console.log('[이미지 분석] Anthropic 결과:', result?.ok ? '성공' : '실패', result?.message);
-      return result;
+    console.log(`[Replicate] 예측 생성: ${prediction.id}`);
+
+    // 즉시 상태 확인 (최대 5초만 대기)
+    const maxWait = 5;
+    let waited = 0;
+
+    while (prediction.status === "starting" && waited < maxWait) {
+      await new Promise(r => setTimeout(r, 1000));
+      waited++;
+      prediction = await replicate.predictions.get(prediction.id);
     }
+
+    // starting 상태면 바로 실패 처리
+    if (prediction.status === "starting" || prediction.status === "queued") {
+      console.error(`[Replicate] 모델이 시작되지 않음: ${prediction.status}`);
+      return {
+        ok: false,
+        message: "replicate_timeout",
+        detail: "Replicate 모델이 시작되지 않습니다. 다른 엔진을 사용해주세요."
+      };
+    }
+
+    // processing 상태면 계속 대기 (최대 30초)
+    const maxProcessWait = 30;
+    let processWaited = 0;
+
+    while (prediction.status === "processing" && processWaited < maxProcessWait) {
+      await new Promise(r => setTimeout(r, 1000));
+      processWaited++;
+
+      if (processWaited % 5 === 0) {
+        console.log(`[Replicate] 처리 중: ${processWaited}/${maxProcessWait}초`);
+      }
+
+      prediction = await replicate.predictions.get(prediction.id);
+    }
+
+    if (prediction.status !== "succeeded") {
+      console.error(`[Replicate] 분석 실패: ${prediction.status}`);
+      return {
+        ok: false,
+        message: "replicate_failed",
+        detail: prediction.error || `상태: ${prediction.status}`
+      };
+    }
+
+    console.log(`[Replicate] 분석 완료, 상태: ${prediction.status}`);
+
+    // 결과 처리
+    const result = Array.isArray(prediction.output)
+      ? prediction.output.join("")
+      : typeof prediction.output === "string"
+      ? prediction.output
+      : String(prediction.output || "");
+
+    console.log('[Replicate] 분석 완료, 결과 길이:', result.length);
+
+    return {
+      ok: true,
+      text: result.trim(),
+      raw: result.trim(),
+      english: "",
+      korean: ""
+    };
+
   } catch (error) {
-    console.error('[이미지 분석] 엔진 선택 오류:', error);
-    // 폴백으로 Anthropic 사용
-    console.log('[이미지 분석] 폴백으로 Anthropic 사용');
-    return await analyzeWithAnthropic({ filePath, description });
+    console.error("[Replicate] 오류 발생:", error);
+    console.error("[Replicate] 오류 상세:", error?.message, error?.stack);
+    return {
+      ok: false,
+      message: `replicate_error: ${error?.message || error}`,
+      raw: String(error)
+    };
   }
+}
+
+// ---------- 이미지 분석 (Anthropic 전용) ----------
+async function analyzeWithSelectedEngine({ filePath, description }) {
+  console.log('[이미지 분석] Anthropic 엔진 사용');
+  return await analyzeWithAnthropic({ filePath, description });
 }
 
 // ---------- IPC 핸들러 ----------

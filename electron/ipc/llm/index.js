@@ -4,7 +4,7 @@
 
 const { ipcMain } = require("electron");
 const { callAnthropic } = require("./anthropic");
-const { callOpenAIGpt5Mini } = require("./openai");
+const { callReplicate } = require("./replicate");
 
 ipcMain.handle("llm/generateScript", async (event, payload) => {
   const llm = payload?.llm;
@@ -14,13 +14,13 @@ ipcMain.handle("llm/generateScript", async (event, payload) => {
     case "anthropic":
       return await callAnthropic(payload);
 
-    case "openai-gpt5mini":
-      return await callOpenAIGpt5Mini(payload);
-
+    case "replicate":
+    case "replicate-llama3":
+      return await callReplicate(payload);
 
     default:
       throw new Error(`지원하지 않는 AI 엔진: ${llm}`);
   }
 });
 
-console.log("🚀 LLM 라우터 초기화: Claude, GPT-5");
+console.log("🚀 LLM 라우터 초기화: Claude, Replicate Llama 3");
