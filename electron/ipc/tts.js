@@ -82,8 +82,6 @@ ipcMain.handle("tts:synthesize", async (event, { scenes, ttsEngine, voiceId, spe
           fileName: part.fileName,
           provider: result.provider
         });
-        
-        console.log(`💾 음성 파일 저장: ${audioFilePath}`);
       }
       
       return { ok: true, audioFiles, provider: result.provider };
@@ -105,9 +103,6 @@ ipcMain.handle("tts:synthesize", async (event, { scenes, ttsEngine, voiceId, spe
 ipcMain.handle("tts/synthesizeByScenes", async (_evt, { doc, tts }) => {
   const { engine, voiceId, voiceName, speakingRate, pitch, provider } = tts || {};
   const scenes = doc?.scenes || [];
-  
-  // voiceId나 voiceName에서 제공자 추출
-  console.log(`🎤 TTS 생성 시작: Google 엔진, ${scenes.length}개 장면`);
 
   // Google TTS만 사용
   return await synthesizeWithGoogle(scenes, { voiceId: voiceId || voiceName, speakingRate, pitch });
@@ -115,42 +110,32 @@ ipcMain.handle("tts/synthesizeByScenes", async (_evt, { doc, tts }) => {
 
 // Google TTS 음성 합성
 async function synthesizeWithGoogle(scenes, options, progressCallback = null) {
-  console.log("🔑 Google TTS API 키 확인 중...");
   const apiKey = await getSecret("googleTtsApiKey");
   if (!apiKey) {
     console.error("❌ Google TTS API Key가 없습니다");
     throw new Error("Google TTS API Key가 설정되지 않았습니다. 설정 > API 키에서 설정해주세요.");
   }
-  
-  console.log(`✅ Google TTS API 키 확인됨: ${apiKey.substring(0, 10)}...`);
+
   const { voiceId, speakingRate, pitch } = options;
-  console.log("🔍 Google TTS 설정 (원본):", { voiceId, speakingRate, pitch });
-  console.log("🔍 Google TTS options 전체:", JSON.stringify(options, null, 2));
-  
+
   const lang = (() => {
     const parts = String(voiceId || "").split("-");
     return parts.length >= 2 ? `${parts[0]}-${parts[1]}` : "ko-KR";
   })();
-  
-  console.log("🎤 Google TTS 사용할 목소리:", { lang, voiceId, finalVoiceName: voiceId || "ko-KR-Neural2-A" });
 
   const parts = [];
-  console.log(`🎤 Google TTS: ${scenes.length}개 장면을 순차 처리합니다...`);
   
   for (let i = 0; i < scenes.length; i++) {
     const sc = scenes[i];
     const finalVoiceName = voiceId || "ko-KR-Neural2-A";
-    
-    console.log(`🎵 장면 ${i + 1}/${scenes.length} - 사용할 목소리: ${finalVoiceName}, 언어: ${lang}`);
-    
+
     // 진행률 업데이트
     if (progressCallback) {
       progressCallback(i, scenes.length);
     }
-    
+
     // 요청 전 대기 (API 안정성을 위해)
     if (i > 0) {
-      console.log(`⏳ ${i + 1}번째 요청 전 500ms 대기...`);
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     
@@ -166,8 +151,6 @@ async function synthesizeWithGoogle(scenes, options, progressCallback = null) {
         effectsProfileId: ["handset-class-device"] // 모바일/데스크톱 최적화
       },
     };
-    
-    console.log(`📋 장면 ${i + 1} - Google TTS 요청 Body:`, JSON.stringify(body, null, 2));
 
     const res = await fetch(`${GOOGLE_TTS_URL}?key=${apiKey}`, {
       method: "POST",
@@ -203,20 +186,14 @@ ipcMain.handle("tts:listVoices", async (_evt, options = {}) => {
   try {
       // Google TTS 목소리 로드
       try {
-        console.log("🔍 tts:listVoices - Google TTS API 키 확인 중...");
         const googleApiKey = await getSecret("googleTtsApiKey");
-        
+
         if (googleApiKey) {
-          console.log(`🔑 Google TTS API 키 발견: ${googleApiKey.substring(0, 10)}...`);
           const googleVoices = await loadGoogleVoices(googleApiKey);
           voices.push(...googleVoices);
-          console.log(`✅ Google TTS 목소리 ${googleVoices.length}개 로드 완료`);
-        } else {
-          console.log("❌ Google TTS API Key가 설정되지 않음");
         }
       } catch (error) {
         console.error('❌ Google TTS 목소리 로드 실패:', error);
-        console.error('오류 상세:', error.message, error.stack);
       }
 
     if (voices.length === 0) {
@@ -246,8 +223,6 @@ ipcMain.handle("tts:listVoices", async (_evt, options = {}) => {
 
 // Google TTS 목소리 로드 함수
 async function loadGoogleVoices(apiKey) {
-  console.log(`🌐 Google TTS API 호출: ${GOOGLE_VOICES_URL}`);
-  
   const res = await fetch(`${GOOGLE_VOICES_URL}?key=${apiKey}`);
   if (!res.ok) {
     const errorText = await res.text();
@@ -257,12 +232,10 @@ async function loadGoogleVoices(apiKey) {
 
   const data = await res.json();
   const allVoices = data.voices || [];
-  console.log(`📊 전체 목소리 수: ${allVoices.length}`);
-  
-  const koreanVoices = allVoices.filter(voice => 
+
+  const koreanVoices = allVoices.filter(voice =>
     voice.languageCodes && voice.languageCodes.includes('ko-KR')
   );
-  console.log(`🇰🇷 한국어 목소리 수: ${koreanVoices.length}`);
   
   const processedVoices = koreanVoices.map(voice => ({
     id: voice.name,
@@ -285,8 +258,7 @@ async function loadGoogleVoices(apiKey) {
     
     return a.name.localeCompare(b.name, 'ko');
   });
-  
-  console.log(`🎤 최종 처리된 목소리:`, processedVoices.slice(0, 3).map(v => v.name));
+
   return processedVoices;
 }
 
@@ -312,3 +284,94 @@ function formatVoiceName(voiceName, ssmlGender) {
   }
   return voiceName;
 }
+
+// 단일 씬 TTS 재생성 API (VREW 스타일)
+ipcMain.handle("tts:regenerateScene", async (event, { sceneIndex, sceneText, voiceSettings = {} }) => {
+  try {
+    if (!sceneText || sceneText.trim().length === 0) {
+      throw new Error("씬 텍스트가 비어있습니다.");
+    }
+
+    // 기본 음성 설정
+    const {
+      voiceId = "ko-KR-Standard-A",
+      speakingRate = 1.0,
+      pitch = -1,
+      volumeGainDb = 2.0
+    } = voiceSettings;
+
+    // 단일 씬 데이터 구성
+    const singleScene = {
+      id: `scene_${sceneIndex + 1}`,
+      text: sceneText.trim(),
+      start: 0, // 단일 씬이므로 시작 시간은 0
+      end: 0    // 시작 시간은 무관
+    };
+
+    // 기존 synthesizeWithGoogle 함수 재사용
+    const result = await synthesizeWithGoogle([singleScene], {
+      voiceId,
+      speakingRate,
+      pitch
+    });
+
+    if (result.ok && result.parts && result.parts.length > 0) {
+      // 파일 저장 처리
+      const store = require('../services/store');
+      const path = require('path');
+      const fs = require('fs').promises;
+
+      // 현재 프로젝트 기반 audio/parts 경로 생성
+      const { getProjectManager } = require('../services/projectManager');
+      const currentProjectId = store.getCurrentProjectId();
+
+      let audioPartsDir;
+      if (currentProjectId) {
+        const projectManager = getProjectManager();
+        let currentProject = store.getCurrentProject();
+
+        if (!currentProject) {
+          currentProject = await projectManager.findProjectById(currentProjectId);
+          if (currentProject) {
+            projectManager.setCurrentProject(currentProject);
+          }
+        }
+
+        if (currentProject && currentProject.paths && currentProject.paths.audio) {
+          audioPartsDir = path.join(currentProject.paths.audio, 'parts');
+        } else {
+          throw new Error(`현재 프로젝트 경로를 찾을 수 없습니다: ${currentProjectId}`);
+        }
+      } else {
+        // 폴백: 기본 경로 사용
+        const projectRoot = store.get('projectRootFolder') || 'C:\\WeaverPro';
+        audioPartsDir = path.join(projectRoot, 'audio', 'parts');
+      }
+
+      // 디렉토리 생성 (없는 경우)
+      await fs.mkdir(audioPartsDir, { recursive: true });
+
+      const part = result.parts[0];
+      const audioFilePath = path.join(audioPartsDir, `scene-${String(sceneIndex + 1).padStart(3, "0")}.mp3`);
+
+      // base64를 Buffer로 변환하여 파일 저장
+      const audioBuffer = Buffer.from(part.base64, 'base64');
+      await fs.writeFile(audioFilePath, audioBuffer);
+
+      return {
+        ok: true,
+        audioFile: {
+          sceneIndex: sceneIndex,
+          audioUrl: audioFilePath,
+          fileName: `scene-${String(sceneIndex + 1).padStart(3, "0")}.mp3`,
+          provider: result.provider
+        }
+      };
+    }
+
+    return result;
+  } catch (error) {
+    console.error(`❌ 단일 씬 TTS 재생성 실패 (씬 ${sceneIndex + 1}):`, error);
+    return { ok: false, error: error.message, details: error.toString() };
+  }
+});

@@ -109,7 +109,6 @@ function extractKeywordsFromText(text) {
     .filter(word => word.length > 1)
     .filter(Boolean);
 
-  console.log(`[키워드 추출] "${text}" → [${words.join(', ')}]`);
   return words;
 }
 
@@ -122,49 +121,38 @@ function calculateKeywordSimilarity(keyword1, keyword2) {
   const k1 = normalizeText(keyword1);
   const k2 = normalizeText(keyword2);
 
-  console.log(`[키워드 유사도] "${k1}" vs "${k2}"`);
-
   // 1. 완전 일치
   if (k1 === k2) {
-    console.log(`[키워드 유사도] 완전 일치: 1.0`);
     return 1.0;
   }
 
   // 2. 부분 포함
   if (k1.includes(k2) || k2.includes(k1)) {
-    console.log(`[키워드 유사도] 부분 포함: 0.8`);
     return 0.8;
   }
 
   // 3. 한국어-영어 매핑 확인
   for (const [korean, englishList] of Object.entries(KEYWORD_MAPPING)) {
     if (k1 === korean && englishList.some(eng => eng === k2)) {
-      console.log(`[키워드 유사도] 한→영 매칭 (${korean}→${k2}): 0.9`);
       return 0.9;
     }
     if (k2 === korean && englishList.some(eng => eng === k1)) {
-      console.log(`[키워드 유사도] 영→한 매칭 (${k1}→${korean}): 0.9`);
       return 0.9;
     }
     if (englishList.includes(k1) && englishList.includes(k2)) {
-      console.log(`[키워드 유사도] 동의어 매칭: 0.7`);
       return 0.7;
     }
   }
 
   // 4. 앞 3글자 매칭 (영어 단어)
   if (k1.length >= 3 && k2.length >= 3 && k1.substring(0, 3) === k2.substring(0, 3)) {
-    console.log(`[키워드 유사도] 앞 3글자 매칭: 0.4`);
     return 0.4;
   }
 
   // 5. 첫 글자 매칭 (한국어)
   if (k1.length >= 2 && k2.length >= 2 && /[가-힣]/.test(k1[0]) && k1[0] === k2[0]) {
-    console.log(`[키워드 유사도] 한국어 첫글자 매칭: 0.3`);
     return 0.3;
   }
-
-  console.log(`[키워드 유사도] 매치 없음: 0`);
   return 0;
 }
 
@@ -189,7 +177,6 @@ function calculateSceneVideoScore(scene, videoInfo) {
   }
 
   if (maxScore > 0) {
-    console.log(`[매칭 점수] "${bestMatch}" ↔ "${videoKeyword}" = ${maxScore.toFixed(3)}`);
   }
 
   return maxScore;
@@ -338,7 +325,6 @@ export async function assignVideosToScenes(scenes, options = {}) {
     });
 
     // 2. 씬별 매칭 점수 계산
-    console.log("[영상 할당] 2️⃣ 씬별 매칭 점수 계산");
     const assignments = [];
     const usedVideos = new Set();
 
@@ -383,7 +369,6 @@ export async function assignVideosToScenes(scenes, options = {}) {
           usedVideos.add(bestVideo.path);
         }
       } else {
-        console.log(`[영상 할당] ❌ 씬 ${i + 1} 매칭 실패 (최소 점수: ${minScore})`);
       }
 
       assignments.push({ scene, video: bestVideo, score: bestScore });

@@ -8,9 +8,11 @@ import {
   CheckmarkCircleRegular,
   VideoRegular,
   ImageRegular,
+  SpeakerMuteRegular,
+  SpeakerOffRegular,
 } from "@fluentui/react-icons";
 import { ensureSceneDefaults } from "../../../utils/scenes";
-import { analyzeSceneKeywords, getRecommendedVideosForScene, assignVideosToScenes } from "../../../services/videoAssignment";
+import { assignVideosToScenes } from "../../../services/videoAssignment";
 import { showError, showSuccess } from "../../common/GlobalToast";
 import { isVideoFile, isImageFile } from "../../../utils/fileHelpers";
 
@@ -25,8 +27,6 @@ function SceneList({
   const [editingText, setEditingText] = useState("");
   const [editingStartTime, setEditingStartTime] = useState("");
   const [editingEndTime, setEditingEndTime] = useState("");
-  const [keywordAnalysis, setKeywordAnalysis] = useState([]);
-  const [recommendedVideos, setRecommendedVideos] = useState([]);
   const [isAssigning, setIsAssigning] = useState(false);
 
   // 컨텍스트 메뉴 상태
@@ -37,6 +37,18 @@ function SceneList({
   // 드래그 앤 드롭 상태
   const [dragOverSceneIndex, setDragOverSceneIndex] = useState(-1);
   const [isDragging, setIsDragging] = useState(false);
+
+  // 미리듣기 상태
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+  const [currentPreviewAudio, setCurrentPreviewAudio] = useState(null);
+
+  // TTS 설정 상태
+  const [ttsSettings, setTtsSettings] = useState({
+    ttsEngine: "google",
+    voice: "ko-KR-Standard-A",
+    speed: "1.0",
+    pitch: "-1"
+  });
   // 시간 포맷 헬퍼
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -68,12 +80,174 @@ function SceneList({
     setEditingText("");
     setEditingStartTime("");
     setEditingEndTime("");
-    setKeywordAnalysis([]);
-    setRecommendedVideos([]);
   }, []);
 
-  const handleSaveEdit = useCallback(() => {
+  // 개별 씬 TTS 재생성 핸들러
+  const regenerateSceneTTS = useCallback(async (sceneIndex, sceneText) => {
+    try {
+      console.log(`[TTS 재생성] 씬 ${sceneIndex + 1} 음성 생성 시작...`);
+
+      // 단일 씬 데이터 구성
+      const singleScene = {
+        id: `scene_${sceneIndex + 1}`,
+        text: sceneText,
+        start: scenes[sceneIndex]?.start || 0,
+        end: scenes[sceneIndex]?.end || 0
+      };
+
+      // 새로운 단일 씬 TTS API 호출 (사용자 설정 사용)
+      const result = await window.api.ttsRegenerateScene({
+        sceneIndex: sceneIndex,
+        sceneText: sceneText,
+        voiceSettings: {
+          voiceId: ttsSettings.voice,
+          speakingRate: parseFloat(ttsSettings.speed),
+          pitch: parseFloat(ttsSettings.pitch),
+          volumeGainDb: 2.0
+        }
+      });
+
+      if (result?.ok && result?.audioFile) {
+        const audioFile = result.audioFile;
+        console.log(`[TTS 재생성] 씬 ${sceneIndex + 1} 음성 생성 완료:`, audioFile.audioUrl);
+
+        // 씬 데이터에 audioPath 추가/업데이트
+        const updatedScenes = [...scenes];
+        updatedScenes[sceneIndex] = {
+          ...updatedScenes[sceneIndex],
+          audioPath: audioFile.audioUrl,
+          audioGenerated: true,
+          audioFileName: audioFile.fileName
+        };
+        setScenes(updatedScenes);
+
+        showSuccess(`씬 ${sceneIndex + 1} 음성이 재생성되었습니다.`);
+      } else {
+        throw new Error(result?.error || "TTS 생성 실패");
+      }
+    } catch (error) {
+      console.error(`[TTS 재생성] 씬 ${sceneIndex + 1} 실패:`, error);
+      showError(`씬 ${sceneIndex + 1} 음성 생성에 실패했습니다: ${error.message}`);
+    }
+  }, [scenes, setScenes, ttsSettings]);
+
+  // 미리듣기 함수
+  const handlePreviewTTS = useCallback(async (text) => {
+    if (!text || text.trim().length === 0) {
+      showError("미리들을 텍스트가 없습니다.");
+      return;
+    }
+
+    try {
+      setIsPreviewPlaying(true);
+
+      // 현재 재생 중인 오디오가 있으면 정지
+      if (currentPreviewAudio) {
+        currentPreviewAudio.pause();
+        currentPreviewAudio.currentTime = 0;
+        setCurrentPreviewAudio(null);
+      }
+
+      // 사용자 TTS 설정 사용
+      const payload = {
+        doc: { scenes: [{ text: text }] },
+        tts: {
+          engine: ttsSettings.ttsEngine,
+          voiceId: ttsSettings.voice,
+          voiceName: ttsSettings.voice,
+          speakingRate: parseFloat(ttsSettings.speed),
+          pitch: parseFloat(ttsSettings.pitch),
+          provider: "Google",
+        },
+      };
+
+      const result = await window.api.invoke("tts/synthesizeByScenes", payload);
+
+      if (result?.ok && result?.parts?.length > 0) {
+        const audioBlob = new Blob([
+          Uint8Array.from(atob(result.parts[0].base64), (c) => c.charCodeAt(0))
+        ], { type: "audio/mpeg" });
+
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+
+        setCurrentPreviewAudio(audio);
+
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          setCurrentPreviewAudio(null);
+          setIsPreviewPlaying(false);
+        };
+
+        audio.onerror = (error) => {
+          console.error("오디오 재생 실패:", error);
+          setCurrentPreviewAudio(null);
+          setIsPreviewPlaying(false);
+          showError("미리듣기 재생에 실패했습니다.");
+        };
+
+        await audio.play();
+      } else {
+        throw new Error(result?.error || result?.message || "음성 합성 실패");
+      }
+    } catch (error) {
+      console.error("TTS 미리듣기 실패:", error);
+      showError(`미리듣기에 실패했습니다: ${error.message}`);
+      setIsPreviewPlaying(false);
+      setCurrentPreviewAudio(null);
+    }
+  }, [currentPreviewAudio, ttsSettings]);
+
+  // SRT 파일 업데이트 함수
+  const updateSrtFile = useCallback(async (updatedScenes) => {
+    try {
+      // videoSaveFolder 경로 가져오기
+      const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
+      const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
+
+      if (!videoSaveFolder) {
+        console.warn("videoSaveFolder를 찾을 수 없습니다.");
+        return;
+      }
+
+      // SRT 생성을 위한 데이터 구성
+      const doc = { scenes: updatedScenes };
+
+      // SRT 생성 API 호출
+      const result = await window.api.invoke("script/toSrt", { doc });
+
+      if (result?.success && result?.data?.srt) {
+        // SRT 파일 경로 구성
+        const srtFilePath = `${videoSaveFolder}\\scripts\\subtitle.srt`;
+
+        // scripts 디렉토리 생성 (없는 경우)
+        await window.api.invoke("fs:mkDirRecursive", { dirPath: `${videoSaveFolder}\\scripts` }).catch(() => {});
+
+        // SRT 파일 저장
+        await window.api.invoke("files:writeText", { filePath: srtFilePath, content: result.data.srt });
+
+        console.log(`✅ SRT 파일 업데이트 완료: ${srtFilePath}`);
+      }
+    } catch (error) {
+      console.error("❌ SRT 파일 업데이트 실패:", error);
+    }
+  }, []);
+
+  // 미리듣기 중지 함수
+  const handleStopPreview = useCallback(() => {
+    if (currentPreviewAudio) {
+      currentPreviewAudio.pause();
+      currentPreviewAudio.currentTime = 0;
+      setCurrentPreviewAudio(null);
+    }
+    setIsPreviewPlaying(false);
+  }, [currentPreviewAudio]);
+
+  const handleSaveEdit = useCallback(async () => {
     if (editingSceneIndex === -1) return;
+
+    const originalText = scenes[editingSceneIndex]?.text || "";
+    const hasTextChanged = editingText !== originalText;
 
     const updatedScenes = [...scenes];
     const scene = updatedScenes[editingSceneIndex];
@@ -91,8 +265,20 @@ function SceneList({
     setScenes(updatedScenes);
     handleCancelEdit();
 
-    console.log("[자막 편집] 씬 저장됨:", { index: editingSceneIndex, text: editingText });
-  }, [editingSceneIndex, editingText, editingStartTime, editingEndTime, scenes, setScenes, handleCancelEdit]);
+    console.log("[자막 편집] 씬 저장됨:", {
+      index: editingSceneIndex,
+      text: editingText,
+      textChanged: hasTextChanged
+    });
+
+    // SRT 파일 업데이트 (텍스트나 시간이 변경된 경우)
+    await updateSrtFile(updatedScenes);
+
+    // 텍스트가 변경된 경우에만 TTS 재생성
+    if (hasTextChanged && editingText.trim().length > 0) {
+      await regenerateSceneTTS(editingSceneIndex, editingText);
+    }
+  }, [editingSceneIndex, editingText, editingStartTime, editingEndTime, scenes, setScenes, handleCancelEdit, regenerateSceneTTS, updateSrtFile]);
 
   // 더블클릭으로 편집 모드 진입
   const handleSceneDoubleClick = useCallback((index, event) => {
@@ -104,22 +290,7 @@ function SceneList({
   const handleTextChange = useCallback(async (newText) => {
     setEditingText(newText);
 
-    // 키워드 분석
-    const analysis = analyzeSceneKeywords(newText);
-    setKeywordAnalysis(analysis);
 
-    // 추천 영상 업데이트 (디바운싱)
-    if (newText.trim().length > 2) {
-      try {
-        const recommendations = await getRecommendedVideosForScene({ text: newText }, 3);
-        setRecommendedVideos(recommendations);
-      } catch (error) {
-        console.error("[실시간 추천] 오류:", error);
-        setRecommendedVideos([]);
-      }
-    } else {
-      setRecommendedVideos([]);
-    }
   }, []);
 
   // 자동 영상 할당 핸들러 (에러 핸들링 강화)
@@ -377,6 +548,43 @@ function SceneList({
     }
   }, [isContextMenuOpen]);
 
+  // TTS 설정 로드
+  useEffect(() => {
+    const loadTtsSettings = async () => {
+      try {
+        const [ttsEngine, voice, speed, pitch] = await Promise.all([
+          window.api.invoke("settings:get", "ttsEngine"),
+          window.api.invoke("settings:get", "voice"),
+          window.api.invoke("settings:get", "speed"),
+          window.api.invoke("settings:get", "pitch")
+        ]);
+
+        setTtsSettings({
+          ttsEngine: ttsEngine || "google",
+          voice: voice || "ko-KR-Standard-A",
+          speed: speed || "1.0",
+          pitch: pitch || "-1"
+        });
+      } catch (error) {
+        console.error("TTS 설정 로드 실패:", error);
+        // 기본 설정 유지
+      }
+    };
+
+    loadTtsSettings();
+  }, []);
+
+  // 컴포넌트 언마운트 시 미리듣기 오디오 정리
+  useEffect(() => {
+    return () => {
+      if (currentPreviewAudio) {
+        currentPreviewAudio.pause();
+        currentPreviewAudio.currentTime = 0;
+        setCurrentPreviewAudio(null);
+      }
+    };
+  }, [currentPreviewAudio]);
+
   return (
     <Card
       style={{
@@ -571,64 +779,6 @@ function SceneList({
                   </div>
                 )}
 
-                {/* VREW 스타일 실시간 분석 영역 */}
-                {isEditing && (keywordAnalysis.length > 0 || recommendedVideos.length > 0) && (
-                  <div
-                    style={{
-                      marginBottom: 8,
-                      padding: 8,
-                      backgroundColor: "#f8f9ff",
-                      borderRadius: 6,
-                      border: "1px solid #e1e8ff",
-                    }}
-                  >
-                    {/* 키워드 분석 */}
-                    {keywordAnalysis.length > 0 && (
-                      <div style={{ marginBottom: 8 }}>
-                        <Text
-                          size={200}
-                          weight="medium"
-                          style={{ fontSize: "11px", color: "#666", marginBottom: 4, display: "block" }}
-                        >
-                          🔍 추출된 키워드
-                        </Text>
-                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                          {keywordAnalysis.map((item, idx) => (
-                            <Badge
-                              key={idx}
-                              appearance="outline"
-                              color={item.type === "korean" ? "brand" : "success"}
-                              size="small"
-                              style={{ fontSize: "10px" }}
-                            >
-                              {item.korean} {item.english.length > 0 && `→ ${item.english[0]}`}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 추천 영상 */}
-                    {recommendedVideos.length > 0 && (
-                      <div>
-                        <Text
-                          size={200}
-                          weight="medium"
-                          style={{ fontSize: "11px", color: "#666", marginBottom: 4, display: "block" }}
-                        >
-                          🎬 추천 영상 (점수순)
-                        </Text>
-                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                          {recommendedVideos.map((video, idx) => (
-                            <Badge key={idx} appearance="tint" color="warning" size="small" style={{ fontSize: "10px" }}>
-                              {video.keyword} ({(video.score * 100).toFixed(0)}%)
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 {/* 편집 버튼 영역 */}
                 {isEditing && (
@@ -639,6 +789,17 @@ function SceneList({
                     <Button appearance="secondary" size="small" onClick={handleCancelEdit}>
                       취소
                     </Button>
+                    {editingText.trim().length > 0 && (
+                      <Button
+                        appearance="subtle"
+                        size="small"
+                        icon={isPreviewPlaying ? <SpeakerOffRegular /> : <SpeakerMuteRegular />}
+                        onClick={isPreviewPlaying ? handleStopPreview : () => handlePreviewTTS(editingText)}
+                        disabled={editingText.trim().length === 0}
+                      >
+                        {isPreviewPlaying ? "중지" : "미리듣기"}
+                      </Button>
+                    )}
                   </div>
                 )}
 

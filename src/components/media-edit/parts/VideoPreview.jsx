@@ -20,6 +20,11 @@ function VideoPreview({
   const animationFrameRef = useRef(null);
   const progressBarRef = useRef(null);
 
+  // TTS 오디오 관리
+  const audioRef = useRef(null);
+  const [ttsAudioUrl, setTtsAudioUrl] = useState(null);
+  const [hasAudio, setHasAudio] = useState(false);
+
   // 시간 포맷 헬퍼
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -27,40 +32,51 @@ function VideoPreview({
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // 비디오 재생/일시정지 토글 (에러 핸들링 강화)
+  // 비디오와 TTS 오디오 동시 재생/일시정지 토글
   const handleVideoToggle = useCallback(() => {
-    if (!videoRef?.current) {
-      console.warn("[비디오 재생] 비디오 ref가 없습니다");
+    const video = videoRef?.current;
+    const audio = audioRef?.current;
+
+    if (!video && !audio) {
+      console.warn("[재생] 비디오와 오디오가 모두 없습니다");
       return;
     }
 
-    const video = videoRef.current;
+    const shouldPlay = video ? video.paused : (audio ? audio.paused : true);
 
-    // 비디오 상태 확인
-    if (video.readyState < 2) {
-      console.warn("[비디오 재생] 비디오가 아직 로드되지 않았습니다");
-      return;
-    }
+    if (shouldPlay) {
+      // 재생 시작
+      const playPromises = [];
 
-    if (video.paused) {
-      video
-        .play()
-        .then(() => {
-          setIsPlaying(true);
-          console.log("[비디오 재생] 재생 시작됨");
-        })
-        .catch((error) => {
-          console.error("[비디오 재생] 재생 실패:", error);
-          setIsPlaying(false);
-          // 사용자에게 에러 알림을 주지 않고 콘솔에만 로그
-        });
+      if (video && video.readyState >= 2) {
+        playPromises.push(
+          video.play().catch((error) => {
+            console.error("[비디오 재생] 재생 실패:", error);
+          })
+        );
+      }
+
+      if (audio && audio.readyState >= 2) {
+        playPromises.push(
+          audio.play().catch((error) => {
+            console.error("[TTS 재생] 재생 실패:", error);
+          })
+        );
+      }
+
+      Promise.allSettled(playPromises).then(() => {
+        setIsPlaying(true);
+        console.log("[재생] 비디오/오디오 재생 시작");
+      });
     } else {
+      // 일시정지
       try {
-        video.pause();
+        if (video) video.pause();
+        if (audio) audio.pause();
         setIsPlaying(false);
-        console.log("[비디오 재생] 일시정지됨");
+        console.log("[재생] 비디오/오디오 일시정지");
       } catch (error) {
-        console.error("[비디오 재생] 일시정지 실패:", error);
+        console.error("[재생] 일시정지 실패:", error);
       }
     }
   }, [videoRef]);
@@ -242,6 +258,83 @@ function VideoPreview({
       };
     }
   }, [videoUrl, videoRef, selectedScene, selectedSceneIndex]);
+
+  // TTS 오디오 로딩 (씬별 음성 파일 로드)
+  useEffect(() => {
+    const loadTtsAudio = async () => {
+      if (!selectedScene?.audioPath) {
+        setTtsAudioUrl(null);
+        setHasAudio(false);
+        return;
+      }
+
+      try {
+        console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 음성 로딩 시도:`, selectedScene.audioPath);
+        const audioUrl = await window.api?.videoPathToUrl?.(selectedScene.audioPath);
+
+        if (audioUrl && audioRef.current) {
+          setTtsAudioUrl(audioUrl);
+          setHasAudio(true);
+
+          // 오디오 로드 이벤트 설정
+          const audio = audioRef.current;
+
+          const handleAudioLoadedData = () => {
+            console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 음성 로드 완료`);
+            // 비디오가 없는 경우 TTS 오디오 자동 재생
+            if (!videoUrl && selectedScene.asset?.type !== "video") {
+              audio.play()
+                .then(() => {
+                  setIsPlaying(true);
+                  console.log(`[TTS 재생] 씬 ${selectedSceneIndex + 1} 자동 재생 시작`);
+                })
+                .catch((error) => {
+                  console.error(`[TTS 재생] 씬 ${selectedSceneIndex + 1} 자동 재생 실패:`, error);
+                });
+            }
+          };
+
+          const handleAudioPlay = () => setIsPlaying(true);
+          const handleAudioPause = () => setIsPlaying(false);
+          const handleAudioEnded = () => {
+            setIsPlaying(false);
+            console.log(`[TTS 재생] 씬 ${selectedSceneIndex + 1} 재생 완료`);
+          };
+
+          // 이벤트 리스너 추가
+          audio.addEventListener("loadeddata", handleAudioLoadedData, { once: true });
+          audio.addEventListener("play", handleAudioPlay);
+          audio.addEventListener("pause", handleAudioPause);
+          audio.addEventListener("ended", handleAudioEnded);
+
+          // 이미 로드된 경우 바로 처리
+          if (audio.readyState >= 2) {
+            handleAudioLoadedData();
+          }
+
+          return () => {
+            audio.removeEventListener("loadeddata", handleAudioLoadedData);
+            audio.removeEventListener("play", handleAudioPlay);
+            audio.removeEventListener("pause", handleAudioPause);
+            audio.removeEventListener("ended", handleAudioEnded);
+          };
+        }
+      } catch (error) {
+        console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 로딩 실패:`, error);
+        setTtsAudioUrl(null);
+        setHasAudio(false);
+      }
+    };
+
+    loadTtsAudio();
+
+    // 이전 TTS URL 정리
+    return () => {
+      if (ttsAudioUrl && selectedScene?.audioPath) {
+        window.api?.revokeVideoUrl?.(selectedScene.audioPath);
+      }
+    };
+  }, [selectedScene?.audioPath, selectedSceneIndex, videoUrl]);
 
   return (
     <Card
@@ -431,11 +524,6 @@ function VideoPreview({
                       <CheckmarkCircleRegular style={{ fontSize: 14, marginRight: 6 }} />
                       {selectedScene.asset.type === "image" ? "이미지" : "영상"} 연결됨
                     </Badge>
-                    {selectedScene.asset.keyword && (
-                      <Badge appearance="outline" color="brand" size="medium">
-                        키워드: {selectedScene.asset.keyword}
-                      </Badge>
-                    )}
                   </div>
                   {selectedScene.asset.resolution && (
                     <Text style={{ fontSize: 14, color: "rgba(255,255,255,0.8)", textAlign: "center" }}>
@@ -484,15 +572,27 @@ function VideoPreview({
         )}
       </div>
 
+      {/* 숨겨진 TTS 오디오 엘리먼트 */}
+      {ttsAudioUrl && (
+        <audio
+          ref={audioRef}
+          src={ttsAudioUrl}
+          style={{ display: "none" }}
+          onError={(e) => {
+            console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 재생 오류:`, e);
+          }}
+        />
+      )}
+
       {/* 플레이어 컨트롤 */}
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <Button
           appearance="primary"
           icon={isPlaying ? <PauseRegular /> : <PlayRegular />}
           onClick={handleVideoToggle}
-          disabled={!selectedScene || !videoUrl || selectedScene.asset?.type !== "video"}
+          disabled={!selectedScene || (!videoUrl && !hasAudio)}
         >
-          {isPlaying ? "일시정지" : "재생"}
+          {isPlaying ? "일시정지" : hasAudio && !videoUrl ? "음성 재생" : "재생"}
         </Button>
 
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8 }}>

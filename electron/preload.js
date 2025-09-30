@@ -311,6 +311,7 @@ contextBridge.exposeInMainWorld("api", {
   scriptToSrt: (payload) => ipcRenderer.invoke("script/toSrt", payload),
   getSubtitlePath: (payload) => ipcRenderer.invoke("script:getSubtitlePath", payload),
   ttsSynthesizeByScenes: (payload) => ipcRenderer.invoke("tts/synthesizeByScenes", payload),
+  ttsRegenerateScene: (payload) => ipcRenderer.invoke("tts:regenerateScene", payload),
   getMp3Duration: (path) => ipcRenderer.invoke("audio/getDuration", { path }),
   audioConcatScenes: (payload) => ipcRenderer.invoke("audio/concatScenes", payload),
   audioMergeFiles: ({ audioFiles, outputPath }) =>
