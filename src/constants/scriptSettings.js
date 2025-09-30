@@ -13,13 +13,10 @@ export const STYLE_OPTIONS = [
 export const DURATION_OPTIONS = [
   { key: 3, text: "3분 (표준)" },
   { key: 5, text: "5분 (중편)" },
-  { key: 8, text: "8분 (장편)" },
   { key: 10, text: "10분 (긴편)" },
   { key: 15, text: "15분 (중간편)" },
-  { key: 20, text: "20분 (장시간)" },
   { key: 30, text: "30분 (장편)" },
   { key: 45, text: "45분 (긴편)" },
-  { key: 60, text: "60분 (1시간)" },
 ];
 
 // 영상 길이별 최적 장면 수를 자동 계산하여 제공하므로 MAX_SCENE_OPTIONS는 사용하지 않음

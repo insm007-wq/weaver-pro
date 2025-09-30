@@ -273,7 +273,7 @@ const ActionCard = memo(
 
           {/* 설명 영역 */}
           <div style={styles.descriptionContainer}>
-            <Text size={100} style={{ color: "rgba(255,255,255,0.95)" }}>
+            <Text size={200} style={{ color: "rgba(255,255,255,0.95)" }}>
               {currentMode.description}
             </Text>
           </div>
