@@ -65,7 +65,6 @@ import { useContainerStyles, useCardStyles, useSettingsStyles } from "../../../s
  */
 const ENGINE_OPTIONS = [
   { value: "replicate", text: "Replicate", subtext: "(고품질)" },
-  { value: "gemini", text: "Google Gemini", subtext: "(AI 대화형)" },
 ];
 
 /**
@@ -73,9 +72,6 @@ const ENGINE_OPTIONS = [
  */
 const ANALYSIS_ENGINE_OPTIONS = [
   { value: "anthropic", text: "Claude Sonnet 4", subtext: "(고성능 분석)" },
-  { value: "gemini", text: "Google Gemini 2.5 Flash", subtext: "(멀티모달, 권장)" },
-  { value: "gemini-pro", text: "Google Gemini 2.5 Pro", subtext: "(고성능)" },
-  { value: "gemini-lite", text: "Google Gemini 2.5 Flash-Lite", subtext: "(경제형)" },
 ];
 
 /**
@@ -99,8 +95,8 @@ function ThumbnailTab() {
   // 엔진 설정 상태
   const [defaultEngine, setDefaultEngine] = useState("replicate");
   const [originalEngine, setOriginalEngine] = useState("replicate");
-  const [analysisEngine, setAnalysisEngine] = useState("gemini-pro");
-  const [originalAnalysisEngine, setOriginalAnalysisEngine] = useState("gemini-pro");
+  const [analysisEngine, setAnalysisEngine] = useState("anthropic");
+  const [originalAnalysisEngine, setOriginalAnalysisEngine] = useState("anthropic");
 
   // UI 상태
   const [isModified, setIsModified] = useState(false);
@@ -147,7 +143,7 @@ function ThumbnailTab() {
 
       const templateToUse = savedTemplate || DEFAULT_TEMPLATE;
       const engineToUse = savedEngine || "replicate";
-      const analysisEngineToUse = savedAnalysisEngine || "gemini-pro";
+      const analysisEngineToUse = savedAnalysisEngine || "anthropic";
 
       setTemplate(templateToUse);
       setOriginalTemplate(templateToUse);
@@ -168,8 +164,8 @@ function ThumbnailTab() {
       setOriginalTemplate(DEFAULT_TEMPLATE);
       setDefaultEngine("replicate");
       setOriginalEngine("replicate");
-      setAnalysisEngine("gemini-pro");
-      setOriginalAnalysisEngine("gemini-pro");
+      setAnalysisEngine("anthropic");
+      setOriginalAnalysisEngine("anthropic");
     } finally {
       setLoading(false);
     }

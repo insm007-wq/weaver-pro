@@ -197,7 +197,6 @@ export default function ApiTab() {
   const [pexelsKey, setPexelsKey] = useState("");
   const [pixabayKey, setPixabayKey] = useState("");
   const [googleTtsKey, setGoogleTtsKey] = useState("");
-  const [geminiKey, setGeminiKey] = useState("");
 
   const [status, setStatus] = useState({
     openai: null,
@@ -206,7 +205,6 @@ export default function ApiTab() {
     pexels: null,
     pixabay: null,
     googleTts: null,
-    gemini: null,
   });
 
   const [loading, setLoading] = useState({
@@ -216,20 +214,18 @@ export default function ApiTab() {
     pexels: false,
     pixabay: false,
     googleTts: false,
-    gemini: false,
   });
 
   // ===== 초기 로드 =====
   useEffect(() => {
     (async () => {
-      const [ok, ak, rk, gk, pxk, pbk, gmk] = await Promise.all([
+      const [ok, ak, rk, gk, pxk, pbk] = await Promise.all([
         window.api.getSecret("openaiKey"),
         window.api.getSecret("anthropicKey"),
         window.api.getSecret("replicateKey"),
         window.api.getSecret("googleTtsApiKey"),
         window.api.getSecret("pexelsApiKey"),
         window.api.getSecret("pixabayApiKey"),
-        window.api.getSecret("geminiKey"),
       ]);
       setOpenaiKey(ok || "");
       setAnthropicKey(ak || "");
@@ -237,7 +233,6 @@ export default function ApiTab() {
       setGoogleTtsKey(gk || "");
       setPexelsKey(pxk || "");
       setPixabayKey(pbk || "");
-      setGeminiKey(gmk || "");
     })();
   }, []);
 
@@ -272,10 +267,6 @@ export default function ApiTab() {
   const saveGoogleTts = async () => {
     await saveSecret("googleTtsApiKey", googleTtsKey);
     setSaved("googleTts");
-  };
-  const saveGemini = async () => {
-    await saveSecret("geminiKey", geminiKey);
-    setSaved("gemini");
   };
 
   // ===== 테스트 =====
@@ -394,22 +385,6 @@ export default function ApiTab() {
   };
 
 
-  const testGemini = async () => {
-    if (!geminiKey?.trim()) return setStat("gemini", false, "키 미입력");
-    setBusy("gemini", true);
-    setStat("gemini", false, "");
-    try {
-      const res = await window.api.testGemini?.(geminiKey.trim());
-      res?.ok ? setStat("gemini", true, "연결 성공") : setStat("gemini", false, `실패: ${stringifyErr(res?.message)}`);
-    } catch (e) {
-      const { message } = handleApiError(e, "api_test", {
-        metadata: { service: "gemini", action: "test_connection" }
-      });
-      setStat("gemini", false, `오류: ${message}`);
-    } finally {
-      setBusy("gemini", false);
-    }
-  };
 
   const services = [
     {
@@ -489,19 +464,6 @@ export default function ApiTab() {
       onTest: testGoogleTts,
       status: status.googleTts,
       loading: loading.googleTts,
-    },
-    {
-      key: "gemini",
-      name: "💎 Google Gemini",
-      description: "구글의 최신 멀티모달 AI 모델 - 텍스트, 이미지, 코드 생성 및 분석",
-      value: geminiKey,
-      setValue: setGeminiKey,
-      placeholder: "AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-      hint: "Google AI Studio에서 발급받은 Gemini API 키를 입력하세요",
-      onSave: saveGemini,
-      onTest: testGemini,
-      status: status.gemini,
-      loading: loading.gemini,
     },
   ];
 

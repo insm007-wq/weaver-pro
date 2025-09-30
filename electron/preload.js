@@ -322,7 +322,6 @@ contextBridge.exposeInMainWorld("api", {
   // ========================================================================
   generateThumbnails: (payload) => ipcRenderer.invoke("replicate:generate", payload),
   generateThumbnailsGoogleImagen3: (payload) => ipcRenderer.invoke("generateThumbnailsGoogleImagen3", payload),
-  generateThumbnailsGemini: (payload) => ipcRenderer.invoke("generateThumbnailsGemini", payload),
 
   // ========================================================================
   // 캐시 관리
@@ -340,7 +339,6 @@ contextBridge.exposeInMainWorld("api", {
   testGoogleImageFX: (apiKey) => ipcRenderer.invoke("googleImageFx:test", apiKey),
   testPexels: (key) => ipcRenderer.invoke("pexels:test", key),
   testPixabay: (key) => ipcRenderer.invoke("pixabay:test", key),
-  testGemini: (apiKey) => ipcRenderer.invoke("gemini:test", apiKey),
 
   // ========================================================================
   // 프리뷰(미디어 다운로드)

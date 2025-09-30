@@ -42,7 +42,6 @@ export const AI_OPTIONS = {
   llmModels: [
     { value: "anthropic", text: "🧠 Anthropic Claude", provider: "Anthropic", cost: "안정성" },
     { value: "openai-gpt5mini", text: "🤖 OpenAI GPT-5", provider: "OpenAI", cost: "롱폼 특화" },
-    { value: "google-gemini", text: "🔥 Google Gemini", provider: "Google", cost: "빠른 생성" },
   ],
 };
 
