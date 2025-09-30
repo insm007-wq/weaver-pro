@@ -16,16 +16,6 @@ async function readAnthropicKey() {
   }
 }
 
-async function readGeminiKey() {
-  if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
-  try {
-    const { getSecret } = require("../services/secrets");
-    const v = await getSecret("geminiKey");
-    return v || null;
-  } catch {
-    return null;
-  }
-}
 
 async function readReplicateKey() {
   try {
@@ -191,71 +181,6 @@ async function analyzeWithAnthropic({ filePath, description }) {
   return { ok: true, text: fullText, raw: fullText, english: "", korean: "" };
 }
 
-// ---------- 제미니 이미지 분석 ----------
-async function analyzeWithGemini({ filePath, description, engineType = 'gemini' }) {
-  console.log('[제미니] 분석 시작, 파일:', filePath, '엔진:', engineType);
-  
-  const apiKey = await readGeminiKey();
-  console.log('[제미니] API 키 상태:', apiKey ? '있음' : '없음');
-  
-  if (!apiKey || typeof apiKey !== "string") {
-    console.log('[제미니] API 키 없음, Anthropic으로 폴백');
-    return { ok: false, message: "no_gemini_key" };
-  }
-  if (!filePath) {
-    return { ok: false, message: "image_required" };
-  }
-
-  try {
-    const { mime, b64 } = await fileToBase64Parts(filePath);
-    if (!b64 || !mime) return { ok: false, message: "invalid_image_file" };
-
-    console.log('[제미니] 이미지 데이터 준비 완료, MIME:', mime);
-
-    // 엔진 타입에 따른 모델 선택
-    let modelName = 'gemini-2.5-flash'; // 기본값
-    if (engineType === 'gemini-pro') {
-      modelName = 'gemini-2.5-pro';
-    } else if (engineType === 'gemini-lite') {
-      modelName = 'gemini-2.5-flash-lite';
-    }
-
-    // 제미니 비전 API 사용
-    const { GoogleGenerativeAI } = require('@google/generative-ai');
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: modelName });
-
-    console.log('[제미니] API 클라이언트 초기화 완료, 모델:', modelName);
-
-    const imagePart = {
-      inlineData: {
-        data: b64,
-        mimeType: mime
-      }
-    };
-
-    let prompt = PROMPT_V7;
-    if (description && typeof description === "string" && description.trim()) {
-      prompt += `\n\n추가 사용자 설명: ${description.trim()}`;
-    }
-
-    console.log('[제미니] 분석 요청 전송 중...');
-    const result = await model.generateContent([prompt, imagePart]);
-    const response = await result.response;
-    const text = response.text();
-
-    console.log('[제미니] 분석 완료, 결과 길이:', text.length);
-    return { ok: true, text: text.trim(), raw: text.trim(), english: "", korean: "" };
-  } catch (error) {
-    console.error("[제미니] 오류 발생:", error);
-    console.error("[제미니] 오류 상세:", error?.message, error?.stack);
-    return {
-      ok: false,
-      message: `gemini_error: ${error?.message || error}`,
-      raw: String(error)
-    };
-  }
-}
 
 // ---------- Replicate 이미지 분석 (LLaVA) ----------
 async function analyzeWithReplicate({ filePath, description }) {

@@ -121,27 +121,6 @@ export const DEFAULT_REFERENCE_PROMPT = `## 레퍼런스 대본 분석 및 적�
   ]
 }`.trim();
 
-export const DEFAULT_TEMPLATE = `당신은 "Imagen-3 프롬프트 제너레이터"입니다.
-사용자가 **장면 설명**을 제공하면, 그 내용을 바탕으로 상세하고 예술적인 이미지 생성 프롬프트를 출력해야 합니다.
+export const DEFAULT_TEMPLATE = `{content}{referenceAnalysis}
 
-### 장면 설명: {content}{referenceAnalysis}
-
-1. 원본 설명에서 **주제 대상**(사람·사물·생물·장소 등)과 **핵심 특징**을 정확히 파악하여 반영하세요.
-
-2. 다음 요소들을 포함하여 프롬프트를 구성하세요:
- - **인물 특징**: 성별, 나이, 복장, 표정 등 (원본 설명을 정확히 따를 것)
- - **배경·장소**: 구체적인 장소와 환경 묘사
- - **조명·분위기**: 극적인 조명과 분위기 연출
- - **구도**: "medium close-up", "wide shot" 등 적절한 구도
- - **스타일**: 영화적이고 사실적인 표현
-
-3. **중요한 제약사항 (반드시 포함):**
-- **Korean person** 또는 **Asian person** 명시
-- **no text, no words, no letters** 포함
-- **16:9 aspect ratio** 명시
-- **ultra-realistic, cinematic style** 포함
-- **dramatic lighting** 포함
-
-4. 원본 설명의 의도를 정확히 반영하되, 성별이나 인물 특성을 임의로 변경하지 마세요.
-
-영문 Imagen-3 생성 프롬프트만 응답해주세요:`;
+Ultra-realistic, cinematic YouTube thumbnail, dramatic lighting, vibrant colors, 16:9 aspect ratio, no text`;

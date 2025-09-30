@@ -321,7 +321,7 @@ contextBridge.exposeInMainWorld("api", {
   // 이미지 생성
   // ========================================================================
   generateThumbnails: (payload) => ipcRenderer.invoke("replicate:generate", payload),
-  generateThumbnailsGoogleImagen3: (payload) => ipcRenderer.invoke("generateThumbnailsGoogleImagen3", payload),
+  expandThumbnailPrompt: (userInput) => ipcRenderer.invoke("thumbnail:expand-prompt", userInput),
 
   // ========================================================================
   // 캐시 관리
@@ -335,7 +335,6 @@ contextBridge.exposeInMainWorld("api", {
   testReplicate: (token) => ipcRenderer.invoke("replicate:test", token),
   testAnthropic: (apiKey) => ipcRenderer.invoke("anthropic:test", apiKey),
   testGoogleTTS: (apiKey) => ipcRenderer.invoke("testGoogleTTS", apiKey),
-  testGoogleImageFX: (apiKey) => ipcRenderer.invoke("googleImageFx:test", apiKey),
   testPexels: (key) => ipcRenderer.invoke("pexels:test", key),
   testPixabay: (key) => ipcRenderer.invoke("pixabay:test", key),
 

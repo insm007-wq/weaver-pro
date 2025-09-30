@@ -481,4 +481,75 @@ async function callAnthropic(params) {
   throw new Error(`대본 생성 실패: ${lastError?.message || "알 수 없는 오류"}`);
 }
 
-module.exports = { callAnthropic };
+/**
+ * 썸네일 프롬프트 확장
+ * 사용자의 간단한 입력(한글/영어)을 YouTube 썸네일에 최적화된 상세 영어 프롬프트로 변환
+ */
+async function expandThumbnailPrompt(userInput) {
+  console.log('[Anthropic] 썸네일 프롬프트 확장 시작:', userInput);
+
+  const apiKey = await getSecret("anthropicKey");
+  if (!apiKey) {
+    throw new Error("Anthropic API Key가 설정되지 않았습니다.");
+  }
+
+  const systemPrompt = `You are a professional YouTube thumbnail prompt engineer.
+Your task is to transform user's simple input into a detailed, optimized image generation prompt for Replicate Flux model.
+
+Guidelines:
+- Always output in English, even if input is in Korean/other languages
+- Make it dramatic, eye-catching, and thumbnail-friendly
+- Include specific details: expressions, poses, lighting, composition
+- Add cinematic and realistic elements
+- Keep it under 200 words
+- Focus on visual impact and YouTube thumbnail best practices
+- Always include: "16:9 aspect ratio, no text, no words, no letters"
+
+Output ONLY the image generation prompt, nothing else.`;
+
+  const userPrompt = `Transform this into a detailed YouTube thumbnail image generation prompt:
+
+"${userInput.trim()}"
+
+Make it vivid, specific, and optimized for a stunning YouTube thumbnail.`;
+
+  try {
+    const response = await fetch(ANTHROPIC_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: DEFAULT_MODEL,
+        max_tokens: 500, // 충분히 상세하되 너무 길지 않게
+        system: systemPrompt,
+        messages: [
+          {
+            role: "user",
+            content: userPrompt,
+          },
+        ],
+        temperature: 0.7, // 창의성과 일관성의 균형
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      throw new Error(`Anthropic API Error ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    const expandedPrompt = data?.content?.[0]?.text?.trim() || userInput;
+
+    console.log('[Anthropic] 확장된 프롬프트:', expandedPrompt);
+    return expandedPrompt;
+  } catch (error) {
+    console.error('[Anthropic] 프롬프트 확장 실패:', error);
+    // 실패 시 원본 입력 + 기본 키워드 반환
+    return `${userInput}, ultra-realistic, cinematic YouTube thumbnail, dramatic lighting, vibrant colors, 16:9 aspect ratio, no text`;
+  }
+}
+
+module.exports = { callAnthropic, expandThumbnailPrompt };

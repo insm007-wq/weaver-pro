@@ -350,7 +350,9 @@ ipcMain.handle("files/getProjectRoot", async () => {
  */
 ipcMain.handle("file:save-url", async (_e, payload = {}) => {
   try {
-    const { url, suggestedName = "image.jpg" } = payload || {};
+    const { url, suggestedName = "image" } = payload || {};
+    console.log('[file:save-url] 요청 받음:', { url: url?.substring(0, 100), suggestedName });
+
     if (!url || typeof url !== "string") {
       return { ok: false, message: "url_required" };
     }
@@ -360,32 +362,43 @@ ipcMain.handle("file:save-url", async (_e, payload = {}) => {
     const exportsDir = path.join(root, "exports");
     ensureDirSync(exportsDir);
 
-    // 확장자/기본 파일명 결정
-    const guessExt = () => {
-      if (suggestedName && path.extname(suggestedName)) {
-        return suggestedName;
-      }
-      try {
-        const u = new URL(url);
-        const base = path.basename(u.pathname);
-        if (base && path.extname(base)) return base;
-      } catch {}
-      return "image.jpg";
-    };
+    // 확장자 제거 후 .jpg 강제 추가 (예전 방식)
+    const baseName = (suggestedName || "image").replace(/\.[^/.]+$/, "");
+    const defaultPath = path.join(exportsDir, `${baseName}.jpg`);
+    console.log('[file:save-url] 저장 대화상자 열기:', defaultPath);
 
-    const defaultPath = path.join(exportsDir, guessExt());
     const { canceled, filePath } = await dialog.showSaveDialog({
       defaultPath,
-      filters: [{ name: "Images", extensions: ["jpg", "jpeg", "png", "webp"] }],
+      filters: [{ name: "JPEG 이미지", extensions: ["jpg"] }],
     });
-    if (canceled || !filePath) return { ok: false, message: "canceled" };
 
-    const buf = url.startsWith("data:")
+    if (canceled || !filePath) return { ok: false, message: "canceled" };
+    console.log('[file:save-url] 저장 경로 선택됨:', filePath);
+
+    let buf = url.startsWith("data:")
       ? parseDataUrl(url)
       : await downloadBuffer(url);
+    console.log('[file:save-url] 다운로드 완료, 버퍼 크기:', buf?.length, 'bytes');
+
+    // WebP나 다른 형식을 JPEG로 변환
+    try {
+      const sharp = require('sharp');
+      const convertedBuf = await sharp(buf)
+        .jpeg({ quality: 95 })
+        .toBuffer();
+      console.log('[file:save-url] JPEG 변환 완료, 변환 후 크기:', convertedBuf?.length, 'bytes');
+      buf = convertedBuf;
+    } catch (convertErr) {
+      console.warn('[file:save-url] JPEG 변환 실패, 원본 저장:', convertErr.message);
+      // 변환 실패 시 원본 그대로 저장
+    }
+
     await fs.promises.writeFile(filePath, buf);
+    console.log('[file:save-url] 파일 저장 완료:', filePath);
+
     return { ok: true, path: filePath };
   } catch (err) {
+    console.error('[file:save-url] 오류 발생:', err);
     return { ok: false, message: String(err?.message || err) };
   }
 });

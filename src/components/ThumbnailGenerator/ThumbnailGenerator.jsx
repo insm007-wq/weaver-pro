@@ -195,32 +195,7 @@ const MAX_UPLOAD_MB = 10; // 10MB로 제한
 const DEFAULT_TEMPLATE = IMPORTED_DEFAULT_TEMPLATE;
 
 /** 품질 설정 프리셋 */
-const QUALITY_PRESETS = [
-  {
-    value: "fast",
-    label: "빠른 생성",
-    steps: 20,
-    cfg: 7,
-    description: "빠른 속도, 적절한 품질",
-    estimatedTime: "약 10-15초",
-  },
-  {
-    value: "balanced",
-    label: "균형 잡힌",
-    steps: 30,
-    cfg: 8,
-    description: "속도와 품질의 균형",
-    estimatedTime: "약 20-30초",
-  },
-  {
-    value: "quality",
-    label: "최고 품질",
-    steps: 50,
-    cfg: 10,
-    description: "최상의 품질, 느린 속도",
-    estimatedTime: "약 40-60초",
-  },
-];
+// 품질 설정은 Replicate API에서 자동 처리되므로 UI 옵션 제거됨
 
 function ThumbnailGenerator() {
   const styles = useStyles();
@@ -232,7 +207,6 @@ function ThumbnailGenerator() {
   const [fixedWidthPx, setFixedWidthPx] = useState(null);
 
   /** 공통 상태 */
-  const [provider, setProvider] = useState("replicate"); // 'replicate' | 'gemini' - 전역 설정에서 로드
   const [metaTemplate, setMetaTemplate] = useState("");
   const [templateLoading, setTemplateLoading] = useState(true);
 
@@ -245,18 +219,11 @@ function ThumbnailGenerator() {
     total: 0,
   });
 
-  /** 품질 설정 */
-  const [qualityPreset, setQualityPreset] = useState("balanced");
-
   /** Replicate 전용 */
-  const [prompt, setPrompt] = useState(""); // ⬅️ Replicate일 때만 사용
-  const [mode, setMode] = useState("dramatic"); // dramatic | calm
+  const [prompt, setPrompt] = useState("");
 
   /** 공통 옵션 */
   const [count, setCount] = useState(1);
-
-  /** Imagen3 전용 옵션 */
-  const [aspectRatio, setAspectRatio] = useState("16:9"); // "1:1" | "3:4" | "4:3" | "9:16" | "16:9"
 
   /** 참고 이미지(분석용) */
   const [imageFile, setImageFile] = useState(null);
@@ -409,24 +376,11 @@ function ThumbnailGenerator() {
 
       // 설정에서 선택된 분석 엔진에 따라 표시 (실제 사용된 엔진 표시)
       try {
-        const savedAnalysisEngine = await window.api.getSetting("thumbnailAnalysisEngine");
-        let engineName = "Claude Sonnet 4"; // 기본값
-
-        if (savedAnalysisEngine === "gemini") {
-          engineName = "Google Gemini 2.5 Flash";
-        } else if (savedAnalysisEngine === "gemini-pro") {
-          engineName = "Google Gemini 2.5 Pro";
-        } else if (savedAnalysisEngine === "gemini-lite") {
-          engineName = "Google Gemini 2.5 Flash-Lite";
-        } else if (savedAnalysisEngine === "anthropic") {
-          engineName = "Claude Sonnet 4";
-        }
-
-        setAnalysisEngine(engineName);
-        console.log(`이미지 분석 완료 - 사용된 엔진: ${engineName} (설정값: ${savedAnalysisEngine})`);
+        setAnalysisEngine("Claude Sonnet 4");
+        console.log(`이미지 분석 완료 - 사용된 엔진: Claude Sonnet 4`);
       } catch (settingError) {
         console.error("분석 엔진 설정 로드 실패:", settingError);
-        setAnalysisEngine("Claude Sonnet 4"); // 기본값
+        setAnalysisEngine("Claude Sonnet 4");
       }
 
       // 분석 완료 상태 업데이트
@@ -478,21 +432,12 @@ function ThumbnailGenerator() {
     onFile(file);
   };
 
-  /** 최종 프롬프트 만들기 */
+  /** 최종 프롬프트 만들기 (Replicate 전용) */
   const buildFinalPrompt = () => {
     const referenceAnalysis = (fxAnalysis || "").trim(); // 전체 분석 결과 사용
     const base = (prompt || "").trim(); // 사용자 입력
 
-    if (provider === "gemini") {
-      // ✅ Gemini: 사용자 입력을 {content}에, 분석 결과를 {referenceAnalysis}에 주입
-      const core = (metaTemplate || "")
-        .replace(/{content}/g, base)
-        .replace(/{referenceAnalysis}/g, referenceAnalysis)
-        .trim();
-      return core;
-    }
-
-    // ✅ Replicate: 장면 설명 + 참고 이미지 분석 + 공통 키워드 + 모드
+    // 템플릿에 변수 치환
     let core = (metaTemplate || "")
       .replace(/{content}/g, base)
       .replace(/{referenceAnalysis}/g, referenceAnalysis)
@@ -508,12 +453,8 @@ function ThumbnailGenerator() {
       "no text, no words, no letters",
       "thumbnail-friendly framing",
     ];
-    const mood =
-      mode === "dramatic"
-        ? ["high contrast", "emotional clarity", "tense atmosphere"]
-        : ["soft lighting", "natural mood", "subtle color palette"];
 
-    return `${core}\n\n${[...common, ...mood].join(", ")}`;
+    return `${core}\n\n${common.join(", ")}`;
   };
 
   /** 프로그레스 업데이트 함수 */
@@ -537,8 +478,7 @@ function ThumbnailGenerator() {
 
   /** 예상 시간 계산 */
   const calculateEstimatedTime = () => {
-    const preset = QUALITY_PRESETS.find((p) => p.value === qualityPreset);
-    const baseTime = preset ? preset.steps * 0.5 : 15; // 기본 15초
+    const baseTime = 25; // Replicate Flux 평균 생성 시간 (초)
     return baseTime * count; // 개수에 비례
   };
 
@@ -553,42 +493,30 @@ function ThumbnailGenerator() {
       return;
     }
 
-    // 각 프로바이더별 필수 필드 가드
-    if (provider === "replicate" && !prompt.trim() && !fxEn.trim() && !metaTemplate.trim()) {
+    // 필수 필드 검증
+    if (!prompt.trim() && !fxEn.trim() && !metaTemplate.trim()) {
       handleError(new Error("validation_failed"), "thumbnail_generation", {
         customMessage: "장면 설명 또는 템플릿/분석 결과 중 하나는 필요합니다.",
       });
       return;
     }
-    if (provider === "gemini" && !prompt.trim() && !metaTemplate.trim() && !fxEn.trim()) {
-      handleError(new Error("validation_failed"), "thumbnail_generation", {
-        customMessage: "장면 설명, 템플릿, 또는 분석 결과 중 하나는 필요합니다.",
-      });
-      return;
-    }
 
     // IPC 가드
-    const hasReplicate = !!window?.api?.generateThumbnails;
-    const hasGemini = !!window?.api?.generateThumbnailsGemini;
-    if (provider === "replicate" && !hasReplicate) {
+    if (!window?.api?.generateThumbnails) {
       handleError(new Error("service_unavailable"), "thumbnail_generation", {
         customMessage: "Replicate 서비스를 사용할 수 없습니다. 설정을 확인하세요.",
       });
       return;
     }
-    if (provider === "gemini" && !hasGemini) {
-      handleError(new Error("service_unavailable"), "thumbnail_generation", {
-        customMessage: "Gemini 서비스를 사용할 수 없습니다. 설정을 확인하세요.",
-      });
-      return;
-    }
 
-    // 생성 시작 전 캐시 삭제
-    try {
-      await window.api.clearCache();
-      console.log("캐시가 자동으로 삭제되었습니다.");
-    } catch (error) {
-      console.warn("캐시 삭제 실패 (무시하고 계속 진행):", error);
+    // 생성 시작 전 캐시 삭제 (선택사항)
+    if (window.api?.clearCache) {
+      try {
+        await window.api.clearCache();
+        console.log("캐시가 자동으로 삭제되었습니다.");
+      } catch (error) {
+        // 캐시 삭제는 선택사항이므로 오류 무시
+      }
     }
 
     setLoading(true);
@@ -604,40 +532,35 @@ function ThumbnailGenerator() {
 
     try {
       const started = Date.now();
-      const finalPrompt = buildFinalPrompt();
+
+      // ✨ 1단계: Anthropic으로 프롬프트 확장
+      updateProgress("generating", 0, count, "프롬프트 최적화 중...");
+      const userPrompt = buildFinalPrompt();
+
+      let finalPrompt = userPrompt;
+      try {
+        const expandResult = await window.api.expandThumbnailPrompt(userPrompt);
+        if (expandResult?.ok && expandResult?.prompt) {
+          finalPrompt = expandResult.prompt;
+          console.log('[썸네일 생성] 프롬프트 확장 완료:', finalPrompt);
+        } else if (expandResult?.fallbackPrompt) {
+          finalPrompt = expandResult.fallbackPrompt;
+          console.warn('[썸네일 생성] 프롬프트 확장 실패, 폴백 사용:', finalPrompt);
+        }
+      } catch (expandError) {
+        console.error('[썸네일 생성] 프롬프트 확장 오류, 원본 사용:', expandError);
+        // 오류 시 원본 프롬프트 사용
+      }
+
       setUsedPrompt(finalPrompt);
 
-      let res;
-      if (provider === "gemini") {
-        // ⬇️ Google Gemini 호출 (count, aspectRatio 사용)
-        updateProgress("generating", 0, count, "Gemini API 초기화 중...");
-        const geminiApiKey = await window.api.getSecret("geminiKey");
-        if (!geminiApiKey?.trim()) {
-          throw new Error("Gemini API 키가 설정되지 않았습니다. 설정 > API에서 키를 입력하세요.");
-        }
+      // ✨ 2단계: Replicate으로 이미지 생성
+      updateProgress("generating", 1, count, `${count}개 썸네일 생성 중...`);
 
-        updateProgress("generating", 1, count, `${count}개 썸네일 생성 중...`);
-        const preset = QUALITY_PRESETS.find((p) => p.value === qualityPreset);
-        res = await window.api.generateThumbnailsGemini({
-          prompt: finalPrompt,
-          count,
-          aspectRatio,
-          apiKey: geminiApiKey,
-          quality: preset ? { steps: preset.steps, cfg: preset.cfg } : undefined,
-        });
-      } else {
-        // ⬇️ Replicate 호출 (count, mode 사용)
-        updateProgress("generating", 0, count, "Replicate API 초기화 중...");
-        updateProgress("generating", 1, count, `${count}개 썸네일 생성 중...`);
-
-        const preset = QUALITY_PRESETS.find((p) => p.value === qualityPreset);
-        res = await window.api.generateThumbnails({
-          prompt: finalPrompt,
-          count,
-          mode,
-          quality: preset ? { steps: preset.steps, cfg: preset.cfg } : undefined,
-        });
-      }
+      const res = await window.api.generateThumbnails({
+        prompt: finalPrompt,
+        count,
+      });
 
       if (!res?.ok) {
         throw new Error(typeof res?.message === "string" ? res.message : JSON.stringify(res?.message));
@@ -664,7 +587,7 @@ function ThumbnailGenerator() {
       // Use centralized error handling with context-aware error processing
       handleApiError(e, "thumbnail_generation", {
         metadata: {
-          provider: provider,
+          provider: "replicate",
           count: count,
           hasPrompt: !!prompt.trim(),
         },
@@ -714,11 +637,7 @@ function ThumbnailGenerator() {
           </Label>
           <Textarea
             rows={8}
-            placeholder={
-              provider === "replicate"
-                ? "어떤 썸네일을 원하시나요? 인물의 표정, 상황, 감정을 구체적으로 적어주세요."
-                : "장면에 대한 설명을 입력하세요. 참고 이미지와 함께 프롬프트 템플릿에 활용됩니다."
-            }
+            placeholder="한글/영어로 간단히 입력하세요 (예: 농구 선수, basketball player dunking)&#10;AI가 자동으로 YouTube 썸네일에 최적화된 프롬프트로 변환합니다."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             style={{
@@ -728,7 +647,7 @@ function ThumbnailGenerator() {
             }}
           />
           <Caption1 style={{ marginTop: tokens.spacingVerticalXS, color: tokens.colorNeutralForeground3 }}>
-            □ 장면 설명이 템플릿의 {"{"}content{"}"} 변수에 삽입되어 프롬프트가 생성됩니다.
+            💡 간단히 입력하면 AI가 자동으로 상세한 프롬프트로 확장합니다. 한글/영어 모두 지원!
           </Caption1>
         </Field>
       </Card>
@@ -878,7 +797,7 @@ function ThumbnailGenerator() {
                     <Title3 style={{ margin: 0, fontSize: tokens.fontSizeBase400 }}>참고 이미지 분석</Title3>
                   </div>
                   {analysisEngine && (
-                    <Badge appearance="tint" color={analysisEngine.includes("Gemini") ? "success" : "brand"} size="small">
+                    <Badge appearance="tint" color="brand" size="small">
                       {analysisEngine}
                     </Badge>
                   )}
@@ -964,77 +883,30 @@ function ThumbnailGenerator() {
             </Dropdown>
           </Field>
 
-          {/* 품질 설정 */}
-          <Field>
-            <Label weight="semibold">
-              <SettingsRegular style={{ marginRight: tokens.spacingHorizontalXS }} />
-              품질 설정
-            </Label>
-            <Dropdown value={qualityPreset} onOptionSelect={(_, data) => setQualityPreset(data.optionValue)}>
-              {QUALITY_PRESETS.map((preset) => (
-                <Option key={preset.value} value={preset.value} text={`${preset.label} - ${preset.description} • ${preset.estimatedTime}`}>
-                  <div>
-                    <div style={{ fontWeight: tokens.fontWeightSemibold }}>{preset.label}</div>
-                    <Caption1>
-                      {preset.description} • {preset.estimatedTime}
-                    </Caption1>
-                  </div>
-                </Option>
-              ))}
-            </Dropdown>
-          </Field>
-
-          {/* 분기 옵션 */}
-          {provider === "replicate" ? (
-            <Field>
-              <Label weight="semibold">생성 모드</Label>
-              <Dropdown value={mode} onOptionSelect={(_, data) => setMode(data.optionValue)}>
-                <Option value="dramatic">극적 & 자극적 모드</Option>
-                <Option value="calm">차분 & 자연스러운 모드</Option>
-              </Dropdown>
-            </Field>
-          ) : (
-            <Field>
-              <Label weight="semibold">가로세로 비율 (ImageFX)</Label>
-              <Dropdown value={aspectRatio} onOptionSelect={(_, data) => setAspectRatio(data.optionValue)}>
-                {["1:1", "3:4", "4:3", "9:16", "16:9"].map((r) => (
-                  <Option key={r} value={r}>
-                    {r}
-                  </Option>
-                ))}
-              </Dropdown>
-            </Field>
-          )}
         </div>
       </Card>
 
       {/* 생성 버튼 */}
       <Card className={styles.settingsCard}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tokens.spacingVerticalM }}>
-          <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>생성 엔진:</Caption1>
-          <div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS }}>
-            <Badge appearance="filled" color="brand" size="medium">
-              {provider === "replicate" ? "Replicate (Flux)" : "Google Gemini (Imagen 3)"}
-            </Badge>
-            {(loading || fxLoading) && remainingTime !== null && (
-              <Caption1
-                style={{
-                  color: fxLoading ? tokens.colorBrandForeground1 : tokens.colorNeutralForeground1,
-                  fontWeight: tokens.fontWeightSemibold,
-                }}
-              >
-                <TimerRegular style={{ marginRight: tokens.spacingHorizontalXXS }} />
-                {fxLoading
-                  ? remainingTime > 1
-                    ? `분석 중 약 ${Math.ceil(remainingTime)}초 남음`
-                    : "분석 거의 완료..."
-                  : remainingTime > 1
-                  ? `생성 중 약 ${Math.ceil(remainingTime)}초 남음`
-                  : "생성 거의 완료..."}
-              </Caption1>
-            )}
+        {(loading || fxLoading) && remainingTime !== null && (
+          <div style={{ marginBottom: tokens.spacingVerticalM, textAlign: "center" }}>
+            <Caption1
+              style={{
+                color: fxLoading ? tokens.colorBrandForeground1 : tokens.colorNeutralForeground1,
+                fontWeight: tokens.fontWeightSemibold,
+              }}
+            >
+              <TimerRegular style={{ marginRight: tokens.spacingHorizontalXXS }} />
+              {fxLoading
+                ? remainingTime > 1
+                  ? `분석 중 약 ${Math.ceil(remainingTime)}초 남음`
+                  : "분석 거의 완료..."
+                : remainingTime > 1
+                ? `생성 중 약 ${Math.ceil(remainingTime)}초 남음`
+                : "생성 거의 완료..."}
+            </Caption1>
           </div>
-        </div>
+        )}
         <Button
           appearance="primary"
           size="large"
@@ -1061,19 +933,14 @@ function ThumbnailGenerator() {
       {/* 결과 */}
       {results.length > 0 && (
         <div style={{ marginTop: tokens.spacingVerticalXXL }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tokens.spacingVerticalM }}>
-            <div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS }}>
-              <span>🎉</span>
-              <Title3>생성 완료!</Title3>
-              {tookMs != null && (
-                <Caption1>
-                  {(tookMs / 1000).toFixed(1)}초 만에 {results.length}개의 썸네일이 생성되었습니다.
-                </Caption1>
-              )}
-            </div>
-            <Badge appearance="filled" color="success" size="medium">
-              {provider === "replicate" ? "Replicate (Flux)" : "Google Gemini (Imagen 3)"}
-            </Badge>
+          <div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS, marginBottom: tokens.spacingVerticalM }}>
+            <span>🎉</span>
+            <Title3>생성 완료!</Title3>
+            {tookMs != null && (
+              <Caption1>
+                {(tookMs / 1000).toFixed(1)}초 만에 {results.length}개의 썸네일이 생성되었습니다.
+              </Caption1>
+            )}
           </div>
 
           <div className={styles.resultsGrid}>
