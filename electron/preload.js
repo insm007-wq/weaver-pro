@@ -411,8 +411,14 @@ contextBridge.exposeInMainWorld("electron", {
 
   // FFmpeg 영상 합성
   ffmpeg: {
-    compose: ({ audioFiles, imageFiles, outputPath, options }) => 
+    compose: ({ audioFiles, imageFiles, outputPath, options }) =>
       ipcRenderer.invoke("ffmpeg:compose", { audioFiles, imageFiles, outputPath, options }),
     check: () => ipcRenderer.invoke("ffmpeg:check"),
+  },
+
+  // 음성 파일 관련 API (ffmpeg 모듈에서 제공)
+  audio: {
+    getDuration: ({ filePath }) => ipcRenderer.invoke("audio:getDuration", { filePath }),
+    getDurations: ({ filePaths }) => ipcRenderer.invoke("audio:getDurations", { filePaths }),
   },
 });

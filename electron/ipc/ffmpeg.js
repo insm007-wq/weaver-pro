@@ -19,13 +19,40 @@ try {
   store = { get: (key, def) => def, set: () => {} };
 }
 
-// music-metadata를 안전하게 로드
+// music-metadata를 안전하게 로드 (ES 모듈 처리)
 let mm = null;
-try {
-  mm = require("music-metadata");
-  console.log("✅ music-metadata 로드 성공");
-} catch (error) {
-  console.warn("⚠️ music-metadata 로드 실패:", error.message);
+async function loadMusicMetadata() {
+  try {
+    if (!mm) {
+      mm = await import("music-metadata");
+      console.log("✅ music-metadata 로드 성공");
+    }
+    return mm;
+  } catch (error) {
+    console.warn("⚠️ music-metadata 로드 실패:", error.message);
+    return null;
+  }
+}
+
+// 음성 파일의 duration을 가져오는 함수 (FFmpeg 사용)
+async function getAudioDuration(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`파일을 찾을 수 없습니다: ${filePath}`);
+    }
+
+    // FFmpeg를 사용하여 duration 측정
+    const duration = await probeDurationSec(filePath);
+
+    if (typeof duration !== 'number' || isNaN(duration) || duration <= 0) {
+      throw new Error("유효하지 않은 음성 파일 길이입니다");
+    }
+
+    return duration;
+  } catch (error) {
+    console.error("음성 파일 길이 가져오기 실패:", error);
+    throw error;
+  }
 }
 
 const ffmpegPath = path.join(__dirname, "..", "..", "node_modules", "ffmpeg-static", "ffmpeg.exe");
@@ -46,6 +73,8 @@ function register() {
     ipcMain.removeHandler("ffmpeg:compose");
     ipcMain.removeHandler("ffmpeg:check");
     ipcMain.removeHandler("ffmpeg:duration");
+    ipcMain.removeHandler("audio:getDuration");
+    ipcMain.removeHandler("audio:getDurations");
   } catch {}
 
   ipcMain.handle(
@@ -122,6 +151,45 @@ function register() {
       return { success: true, seconds: sec };
     } catch (e) {
       return { success: false, message: e.message };
+    }
+  });
+
+  // 음성 파일 duration 가져오기 IPC 핸들러
+  ipcMain.handle("audio:getDuration", async (event, { filePath }) => {
+    try {
+      if (!filePath) {
+        return { success: false, error: "파일 경로가 필요합니다" };
+      }
+
+      const duration = await getAudioDuration(filePath);
+      return { success: true, duration };
+    } catch (error) {
+      console.error("음성 파일 길이 가져오기 실패:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // 여러 음성 파일의 duration을 한번에 가져오기
+  ipcMain.handle("audio:getDurations", async (event, { filePaths }) => {
+    try {
+      if (!Array.isArray(filePaths)) {
+        return { success: false, error: "파일 경로 배열이 필요합니다" };
+      }
+
+      const results = [];
+      for (const filePath of filePaths) {
+        try {
+          const duration = await getAudioDuration(filePath);
+          results.push({ filePath, duration, success: true });
+        } catch (error) {
+          results.push({ filePath, duration: 0, success: false, error: error.message });
+        }
+      }
+
+      return { success: true, results };
+    } catch (error) {
+      console.error("여러 음성 파일 길이 가져오기 실패:", error);
+      return { success: false, error: error.message };
     }
   });
 

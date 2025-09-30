@@ -14,7 +14,6 @@ const ScriptVoiceGenerator = lazy(() => import("./components/scriptgen/ScriptVoi
 const MediaPrepEditor = lazy(() => import("./components/media-prep/MediaPrepEditor"));
 const MediaDownloadPage = lazy(() => import("./components/media-down/MediaDownloadPage"));
 const MediaEditPage = lazy(() => import("./components/media-edit/MediaEditPage"));
-const FinalizePage = lazy(() => import("./components/finalize/FinalizePage"));
 
 const useStyles = makeStyles({
   root: {
@@ -203,9 +202,6 @@ function App() {
                   <MediaEditPage />
                 </KeepAlivePane>
 
-                <KeepAlivePane active={currentPage === "finalize"}>
-                  <FinalizePage />
-                </KeepAlivePane>
 
                 <KeepAlivePane active={currentPage === "settings"}>
                   <SettingsPage onBack={() => setCurrentPage(null)} />

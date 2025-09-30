@@ -49,6 +49,9 @@ function SceneList({
     speed: "1.0",
     pitch: "-1"
   });
+
+  // 음성 파일 duration 상태
+  const [audioDurations, setAudioDurations] = useState({});
   // 시간 포맷 헬퍼
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -111,6 +114,19 @@ function SceneList({
         const audioFile = result.audioFile;
         console.log(`[TTS 재생성] 씬 ${sceneIndex + 1} 음성 생성 완료:`, audioFile.audioUrl);
 
+        // 새로 생성된 음성 파일의 duration 가져오기
+        try {
+          const durationResult = await window.api.invoke("audio:getDuration", { filePath: audioFile.audioUrl });
+          if (durationResult?.success) {
+            setAudioDurations(prev => ({
+              ...prev,
+              [sceneIndex]: durationResult.duration
+            }));
+          }
+        } catch (error) {
+          console.error("새 음성 파일 길이 가져오기 실패:", error);
+        }
+
         // 씬 데이터에 audioPath 추가/업데이트
         const updatedScenes = [...scenes];
         updatedScenes[sceneIndex] = {
@@ -163,13 +179,27 @@ function SceneList({
 
       const result = await window.api.invoke("tts/synthesizeByScenes", payload);
 
-      if (result?.ok && result?.parts?.length > 0) {
-        const audioBlob = new Blob([
-          Uint8Array.from(atob(result.parts[0].base64), (c) => c.charCodeAt(0))
-        ], { type: "audio/mpeg" });
+      if (result?.ok && result?.parts?.length > 0 && result.parts[0].base64) {
+        try {
+          // base64 데이터 검증
+          const base64Data = result.parts[0].base64.replace(/^data:audio\/[^;]+;base64,/, '');
+          const binaryString = atob(base64Data);
+          const bytes = new Uint8Array(binaryString.length);
 
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+
+          const audioBlob = new Blob([bytes], { type: "audio/mpeg" });
+
+          if (audioBlob.size === 0) {
+            throw new Error("생성된 오디오 blob이 비어있습니다");
+          }
+
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const audio = new Audio(audioUrl);
+
+          console.log("[TTS 미리듣기] 오디오 blob 생성 성공:", audioBlob.size, "bytes");
 
         setCurrentPreviewAudio(audio);
 
@@ -186,7 +216,11 @@ function SceneList({
           showError("미리듣기 재생에 실패했습니다.");
         };
 
-        await audio.play();
+          await audio.play();
+        } catch (blobError) {
+          console.error("오디오 blob 생성 실패:", blobError);
+          throw new Error(`오디오 데이터 처리 실패: ${blobError.message}`);
+        }
       } else {
         throw new Error(result?.error || result?.message || "음성 합성 실패");
       }
@@ -574,6 +608,59 @@ function SceneList({
     loadTtsSettings();
   }, []);
 
+  // 모든 씬의 음성 파일 duration 로드
+  const loadAudioDurations = useCallback(async () => {
+    try {
+      // videoSaveFolder 경로 가져오기
+      const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
+      const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
+
+      console.log("[음성 길이 로드] videoSaveFolder:", videoSaveFolder);
+      console.log("[음성 길이 로드] scenes.length:", scenes.length);
+
+      if (!videoSaveFolder || scenes.length === 0) {
+        console.log("[음성 길이 로드] 조건 불만족으로 종료");
+        return;
+      }
+
+      // 각 씬의 음성 파일 경로 생성
+      const filePaths = scenes.map((_, index) => {
+        const sceneNumber = String(index + 1).padStart(3, "0");
+        return `${videoSaveFolder}\\audio\\parts\\scene-${sceneNumber}.mp3`;
+      });
+
+      console.log("[음성 길이 로드] 음성 파일 경로들:", filePaths);
+
+      // 모든 음성 파일의 duration 가져오기
+      const result = await window.api.invoke("audio:getDurations", { filePaths });
+
+      console.log("[음성 길이 로드] API 결과:", result);
+
+      if (result?.success && result?.results) {
+        const durationsMap = {};
+        result.results.forEach((item, index) => {
+          if (item.success) {
+            durationsMap[index] = item.duration;
+            console.log(`[음성 길이 로드] 씬 ${index + 1}: ${item.duration}초`);
+          } else {
+            console.log(`[음성 길이 로드] 씬 ${index + 1} 실패:`, item.error);
+          }
+        });
+        setAudioDurations(durationsMap);
+        console.log("[음성 길이 로드] 최종 durationsMap:", durationsMap);
+      } else {
+        console.log("[음성 길이 로드] API 결과가 올바르지 않음");
+      }
+    } catch (error) {
+      console.error("음성 파일 길이 로드 실패:", error);
+    }
+  }, [scenes]);
+
+  // 씬 변경 시 음성 파일 duration 로드
+  useEffect(() => {
+    loadAudioDurations();
+  }, [loadAudioDurations]);
+
   // 컴포넌트 언마운트 시 미리듣기 오디오 정리
   useEffect(() => {
     return () => {
@@ -729,7 +816,12 @@ function SceneList({
                     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                       <ClockRegular style={{ fontSize: 12 }} />
                       <Text size={200} style={{ color: "#666" }}>
-                        {formatTime(scene.start)} - {formatTime(scene.end)}
+                        {audioDurations[index] ?
+                          `${formatTime(audioDurations[index])} (음성)` :
+                          (scene.start && scene.end && scene.start !== scene.end) ?
+                            `${formatTime(scene.start)} - ${formatTime(scene.end)}` :
+                            "음성 파일 로드 중..."
+                        }
                       </Text>
                     </div>
                   )}
