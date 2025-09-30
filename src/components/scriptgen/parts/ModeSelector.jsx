@@ -42,6 +42,8 @@ const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, com
   // 클릭 핸들러 최적화
   const handleModeChange = useCallback(
     (modeKey) => {
+      const mode = MODE_CONFIGS[modeKey];
+      if (mode?.disabled) return;
       const status = getValidationStatus(modeKey);
       if (status !== "generating") {
         onModeChange(modeKey);
@@ -205,20 +207,22 @@ const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, com
             const isSelected = selectedMode === mode.key;
             const status = getValidationStatus(mode.key);
             const Icon = mode.icon;
+            const isDisabled = mode.disabled;
 
             return (
               <button
                 key={mode.key}
                 onClick={() => handleModeChange(mode.key)}
+                disabled={isDisabled}
                 style={{
                   flex: 1,
                   background: isSelected ? mode.gradient : "transparent",
                   border: "none",
                   borderRadius: 6,
                   padding: "12px 16px",
-                  cursor: status === "generating" ? "not-allowed" : "pointer",
+                  cursor: isDisabled ? "not-allowed" : status === "generating" ? "not-allowed" : "pointer",
                   transition: "all 200ms ease-out",
-                  opacity: status === "generating" && !isSelected ? 0.6 : 1,
+                  opacity: isDisabled ? 0.4 : status === "generating" && !isSelected ? 0.6 : 1,
                   color: isSelected ? "white" : tokens.colorNeutralForeground1,
                   display: "flex",
                   alignItems: "center",
@@ -282,6 +286,7 @@ const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, com
           const isSelected = selectedMode === mode.key;
           const status = getValidationStatus(mode.key);
           const Icon = mode.icon;
+          const isDisabled = mode.disabled;
 
           return (
             <Card
@@ -291,11 +296,12 @@ const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, com
                 border: isSelected ? "2px solid transparent" : `2px solid ${tokens.colorNeutralStroke2}`,
                 borderRadius: 12,
                 padding: tokens.spacingVerticalM,
-                cursor: status === "generating" ? "not-allowed" : "pointer",
+                cursor: isDisabled ? "not-allowed" : status === "generating" ? "not-allowed" : "pointer",
                 transform: isSelected ? "translateY(-2px)" : "none",
                 boxShadow: isSelected ? "0 8px 24px rgba(0,0,0,0.15)" : "0 2px 8px rgba(0,0,0,0.08)",
                 transition: "all 200ms ease-out",
-                opacity: status === "generating" && !isSelected ? 0.6 : 1,
+                opacity: isDisabled ? 0.4 : status === "generating" && !isSelected ? 0.6 : 1,
+                pointerEvents: isDisabled ? "none" : "auto",
               }}
               onClick={() => handleModeChange(mode.key)}
             >

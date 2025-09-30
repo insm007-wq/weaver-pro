@@ -34,14 +34,6 @@ export const IMAGE_STYLE_OPTIONS = [
 
 export const AI_ENGINE_OPTIONS = [
   {
-    key: "openai-gpt5mini",
-    text: "🤖 OpenAI GPT-5 Mini",
-    desc: "최신 GPT-5 모델, 롱폼 대본 최적화",
-    processingTime: "2-5분",
-    features: ["📝 긴 대본 생성", "🎯 정확성", "🔄 일관성"],
-    rating: 4.8,
-  },
-  {
     key: "anthropic",
     text: "🧠 Anthropic Claude",
     desc: "Claude Sonnet/Haiku, 정확하고 자연스러운 문체",
@@ -50,12 +42,12 @@ export const AI_ENGINE_OPTIONS = [
     rating: 4.9,
   },
   {
-    key: "google-gemini",
-    text: "🚀 Google Gemini",
-    desc: "Google의 최신 멀티모달 AI 모델",
+    key: "replicate",
+    text: "🦙 Replicate Llama",
+    desc: "Llama 3 모델, 빠르고 효율적",
     processingTime: "1-2분",
-    features: ["⚡ 빠른 속도", "🔍 정확한 분석", "💡 창의적 아이디어"],
-    rating: 4.7,
+    features: ["⚡ 빠른 속도", "💰 비용 효율", "🎯 정확성"],
+    rating: 4.6,
   },
 ];
 
@@ -122,8 +114,7 @@ export const CPM_PRESETS = [
 
 export const LLM_OPTIONS = [
   { label: "Anthropic Claude 3.5/3.7", value: "anthropic" },
-  { label: "OpenAI GPT-5 mini", value: "openai-gpt5mini" },
-  { label: "Google Gemini", value: "google-gemini" },
+  { label: "Replicate Llama 3", value: "replicate" },
 ];
 
 export const makeDefaultForm = () => ({
@@ -131,7 +122,7 @@ export const makeDefaultForm = () => ({
   style: "informative",
   durationMin: 3, // 기본값 3분
   maxScenes: 8,   // 기본값 8씬
-  aiEngine: "openai-gpt5mini",
+  aiEngine: "anthropic",
   temperature: 1.0,
   imageStyle: "cinematic",
   generateImages: true,

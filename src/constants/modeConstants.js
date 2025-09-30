@@ -1,23 +1,7 @@
-import { VideoRegular, DocumentEditRegular } from "@fluentui/react-icons";
+import { DocumentEditRegular } from "@fluentui/react-icons";
 
 // 공통 모드 상수
 export const MODE_CONFIGS = {
-  automation_mode: {
-    key: "automation_mode",
-    title: "🎬 완전 자동화",
-    subtitle: "대본부터 영상까지 한번에",
-    fullTitle: "🎬 완전 자동화 영상 생성",
-    description: "AI가 대본부터 최종 영상까지 모든 과정을 자동으로 처리합니다",
-    fullDescription: "AI가 대본 생성 → 음성 합성 → 이미지 생성 → 영상 합성까지 자동으로 처리합니다",
-    steps: ["대본 생성", "음성 합성", "이미지 생성", "영상 합성"],
-    icon: VideoRegular,
-    color: "brand",
-    gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-    estimatedTime: "8-12분",
-    buttonText: "🚀 완전 자동화 시작",
-    loadingText: "자동화 생성 중...",
-    outputFormat: "MP4 영상 파일 + 음성 + 자막"
-  },
   script_mode: {
     key: "script_mode",
     title: "📝 대본 생성",

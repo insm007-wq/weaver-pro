@@ -1,10 +1,9 @@
 import { memo, useMemo, useCallback, useState } from "react";
 import { Card, Text, Button, tokens } from "@fluentui/react-components";
-import { VideoRegular, DocumentEditRegular, SparkleRegular, PlayRegular, WarningRegular } from "@fluentui/react-icons";
+import { DocumentEditRegular, SparkleRegular, PlayRegular, WarningRegular } from "@fluentui/react-icons";
 import { useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
 import { AI_ENGINE_OPTIONS } from "../../../constants/scriptSettings";
 import { generateAudioAndSubtitles } from "../../../utils/audioSubtitleGenerator";
-import { generateAudioStep, generateImagesStep, generateVideoStep } from "../../../utils/automationSteps";
 
 const ActionCard = memo(
   ({
@@ -170,139 +169,9 @@ const ActionCard = memo(
       [currentOperation, setError, setIsLoading, setDoc, setFullVideoState, addLog, runGenerate, form, voices, api]
     );
 
-    // 완전 자동화 영상 생성 함수
-    const runFullVideoGeneration = useCallback(async () => {
-      if (currentOperation) {
-        currentOperation.abort();
-      }
-
-      const abortController = new AbortController();
-      setCurrentOperation(abortController);
-
-      setDoc(null);
-      setError("");
-      setIsLoading(true);
-
-      setFullVideoState({
-        isGenerating: true,
-        mode: "automation_mode",
-        currentStep: "script",
-        progress: { script: 0, audio: 0, images: 0, video: 0, subtitle: 0 },
-        results: { script: null, audio: null, images: [], video: null },
-        streamingScript: "",
-        error: null,
-        startTime: new Date(),
-        logs: [],
-      });
-
-      addLog("🎬 완전 자동화 영상 생성을 시작합니다...");
-
-      try {
-        addLog("📁 전역 설정에서 영상 폴더 경로 확인 중...");
-
-        // 프로젝트 설정 확인
-        if (!window.api?.getSetting) {
-          throw new Error("API를 사용할 수 없습니다.");
-        }
-
-        try {
-          const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
-          const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
-          const currentProjectIdResult = await window.api.getSetting("currentProjectId");
-          const currentProjectId = currentProjectIdResult?.value || currentProjectIdResult;
-
-          if (videoSaveFolder && currentProjectId) {
-            addLog(`🎯 현재 프로젝트: ${currentProjectId}`);
-            addLog(`📂 프로젝트 폴더 구조 사용 모드`);
-          } else {
-            throw new Error("프로젝트 설정이 없습니다.");
-          }
-        } catch (settingsError) {
-          addLog(`❌ 프로젝트 설정 가져오기 실패: ${settingsError.message}`, "error");
-          throw new Error("프로젝트 설정을 가져올 수 없습니다.");
-        }
-
-        addLog("📝 AI 대본 생성 중...");
-        const script = await runGenerate(form);
-        if (!script || !script.scenes || script.scenes.length === 0) {
-          throw new Error("대본 생성에 실패했습니다.");
-        }
-
-        updateFullVideoState({ currentStep: "audio", progress: { script: 100 } });
-        addLog("🎤 음성 생성 중...");
-        const audio = await generateAudioStep(script, form, addLog, setFullVideoState, api);
-
-        updateFullVideoState({ currentStep: "images", progress: { audio: 100 } });
-        addLog("🖼️ 이미지 생성 중...");
-        const images = await generateImagesStep(script, form, addLog, updateFullVideoState, api);
-
-        updateFullVideoState({ currentStep: "video", progress: { images: 100 } });
-        addLog("🎬 영상 합성 중...");
-        const video = await generateVideoStep(script, audio, images, addLog, setFullVideoState, api);
-
-        updateFullVideoState({
-          currentStep: "complete",
-          progress: { video: 100 },
-          results: { script, audio, images, video },
-          isGenerating: false,
-        });
-        addLog("✅ 완전 자동화 영상 생성이 완료되었습니다!", "success");
-        addLog(`📁 영상 파일: ${video.videoPath}`, "info");
-
-        // 출력 폴더 자동 열기
-        try {
-          await window.electronAPI.project.openOutputFolder();
-          addLog("📂 출력 폴더를 열었습니다.", "success");
-        } catch (error) {
-          addLog("❌ 출력 폴더 열기 실패: " + error.message, "error");
-        }
-      } catch (error) {
-        if (error.name === "AbortError") {
-          addLog("⏹️ 작업이 취소되었습니다.", "info");
-          updateFullVideoState({
-            currentStep: "cancelled",
-            isGenerating: false,
-          });
-        } else {
-          updateFullVideoState({
-            currentStep: "error",
-            failedStep: fullVideoState?.currentStep || "unknown",
-            error: error.message,
-            isGenerating: false,
-          });
-          addLog(`❌ 오류 발생: ${error.message}`, "error");
-        }
-      } finally {
-        setCurrentOperation(null);
-      }
-    }, [
-      currentOperation,
-      setDoc,
-      setError,
-      setIsLoading,
-      setFullVideoState,
-      addLog,
-      api,
-      runGenerate,
-      form,
-      updateFullVideoState,
-      fullVideoState?.currentStep,
-    ]);
-
     // 모드 설정 메모화
     const modes = useMemo(
       () => ({
-        automation_mode: {
-          title: "🎬 완전 자동화 영상 생성",
-          description: "AI가 대본부터 최종 영상까지 모든 과정을 자동으로 처리합니다",
-          buttonText: "🚀 완전 자동화 시작",
-          loadingText: "자동화 생성 중...",
-          icon: VideoRegular,
-          gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-          estimatedTime: "8-12분",
-          outputFormat: "MP4 영상 파일 + 음성 + 자막",
-          onGenerate: runFullVideoGeneration,
-        },
         script_mode: {
           title: "📝 대본 생성 (기본 모드)",
           description: "빠르게 대본과 음성을 생성하여 콘텐츠 제작을 시작합니다",
@@ -315,7 +184,7 @@ const ActionCard = memo(
           onGenerate: () => runScriptMode(form),
         },
       }),
-      [runFullVideoGeneration, runScriptMode, form]
+      [runScriptMode, form]
     );
 
     const currentMode = useMemo(() => modes[selectedMode], [modes, selectedMode]);
@@ -332,7 +201,7 @@ const ActionCard = memo(
           background: currentMode?.gradient || "transparent",
           border: "none",
           borderRadius: 12,
-          padding: tokens.spacingVerticalM,
+          padding: tokens.spacingVerticalS,
           color: "white",
           boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
           textAlign: "center",
@@ -348,7 +217,7 @@ const ActionCard = memo(
         },
         button: {
           width: "100%",
-          padding: "12px 16px",
+          padding: "10px 16px",
           fontSize: "14px",
           fontWeight: "bold",
           backgroundColor: "rgba(255,255,255,0.9)",
@@ -357,8 +226,8 @@ const ActionCard = memo(
           boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         },
         descriptionContainer: {
-          marginTop: tokens.spacingVerticalS,
-          padding: tokens.spacingVerticalS,
+          marginTop: tokens.spacingVerticalXS,
+          padding: tokens.spacingVerticalXS,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -383,8 +252,8 @@ const ActionCard = memo(
       return (
         <Card style={styles.centeredCard}>
           {/* 헤더 */}
-          <div style={{ marginBottom: tokens.spacingVerticalS }}>
-            <Text size={400} weight="semibold" style={{ color: "white" }}>
+          <div style={{ marginBottom: tokens.spacingVerticalXS }}>
+            <Text size={300} weight="semibold" style={{ color: "white" }}>
               {currentMode.title}
             </Text>
           </div>
@@ -404,7 +273,7 @@ const ActionCard = memo(
 
           {/* 설명 영역 */}
           <div style={styles.descriptionContainer}>
-            <Text size={200} style={{ color: "rgba(255,255,255,0.95)" }}>
+            <Text size={100} style={{ color: "rgba(255,255,255,0.95)" }}>
               {currentMode.description}
             </Text>
           </div>

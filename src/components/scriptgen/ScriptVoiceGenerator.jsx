@@ -31,7 +31,7 @@ function ScriptVoiceGenerator() {
   // 기본 상태 관리 (단순화)
   const [form, setForm] = useState(makeDefaultForm());
   const [globalSettings, setGlobalSettings] = useState({});
-  const [selectedMode, setSelectedMode] = useState("automation_mode");
+  const [selectedMode, setSelectedMode] = useState("script_mode");
   const [showResultsSidebar, setShowResultsSidebar] = useState(true);
 
   // 전체 영상 생성 상태
@@ -103,46 +103,21 @@ function ScriptVoiceGenerator() {
           position: "relative",
         }}
       >
-        {/* 1행: 생성 모드 + 실행 버튼 (2열) */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: tokens.spacingHorizontalL,
-            alignItems: "stretch",
-            width: "100%",
-            maxWidth: "100%",
-            overflowX: "hidden",
-          }}
-        >
-          {/* 생성 모드 */}
-          <ModeSelector
-            selectedMode={selectedMode}
-            onModeChange={setSelectedMode}
-            form={form}
-            isGenerating={fullVideoState.isGenerating}
-            compact={true}
-            globalSettings={globalSettings}
-            setGlobalSettings={setGlobalSettings}
-            api={api}
-          />
-
-          {/* 실행 버튼 */}
-          <ActionCard
-            selectedMode={selectedMode}
-            form={form}
-            isLoading={isLoading}
-            fullVideoState={fullVideoState}
-            setFullVideoState={setFullVideoState}
-            voices={voices}
-            api={api}
-            runGenerate={runGenerate}
-            setError={setError}
-            setIsLoading={setIsLoading}
-            setDoc={setDoc}
-            centered={true}
-          />
-        </div>
+        {/* 1행: 실행 버튼 (1열) */}
+        <ActionCard
+          selectedMode={selectedMode}
+          form={form}
+          isLoading={isLoading}
+          fullVideoState={fullVideoState}
+          setFullVideoState={setFullVideoState}
+          voices={voices}
+          api={api}
+          runGenerate={runGenerate}
+          setError={setError}
+          setIsLoading={setIsLoading}
+          setDoc={setDoc}
+          centered={true}
+        />
 
         {/* 2행: 기본 설정 (1열) */}
         <BasicSettingsCard form={form} onChange={onChange} promptNames={promptNames} promptLoading={promptLoading} setForm={setForm} />

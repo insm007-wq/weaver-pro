@@ -41,22 +41,13 @@ class AIKeywordService {
           await this.initializeAnthropic(apiKey);
           break;
 
-        case "openai-gpt5mini":
-        case "openai":
-          apiKey = await getSecret("openaiKey") || store.get("openaiApiKey");
+        case "replicate":
+        case "replicate-llama3":
+          apiKey = await getSecret("replicateKey") || store.get("replicateApiKey");
           if (!apiKey) {
-            throw new Error("OpenAI API 키가 설정되지 않았습니다. 전역 설정 > 기본 설정에서 API 키를 입력해주세요.");
+            throw new Error("Replicate API 키가 설정되지 않았습니다. 전역 설정 > 기본 설정에서 API 키를 입력해주세요.");
           }
-          await this.initializeOpenAI(apiKey);
-          break;
-
-        case "google-gemini":
-        case "gemini":
-          apiKey = await getSecret("geminiKey") || store.get("geminiApiKey");
-          if (!apiKey) {
-            throw new Error("Gemini API 키가 설정되지 않았습니다. 전역 설정 > 기본 설정에서 API 키를 입력해주세요.");
-          }
-          await this.initializeGemini(apiKey);
+          await this.initializeReplicate(apiKey);
           break;
 
         default:
@@ -86,25 +77,15 @@ class AIKeywordService {
     this.aiProvider = "Anthropic";
   }
 
-  async initializeOpenAI(apiKey) {
+  async initializeReplicate(apiKey) {
     try {
-      const OpenAI = require("openai");
-      this.client = new OpenAI({
-        apiKey: apiKey,
+      const Replicate = require("replicate");
+      this.client = new Replicate({
+        auth: apiKey,
       });
-      this.aiProvider = "OpenAI";
+      this.aiProvider = "Replicate";
     } catch (error) {
-      throw new Error("OpenAI 패키지를 찾을 수 없습니다. npm install openai를 실행해주세요.");
-    }
-  }
-
-  async initializeGemini(apiKey) {
-    try {
-      const { GoogleGenerativeAI } = require("@google/generative-ai");
-      this.client = new GoogleGenerativeAI(apiKey);
-      this.aiProvider = "Gemini";
-    } catch (error) {
-      throw new Error("Google Generative AI 패키지를 찾을 수 없습니다. npm install @google/generative-ai를 실행해주세요.");
+      throw new Error("Replicate 패키지를 찾을 수 없습니다. npm install replicate를 실행해주세요.");
     }
   }
 
@@ -128,6 +109,7 @@ class AIKeywordService {
 
     switch (aiProvider) {
       case "Anthropic":
+      case "Replicate":
         return `다음 자막에서 영상 검색에 최적화된 키워드를 추출하세요.
 
 🎬 **핵심 원칙: 장면 맥락을 생각하고 실제 검색 가능한 키워드만 추출**
@@ -138,44 +120,6 @@ ${subtitleText}
 ${baseRules}
 
 JSON 응답 형식 (모든 번호 포함 필수):
-{
-  "keywords": {
-    "1": ["진돗개"],
-    "2": ["카페"],
-    "3": ["의사"]
-  }
-}`;
-
-      case "OpenAI":
-        return `You are an expert at extracting video search keywords from Korean subtitles.
-
-Extract ONE relevant keyword for each subtitle line that would work well for video asset searches.
-
-Subtitles:
-${subtitleText}
-
-${baseRules}
-
-IMPORTANT: Return ONLY valid JSON format:
-{
-  "keywords": {
-    "1": ["진돗개"],
-    "2": ["카페"],
-    "3": ["의사"]
-  }
-}`;
-
-      case "Gemini":
-        return `한국어 자막에서 영상 소스 검색용 키워드를 추출하는 전문가입니다.
-
-각 자막 라인마다 영상 검색에 적합한 키워드 1개씩 추출해주세요.
-
-자막:
-${subtitleText}
-
-${baseRules}
-
-JSON 형식으로만 응답하세요:
 {
   "keywords": {
     "1": ["진돗개"],
@@ -224,6 +168,7 @@ JSON 응답 형식:
 
     switch (aiProvider) {
       case "Anthropic":
+      case "Replicate":
         return `다음 자막 배치에서 영상 검색에 최적화된 키워드를 추출하세요.
 
 🎬 **핵심 원칙: 장면 맥락을 생각하고 실제 검색 가능한 키워드만 추출**${batchContext}
@@ -234,44 +179,6 @@ ${subtitleText}
 ${baseRules}
 
 JSON 응답 형식 (모든 번호 포함 필수):
-{
-  "keywords": {
-    "1": ["진돗개"],
-    "2": ["카페"],
-    "3": ["의사"]
-  }
-}`;
-
-      case "OpenAI":
-        return `You are an expert at extracting video search keywords from Korean subtitles.
-
-Extract ONE relevant keyword for each subtitle line that would work well for video asset searches.${batchContext}
-
-Subtitles:
-${subtitleText}
-
-${baseRules}
-
-IMPORTANT: Return ONLY valid JSON format:
-{
-  "keywords": {
-    "1": ["진돗개"],
-    "2": ["카페"],
-    "3": ["의사"]
-  }
-}`;
-
-      case "Gemini":
-        return `한국어 자막에서 영상 소스 검색용 키워드를 추출하는 전문가입니다.
-
-각 자막 라인마다 영상 검색에 적합한 키워드 1개씩 추출해주세요.${batchContext}
-
-자막:
-${subtitleText}
-
-${baseRules}
-
-JSON 형식으로만 응답하세요:
 {
   "keywords": {
     "1": ["진돗개"],
@@ -578,26 +485,18 @@ JSON 응답 형식:
           content = response.content[0].text.trim();
           break;
 
-        case "OpenAI":
-          response = await this.client.chat.completions.create({
-            model: "gpt-4o-mini",
-            max_tokens: 4000,
-            temperature: 0.7,
-            response_format: { type: "json_object" },
-            messages: [
-              {
-                role: "user",
-                content: prompt,
-              },
-            ],
-          });
-          content = response.choices[0].message.content.trim();
-          break;
-
-        case "Gemini":
-          const model = this.client.getGenerativeModel({ model: "gemini-1.5-flash" });
-          const result = await model.generateContent(prompt);
-          content = result.response.text().trim();
+        case "Replicate":
+          response = await this.client.run(
+            "meta/meta-llama-3-70b-instruct",
+            {
+              input: {
+                prompt: prompt,
+                max_tokens: 4000,
+                temperature: 0.7,
+              }
+            }
+          );
+          content = response.join('').trim();
           break;
 
         default:

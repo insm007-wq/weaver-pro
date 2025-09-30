@@ -16,11 +16,7 @@ export const useKeywordExtraction = () => {
   const getLlmDisplayName = useCallback((model) => {
     const modelMap = {
       anthropic: "🤖 Anthropic Claude",
-      openai: "🤖 OpenAI GPT",
-      "openai-gpt5mini": "🤖 OpenAI GPT-4o Mini",
-      "google-gemini": "🤖 Google Gemini",
-      minimax: "🤖 MiniMax",
-      ollama: "🤖 Ollama Local",
+      replicate: "🦙 Replicate Llama",
     };
     return modelMap[model] || `🤖 ${model}`;
   }, []);
