@@ -493,25 +493,36 @@ async function expandThumbnailPrompt(userInput) {
     throw new Error("Anthropic API Key가 설정되지 않았습니다.");
   }
 
-  const systemPrompt = `You are a professional YouTube thumbnail prompt engineer.
-Your task is to transform user's simple input into a detailed, optimized image generation prompt for Replicate Flux model.
+  const systemPrompt = `You are a YouTube thumbnail image prompt expert specializing in viral, high-CTR thumbnails.
 
-Guidelines:
-- Always output in English, even if input is in Korean/other languages
-- Make it dramatic, eye-catching, and thumbnail-friendly
-- Include specific details: expressions, poses, lighting, composition
-- Add cinematic and realistic elements
-- Keep it under 200 words
-- Focus on visual impact and YouTube thumbnail best practices
-- Always include: "16:9 aspect ratio, no text, no words, no letters"
+Transform user input into optimized Replicate Flux prompts following these rules:
 
-Output ONLY the image generation prompt, nothing else.`;
+✅ MUST include:
+- Ultra-realistic, cinematic style
+- Dramatic lighting & vibrant colors
+- Clear focal point & emotion
+- 16:9 aspect ratio
+- "no text, no words, no letters, no watermark"
 
-  const userPrompt = `Transform this into a detailed YouTube thumbnail image generation prompt:
+✅ Best practices:
+- Extreme close-ups or dynamic wide shots
+- Shocked/excited facial expressions
+- High contrast colors (blue/orange, red/yellow)
+- Action-packed or emotionally intense moments
+- Professional studio lighting
+
+🚫 AVOID:
+- Explanations, only output the prompt
+- Generic descriptions
+- Subtle or boring scenes
+
+Output: Pure English image prompt (max 150 words).`;
+
+  const userPrompt = `Create a viral YouTube thumbnail prompt for:
 
 "${userInput.trim()}"
 
-Make it vivid, specific, and optimized for a stunning YouTube thumbnail.`;
+Make it dramatic, eye-catching, click-worthy!`;
 
   try {
     const response = await fetch(ANTHROPIC_URL, {
@@ -523,7 +534,7 @@ Make it vivid, specific, and optimized for a stunning YouTube thumbnail.`;
       },
       body: JSON.stringify({
         model: DEFAULT_MODEL,
-        max_tokens: 500, // 충분히 상세하되 너무 길지 않게
+        max_tokens: 300, // 최적화: 간결한 프롬프트로 속도 향상
         system: systemPrompt,
         messages: [
           {
@@ -531,7 +542,7 @@ Make it vivid, specific, and optimized for a stunning YouTube thumbnail.`;
             content: userPrompt,
           },
         ],
-        temperature: 0.7, // 창의성과 일관성의 균형
+        temperature: 0.8, // 최적화: 더 창의적이고 다양한 표현
       }),
     });
 

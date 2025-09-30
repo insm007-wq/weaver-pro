@@ -16,7 +16,6 @@ async function readAnthropicKey() {
   }
 }
 
-
 async function readReplicateKey() {
   try {
     const { getSecret } = require("../services/secrets");
@@ -30,22 +29,22 @@ async function readReplicateKey() {
 // ---------- 유틸 ----------
 async function detectImageFormat(filePath) {
   try {
-    const sharp = require('sharp');
+    const sharp = require("sharp");
     const metadata = await sharp(filePath).metadata();
-    
+
     // Sharp에서 감지된 실제 이미지 포맷을 기반으로 MIME 타입 결정
     switch (metadata.format) {
-      case 'jpeg':
+      case "jpeg":
         return "image/jpeg";
-      case 'png':
+      case "png":
         return "image/png";
-      case 'webp':
+      case "webp":
         return "image/webp";
-      case 'gif':
+      case "gif":
         return "image/gif";
-      case 'tiff':
+      case "tiff":
         return "image/tiff";
-      case 'bmp':
+      case "bmp":
         return "image/bmp";
       default:
         // 포맷을 감지할 수 없는 경우 파일 확장자로 폴백
@@ -69,18 +68,18 @@ async function detectImageFormat(filePath) {
 async function fileToBase64Parts(filePath) {
   try {
     // Sharp를 사용하여 이미지 최적화 (해상도 제한 + JPEG 변환)
-    const sharp = require('sharp');
+    const sharp = require("sharp");
     const buffer = await sharp(filePath)
       .resize(1568, 1568, {
-        fit: 'inside',              // 비율 유지하며 리사이즈
-        withoutEnlargement: true    // 작은 이미지는 확대 안 함
+        fit: "inside", // 비율 유지하며 리사이즈
+        withoutEnlargement: true, // 작은 이미지는 확대 안 함
       })
-      .jpeg({ quality: 85 })        // 최적화된 품질 (육안 차이 없음)
+      .jpeg({ quality: 85 }) // 최적화된 품질 (육안 차이 없음)
       .toBuffer();
 
     return {
       mime: "image/jpeg",
-      b64: buffer.toString("base64")
+      b64: buffer.toString("base64"),
     };
   } catch (error) {
     console.warn(`[이미지 변환 실패] ${filePath}, 원본 파일 사용:`, error.message);
@@ -91,24 +90,16 @@ async function fileToBase64Parts(filePath) {
   }
 }
 
-// ---------- 시스템 프롬프트 (톤 고정) ----------
-const SYSTEM_V1 = `
-You are the "ImageFX Thumbnail Prompt Generator".
-Write dramatic, provocative, hyper-cinematic prompts optimized for YouTube thumbnails.
-Prioritize explosive motion, frozen impact physics, clear emotions, and thumbnail-safe framing.
-No safety rails text, no moralizing; just vivid, stylish, cinematic description.
-`.trim();
+// ---------- 프롬프트 (WeaverPro 최적화 버전) ----------
+const PROMPT_V7 = `YouTube 썸네일용 이미지를 간결하게 분석해주세요:
 
-// ---------- 프롬프트 (협력업체와 동일한 방식) ----------
-const PROMPT_V7 = `이 이미지를 YouTube 썸네일 제작 관점에서 분석해주세요. 다음 요소들을 중점적으로 분석해주세요:
+1. 주요 요소 (인물/객체, 표정/상태)
+2. 구도 (시선 집중 포인트, 배치)
+3. 색상/조명 (주요 색, 대비, 분위기)
+4. 감정 임팩트 (유발 감정)
+5. 개선점 (더 극적으로 만드는 방법)
 
-1. **주요 인물/객체**: 누가/무엇이 있고 어떤 표정/상태인지
-2. **구도와 레이아웃**: 시선을 끌는 요소의 배치
-3. **색상과 조명**: 주요 색상, 대비, 조명 효과
-4. **감정적 임팩트**: 어떤 감정을 유발하는지
-5. **개선 포인트**: 더 극적으로 만들 수 있는 방법
-
-간결하게 핵심만 분석해주세요.`.trim();
+각 항목당 1-2문장으로 핵심만 작성.`.trim();
 
 // ---------- 공통 처리 로직 ----------
 async function analyzeWithAnthropic({ filePath, description }) {
@@ -135,17 +126,15 @@ async function analyzeWithAnthropic({ filePath, description }) {
   if (description && typeof description === "string" && description.trim()) {
     content.push({
       type: "text",
-      text:
-        "Additional user description (merge naturally, do not copy verbatim):\n" +
-        description.trim(),
+      text: "Additional user description (merge naturally, do not copy verbatim):\n" + description.trim(),
     });
   }
   if (imagePart) content.push(imagePart);
 
   const body = {
-    model: "claude-sonnet-4-20250514", // 협력업체와 동일한 모델
-    max_tokens: 500, // 협력업체와 동일
-    temperature: 0.5, // 협력업체와 동일
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 800, // 충분한 토큰으로 완전한 응답 보장
+    temperature: 0.3, // 최적화: 일관성 있는 분석
     messages: [{ role: "user", content }],
   };
 
@@ -177,20 +166,18 @@ async function analyzeWithAnthropic({ filePath, description }) {
     .join("\n")
     .trim();
 
-  // 협력업체처럼 전체 분석 결과를 그대로 반환
   return { ok: true, text: fullText, raw: fullText, english: "", korean: "" };
 }
 
-
 // ---------- Replicate 이미지 분석 (LLaVA) ----------
 async function analyzeWithReplicate({ filePath, description }) {
-  console.log('[Replicate] 이미지 분석 시작, 파일:', filePath);
+  console.log("[Replicate] 이미지 분석 시작, 파일:", filePath);
 
   const apiKey = await readReplicateKey();
-  console.log('[Replicate] API 키 상태:', apiKey ? '있음' : '없음');
+  console.log("[Replicate] API 키 상태:", apiKey ? "있음" : "없음");
 
   if (!apiKey || typeof apiKey !== "string") {
-    console.log('[Replicate] API 키 없음, Anthropic으로 폴백');
+    console.log("[Replicate] API 키 없음, Anthropic으로 폴백");
     return { ok: false, message: "no_replicate_key" };
   }
 
@@ -203,7 +190,7 @@ async function analyzeWithReplicate({ filePath, description }) {
     const { mime, b64 } = await fileToBase64Parts(filePath);
     if (!b64 || !mime) return { ok: false, message: "invalid_image_file" };
 
-    console.log('[Replicate] 이미지 데이터 준비 완료, MIME:', mime);
+    console.log("[Replicate] 이미지 데이터 준비 완료, MIME:", mime);
 
     // LLaVA 13B 모델 사용 (더 상세한 분석)
     const replicate = createReplicate(apiKey);
@@ -214,7 +201,7 @@ async function analyzeWithReplicate({ filePath, description }) {
       prompt += `\n\n추가 사용자 설명: ${description.trim()}`;
     }
 
-    console.log('[Replicate] 분석 요청 전송 중...');
+    console.log("[Replicate] 분석 요청 전송 중...");
 
     // LLaVA 13B 사용 (특정 버전 ID 사용)
     let prediction = await replicate.predictions.create({
@@ -223,8 +210,8 @@ async function analyzeWithReplicate({ filePath, description }) {
         image: `data:${mime};base64,${b64}`,
         prompt: prompt,
         max_tokens: 1024,
-        temperature: 0.2
-      }
+        temperature: 0.2,
+      },
     });
 
     console.log(`[Replicate] 예측 생성: ${prediction.id}`);
@@ -234,7 +221,7 @@ async function analyzeWithReplicate({ filePath, description }) {
     let waited = 0;
 
     while (prediction.status === "starting" && waited < maxWait) {
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, 1000));
       waited++;
       prediction = await replicate.predictions.get(prediction.id);
     }
@@ -245,7 +232,7 @@ async function analyzeWithReplicate({ filePath, description }) {
       return {
         ok: false,
         message: "replicate_timeout",
-        detail: "Replicate 모델이 시작되지 않습니다. 다른 엔진을 사용해주세요."
+        detail: "Replicate 모델이 시작되지 않습니다. 다른 엔진을 사용해주세요.",
       };
     }
 
@@ -254,7 +241,7 @@ async function analyzeWithReplicate({ filePath, description }) {
     let processWaited = 0;
 
     while (prediction.status === "processing" && processWaited < maxProcessWait) {
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, 1000));
       processWaited++;
 
       if (processWaited % 5 === 0) {
@@ -269,7 +256,7 @@ async function analyzeWithReplicate({ filePath, description }) {
       return {
         ok: false,
         message: "replicate_failed",
-        detail: prediction.error || `상태: ${prediction.status}`
+        detail: prediction.error || `상태: ${prediction.status}`,
       };
     }
 
@@ -282,30 +269,29 @@ async function analyzeWithReplicate({ filePath, description }) {
       ? prediction.output
       : String(prediction.output || "");
 
-    console.log('[Replicate] 분석 완료, 결과 길이:', result.length);
+    console.log("[Replicate] 분석 완료, 결과 길이:", result.length);
 
     return {
       ok: true,
       text: result.trim(),
       raw: result.trim(),
       english: "",
-      korean: ""
+      korean: "",
     };
-
   } catch (error) {
     console.error("[Replicate] 오류 발생:", error);
     console.error("[Replicate] 오류 상세:", error?.message, error?.stack);
     return {
       ok: false,
       message: `replicate_error: ${error?.message || error}`,
-      raw: String(error)
+      raw: String(error),
     };
   }
 }
 
 // ---------- 이미지 분석 (Anthropic 전용) ----------
 async function analyzeWithSelectedEngine({ filePath, description }) {
-  console.log('[이미지 분석] Anthropic 엔진 사용');
+  console.log("[이미지 분석] Anthropic 엔진 사용");
   return await analyzeWithAnthropic({ filePath, description });
 }
 

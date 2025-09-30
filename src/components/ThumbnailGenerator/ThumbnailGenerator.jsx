@@ -209,6 +209,7 @@ function ThumbnailGenerator() {
   /** 공통 상태 */
   const [metaTemplate, setMetaTemplate] = useState("");
   const [templateLoading, setTemplateLoading] = useState(true);
+  const [provider, setProvider] = useState("replicate");
 
   /** 프로그레스 상태 */
   const [progress, setProgress] = useState({
@@ -640,6 +641,7 @@ function ThumbnailGenerator() {
             placeholder="한글/영어로 간단히 입력하세요 (예: 농구 선수, basketball player dunking)&#10;AI가 자동으로 YouTube 썸네일에 최적화된 프롬프트로 변환합니다."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
+            disabled={loading || fxLoading}
             style={{
               marginTop: tokens.spacingVerticalS,
               fontFamily: tokens.fontFamilyBase,
@@ -667,7 +669,8 @@ function ThumbnailGenerator() {
             onDragLeave={() => setDragOver(false)}
             onDrop={onDrop}
             className={mergeClasses(styles.uploadArea, dragOver && styles.uploadAreaDragOver)}
-            onClick={onPickFile}
+            onClick={loading ? undefined : onPickFile}
+            style={{ cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1 }}
           >
             {imagePreview ? (
               <div className={styles.previewContainer}>
@@ -680,6 +683,7 @@ function ThumbnailGenerator() {
                       size="small"
                       appearance="outline"
                       icon={<DeleteRegular />}
+                      disabled={loading || fxLoading}
                       onClick={(e) => {
                         e.stopPropagation();
                         setImageFile(null);
@@ -700,7 +704,7 @@ function ThumbnailGenerator() {
                     <Button
                       size="small"
                       appearance="outline"
-                      disabled={!imageFile || fxLoading}
+                      disabled={!imageFile || fxLoading || loading}
                       onClick={(e) => {
                         e.stopPropagation();
                         analyzeReference(imageFile);
@@ -708,14 +712,16 @@ function ThumbnailGenerator() {
                     >
                       {fxLoading ? (
                         <>
-                          <Spinner size="extra-small" />
-                          분석 중…
+                          <Spinner size="extra-small" style={{ marginRight: tokens.spacingHorizontalS }} />
+                          <span style={{ color: "#0078d4", fontWeight: tokens.fontWeightSemibold }}>
+                            분석 중…
+                          </span>
                           {remainingTime !== null && (
                             <span
                               style={{
-                                marginLeft: tokens.spacingHorizontalXS,
-                                color: tokens.colorNeutralForegroundOnBrand,
-                                fontWeight: tokens.fontWeightSemibold,
+                                marginLeft: tokens.spacingHorizontalS,
+                                color: "#0078d4",
+                                fontWeight: tokens.fontWeightBold,
                               }}
                             >
                               (약 {Math.ceil(remainingTime)}초 남음)
@@ -796,67 +802,27 @@ function ThumbnailGenerator() {
                     </div>
                     <Title3 style={{ margin: 0, fontSize: tokens.fontSizeBase400 }}>참고 이미지 분석</Title3>
                   </div>
-                  {analysisEngine && (
-                    <Badge appearance="tint" color="brand" size="small">
-                      {analysisEngine}
-                    </Badge>
-                  )}
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM }}>
-                  {/* 분석 내용을 구조화된 형태로 표시 */}
-                  {fxAnalysis.split("\n\n").map((section, index) => {
-                    const isMainSection = section.match(/^\d+\.\s*\*\*(.*?)\*\*/);
-                    const sectionTitle = isMainSection ? isMainSection[1] : null;
-                    const sectionContent = isMainSection ? section.replace(/^\d+\.\s*\*\*(.*?)\*\*:\s*/, "") : section;
-
-                    return (
-                      <div
-                        key={index}
-                        style={{
-                          padding: tokens.spacingVerticalM,
-                          backgroundColor: tokens.colorSubtleBackground,
-                          borderRadius: tokens.borderRadiusMedium,
-                          border: `1px solid ${tokens.colorNeutralStroke2}`,
-                        }}
-                      >
-                        {sectionTitle && (
-                          <div
-                            style={{
-                              marginBottom: tokens.spacingVerticalS,
-                              fontWeight: tokens.fontWeightSemibold,
-                              color: tokens.colorNeutralForeground1,
-                              fontSize: tokens.fontSizeBase200,
-                              display: "flex",
-                              alignItems: "center",
-                              gap: tokens.spacingHorizontalXS,
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: "6px",
-                                height: "6px",
-                                backgroundColor: tokens.colorBrandForeground1,
-                                borderRadius: "50%",
-                              }}
-                            />
-                            {sectionTitle}
-                          </div>
-                        )}
-                        <Body1
-                          style={{
-                            whiteSpace: "pre-wrap",
-                            lineHeight: "1.5",
-                            color: tokens.colorNeutralForeground2,
-                            margin: 0,
-                            fontSize: tokens.fontSizeBase300,
-                          }}
-                        >
-                          {sectionContent}
-                        </Body1>
-                      </div>
-                    );
-                  })}
+                <div
+                  style={{
+                    padding: tokens.spacingVerticalL,
+                    backgroundColor: tokens.colorSubtleBackground,
+                    borderRadius: tokens.borderRadiusMedium,
+                    border: `1px solid ${tokens.colorNeutralStroke2}`,
+                  }}
+                >
+                  <Body1
+                    style={{
+                      whiteSpace: "pre-wrap",
+                      lineHeight: "1.6",
+                      color: tokens.colorNeutralForeground2,
+                      margin: 0,
+                      fontSize: tokens.fontSizeBase300,
+                    }}
+                  >
+                    {fxAnalysis}
+                  </Body1>
                 </div>
               </Card>
             )}
@@ -874,7 +840,11 @@ function ThumbnailGenerator() {
           {/* 공통: 생성 개수 */}
           <Field>
             <Label weight="semibold">생성 개수</Label>
-            <Dropdown value={count.toString()} onOptionSelect={(_, data) => setCount(Number(data.optionValue))}>
+            <Dropdown
+              value={count.toString()}
+              onOptionSelect={(_, data) => setCount(Number(data.optionValue))}
+              disabled={loading || fxLoading}
+            >
               {[1, 2, 3, 4].map((n) => (
                 <Option key={n} value={n.toString()}>
                   {n}개
@@ -888,25 +858,6 @@ function ThumbnailGenerator() {
 
       {/* 생성 버튼 */}
       <Card className={styles.settingsCard}>
-        {(loading || fxLoading) && remainingTime !== null && (
-          <div style={{ marginBottom: tokens.spacingVerticalM, textAlign: "center" }}>
-            <Caption1
-              style={{
-                color: fxLoading ? tokens.colorBrandForeground1 : tokens.colorNeutralForeground1,
-                fontWeight: tokens.fontWeightSemibold,
-              }}
-            >
-              <TimerRegular style={{ marginRight: tokens.spacingHorizontalXXS }} />
-              {fxLoading
-                ? remainingTime > 1
-                  ? `분석 중 약 ${Math.ceil(remainingTime)}초 남음`
-                  : "분석 거의 완료..."
-                : remainingTime > 1
-                ? `생성 중 약 ${Math.ceil(remainingTime)}초 남음`
-                : "생성 거의 완료..."}
-            </Caption1>
-          </div>
-        )}
         <Button
           appearance="primary"
           size="large"
@@ -922,11 +873,34 @@ function ThumbnailGenerator() {
             alignItems: "center",
             justifyContent: "center",
             gap: tokens.spacingHorizontalS,
-            padding: "0 24px", // 충분한 패딩으로 아이콘 공간 확보
+            padding: "0 24px",
+            backgroundColor: loading ? "#e3f2fd" : undefined,
+            color: loading ? "#0078d4" : undefined,
+            border: loading ? "2px solid #0078d4" : undefined,
           }}
         >
-          {loading ? <Spinner size="small" /> : <SparkleRegular />}
-          {loading ? "생성 중..." : "🎨 썸네일 생성하기"}
+          {loading ? (
+            <>
+              <Spinner size="small" style={{ marginRight: tokens.spacingHorizontalS }} />
+              <span style={{ color: "#0078d4", fontWeight: tokens.fontWeightBold }}>
+                생성 중...
+              </span>
+              {remainingTime !== null && remainingTime > 1 && (
+                <span style={{
+                  marginLeft: tokens.spacingHorizontalS,
+                  fontWeight: tokens.fontWeightBold,
+                  color: "#0078d4"
+                }}>
+                  (약 {Math.ceil(remainingTime)}초)
+                </span>
+              )}
+            </>
+          ) : (
+            <>
+              <SparkleRegular />
+              🎨 썸네일 생성하기
+            </>
+          )}
         </Button>
       </Card>
 
