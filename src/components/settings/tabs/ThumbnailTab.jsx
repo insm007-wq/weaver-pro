@@ -71,7 +71,6 @@ const ENGINE_OPTIONS = [
  * 이미지 분석 AI 엔진 옵션
  */
 const ANALYSIS_ENGINE_OPTIONS = [
-  { value: "replicate", text: "Replicate LLaVA", subtext: "(저렴함)" },
   { value: "anthropic", text: "Claude Sonnet 4", subtext: "(고성능 분석)" },
 ];
 
@@ -96,8 +95,8 @@ function ThumbnailTab() {
   // 엔진 설정 상태
   const [defaultEngine, setDefaultEngine] = useState("replicate");
   const [originalEngine, setOriginalEngine] = useState("replicate");
-  const [analysisEngine, setAnalysisEngine] = useState("replicate");
-  const [originalAnalysisEngine, setOriginalAnalysisEngine] = useState("replicate");
+  const [analysisEngine, setAnalysisEngine] = useState("anthropic");
+  const [originalAnalysisEngine, setOriginalAnalysisEngine] = useState("anthropic");
 
   // UI 상태
   const [isModified, setIsModified] = useState(false);
@@ -144,7 +143,7 @@ function ThumbnailTab() {
 
       const templateToUse = savedTemplate || DEFAULT_TEMPLATE;
       const engineToUse = savedEngine || "replicate";
-      const analysisEngineToUse = savedAnalysisEngine || "replicate";
+      const analysisEngineToUse = savedAnalysisEngine || "anthropic";
 
       setTemplate(templateToUse);
       setOriginalTemplate(templateToUse);
@@ -165,8 +164,8 @@ function ThumbnailTab() {
       setOriginalTemplate(DEFAULT_TEMPLATE);
       setDefaultEngine("replicate");
       setOriginalEngine("replicate");
-      setAnalysisEngine("replicate");
-      setOriginalAnalysisEngine("replicate");
+      setAnalysisEngine("anthropic");
+      setOriginalAnalysisEngine("anthropic");
     } finally {
       setLoading(false);
     }
