@@ -15,8 +15,8 @@ export const DURATION_OPTIONS = [
   { key: 5, text: "5분 (중편)" },
   { key: 10, text: "10분 (긴편)" },
   { key: 15, text: "15분 (중간편)" },
-  { key: 30, text: "30분 (장편)" },
-  { key: 45, text: "45분 (긴편)" },
+  { key: 20, text: "20분 (장편)" },
+  { key: 30, text: "30분 (초장편)" },
 ];
 
 // 영상 길이별 최적 장면 수를 자동 계산하여 제공하므로 MAX_SCENE_OPTIONS는 사용하지 않음
@@ -118,7 +118,6 @@ export const makeDefaultForm = () => ({
   topic: "",
   style: "informative",
   durationMin: 3, // 기본값 3분
-  maxScenes: 8,   // 기본값 8씬
   aiEngine: "anthropic",
   temperature: 1.0,
   imageStyle: "cinematic",
@@ -126,4 +125,6 @@ export const makeDefaultForm = () => ({
   generateVoice: true,
   ttsEngine: "google",
   voice: "ko-KR-Wavenet-A",
+  cpmMin: 300, // 분당 최소 글자수 (한국어 TTS 기준)
+  cpmMax: 400, // 분당 최대 글자수
 });
