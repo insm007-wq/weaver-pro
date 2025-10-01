@@ -2,12 +2,12 @@
 export const DUR_OPTIONS = [1, 3, 5, 7, 10, 15, 20, 25, 30];
 
 export const STYLE_OPTIONS = [
-  { key: "informative", text: "📚 정보 전달형", desc: "교육적이고 명확한 설명" },
-  { key: "engaging", text: "🎯 매력적인", desc: "흥미롭고 재미있는 톤" },
-  { key: "professional", text: "💼 전문적인", desc: "비즈니스에 적합한 스타일" },
-  { key: "casual", text: "😊 캐주얼한", desc: "친근하고 편안한 분위기" },
-  { key: "dramatic", text: "🎭 극적인", desc: "강렬하고 임팩트 있는 전개" },
-  { key: "storytelling", text: "📖 스토리텔링", desc: "이야기 형식의 구성" },
+  { key: "informative", text: "정보 전달형", desc: "교육적이고 명확한 설명" },
+  { key: "engaging", text: "매력적인", desc: "흥미롭고 재미있는 톤" },
+  { key: "professional", text: "전문적인", desc: "비즈니스에 적합한 스타일" },
+  { key: "casual", text: "캐주얼한", desc: "친근하고 편안한 분위기" },
+  { key: "dramatic", text: "극적인", desc: "강렬하고 임팩트 있는 전개" },
+  { key: "storytelling", text: "스토리텔링", desc: "이야기 형식의 구성" },
 ];
 
 export const DURATION_OPTIONS = [

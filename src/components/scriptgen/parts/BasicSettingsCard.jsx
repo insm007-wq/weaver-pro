@@ -66,7 +66,7 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
       },
       gridContainer: {
         display: "grid",
-        gridTemplateColumns: "1fr 1fr",
+        gridTemplateColumns: "1fr 1fr 1fr",
         gap: "12px",
         alignItems: "start",
       },
@@ -75,7 +75,7 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
       },
       referenceContainer: {
         gridColumn: "1 / -1",
-        marginTop: tokens.spacingVerticalM,
+        marginTop: tokens.spacingVerticalS,
       },
       switchContainer: {
         display: "flex",
