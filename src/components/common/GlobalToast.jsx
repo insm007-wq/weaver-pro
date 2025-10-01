@@ -18,21 +18,27 @@ const useStyles = makeStyles({
     left: 0,
     right: 0,
     zIndex: 9999,
-    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
     transform: 'translateY(-100%)',
-    transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    opacity: 0,
+    transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease',
     pointerEvents: 'none', // 배경은 클릭 차단하지 않음
   },
   containerVisible: {
     transform: 'translateY(0)',
+    opacity: 1,
   },
   messageBar: {
-    maxWidth: '1200px',
-    margin: '0 auto',
-    ...shorthands.borderRadius(tokens.borderRadiusMedium),
+    width: '100%',
+    margin: '0',
+    ...shorthands.borderRadius('0'),
     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
     border: 'none',
     pointerEvents: 'auto', // MessageBar만 클릭 가능
+    minHeight: '48px',
+    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalXL),
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   successBar: {
     backgroundColor: `${tokens.colorPaletteLightGreenBackground2} !important`,
@@ -50,6 +56,7 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightSemibold,
     fontSize: tokens.fontSizeBase300,
     lineHeight: tokens.lineHeightBase300,
+    textAlign: 'center',
   },
   closeButton: {
     minWidth: 'auto',
@@ -188,13 +195,13 @@ export default function GlobalToast() {
     hideTimerRef.current = setTimeout(() => setToast(null), 300);
   }, [clearTimers]);
 
-  // toast가 없거나 visible이 아니면 아예 렌더링하지 않음
-  if (!toast || !isVisible) return null;
+  // toast가 없으면 렌더링하지 않음
+  if (!toast) return null;
 
   const isSuccess = toast.type === 'success';
 
   return (
-    <div className={mergeClasses(styles.container, styles.containerVisible)}>
+    <div className={mergeClasses(styles.container, isVisible && styles.containerVisible)}>
       <MessageBar
         intent={isSuccess ? 'success' : 'error'}
         className={mergeClasses(styles.messageBar, isSuccess ? styles.successBar : styles.errorBar)}
