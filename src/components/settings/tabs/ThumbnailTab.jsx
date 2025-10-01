@@ -18,7 +18,7 @@ import {
 import { SaveRegular, ArrowResetRegular, InfoRegular, PuzzlePieceRegular, EditRegular } from "@fluentui/react-icons";
 import { DEFAULT_TEMPLATE } from "../../../constants/prompts";
 import { handleError, handleApiError } from "@utils";
-import { StandardCard, SettingsHeader, ActionButton, StatusBadge, LoadingSpinner } from "../../common";
+import { StandardCard, ActionButton, StatusBadge, LoadingSpinner } from "../../common";
 import { showGlobalToast } from "../../common/GlobalToast";
 import { useContainerStyles, useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
 
@@ -306,19 +306,6 @@ function ThumbnailTab() {
 
   return (
     <div className={containerStyles.container}>
-      {/* 헤더 */}
-      <SettingsHeader
-        icon="🎨"
-        title="썸네일 생성 프롬프트 설정"
-        description={
-          <>
-            YouTube 썸네일 생성에 사용될 프롬프트 템플릿을 설정합니다.
-            <br />
-            변수를 사용하여 동적으로 내용을 치환할 수 있습니다.
-          </>
-        }
-      />
-
       {/* 메인 설정 */}
       <Card
         className={cardStyles.settingsCard}

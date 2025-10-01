@@ -4,43 +4,6 @@ import { SettingsRegular } from "@fluentui/react-icons";
 import { STYLE_OPTIONS, DURATION_OPTIONS } from "../../../constants/scriptSettings";
 import { validateAndSanitizeText } from "../../../utils/sanitizer";
 
-/** 영상 길이별 최적 장면 수 자동 계산 (원본 유지) */
-const getRecommendedScenes = (durationMin) => {
-  if (!durationMin) return 8;
-  if (durationMin <= 3) return 8;
-  if (durationMin <= 5) return 10;
-  if (durationMin <= 8) return 12;
-  if (durationMin <= 10) return 15;
-  if (durationMin <= 15) return 20;
-  if (durationMin <= 20) return 25;
-  if (durationMin <= 30) return 35;
-  if (durationMin <= 45) return 50;
-  return 60;
-};
-
-/** 장면 수 옵션 동적 생성 (원본 유지) */
-const getDynamicSceneOptions = (durationMin) => {
-  const recommended = getRecommendedScenes(durationMin);
-  const min = Math.max(4, Math.floor(recommended * 0.6));
-  const max = Math.min(100, Math.ceil(recommended * 1.4));
-
-  const options = [];
-  const step = Math.max(1, Math.floor((max - min) / 10));
-
-  for (let i = min; i <= max; i += step) {
-    const isRecommended = i === recommended;
-    const label = isRecommended ? `${i}개 (권장)` : i < recommended ? `${i}개 (간결)` : `${i}개 (상세)`;
-    options.push({ key: i, text: label, isRecommended });
-  }
-
-  if (!options.some((opt) => opt.key === recommended)) {
-    options.push({ key: recommended, text: `${recommended}개 (권장)`, isRecommended: true });
-    options.sort((a, b) => a.key - b.key);
-  }
-
-  return options;
-};
-
 /**
  * 기본 설정 카드 (UI만 개선)
  */
@@ -53,15 +16,12 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
       topic: form?.topic || "",
       style: form?.style || "",
       durationMin: form?.durationMin || 0,
-      maxScenes: form?.maxScenes || 0,
       promptName: form?.promptName || "",
       showReferenceScript: form?.showReferenceScript || false,
       referenceScript: form?.referenceScript || "",
     }),
-    [form?.topic, form?.style, form?.durationMin, form?.maxScenes, form?.promptName, form?.showReferenceScript, form?.referenceScript]
+    [form?.topic, form?.style, form?.durationMin, form?.promptName, form?.showReferenceScript, form?.referenceScript]
   );
-
-  const sceneOptions = useMemo(() => getDynamicSceneOptions(safeForm.durationMin), [safeForm.durationMin]);
 
   // 안전한 입력 처리 함수 메모화
   const handleSafeChange = useCallback(
@@ -81,10 +41,6 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
 
       // 정제된 값으로 onChange 호출
       onChange(field, result.sanitized);
-
-      if (!result.isValid) {
-        console.warn(`입력 검증 실패 [${field}]:`, result.errors);
-      }
     },
     [onChange, setValidationErrors]
   );
@@ -252,49 +208,6 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
               </Option>
             ))}
           </Dropdown>
-        </Field>
-
-        {/* 최대 장면 수 (자동 계산) */}
-        <Field
-          label={
-            <Text size={300} weight="semibold">
-              최대 장면 수
-            </Text>
-          }
-        >
-          <Dropdown
-            value={sceneOptions.find((s) => s.key === safeForm.maxScenes)?.text || "장면 수 선택"}
-            selectedOptions={[safeForm.maxScenes?.toString()]}
-            onOptionSelect={(_, d) => onChange("maxScenes", parseInt(d.optionValue))}
-            size="medium" // 🔧 large → medium
-            disabled={!safeForm.durationMin}
-            placeholder={safeForm.durationMin ? "장면 수 선택" : "먼저 영상 길이를 선택하세요"}
-            style={{ minHeight: 36 }}
-          >
-            {sceneOptions.map((scene) => (
-              <Option
-                key={scene.key}
-                value={scene.key.toString()}
-                style={{
-                  // 권장 옵션은 은은한 배경/서브톤
-                  color: scene.isRecommended ? tokens.colorPaletteGreenForeground2 : "inherit",
-                  fontWeight: scene.isRecommended ? 600 : 400,
-                  background: scene.isRecommended ? tokens.colorPaletteGreenBackground1 : "transparent",
-                }}
-              >
-                {scene.text}
-              </Option>
-            ))}
-          </Dropdown>
-
-          {/* 권장 안내 캡션: 높이 고정해 레이아웃 안정 */}
-          <div style={styles.fixedHeightCaption}>
-            {safeForm.durationMin && (
-              <Text size={200} style={{ color: tokens.colorNeutralForeground3, display: "block" }}>
-                권장: {getRecommendedScenes(safeForm.durationMin)}개
-              </Text>
-            )}
-          </div>
         </Field>
 
         {/* 프롬프트 선택 */}

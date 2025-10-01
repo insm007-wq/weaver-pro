@@ -23,7 +23,6 @@ import {
   DismissCircleRegular,
   ClockRegular,
 } from "@fluentui/react-icons";
-import { SettingsHeader } from "../../common";
 import { useContainerStyles, useCardStyles } from "../../../styles/commonStyles";
 import { handleApiError } from "@utils";
 
@@ -460,18 +459,6 @@ export default function ApiTab() {
 
   return (
     <div className={containerStyles.container}>
-      {/* Header */}
-      <SettingsHeader
-        icon="🔧"
-        title="API 설정 및 외부 서비스 연결 관리"
-        description={
-          <>
-            외부 서비스 API 키를 안전하게 저장하고 연결 상태를 확인할 수 있습니다.
-            <br />각 서비스의 API 키를 입력한 후 테스트 버튼을 클릭하여 연결을 확인하세요.
-          </>
-        }
-      />
-
       {/* Services Grid */}
       <div className={s.servicesGrid}>
         {services.map((service) => (

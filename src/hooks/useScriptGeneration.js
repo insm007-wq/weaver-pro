@@ -54,7 +54,6 @@ export function useScriptGeneration() {
 
         // 전역 설정 우선, 없으면 form.aiEngine 사용
         const finalEngine = globalLlmModel || form.aiEngine || "anthropic";
-        console.log("🎯 AI 생성 엔진:", finalEngine);
 
         let promptContent = { script: "", reference: "" };
         if (form.promptName) {
@@ -69,7 +68,6 @@ export function useScriptGeneration() {
           topic: form.topic,
           style: form.style,
           duration: form.durationMin,
-          maxScenes: form.maxScenes,
           temperature: form.temperature,
           prompt: promptContent.script || form.customPrompt,
           referenceText: form.referenceScript,
@@ -89,12 +87,7 @@ export function useScriptGeneration() {
         const res = await api.invoke("llm/generateScript", payload, { timeout: timeoutMs });
 
         if (res && res.data && res.data.scenes) {
-          const actualScenes = res.data.scenes.length;
-          const totalChars = res.data.scenes.reduce((sum, scene) => sum + (scene.text || "").length, 0);
-
           setDoc(res.data);
-          console.log(`✅ 대본 생성 완료: ${actualScenes}개 장면 (${totalChars}자)`);
-
           return res.data;
         } else {
           throw new Error("API 응답이 올바르지 않습니다.");
@@ -102,7 +95,6 @@ export function useScriptGeneration() {
       } catch (e) {
         const errorMessage = e?.message || "대본 생성 중 오류가 발생했습니다.";
         setError(errorMessage);
-        // 오류 메시지는 error 상태로 전달
         console.error("대본 생성 오류:", e);
       } finally {
         setIsLoading(false);

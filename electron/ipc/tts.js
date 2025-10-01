@@ -8,8 +8,6 @@ const GOOGLE_VOICES_URL = "https://texttospeech.googleapis.com/v1/voices";
 // 새로운 tts:synthesize 핸들러 (ScriptVoiceGenerator에서 사용)
 ipcMain.handle("tts:synthesize", async (event, { scenes, ttsEngine, voiceId, speed }) => {
   try {
-    console.log(`🎤 TTS 합성 요청: ${ttsEngine} 엔진, ${scenes?.length || 0}개 장면`);
-    
     if (!scenes || scenes.length === 0) {
       throw new Error("장면 데이터가 없습니다.");
     }
@@ -50,17 +48,14 @@ ipcMain.handle("tts:synthesize", async (event, { scenes, ttsEngine, voiceId, spe
 
         if (currentProject && currentProject.paths && currentProject.paths.audio) {
           audioPartsDir = path.join(currentProject.paths.audio, 'parts');
-          console.log("🔧 TTS - 현재 프로젝트 기반 audio/parts 경로 사용:", audioPartsDir);
         } else {
           throw new Error(`현재 프로젝트 경로를 찾을 수 없습니다: ${currentProjectId}`);
         }
       } else {
         // 폴백: 기본 경로 사용
-        console.warn("⚠️ 현재 프로젝트가 설정되지 않았습니다. 기본 경로를 사용합니다.");
         const projectRoot = store.get('projectRootFolder') || 'C:\\WeaverPro';
         const defaultProjectName = store.get('defaultProjectName') || 'default';
         audioPartsDir = path.join(projectRoot, defaultProjectName, 'audio', 'parts');
-        console.log("🔧 TTS - 폴백 audio/parts 경로:", audioPartsDir);
       }
 
       // 디렉토리 생성 (없는 경우)
@@ -71,16 +66,17 @@ ipcMain.handle("tts:synthesize", async (event, { scenes, ttsEngine, voiceId, spe
       for (let i = 0; i < result.parts.length; i++) {
         const part = result.parts[i];
         const audioFilePath = path.join(audioPartsDir, part.fileName);
-        
+
         // base64를 Buffer로 변환하여 파일 저장
         const audioBuffer = Buffer.from(part.base64, 'base64');
         await fs.writeFile(audioFilePath, audioBuffer);
-        
+
         audioFiles.push({
           sceneIndex: i,
           audioUrl: audioFilePath,
           fileName: part.fileName,
-          provider: result.provider
+          provider: result.provider,
+          duration: part.duration || 0  // 실제 측정된 오디오 길이 추가
         });
       }
       
@@ -124,7 +120,11 @@ async function synthesizeWithGoogle(scenes, options, progressCallback = null) {
   })();
 
   const parts = [];
-  
+  const path = require('path');
+  const fs = require('fs').promises;
+  const os = require('os');
+  const { execSync } = require('child_process');
+
   for (let i = 0; i < scenes.length; i++) {
     const sc = scenes[i];
     const finalVoiceName = voiceId || "ko-KR-Neural2-A";
@@ -138,17 +138,17 @@ async function synthesizeWithGoogle(scenes, options, progressCallback = null) {
     if (i > 0) {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
-    
+
     const body = {
       input: { text: String(sc.text || "") },
       voice: { languageCode: lang, name: finalVoiceName },
       audioConfig: {
         audioEncoding: "MP3",
-        speakingRate: Number(speakingRate ?? 1.05), // 기본 속도를 조금 빠르게
-        pitch: Number(pitch ?? -1), // 피치를 약간 낮춰 자연스럽게
-        volumeGainDb: 2.0, // 볼륨을 약간 높여 명확하게
-        sampleRateHertz: 24000, // 고품질 샘플레이트
-        effectsProfileId: ["handset-class-device"] // 모바일/데스크톱 최적화
+        speakingRate: Number(speakingRate ?? 1.05),
+        pitch: Number(pitch ?? -1),
+        volumeGainDb: 2.0,
+        sampleRateHertz: 24000,
+        effectsProfileId: ["handset-class-device"]
       },
     };
 
@@ -157,20 +157,45 @@ async function synthesizeWithGoogle(scenes, options, progressCallback = null) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    
+
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
       throw new Error(`Google TTS 실패(${i + 1}): ${res.status} ${txt}`);
     }
-    
+
     const data = await res.json();
     const base64 = data?.audioContent;
     if (!base64) throw new Error(`Google TTS 응답 오류(${i + 1})`);
-    
+
+    // 실제 오디오 duration 측정을 위해 임시 파일 생성
+    let actualDuration = 0;
+    try {
+      const tempDir = os.tmpdir();
+      const tempFile = path.join(tempDir, `temp-audio-${i}.mp3`);
+
+      // base64를 파일로 저장
+      const buffer = Buffer.from(base64, 'base64');
+      await fs.writeFile(tempFile, buffer);
+
+      // ffprobe로 실제 duration 측정
+      const ffprobeCmd = `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${tempFile}"`;
+      const durationOutput = execSync(ffprobeCmd, { encoding: 'utf-8' }).trim();
+      actualDuration = parseFloat(durationOutput);
+
+      // 임시 파일 삭제
+      await fs.unlink(tempFile).catch(() => {});
+    } catch (error) {
+      // 폴백: 글자 수 기반 추정 (한국어 TTS speakingRate 1.05 기준)
+      // speakingRate 1.05 = 약 240-260자/분 = 4-4.3자/초
+      const charCount = (sc.text || "").length;
+      actualDuration = charCount / (240 / 60); // 240자/분 = 4자/초
+    }
+
     parts.push({
       fileName: `scene-${String(i + 1).padStart(3, "0")}.mp3`,
       base64,
       mime: "audio/mpeg",
+      duration: actualDuration, // 실제 측정된 duration 추가
     });
   }
 
@@ -364,7 +389,8 @@ ipcMain.handle("tts:regenerateScene", async (event, { sceneIndex, sceneText, voi
           sceneIndex: sceneIndex,
           audioUrl: audioFilePath,
           fileName: `scene-${String(sceneIndex + 1).padStart(3, "0")}.mp3`,
-          provider: result.provider
+          provider: result.provider,
+          duration: part.duration || 0  // 실제 측정된 오디오 길이 추가
         }
       };
     }

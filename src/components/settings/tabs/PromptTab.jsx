@@ -14,7 +14,6 @@ import {
 import { useApi } from "../../../hooks/useApi";
 import { LoadingSpinner } from "../../common/LoadingSpinner";
 import { ErrorBoundary } from "../../common/ErrorBoundary";
-import { SettingsHeader } from "../../common";
 import { showGlobalToast } from "../../common/GlobalToast";
 import { useContainerStyles, useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
 import { DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT } from "../../../constants/prompts";
@@ -470,12 +469,6 @@ function PromptTab() {
 
   return (
     <div className={containerStyles.container}>
-      <SettingsHeader
-        icon={<BrainCircuitRegular />}
-        title="프롬프트 템플릿 관리"
-        description="AI 대본 생성과 레퍼런스 분석에 사용할 프롬프트 템플릿을 관리합니다. 카테고리별로 프롬프트를 생성하고 편집하여 더 나은 결과를 얻으세요."
-      />
-
       {/* ===== 상단 관리 바 (Dropdown과 액션 통합) ===== */}
       <Card
         className={cardStyles.settingsCard}

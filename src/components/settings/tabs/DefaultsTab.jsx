@@ -7,9 +7,7 @@ import {
   ArrowResetRegular,
   VideoRegular,
   PuzzlePieceRegular,
-  SettingsRegular,
 } from "@fluentui/react-icons";
-import { SettingsHeader } from "../../common";
 import { useContainerStyles, useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
 import { showGlobalToast } from "../../common/GlobalToast";
 import { useApi } from "../../../hooks/useApi";
@@ -346,12 +344,6 @@ export default function DefaultsTab() {
 
   return (
     <div className={containerStyles.container}>
-      <SettingsHeader
-        icon={<SettingsRegular />}
-        title="기본 설정"
-        description="애플리케이션의 기본 동작을 설정하고, AI 모델 및 출력 품질을 구성합니다."
-      />
-
       <Card className={cardStyles.settingsCard} style={{ padding: sectionGap }}>
         {/* 일반 설정 섹션 */}
         <div style={{ marginBottom: sectionGap }}>
