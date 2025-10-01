@@ -34,8 +34,8 @@ const useStyles = makeStyles({
     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
     border: 'none',
     pointerEvents: 'auto', // MessageBar만 클릭 가능
-    minHeight: '48px',
-    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalXL),
+    minHeight: '40px',
+    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalXL),
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
