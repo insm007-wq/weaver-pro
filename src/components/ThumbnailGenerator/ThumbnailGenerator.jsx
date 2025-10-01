@@ -264,12 +264,20 @@ function ThumbnailGenerator() {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const [savedTemplate, savedEngine] = await Promise.all([
-          window.api.getSetting("thumbnailPromptTemplate"),
+        const [selectedName, savedEngine] = await Promise.all([
+          window.api.getSetting("selectedPromptName"),
           window.api.getSetting("thumbnailDefaultEngine"),
         ]);
 
-        setMetaTemplate(savedTemplate || DEFAULT_TEMPLATE);
+        // 선택된 프롬프트의 썸네일 카테고리 로드
+        const promptName = selectedName || "기본 프롬프트";
+        const res = await window.api.invoke("prompts:getPairByName", promptName);
+
+        if (res?.ok && res.data?.thumbnail?.content) {
+          setMetaTemplate(res.data.thumbnail.content.trim());
+        } else {
+          setMetaTemplate(DEFAULT_TEMPLATE);
+        }
 
         // 전역 설정의 기본 엔진을 항상 사용
         if (savedEngine) {
@@ -287,10 +295,37 @@ function ThumbnailGenerator() {
 
   /** 설정 변경 감지 */
   useEffect(() => {
-    const handleSettingsChanged = (payload) => {
-      if (payload?.key === "thumbnailPromptTemplate") {
-        setMetaTemplate(payload.value || DEFAULT_TEMPLATE);
-        console.log(`프롬프트 템플릿 변경됨`);
+    const handleSettingsChanged = async (payload) => {
+      // 선택된 프롬프트 변경 시 썸네일 프롬프트 업데이트
+      if (payload?.key === "selectedPromptName") {
+        try {
+          const promptName = payload.value || "기본 프롬프트";
+          const res = await window.api.invoke("prompts:getPairByName", promptName);
+
+          if (res?.ok && res.data?.thumbnail?.content) {
+            setMetaTemplate(res.data.thumbnail.content.trim());
+            console.log(`썸네일 프롬프트 변경됨 (프롬프트: ${promptName})`);
+          } else {
+            setMetaTemplate(DEFAULT_TEMPLATE);
+          }
+        } catch (error) {
+          console.error("썸네일 프롬프트 로드 실패:", error);
+          setMetaTemplate(DEFAULT_TEMPLATE);
+        }
+      } else if (payload?.key === "prompts") {
+        // prompts 배열이 변경되면 현재 선택된 프롬프트의 썸네일 다시 로드
+        try {
+          const selectedName = await window.api.getSetting("selectedPromptName");
+          const promptName = selectedName || "기본 프롬프트";
+          const res = await window.api.invoke("prompts:getPairByName", promptName);
+
+          if (res?.ok && res.data?.thumbnail?.content) {
+            setMetaTemplate(res.data.thumbnail.content.trim());
+            console.log(`썸네일 프롬프트 업데이트됨 (프롬프트: ${promptName})`);
+          }
+        } catch (error) {
+          console.error("썸네일 프롬프트 업데이트 실패:", error);
+        }
       } else if (payload?.key === "thumbnailDefaultEngine") {
         // 생성 엔진 변경 시 실시간 업데이트
         setProvider(payload.value || "replicate");

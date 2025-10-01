@@ -245,6 +245,9 @@ function PromptTab() {
         setReferencePrompt(catDefault("reference"));
         setThumbnailPrompt(DEFAULT_TEMPLATE);
       }
+
+      // 선택된 프롬프트 이름을 전역 설정에 저장 (썸네일 생성기에서 사용)
+      await window.api.setSetting({ key: "selectedPromptName", value: name });
     } catch (e) {
       console.error(e);
     }
