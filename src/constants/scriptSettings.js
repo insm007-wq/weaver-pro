@@ -103,9 +103,9 @@ export const GENERATION_TYPE_OPTIONS = [
 ];
 
 export const CPM_PRESETS = [
-  { label: "빠른 속도 (400-500자/분)", min: 400, max: 500 },
-  { label: "표준 속도 (300-400자/분)", min: 300, max: 400 },
-  { label: "느린 속도 (200-300자/분)", min: 200, max: 300 },
+  { label: "빠른 속도 (250-280자/분)", min: 250, max: 280 },
+  { label: "표준 속도 (220-250자/분, 권장)", min: 220, max: 250 },
+  { label: "느린 속도 (180-220자/분)", min: 180, max: 220 },
   { label: "사용자 정의", min: null, max: null },
 ];
 
@@ -125,6 +125,6 @@ export const makeDefaultForm = () => ({
   generateVoice: true,
   ttsEngine: "google",
   voice: "ko-KR-Wavenet-A",
-  cpmMin: 300, // 분당 최소 글자수 (한국어 TTS 기준)
-  cpmMax: 400, // 분당 최대 글자수
+  cpmMin: 220, // 분당 최소 글자수 (Google TTS speakingRate 1.0 실측)
+  cpmMax: 250, // 분당 최대 글자수
 });

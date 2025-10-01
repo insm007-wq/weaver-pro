@@ -152,7 +152,7 @@ function buildPrompt({ topic, style, duration, referenceText, cpmMin, cpmMax }) 
 }
 
 // 커스텀 프롬프트 변수 치환 (Anthropic과 동일)
-function _buildPrompt(topic, duration, style, customPrompt = null, referenceScript = null, cpmMin = 300, cpmMax = 400) {
+function _buildPrompt(topic, duration, style, customPrompt = null, referenceScript = null, cpmMin = 220, cpmMax = 250) {
   const minCharacters = duration * cpmMin;
   const maxCharacters = duration * cpmMax;
   const totalSeconds = duration * 60;
@@ -388,9 +388,18 @@ async function callReplicate(params) {
     // ⚠️ 글자 수가 최소 기준 미만이면 재시도 (장편/단편 구분)
     const isLongForm = duration >= 20;
     const expectedMinChars = isLongForm
-      ? Math.round(duration * cpmMin * 1.1)  // 장편: 110% (30분 = 10,560자)
-      : Math.round(duration * cpmMin * 1.25); // 단편: 125% (3분 = 1,200자)
+      ? Math.round(duration * cpmMin * 1.4)  // 장편: 140% (20분 = 6,160자)
+      : Math.round(duration * cpmMin * 1.25); // 단편: 125% (3분 = 825자)
     const actualSceneCount = normalizedScenes.length;
+
+    console.log(`📊 Replicate 대본 생성 결과 (시도 ${attempt}/${maxRetries}):`);
+    console.log(`  - 요청 시간: ${duration}분`);
+    console.log(`  - 생성 장면: ${actualSceneCount}개`);
+    console.log(`  - 생성 글자: ${totalChars}자`);
+    console.log(`  - 최소 요구: ${expectedMinChars}자 (${isLongForm ? '장편 140%' : '단편 125%'})`);
+    console.log(`  - CPM 기준: ${cpmMin}-${cpmMax}자/분`);
+    console.log(`  - 예상 TTS 길이: ${(totalChars / 220).toFixed(1)}분 (Google TTS speakingRate 1.0 기준: 220자/분)`);
+    console.log(`  - 목표 달성률: ${((totalChars / 220) / duration * 100).toFixed(0)}%`);
 
     if (totalChars < expectedMinChars && attempt < maxRetries) {
       console.warn(`⚠️ 글자 수 부족: ${totalChars}자 < ${expectedMinChars}자 (최소 요구)`);
