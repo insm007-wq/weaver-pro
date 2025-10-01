@@ -167,30 +167,39 @@ function PromptTab() {
    */
   useEffect(() => {
     if (!didInitRef.current && Array.isArray(prompts)) {
-      // 기본 프롬프트들 찾기
-      const dScript = prompts.find((p) => p.isDefault && p.category === "script");
-      const dRef = prompts.find((p) => p.isDefault && p.category === "reference");
-      const dThumb = prompts.find((p) => p.isDefault && p.category === "thumbnail");
+      const initializePrompts = async () => {
+        // 기본 프롬프트들 찾기
+        const dScript = prompts.find((p) => p.isDefault && p.category === "script");
+        const dRef = prompts.find((p) => p.isDefault && p.category === "reference");
+        const dThumb = prompts.find((p) => p.isDefault && p.category === "thumbnail");
 
-      // 에디터에 기본 프롬프트 설정
-      setScriptPrompt(dScript?.content?.trim() ?? catDefault("script"));
-      setReferencePrompt(dRef?.content?.trim() ?? catDefault("reference"));
-      setThumbnailPrompt(dThumb?.content?.trim() ?? DEFAULT_TEMPLATE);
-      setOriginalThumbnailPrompt(dThumb?.content?.trim() ?? DEFAULT_TEMPLATE);
+        // 에디터에 기본 프롬프트 설정
+        setScriptPrompt(dScript?.content?.trim() ?? catDefault("script"));
+        setReferencePrompt(dRef?.content?.trim() ?? catDefault("reference"));
+        setThumbnailPrompt(dThumb?.content?.trim() ?? DEFAULT_TEMPLATE);
+        setOriginalThumbnailPrompt(dThumb?.content?.trim() ?? DEFAULT_TEMPLATE);
 
-      // 사용자 프롬프트가 있으면 첫 번째 사용자 프롬프트 선택, 없으면 기본 프롬프트 선택
-      const userNames = uniqueUserNames(prompts);
+        // 이전에 선택했던 프롬프트 이름을 불러오기
+        const savedName = await window.api.getSetting("selectedPromptName");
+        const userNames = uniqueUserNames(prompts);
+        const allNames = [...new Set(["기본 프롬프트", ...userNames])];
 
-      if (userNames.length > 0) {
-        // 사용자 프롬프트가 있으면 첫 번째 사용자 프롬프트 선택
-        activatePair(userNames[0]);
-      } else {
-        // 사용자 프롬프트가 없으면 기본 프롬프트 선택
-        activatePair("기본 프롬프트");
-      }
+        // 저장된 이름이 있고 유효하면 해당 프롬프트 선택
+        if (savedName && allNames.includes(savedName)) {
+          await activatePair(savedName);
+        } else if (userNames.length > 0) {
+          // 저장된 값이 없으면 첫 번째 사용자 프롬프트 선택
+          await activatePair(userNames[0]);
+        } else {
+          // 사용자 프롬프트가 없으면 기본 프롬프트 선택
+          await activatePair("기본 프롬프트");
+        }
 
-      didInitRef.current = true;
-      setLoading(false);
+        didInitRef.current = true;
+        setLoading(false);
+      };
+
+      initializePrompts();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prompts]);
