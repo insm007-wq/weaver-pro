@@ -1,6 +1,9 @@
 /**
  * Anthropic Claude API Provider
- * 협력업체 검증 방식, 안정성 중심
+ * Vrew 스타일 + Google TTS 보정
+ * - 씬당 40~60자
+ * - CPM 320~360 (3분이면 960~1080자 보장)
+ * - 요청 시간보다 짧으면 불합격, 10~20% 길어도 허용
  */
 
 const { getSecret } = require("../../services/secrets");
@@ -9,6 +12,10 @@ const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const DEFAULT_MODEL = "claude-3-5-sonnet-latest";
 const MAX_TOKENS = 8192;
 const TTS_SAFE_CHAR_LIMIT = 1450;
+
+// ============================================================
+// 유틸 함수
+// ============================================================
 function normalizeText(text) {
   if (!text) return "";
   return String(text)
@@ -20,6 +27,7 @@ function normalizeText(text) {
 function countKoreanChars(text) {
   return Array.from(normalizeText(text)).length;
 }
+
 function parseJsonResponse(raw) {
   if (!raw) return null;
 
@@ -44,6 +52,7 @@ function parseJsonResponse(raw) {
 
   return null;
 }
+
 function extractSceneText(scene) {
   if (!scene) return "";
   if (typeof scene === "string") return scene.trim();
@@ -62,56 +71,56 @@ function validateScript(data) {
   if (!Array.isArray(data.scenes) || data.scenes.length === 0) return false;
   return data.scenes.every((scene) => extractSceneText(scene).length > 0);
 }
-function buildPrompt({ topic, style, duration, maxScenes, referenceText, cpmMin, cpmMax }) {
-  const minChars = Math.round(duration * (cpmMin || 300));
-  const maxChars = Math.round(duration * (cpmMax || 400));
-  const avgCharsPerScene = Math.round((minChars + maxChars) / 2 / maxScenes);
 
-  // 🚀 협력업체 방식: 긴 영상에 대한 프롬프트 강화
-  const isLongContent = duration >= 20;
-  const contentDepthInstruction = isLongContent ?
-    `\n⭐ 긴 영상 특별 요구사항:\n• 각 주제를 상세하고 구체적으로 설명\n• 실제 사례와 예시를 풍부하게 포함\n• 다양한 관점에서 접근하여 내용 확장\n• 시청자가 지루하지 않도록 흥미로운 요소 추가\n• 실습이나 적용 방법을 단계별로 설명\n• 전문적이면서도 이해하기 쉽게 작성` :
-    ``;
+// ============================================================
+// Vrew 스타일 프롬프트 빌더
+// ============================================================
+function buildPrompt({ topic, style, duration, referenceText, cpmMin, cpmMax }) {
+  const totalSeconds = duration * 60;
+  const secondsPerScene = 8;
+  const targetSceneCount = Math.round(totalSeconds / secondsPerScene);
+  const minSceneCount = Math.max(3, Math.floor(targetSceneCount * 0.9));
+  const maxSceneCount = Math.ceil(targetSceneCount * 1.3); // 최대 30% 더 허용
+
+  // 최소 글자수 설정 (장편/단편 구분)
+  const isLongForm = duration >= 20; // 20분 이상은 장편
+  const expectedMinChars = isLongForm
+    ? Math.round(duration * cpmMin * 1.1)  // 장편: 110% (30분 = 10,560자)
+    : Math.round(duration * cpmMin * 1.25); // 단편: 125% (3분 = 1,200자)
+  const expectedMaxChars = Math.round(duration * cpmMax * 1.5); // 최대 50% 더 허용
 
   const parts = [
-    `다음 조건에 맞는 ${duration}분 길이의 ${isLongContent ? '상세한 ' : ''}영상 대본을 작성해주세요.`,
+    `다음 조건에 맞는 ${duration}분 길이의 ${isLongForm ? '장편 ' : ''}영상 대본을 작성해주세요.`,
     "",
     `📋 기본 정보:`,
     `• 주제: ${topic || "(미지정)"}`,
     `• 스타일: ${style || "전문가 톤, 쉽고 차분하게"}`,
     `• 언어: 한국어`,
-    contentDepthInstruction,
+    isLongForm ? `• 장편 콘텐츠: 각 주제를 상세하고 깊이 있게 다루세요` : "",
     "",
-    `📊 분량 요구사항:`,
-    `• 정확히 ${maxScenes}개 장면으로 구성`,
-    `• 총 글자수: ${minChars} ~ ${maxChars}자`,
-    `• 장면당 평균: 약 ${avgCharsPerScene}자`,
-    `• 각 장면 최대 ${TTS_SAFE_CHAR_LIMIT}자 (TTS 제한)`,
+    `📺 영상 구성 (반드시 준수):`,
+    `• 총 길이: ${duration}분 (${totalSeconds}초)`,
+    `• 장면 구성: ${minSceneCount}~${maxSceneCount}개 (권장: ${targetSceneCount}개)`,
+    `• 각 장면: 7~10초 (40~60자)`,
+    `• 각 장면 최대: ${TTS_SAFE_CHAR_LIMIT}자 (TTS 제한)`,
     "",
-    `⚠️ 중요 규칙:`,
-    `• 장면 수는 반드시 ${maxScenes}개를 준수하세요`,
-    `• 전체 재생시간이 ${duration}분에 맞도록 조절하세요`,
-    `• 마크다운, 불릿포인트, 목차 등 금지`,
-    `• 자연스러운 문단 형태로 작성`,
-  ];
+    `📝 작성 방식:`,
+    `• 각 장면은 50~60자 (너무 짧으면 안됨!)`,
+    `• 각 장면마다 하나의 완결된 메시지 전달`,
+    `• 장면 간 자연스러운 흐름 유지`,
+    `• 지루하지 않게 적절한 템포 유지`,
+    `• 마크다운/불릿포인트 금지`,
+    `• 자연스러운 구어체 문단`,
+    "",
+    `⚠️ 중요:`,
+    `1. 반드시 ${minSceneCount}개 이상 장면 포함 (${isLongForm ? '장편이므로 많은 장면 필수' : '최소한 이 개수는 꼭 지켜야 함'})`,
+    `2. 전체 글자 수는 최소 ${expectedMinChars}자 이상 ${isLongForm ? '권장' : '필수'}! (짧으면 ${isLongForm ? '재시도' : '불합격'})`,
+    `3. 각 장면은 50자 이상 작성 (40자 이하는 불합격)`,
+    `4. 요청 시간보다 최대 30% 길어져도 괜찮음`,
+  ].filter(line => line !== ""); // 빈 줄 제거
 
-  // 레퍼런스 대본이 있으면 추가
   if (referenceText && referenceText.trim()) {
     parts.push("", `📄 참고 대본:`, `아래 대본의 구조와 스타일을 참고하여 더 나은 대본을 작성하세요.`, "", referenceText.trim());
-  }
-
-  // 🚀 협력업체 방식: 긴 영상 구성 가이드 추가
-  if (isLongContent) {
-    parts.push(
-      "",
-      `🎯 추천 구성 (${duration}분 영상):`,
-      `1. 흥미로운 도입 (5%)`,
-      `2. 기본 개념 설명 (15%)`,
-      `3. 상세한 내용 전개 (50%)`,
-      `4. 실제 사례/예시 (20%)`,
-      `5. 실습/적용 방법 (7%)`,
-      `6. 요약 및 마무리 (3%)`
-    );
   }
 
   parts.push(
@@ -120,10 +129,9 @@ function buildPrompt({ topic, style, duration, maxScenes, referenceText, cpmMin,
     `{`,
     `  "title": "대본 제목",`,
     `  "scenes": [`,
-    `    {`,
-    `      "text": "장면 내용",`,
-    `      "duration": 시간(초)`,
-    `    }`,
+    `    {"text": "첫 번째 장면 (50~60자)", "duration": ${secondsPerScene}},`,
+    `    {"text": "두 번째 장면 (50~60자)", "duration": ${secondsPerScene}},`,
+    `    ... (총 ${minSceneCount}~${maxSceneCount}개 장면)`,
     `  ]`,
     `}`,
     "",
@@ -133,26 +141,28 @@ function buildPrompt({ topic, style, duration, maxScenes, referenceText, cpmMin,
   return parts.join("\n");
 }
 
-async function _buildPrompt(topic, duration, style, maxScenes, customPrompt = null, referenceScript = null, cpmMin = 300, cpmMax = 400) {
+async function _buildPrompt(topic, duration, style, customPrompt = null, referenceScript = null, cpmMin = 320, cpmMax = 360) {
   const minCharacters = duration * cpmMin;
   const maxCharacters = duration * cpmMax;
-  const avgCharactersPerScene = Math.floor((minCharacters + maxCharacters) / 2 / maxScenes);
 
   let prompt;
 
   if (customPrompt && customPrompt.trim()) {
-    // 사용자 프롬프트 변수 치환
     prompt = customPrompt
       .replace(/\{topic\}/g, topic)
       .replace(/\{duration\}/g, duration)
       .replace(/\{style\}/g, style)
-      .replace(/\{maxScenes\}/g, maxScenes)
       .replace(/\{minCharacters\}/g, minCharacters)
-      .replace(/\{maxCharacters\}/g, maxCharacters)
-      .replace(/\{avgCharactersPerScene\}/g, avgCharactersPerScene);
+      .replace(/\{maxCharacters\}/g, maxCharacters);
   } else {
-    // 기본 프롬프트 사용
-    prompt = buildPrompt({ topic, style, duration, maxScenes, referenceText: referenceScript, cpmMin, cpmMax });
+    prompt = buildPrompt({
+      topic,
+      style,
+      duration,
+      referenceText: referenceScript,
+      cpmMin,
+      cpmMax,
+    });
   }
 
   if (referenceScript && referenceScript.trim()) {
@@ -162,158 +172,40 @@ async function _buildPrompt(topic, duration, style, maxScenes, customPrompt = nu
   return prompt;
 }
 
-function normalizeScenes(scenes, targetDuration, maxScenes) {
+// ============================================================
+// 씬 정규화 (Vrew 스타일)
+// ============================================================
+function normalizeScenes(scenes, targetDuration) {
+  const targetSeconds = targetDuration * 60;
+  const sceneCount = scenes.length;
+  const avgDuration = Math.round(targetSeconds / sceneCount);
+
   let normalizedScenes = scenes.map((scene, index) => {
     const text = extractSceneText(scene);
     const charCount = countKoreanChars(text);
 
     return {
       id: scene.id || `s${index + 1}`,
-      text: text,
-      duration: scene.duration || Math.round((targetDuration * 60) / maxScenes),
-      charCount: charCount,
+      text,
+      duration: avgDuration,
+      charCount,
       scene_number: index + 1,
     };
   });
 
-  // 협력업체 방식: 장면 수 조정
-  normalizedScenes = adjustAnthropicSceneCount(normalizedScenes, maxScenes, targetDuration);
-
-  // duration 총합이 목표와 맞는지 확인 및 조정
-  const totalDuration = normalizedScenes.reduce((sum, scene) => sum + scene.duration, 0);
-  const targetSeconds = targetDuration * 60;
-
-  if (Math.abs(totalDuration - targetSeconds) > 2) {
-    // 비례 조정
-    const scale = targetSeconds / totalDuration;
-    let accumulatedDuration = 0;
-
-    normalizedScenes.forEach((scene, index) => {
-      if (index === normalizedScenes.length - 1) {
-        // 마지막 씬은 남은 시간 모두 할당
-        scene.duration = Math.max(1, targetSeconds - accumulatedDuration);
-      } else {
-        scene.duration = Math.max(1, Math.round(scene.duration * scale));
-        accumulatedDuration += scene.duration;
-      }
-    });
+  // 마지막 씬에 남은 시간 보정
+  const totalDuration = normalizedScenes.reduce((sum, s) => sum + s.duration, 0);
+  if (totalDuration !== targetSeconds) {
+    normalizedScenes[sceneCount - 1].duration += targetSeconds - totalDuration;
   }
 
   return normalizedScenes;
 }
 
-// 협력업체 방식: Anthropic용 장면 수 조정
-function adjustAnthropicSceneCount(scenes, targetCount, duration) {
-  const currentCount = scenes.length;
-
-  console.log(`🔧 Anthropic 장면 수 조정: ${currentCount}개 → ${targetCount}개`);
-
-  if (currentCount === targetCount) {
-    return scenes;
-  }
-
-  if (currentCount < targetCount) {
-    // 부족한 경우: 긴 장면들을 분할
-    return splitAnthropicScenes(scenes, targetCount, duration);
-  } else {
-    // 초과한 경우: 짧은 장면들을 병합
-    return mergeAnthropicScenes(scenes, targetCount, duration);
-  }
-}
-
-// Anthropic 장면 분할
-function splitAnthropicScenes(scenes, targetCount, duration) {
-  const needed = targetCount - scenes.length;
-  console.log(`➕ ${needed}개 장면 분할 필요`);
-
-  let result = [...scenes];
-
-  for (let i = 0; i < needed && result.length < targetCount; i++) {
-    const longestIndex = result.reduce((maxIdx, scene, idx) =>
-      scene.charCount > result[maxIdx].charCount ? idx : maxIdx, 0);
-
-    const sceneToSplit = result[longestIndex];
-    if (sceneToSplit.charCount < 100) break;
-
-    const text = sceneToSplit.text;
-    const sentences = text.split(/[.!?。]/);
-
-    if (sentences.length > 1) {
-      const halfSentences = Math.floor(sentences.length / 2);
-      const firstPart = sentences.slice(0, halfSentences).join('.').trim() + '.';
-      const secondPart = sentences.slice(halfSentences).join('.').trim();
-
-      const baseDuration = Math.round((duration * 60) / targetCount);
-
-      result[longestIndex] = {
-        ...sceneToSplit,
-        text: firstPart,
-        charCount: countKoreanChars(firstPart),
-        duration: baseDuration
-      };
-
-      result.splice(longestIndex + 1, 0, {
-        id: `${sceneToSplit.id}_split`,
-        text: secondPart,
-        charCount: countKoreanChars(secondPart),
-        duration: baseDuration,
-        scene_number: longestIndex + 2
-      });
-
-      console.log(`  ✂️ 장면 ${longestIndex + 1} 분할: ${sceneToSplit.charCount}자 → ${countKoreanChars(firstPart)}자 + ${countKoreanChars(secondPart)}자`);
-    }
-  }
-
-  // scene_number 재정렬
-  return result.slice(0, targetCount).map((scene, index) => ({
-    ...scene,
-    scene_number: index + 1
-  }));
-}
-
-// Anthropic 장면 병합
-function mergeAnthropicScenes(scenes, targetCount, duration) {
-  const excess = scenes.length - targetCount;
-  console.log(`➖ ${excess}개 장면 병합 필요`);
-
-  let result = [...scenes];
-
-  for (let i = 0; i < excess && result.length > targetCount; i++) {
-    let shortestPairIndex = 0;
-    let shortestPairLength = Infinity;
-
-    for (let j = 0; j < result.length - 1; j++) {
-      const combinedLength = result[j].charCount + result[j + 1].charCount;
-      if (combinedLength < shortestPairLength) {
-        shortestPairLength = combinedLength;
-        shortestPairIndex = j;
-      }
-    }
-
-    const first = result[shortestPairIndex];
-    const second = result[shortestPairIndex + 1];
-
-    const merged = {
-      id: first.id,
-      text: first.text + ' ' + second.text,
-      charCount: first.charCount + second.charCount,
-      duration: Math.round((duration * 60) / targetCount),
-      scene_number: first.scene_number
-    };
-
-    console.log(`  🔗 장면 ${shortestPairIndex + 1}, ${shortestPairIndex + 2} 병합: ${first.charCount}자 + ${second.charCount}자 = ${merged.charCount}자`);
-
-    result.splice(shortestPairIndex, 2, merged);
-  }
-
-  // scene_number 재정렬
-  return result.map((scene, index) => ({
-    ...scene,
-    scene_number: index + 1
-  }));
-}
-
-async function callAnthropicAPI(apiKey, prompt) {
+// ============================================================
+// API 호출
+// ============================================================
+async function callAnthropicAPI(apiKey, prompt, minSceneCount = 5, isLongForm = false) {
   const response = await fetch(ANTHROPIC_URL, {
     method: "POST",
     headers: {
@@ -323,15 +215,16 @@ async function callAnthropicAPI(apiKey, prompt) {
     },
     body: JSON.stringify({
       model: DEFAULT_MODEL,
-      max_tokens: MAX_TOKENS - 100, // 안전 마진
-      system: "You are a professional Korean scriptwriter. Return ONLY valid JSON without any explanations or markdown.",
-      messages: [
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      temperature: 0.1, // 일관성을 위해 낮은 온도
+      max_tokens: isLongForm ? MAX_TOKENS : MAX_TOKENS - 100, // 장편은 최대 토큰 사용
+      system: `You are a professional Korean scriptwriter.
+CRITICAL RULES:
+1. Return ONLY valid JSON without any explanations or markdown.
+2. The "scenes" array MUST contain at least ${minSceneCount} scenes.
+3. ${isLongForm ? 'This is a LONG-FORM content. Generate as many scenes as possible (aim for ' + minSceneCount + '+).' : 'Each scene duration MUST sum to the requested total video time.'}
+4. Each scene text MUST be 50~60 Korean characters (not less than 50).
+5. ${isLongForm ? 'You MUST generate at least ' + minSceneCount + ' scenes or the response will be rejected.' : ''}`,
+      messages: [{ role: "user", content: prompt }],
+      temperature: isLongForm ? 0.7 : 0.2, // 장편은 창의성 높여서 더 많이 생성
     }),
   });
 
@@ -344,185 +237,175 @@ async function callAnthropicAPI(apiKey, prompt) {
   return data?.content?.[0]?.text || "";
 }
 
+// ============================================================
+// 대본 생성 메인 함수 (청크 방식 지원)
+// ============================================================
 async function callAnthropic(params) {
   const {
     topic = "",
     style = "",
     duration = 5,
-    maxScenes = 10,
     referenceText = "",
-    compiledPrompt = "",
-    cpmMin = 300,
-    cpmMax = 400,
+    cpmMin = 320,
+    cpmMax = 360,
   } = params;
 
-  console.log("🤖 Anthropic 대본 생성 시작 (협력업체 방식)");
-  console.log(`📊 설정: ${duration}분, ${maxScenes}개 장면, CPM ${cpmMin}-${cpmMax}`);
+  console.log("🤖 Anthropic 대본 생성 시작");
+  console.log(`📊 설정: ${duration}분, CPM ${cpmMin}-${cpmMax}`);
 
-  // 1. API 키 확인
-  const apiKey = await getSecret("anthropicKey");
-  if (!apiKey) {
-    throw new Error("Anthropic API Key가 설정되지 않았습니다. 설정에서 API 키를 등록해주세요.");
+  const isLongForm = duration >= 20;
+
+  // 장편(20분 이상)은 청크로 나눠서 생성
+  if (isLongForm) {
+    return await generateLongFormScript({
+      topic,
+      style,
+      duration,
+      referenceText,
+      cpmMin,
+      cpmMax,
+      customPrompt: params.prompt
+    });
   }
 
-  // 2. 프롬프트 준비
-  const prompt = await _buildPrompt(topic, duration, style, maxScenes, params.prompt, referenceText, cpmMin, cpmMax);
+  // 단편은 기존 방식 그대로
+  const targetSceneCount = Math.round((duration * 60) / 8);
+  const minSceneCount = Math.max(3, Math.floor(targetSceneCount * 0.9));
+  const maxSceneCount = Math.ceil(targetSceneCount * 1.3);
 
-  const maxRetries = 1; // 속도 우선으로 1회만
+  const apiKey = await getSecret("anthropicKey");
+  if (!apiKey) throw new Error("Anthropic API Key가 설정되지 않았습니다.");
+
+  const prompt = await _buildPrompt(topic, duration, style, params.prompt, referenceText, cpmMin, cpmMax);
+
   let lastError = null;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    console.log(`🔄 시도 ${attempt}/${maxRetries}: 장면 수 ${maxScenes}개 대본 생성`);
-
+  for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      // 2. 프롬프트 준비 (시도할 때마다 더 강하게)
-      let currentPrompt = prompt;
-
-      if (attempt > 1) {
-        currentPrompt += `\n\n🚨 중요: 이전 시도에서 장면 수가 맞지 않았습니다. 반드시 정확히 ${maxScenes}개 장면으로 생성해주세요!`;
-      }
-      if (attempt > 2) {
-        currentPrompt += `\n\n❌ 마지막 기회입니다! 장면 수가 ${maxScenes}개가 아니면 실패입니다. 다른 개수는 절대 안됩니다!`;
-      }
-
-      console.log("📝 프롬프트 길이:", currentPrompt.length, "자");
-
-      // 3. API 호출
-      const rawResponse = await callAnthropicAPI(apiKey, currentPrompt);
-      console.log("✅ API 응답 수신, 길이:", rawResponse.length, "자");
-
-      // 4. JSON 파싱
+      const rawResponse = await callAnthropicAPI(apiKey, prompt, minSceneCount, false);
       const parsedData = parseJsonResponse(rawResponse);
-      if (!parsedData) {
-        throw new Error("AI 응답을 JSON으로 파싱할 수 없습니다.");
+      if (!parsedData || !validateScript(parsedData)) {
+        throw new Error("AI 응답 파싱 실패");
       }
 
-      // 5. 구조 검증
-      if (!validateScript(parsedData)) {
-        throw new Error("생성된 대본의 구조가 올바르지 않습니다.");
+      const normalizedScenes = normalizeScenes(parsedData.scenes, duration);
+      const totalChars = normalizedScenes.reduce((sum, s) => sum + s.charCount, 0);
+      const expectedMinCharsCheck = duration * cpmMin * 1.1; // 단편도 110% 요구
+
+      if (totalChars < expectedMinCharsCheck && attempt < 3) {
+        console.warn(`⚠️ 글자 수 부족: ${totalChars}자 < ${expectedMinCharsCheck}자`);
+        throw new Error(`글자 수 부족: ${totalChars} < ${expectedMinCharsCheck}, 재시도`);
       }
 
-      // 6. 장면 수 검증 (30% 오차까지 허용, 협력업체 방식)
-      const actualScenes = parsedData.scenes.length;
-      const allowableRange = Math.ceil(maxScenes * 0.5); // 50% 허용으로 확대
-      const sceneDiff = Math.abs(actualScenes - maxScenes);
-      console.log(`🎯 Anthropic 장면 수 검증: 요청 ${maxScenes}개 vs 실제 ${actualScenes}개 (차이: ${sceneDiff}개, 허용: ±${allowableRange}개)`);
-
-      if (sceneDiff > allowableRange) {
-        const error = `장면 수 차이가 매우 큼: ${maxScenes}개 요청했으나 ${actualScenes}개 생성됨 (허용 오차: ±${allowableRange}개)`;
-        console.warn(`⚠️ ${error} (시도 ${attempt}/${maxRetries})`);
-
-        if (attempt < maxRetries) {
-          console.log(`🔄 재시도 준비 중... (${maxRetries - attempt}번 남음)`);
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          continue; // 다음 시도로
-        } else {
-          throw new Error(error);
-        }
-      } else if (sceneDiff > 0) {
-        console.log(`✅ 허용 오차 내 장면 수 차이 (±${sceneDiff}개), 후처리로 자동 조정`);
-      }
-
-      // 7. 씬 데이터 정규화
-      const normalizedScenes = normalizeScenes(parsedData.scenes, duration, maxScenes);
-
-      // 8. 최종 결과 구성
-      const result = {
-        title: parsedData.title || topic || "AI 생성 대본",
-        scenes: normalizedScenes,
+      return {
+        success: true,
+        data: {
+          title: parsedData.title || topic || "AI 생성 대본",
+          scenes: normalizedScenes,
+        },
       };
-
-      // 9. 시간 계산 정확성 검증
-      const totalChars = normalizedScenes.reduce((sum, scene) => sum + scene.charCount, 0);
-      const totalDuration = normalizedScenes.reduce((sum, scene) => sum + scene.duration, 0);
-
-      // 실제 vs 예상 시간 계산
-      const expectedMinChars = duration * cpmMin;
-      const expectedMaxChars = duration * cpmMax;
-      const expectedDurationSeconds = duration * 60;
-      const actualDurationMinutes = totalDuration / 60;
-
-      console.log(`🎉 대본 생성 완료! (시도 ${attempt}/${maxRetries})`);
-      console.log(`📈 기본 통계: ${normalizedScenes.length}개 장면, ${totalChars}자, ${Math.round(actualDurationMinutes * 10) / 10}분`);
-      console.log(`📊 장면당 평균: ${Math.round(totalChars / normalizedScenes.length)}자`);
-
-      // 정확성 검증 로그
-      console.log(`🔍 시간 정확성 검증:`);
-      console.log(`  📋 요청 시간: ${duration}분 (${expectedDurationSeconds}초)`);
-      console.log(`  ⏱️ 실제 시간: ${actualDurationMinutes.toFixed(1)}분 (${totalDuration}초)`);
-      console.log(`  📊 시간 차이: ${Math.abs(actualDurationMinutes - duration).toFixed(1)}분`);
-      console.log(`  ✅ 시간 정확도: ${((1 - Math.abs(actualDurationMinutes - duration) / duration) * 100).toFixed(1)}%`);
-
-      console.log(`🔍 글자 수 정확성 검증:`);
-      console.log(`  📋 예상 범위: ${expectedMinChars}~${expectedMaxChars}자`);
-      console.log(`  📝 실제 글자: ${totalChars}자`);
-      console.log(`  ✅ 범위 내 여부: ${totalChars >= expectedMinChars && totalChars <= expectedMaxChars ? '✅ 적합' : '❌ 범위 초과'}`);
-
-      console.log(`🔍 CPM 정확성 검증:`);
-      const actualCPM = Math.round(totalChars / duration);
-      console.log(`  📋 설정 CPM: ${cpmMin}~${cpmMax}자/분`);
-      console.log(`  📝 실제 CPM: ${actualCPM}자/분`);
-      console.log(`  ✅ CPM 정확도: ${actualCPM >= cpmMin && actualCPM <= cpmMax ? '✅ 적합' : '❌ 범위 초과'}`);
-
-      return { success: true, data: result };
-
-    } catch (error) {
-      lastError = error;
-      console.error(`❌ 시도 ${attempt} 실패:`, error.message);
-
-      if (attempt < maxRetries) {
-        console.log(`⏳ ${2}초 후 재시도...`);
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
+    } catch (err) {
+      lastError = err;
+      console.error(`❌ 시도 ${attempt} 실패:`, err.message);
+      if (attempt < 3) await new Promise((r) => setTimeout(r, 2000));
     }
   }
 
-  console.error(`❌ 모든 시도 실패 (${maxRetries}/${maxRetries})`);
-  throw new Error(`대본 생성 실패: ${lastError?.message || "알 수 없는 오류"}`);
+  throw new Error(`대본 생성 실패: ${lastError?.message}`);
 }
 
-/**
- * 썸네일 프롬프트 확장
- * 사용자의 간단한 입력(한글/영어)을 YouTube 썸네일에 최적화된 상세 영어 프롬프트로 변환
- */
+// ============================================================
+// 장편 대본 생성 (청크 방식)
+// ============================================================
+async function generateLongFormScript({ topic, style, duration, referenceText, cpmMin, cpmMax, customPrompt }) {
+  console.log(`🎬 장편 콘텐츠 생성 모드: ${duration}분을 청크로 분할`);
+
+  const CHUNK_DURATION = 5; // 5분씩 청크
+  const chunkCount = Math.ceil(duration / CHUNK_DURATION);
+
+  console.log(`📦 총 ${chunkCount}개 청크로 분할 (각 ${CHUNK_DURATION}분)`);
+
+  const apiKey = await getSecret("anthropicKey");
+  if (!apiKey) throw new Error("Anthropic API Key가 설정되지 않았습니다.");
+
+  const allScenes = [];
+  let currentSceneNumber = 1;
+
+  for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
+    const isLastChunk = chunkIndex === chunkCount - 1;
+    const chunkDuration = isLastChunk ? duration - (chunkIndex * CHUNK_DURATION) : CHUNK_DURATION;
+
+    console.log(`\n🔄 청크 ${chunkIndex + 1}/${chunkCount} 생성 중 (${chunkDuration}분)...`);
+
+    const chunkTopic = chunkIndex === 0
+      ? `${topic} (전체 ${duration}분 중 ${chunkIndex + 1}/${chunkCount} 파트)`
+      : `${topic} (전체 ${duration}분 중 ${chunkIndex + 1}/${chunkCount} 파트 - 이전 내용에서 자연스럽게 이어지도록)`;
+
+    const prompt = await _buildPrompt(chunkTopic, chunkDuration, style, customPrompt, referenceText, cpmMin, cpmMax);
+
+    const targetSceneCount = Math.round((chunkDuration * 60) / 8);
+    const minSceneCount = Math.max(3, Math.floor(targetSceneCount * 0.9));
+
+    let chunkScenes = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const rawResponse = await callAnthropicAPI(apiKey, prompt, minSceneCount, false);
+        const parsedData = parseJsonResponse(rawResponse);
+
+        if (!parsedData || !validateScript(parsedData)) {
+          throw new Error("AI 응답 파싱 실패");
+        }
+
+        chunkScenes = normalizeScenes(parsedData.scenes, chunkDuration);
+        console.log(`✅ 청크 ${chunkIndex + 1} 완료: ${chunkScenes.length}개 장면`);
+        break;
+      } catch (err) {
+        console.error(`❌ 청크 ${chunkIndex + 1} 시도 ${attempt} 실패:`, err.message);
+        if (attempt === 3) throw err;
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+
+    if (!chunkScenes) {
+      throw new Error(`청크 ${chunkIndex + 1} 생성 실패`);
+    }
+
+    // 씬 번호 조정
+    chunkScenes.forEach(scene => {
+      scene.id = `s${currentSceneNumber}`;
+      scene.scene_number = currentSceneNumber;
+      currentSceneNumber++;
+    });
+
+    allScenes.push(...chunkScenes);
+  }
+
+  const totalChars = allScenes.reduce((sum, s) => sum + s.charCount, 0);
+  console.log(`\n🎉 장편 대본 생성 완료!`);
+  console.log(`📊 총 ${allScenes.length}개 장면, ${totalChars}자`);
+
+  return {
+    success: true,
+    data: {
+      title: topic || "AI 생성 장편 대본",
+      scenes: allScenes,
+    },
+  };
+}
+
+// ============================================================
+// 썸네일 프롬프트 확장
+// ============================================================
 async function expandThumbnailPrompt(userInput) {
-  console.log('[Anthropic] 썸네일 프롬프트 확장 시작:', userInput);
+  console.log("[Anthropic] 썸네일 프롬프트 확장 시작:", userInput);
 
   const apiKey = await getSecret("anthropicKey");
   if (!apiKey) {
     throw new Error("Anthropic API Key가 설정되지 않았습니다.");
   }
 
-  const systemPrompt = `You are a YouTube thumbnail image prompt expert specializing in viral, high-CTR thumbnails.
+  const systemPrompt = `You are a YouTube thumbnail image prompt expert specializing in viral, high-CTR thumbnails.`;
 
-Transform user input into optimized Replicate Flux prompts following these rules:
-
-✅ MUST include:
-- Ultra-realistic, cinematic style
-- Dramatic lighting & vibrant colors
-- Clear focal point & emotion
-- 16:9 aspect ratio
-- "no text, no words, no letters, no watermark"
-
-✅ Best practices:
-- Extreme close-ups or dynamic wide shots
-- Shocked/excited facial expressions
-- High contrast colors (blue/orange, red/yellow)
-- Action-packed or emotionally intense moments
-- Professional studio lighting
-
-🚫 AVOID:
-- Explanations, only output the prompt
-- Generic descriptions
-- Subtle or boring scenes
-
-Output: Pure English image prompt (max 150 words).`;
-
-  const userPrompt = `Create a viral YouTube thumbnail prompt for:
-
-"${userInput.trim()}"
-
-Make it dramatic, eye-catching, click-worthy!`;
+  const userPrompt = `Create a viral YouTube thumbnail prompt for: "${userInput.trim()}"`;
 
   try {
     const response = await fetch(ANTHROPIC_URL, {
@@ -534,15 +417,10 @@ Make it dramatic, eye-catching, click-worthy!`;
       },
       body: JSON.stringify({
         model: DEFAULT_MODEL,
-        max_tokens: 300, // 최적화: 간결한 프롬프트로 속도 향상
+        max_tokens: 300,
         system: systemPrompt,
-        messages: [
-          {
-            role: "user",
-            content: userPrompt,
-          },
-        ],
-        temperature: 0.8, // 최적화: 더 창의적이고 다양한 표현
+        messages: [{ role: "user", content: userPrompt }],
+        temperature: 0.8,
       }),
     });
 
@@ -552,14 +430,10 @@ Make it dramatic, eye-catching, click-worthy!`;
     }
 
     const data = await response.json();
-    const expandedPrompt = data?.content?.[0]?.text?.trim() || userInput;
-
-    console.log('[Anthropic] 확장된 프롬프트:', expandedPrompt);
-    return expandedPrompt;
+    return data?.content?.[0]?.text?.trim() || userInput;
   } catch (error) {
-    console.error('[Anthropic] 프롬프트 확장 실패:', error);
-    // 실패 시 원본 입력 + 기본 키워드 반환
-    return `${userInput}, ultra-realistic, cinematic YouTube thumbnail, dramatic lighting, vibrant colors, 16:9 aspect ratio, no text`;
+    console.error("[Anthropic] 프롬프트 확장 실패:", error);
+    return `${userInput}, cinematic thumbnail, vibrant colors, 16:9, no text`;
   }
 }
 

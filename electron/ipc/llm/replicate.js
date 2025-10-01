@@ -81,38 +81,49 @@ function extractSceneText(scene) {
   return "";
 }
 
-// 프롬프트 생성 (기존 Anthropic 방식 참고)
-function buildPrompt({ topic, style, duration, maxScenes, referenceText, cpmMin, cpmMax }) {
-  const minChars = Math.round(duration * (cpmMin || 300));
-  const maxChars = Math.round(duration * (cpmMax || 400));
-  const avgCharsPerScene = Math.round((minChars + maxChars) / 2 / maxScenes);
+// 프롬프트 생성
+function buildPrompt({ topic, style, duration, referenceText, cpmMin, cpmMax }) {
+  // Vrew 스타일: 장면 수 기반 계산
+  const totalSeconds = duration * 60;
+  const secondsPerScene = 8; // 각 장면 약 8초 (Anthropic과 동일)
+  const targetSceneCount = Math.round(totalSeconds / secondsPerScene);
+  const minSceneCount = Math.max(3, Math.floor(targetSceneCount * 0.9)); // 최소 90%
+  const maxSceneCount = Math.ceil(targetSceneCount * 1.3); // 최대 130% (여유 확보)
 
-  const isLongContent = duration >= 20;
-  const contentDepthInstruction = isLongContent ?
-    `\n⭐ 긴 영상 특별 요구사항:\n• 각 주제를 상세하고 구체적으로 설명\n• 실제 사례와 예시를 풍부하게 포함\n• 다양한 관점에서 접근하여 내용 확장\n• 시청자가 지루하지 않도록 흥미로운 요소 추가\n• 실습이나 적용 방법을 단계별로 설명\n• 전문적이면서도 이해하기 쉽게 작성` :
-    ``;
+  // 각 장면당 글자수 (한국어 TTS 기준: 약 5-6자/초)
+  const minCharsPerScene = 50; // 최소 50자
+  const maxCharsPerScene = 60; // 최대 60자
+
+  const isLongForm = duration >= 20;
 
   const parts = [
-    `다음 조건에 맞는 ${duration}분 길이의 ${isLongContent ? '상세한 ' : ''}영상 대본을 작성해주세요.`,
+    `다음 조건에 맞는 ${duration}분 길이의 ${isLongForm ? '장편 ' : ''}영상 대본을 작성해주세요.`,
     "",
     `📋 기본 정보:`,
     `• 주제: ${topic || "(미지정)"}`,
     `• 스타일: ${style || "전문가 톤, 쉽고 차분하게"}`,
     `• 언어: 한국어`,
-    contentDepthInstruction,
+    isLongForm ? `• 장편 콘텐츠: 각 주제를 상세하고 깊이 있게 다루세요` : "",
     "",
-    `📊 분량 요구사항:`,
-    `• 정확히 ${maxScenes}개 장면으로 구성`,
-    `• 총 글자수: ${minChars} ~ ${maxChars}자`,
-    `• 장면당 평균: 약 ${avgCharsPerScene}자`,
-    `• 각 장면 최대 ${TTS_SAFE_CHAR_LIMIT}자 (TTS 제한)`,
+    `📺 영상 구성 (반드시 준수):`,
+    `• 총 길이: ${duration}분 (${totalSeconds}초)`,
+    `• 장면 구성: ${minSceneCount}~${maxSceneCount}개 장면 (권장: ${targetSceneCount}개)`,
+    `• 각 장면: 약 ${secondsPerScene}초 분량 (${minCharsPerScene}~${maxCharsPerScene}자)`,
+    `• 각 장면 최대: ${TTS_SAFE_CHAR_LIMIT}자 (TTS 제한)`,
     "",
-    `⚠️ 중요 규칙:`,
-    `• 장면 수는 반드시 ${maxScenes}개를 준수하세요`,
-    `• 전체 재생시간이 ${duration}분에 맞도록 조절하세요`,
+    `📝 작성 방식:`,
+    `• 각 장면은 50~60자 (너무 짧으면 안됨!)`,
+    `• 각 장면마다 하나의 완결된 메시지 전달`,
+    `• 장면 간 자연스러운 흐름 유지`,
+    `• 지루하지 않게 적절한 템포 유지`,
     `• 마크다운, 불릿포인트, 목차 등 금지`,
-    `• 자연스러운 문단 형태로 작성`,
-  ];
+    `• 자연스러운 구어체 문단으로 작성`,
+    "",
+    `⚠️ 중요:`,
+    `1. 반드시 ${minSceneCount}개 이상 장면 포함 (${isLongForm ? '장편이므로 많은 장면 필수' : '최소한 이 개수는 꼭 지켜야 함'})`,
+    `2. 각 장면은 50자 이상 작성 (40자 이하는 불합격)`,
+    `3. 요청 시간보다 최대 30% 길어져도 괜찮음`,
+  ].filter(line => line !== ""); // 빈 줄 제거
 
   // 레퍼런스 대본이 있으면 추가
   if (referenceText && referenceText.trim()) {
@@ -125,21 +136,25 @@ function buildPrompt({ topic, style, duration, maxScenes, referenceText, cpmMin,
     `{`,
     `  "title": "대본 제목",`,
     `  "scenes": [`,
-    `    {`,
-    `      "text": "장면 내용",`,
-    `      "duration": 시간(초)`,
-    `    }`,
+    `    {"text": "첫 번째 장면 (50~60자)", "duration": ${secondsPerScene}},`,
+    `    {"text": "두 번째 장면 (50~60자)", "duration": ${secondsPerScene}},`,
+    `    {"text": "세 번째 장면 (50~60자)", "duration": ${secondsPerScene}},`,
+    `    ... (총 ${minSceneCount}~${maxSceneCount}개 장면)`,
     `  ]`,
     `}`,
     "",
+    `⚡ 중요: 반드시 ${minSceneCount}개 이상의 장면을 배열에 포함하세요!`,
+    `⚡ 각 장면은 50~60자로 작성 (40자 이하는 불합격)`,
     `⚡ JSON만 출력하고 다른 설명은 절대 포함하지 마세요.`
   );
 
   return parts.join("\n");
 }
 
-// 장면 정규화 (기존 방식 유지)
-function normalizeScenes(scenes, targetDuration, maxScenes) {
+// 장면 정규화
+function normalizeScenes(scenes, targetDuration) {
+  const actualSceneCount = scenes.length;
+
   let normalizedScenes = scenes.map((scene, index) => {
     const text = extractSceneText(scene);
     const charCount = countKoreanChars(text);
@@ -147,14 +162,11 @@ function normalizeScenes(scenes, targetDuration, maxScenes) {
     return {
       id: scene.id || `s${index + 1}`,
       text: text,
-      duration: scene.duration || Math.round((targetDuration * 60) / maxScenes),
+      duration: scene.duration || Math.round((targetDuration * 60) / actualSceneCount),
       charCount: charCount,
       scene_number: index + 1,
     };
   });
-
-  // 장면 수 조정
-  normalizedScenes = adjustSceneCount(normalizedScenes, maxScenes, targetDuration);
 
   // duration 총합 조정
   const totalDuration = normalizedScenes.reduce((sum, scene) => sum + scene.duration, 0);
@@ -177,118 +189,12 @@ function normalizeScenes(scenes, targetDuration, maxScenes) {
   return normalizedScenes;
 }
 
-// 장면 수 조정 로직
-function adjustSceneCount(scenes, targetCount, duration) {
-  const currentCount = scenes.length;
-
-  console.log(`🔧 Replicate 장면 수 조정: ${currentCount}개 → ${targetCount}개`);
-
-  if (currentCount === targetCount) {
-    return scenes;
-  }
-
-  if (currentCount < targetCount) {
-    return splitScenes(scenes, targetCount, duration);
-  } else {
-    return mergeScenes(scenes, targetCount, duration);
-  }
-}
-
-function splitScenes(scenes, targetCount, duration) {
-  const needed = targetCount - scenes.length;
-  console.log(`➕ ${needed}개 장면 분할 필요`);
-
-  let result = [...scenes];
-
-  for (let i = 0; i < needed && result.length < targetCount; i++) {
-    const longestIndex = result.reduce((maxIdx, scene, idx) =>
-      scene.charCount > result[maxIdx].charCount ? idx : maxIdx, 0);
-
-    const sceneToSplit = result[longestIndex];
-    if (sceneToSplit.charCount < 100) break;
-
-    const text = sceneToSplit.text;
-    const sentences = text.split(/[.!?。]/);
-
-    if (sentences.length > 1) {
-      const halfSentences = Math.floor(sentences.length / 2);
-      const firstPart = sentences.slice(0, halfSentences).join('.').trim() + '.';
-      const secondPart = sentences.slice(halfSentences).join('.').trim();
-
-      const baseDuration = Math.round((duration * 60) / targetCount);
-
-      result[longestIndex] = {
-        ...sceneToSplit,
-        text: firstPart,
-        charCount: countKoreanChars(firstPart),
-        duration: baseDuration
-      };
-
-      result.splice(longestIndex + 1, 0, {
-        id: `${sceneToSplit.id}_split`,
-        text: secondPart,
-        charCount: countKoreanChars(secondPart),
-        duration: baseDuration,
-        scene_number: longestIndex + 2
-      });
-
-      console.log(`  ✂️ 장면 ${longestIndex + 1} 분할: ${sceneToSplit.charCount}자 → ${countKoreanChars(firstPart)}자 + ${countKoreanChars(secondPart)}자`);
-    }
-  }
-
-  return result.slice(0, targetCount).map((scene, index) => ({
-    ...scene,
-    scene_number: index + 1
-  }));
-}
-
-function mergeScenes(scenes, targetCount, duration) {
-  const excess = scenes.length - targetCount;
-  console.log(`➖ ${excess}개 장면 병합 필요`);
-
-  let result = [...scenes];
-
-  for (let i = 0; i < excess && result.length > targetCount; i++) {
-    let shortestPairIndex = 0;
-    let shortestPairLength = Infinity;
-
-    for (let j = 0; j < result.length - 1; j++) {
-      const combinedLength = result[j].charCount + result[j + 1].charCount;
-      if (combinedLength < shortestPairLength) {
-        shortestPairLength = combinedLength;
-        shortestPairIndex = j;
-      }
-    }
-
-    const first = result[shortestPairIndex];
-    const second = result[shortestPairIndex + 1];
-
-    const merged = {
-      id: first.id,
-      text: first.text + ' ' + second.text,
-      charCount: first.charCount + second.charCount,
-      duration: Math.round((duration * 60) / targetCount),
-      scene_number: first.scene_number
-    };
-
-    console.log(`  🔗 장면 ${shortestPairIndex + 1}, ${shortestPairIndex + 2} 병합: ${first.charCount}자 + ${second.charCount}자 = ${merged.charCount}자`);
-
-    result.splice(shortestPairIndex, 2, merged);
-  }
-
-  return result.map((scene, index) => ({
-    ...scene,
-    scene_number: index + 1
-  }));
-}
-
-// 메인 Replicate 호출 함수
+// 메인 Replicate 호출 함수 (청크 방식 지원)
 async function callReplicate(params) {
   const {
     topic = "",
     style = "",
     duration = 5,
-    maxScenes = 10,
     referenceText = "",
     cpmMin = 300,
     cpmMax = 400,
@@ -296,10 +202,32 @@ async function callReplicate(params) {
   } = params;
 
   console.log("🤖 Replicate 대본 생성 시작 (Llama 3 기반)");
-  console.log(`📊 설정: ${duration}분, ${maxScenes}개 장면, CPM ${cpmMin}-${cpmMax}`);
+  console.log(`📊 설정: ${duration}분, CPM ${cpmMin}-${cpmMax}`);
+
+  const isLongForm = duration >= 20;
+
+  // 장편(20분 이상)은 청크로 나눠서 생성 (Anthropic과 동일)
+  if (isLongForm) {
+    return await generateLongFormScriptReplicate({
+      topic,
+      style,
+      duration,
+      referenceText,
+      cpmMin,
+      cpmMax,
+      model
+    });
+  }
+
+  // 단편은 기존 방식
+  const targetSceneCount = Math.round((duration * 60) / 8);
+  const minSceneCount = Math.max(3, Math.floor(targetSceneCount * 0.9));
+  const maxSceneCount = Math.ceil(targetSceneCount * 1.3);
+
+  console.log(`📊 예상 장면 수: ${minSceneCount}~${maxSceneCount}개 (권장: ${targetSceneCount}개)`);
   console.log(`🦙 모델: ${model}`);
 
-  // 1. API 키 확인 (기존 Replicate 키 재사용)
+  // 1. API 키 확인
   const apiKey = await getSecret("replicateKey");
   if (!apiKey) {
     throw new Error("Replicate API Key가 설정되지 않았습니다. 설정에서 API 키를 등록해주세요.");
@@ -308,9 +236,15 @@ async function callReplicate(params) {
   // 2. 모델 설정
   const modelSlug = LLAMA_MODELS[model] || LLAMA_MODELS[DEFAULT_MODEL];
 
-  try {
+  const maxRetries = 3;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    console.log(`🔄 시도 ${attempt}/${maxRetries}: Replicate 대본 생성`);
+
+    try {
     // 3. 프롬프트 생성
-    const prompt = buildPrompt({ topic, style, duration, maxScenes, referenceText, cpmMin, cpmMax });
+    const prompt = buildPrompt({ topic, style, duration, referenceText, cpmMin, cpmMax });
 
     console.log("📝 프롬프트 길이:", prompt.length, "자");
 
@@ -385,19 +319,11 @@ async function callReplicate(params) {
       throw new Error("생성된 대본의 구조가 올바르지 않습니다.");
     }
 
-    // 11. 장면 수 검증
+    // 11. 씬 데이터 정규화
     const actualScenes = parsedData.scenes.length;
-    const allowableRange = Math.ceil(maxScenes * 0.5);
-    const sceneDiff = Math.abs(actualScenes - maxScenes);
+    console.log(`🎯 AI가 생성한 장면 수: ${actualScenes}개`);
 
-    console.log(`🎯 장면 수 검증: 요청 ${maxScenes}개 vs 실제 ${actualScenes}개 (차이: ${sceneDiff}개)`);
-
-    if (sceneDiff > allowableRange) {
-      console.warn(`⚠️ 장면 수 차이가 큼, 후처리로 조정 (±${sceneDiff}개)`);
-    }
-
-    // 12. 씬 데이터 정규화
-    const normalizedScenes = normalizeScenes(parsedData.scenes, duration, maxScenes);
+    const normalizedScenes = normalizeScenes(parsedData.scenes, duration);
 
     // 13. 최종 결과 구성
     const result = {
@@ -411,16 +337,159 @@ async function callReplicate(params) {
     const actualDurationMinutes = totalDuration / 60;
     const actualCPM = Math.round(totalChars / duration);
 
-    console.log(`🎉 Replicate 대본 생성 완료!`);
+    console.log(`🎉 Replicate 대본 생성 완료! (시도 ${attempt}/${maxRetries})`);
     console.log(`📈 기본 통계: ${normalizedScenes.length}개 장면, ${totalChars}자, ${actualDurationMinutes.toFixed(1)}분`);
     console.log(`📊 실제 CPM: ${actualCPM}자/분 (목표: ${cpmMin}-${cpmMax})`);
 
+    // ⚠️ 글자 수가 최소 기준 미만이면 재시도 (장편/단편 구분)
+    const isLongForm = duration >= 20;
+    const expectedMinChars = isLongForm
+      ? Math.round(duration * cpmMin * 1.1)  // 장편: 110% (30분 = 10,560자)
+      : Math.round(duration * cpmMin * 1.25); // 단편: 125% (3분 = 1,200자)
+    const actualSceneCount = normalizedScenes.length;
+
+    if (totalChars < expectedMinChars && attempt < maxRetries) {
+      console.warn(`⚠️ 글자 수 부족: ${totalChars}자 < ${expectedMinChars}자 (최소 요구)`);
+      console.warn(`🔄 재시도 ${attempt + 1}/${maxRetries}...`);
+      throw new Error(`글자 수 부족: ${totalChars}자 < ${expectedMinChars}자, 재시도`);
+    }
+
+    // 장면 수 검증 로그
+    console.log(`🔍 장면 수 검증:`);
+    console.log(`  📋 요청 범위: ${minSceneCount}~${maxSceneCount}개`);
+    console.log(`  📝 실제 장면: ${actualSceneCount}개`);
+    console.log(`  ✅ 범위 내 여부: ${actualSceneCount >= minSceneCount && actualSceneCount <= maxSceneCount ? '✅ 적합' : '⚠️ 범위 벗어남'}`);
+
     return { success: true, data: result };
 
-  } catch (error) {
-    console.error(`❌ Replicate 대본 생성 실패:`, error.message);
-    throw new Error(`Replicate 대본 생성 실패: ${error.message}`);
+    } catch (error) {
+      lastError = error;
+      console.error(`❌ 시도 ${attempt} 실패:`, error.message);
+
+      if (attempt < maxRetries) {
+        console.log(`⏳ ${2}초 후 재시도...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
   }
+
+  // 모든 재시도 실패
+  console.error(`❌ Replicate 대본 생성 최종 실패 (${maxRetries}회 시도)`);
+  throw new Error(`Replicate 대본 생성 실패: ${lastError?.message || '알 수 없는 오류'}`);
+}
+
+// ============================================================
+// 장편 대본 생성 (청크 방식) - Replicate
+// ============================================================
+async function generateLongFormScriptReplicate({ topic, style, duration, referenceText, cpmMin, cpmMax, model }) {
+  console.log(`🎬 Replicate 장편 콘텐츠 생성 모드: ${duration}분을 청크로 분할`);
+
+  const CHUNK_DURATION = 5;
+  const chunkCount = Math.ceil(duration / CHUNK_DURATION);
+
+  console.log(`📦 총 ${chunkCount}개 청크로 분할 (각 ${CHUNK_DURATION}분)`);
+
+  const apiKey = await getSecret("replicateKey");
+  if (!apiKey) throw new Error("Replicate API Key가 설정되지 않았습니다.");
+
+  const modelSlug = LLAMA_MODELS[model] || LLAMA_MODELS[DEFAULT_MODEL];
+  const replicate = createReplicate(apiKey);
+  const versionId = await resolveLatestVersionId(modelSlug, apiKey);
+
+  const allScenes = [];
+  let currentSceneNumber = 1;
+
+  for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
+    const isLastChunk = chunkIndex === chunkCount - 1;
+    const chunkDuration = isLastChunk ? duration - (chunkIndex * CHUNK_DURATION) : CHUNK_DURATION;
+
+    console.log(`\n🔄 청크 ${chunkIndex + 1}/${chunkCount} 생성 중 (${chunkDuration}분)...`);
+
+    const chunkTopic = chunkIndex === 0
+      ? `${topic} (전체 ${duration}분 중 ${chunkIndex + 1}/${chunkCount} 파트)`
+      : `${topic} (전체 ${duration}분 중 ${chunkIndex + 1}/${chunkCount} 파트 - 이전 내용에서 자연스럽게 이어지도록)`;
+
+    const prompt = buildPrompt({
+      topic: chunkTopic,
+      style,
+      duration: chunkDuration,
+      referenceText,
+      cpmMin,
+      cpmMax
+    });
+
+    const targetSceneCount = Math.round((chunkDuration * 60) / 8);
+    const minSceneCount = Math.max(3, Math.floor(targetSceneCount * 0.9));
+
+    let chunkScenes = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        let prediction = await replicate.predictions.create({
+          version: versionId,
+          input: {
+            prompt: prompt,
+            max_tokens: MAX_TOKENS,
+            temperature: 0.1,
+            top_p: 0.9,
+            system_prompt: "You are a professional Korean scriptwriter. Return ONLY valid JSON without any explanations or markdown."
+          }
+        });
+
+        const maxTries = 180;
+        let tries = 0;
+        while (["starting", "processing", "queued"].includes(prediction.status) && tries < maxTries) {
+          await new Promise((r) => setTimeout(r, 1000));
+          prediction = await replicate.predictions.get(prediction.id);
+          tries++;
+        }
+
+        if (prediction.status !== "succeeded") {
+          throw new Error(`Replicate 실패: ${prediction.error}`);
+        }
+
+        const rawResponse = Array.isArray(prediction.output)
+          ? prediction.output.join("")
+          : String(prediction.output || "");
+
+        const parsedData = parseJsonResponse(rawResponse);
+        if (!parsedData || !validateScript(parsedData)) {
+          throw new Error("AI 응답 파싱 실패");
+        }
+
+        chunkScenes = normalizeScenes(parsedData.scenes, chunkDuration);
+        console.log(`✅ 청크 ${chunkIndex + 1} 완료: ${chunkScenes.length}개 장면`);
+        break;
+      } catch (err) {
+        console.error(`❌ 청크 ${chunkIndex + 1} 시도 ${attempt} 실패:`, err.message);
+        if (attempt === 3) throw err;
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+
+    if (!chunkScenes) {
+      throw new Error(`청크 ${chunkIndex + 1} 생성 실패`);
+    }
+
+    chunkScenes.forEach(scene => {
+      scene.id = `s${currentSceneNumber}`;
+      scene.scene_number = currentSceneNumber;
+      currentSceneNumber++;
+    });
+
+    allScenes.push(...chunkScenes);
+  }
+
+  const totalChars = allScenes.reduce((sum, s) => sum + s.charCount, 0);
+  console.log(`\n🎉 Replicate 장편 대본 생성 완료!`);
+  console.log(`📊 총 ${allScenes.length}개 장면, ${totalChars}자`);
+
+  return {
+    success: true,
+    data: {
+      title: topic || "AI 생성 장편 대본",
+      scenes: allScenes,
+    },
+  };
 }
 
 module.exports = { callReplicate };
