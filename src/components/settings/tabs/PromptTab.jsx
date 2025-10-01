@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Text, Button, Dropdown, Option, Field, Input, Textarea, Card, tokens, Divider } from "@fluentui/react-components";
+import { Text, Button, Dropdown, Option, Field, Input, Textarea, Card, tokens, TabList, Tab } from "@fluentui/react-components";
 import {
   AddRegular,
   DeleteRegular,
@@ -16,7 +16,7 @@ import { LoadingSpinner } from "../../common/LoadingSpinner";
 import { ErrorBoundary } from "../../common/ErrorBoundary";
 import { showGlobalToast } from "../../common/GlobalToast";
 import { useContainerStyles, useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
-import { DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT } from "../../../constants/prompts";
+import { DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT, DEFAULT_TEMPLATE } from "../../../constants/prompts";
 
 /**
  * PromptTab 컴포넌트
@@ -137,6 +137,8 @@ function PromptTab() {
   // 에디터 상태
   const [scriptPrompt, setScriptPrompt] = useState("");
   const [referencePrompt, setReferencePrompt] = useState("");
+  const [thumbnailPrompt, setThumbnailPrompt] = useState("");
+  const [originalThumbnailPrompt, setOriginalThumbnailPrompt] = useState("");
 
   // 선택된 프롬프트 상태
   const [selectedName, setSelectedName] = useState("");
@@ -146,6 +148,7 @@ function PromptTab() {
   // UI 제어 상태
   const [showInlineCreate, setShowInlineCreate] = useState(false);
   const [newName, setNewName] = useState("");
+  const [selectedTab, setSelectedTab] = useState("script");
   const didInitRef = useRef(false);
 
   /* ============ 초기화 및 데이터 로드 ============ */
@@ -155,6 +158,7 @@ function PromptTab() {
    */
   useEffect(() => {
     loadPrompts();
+    loadThumbnailPrompt();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -203,6 +207,22 @@ function PromptTab() {
       setLoading(false);
     } catch {
       setLoading(false);
+    }
+  };
+
+  /**
+   * 썸네일 프롬프트를 settings.json에서 로드
+   */
+  const loadThumbnailPrompt = async () => {
+    try {
+      const savedTemplate = await window.api.getSetting("thumbnailPromptTemplate");
+      const templateToUse = savedTemplate || DEFAULT_TEMPLATE;
+      setThumbnailPrompt(templateToUse);
+      setOriginalThumbnailPrompt(templateToUse);
+    } catch (error) {
+      console.error("썸네일 프롬프트 로드 실패:", error);
+      setThumbnailPrompt(DEFAULT_TEMPLATE);
+      setOriginalThumbnailPrompt(DEFAULT_TEMPLATE);
     }
   };
 
@@ -426,6 +446,9 @@ function PromptTab() {
 
       await savePair(name, scriptPrompt, referencePrompt);
 
+      // 썸네일 프롬프트도 함께 저장
+      await saveThumbnailPrompt();
+
       showGlobalToast({
         type: "success",
         text: "성공적으로 저장되었습니다! 🎉",
@@ -440,12 +463,35 @@ function PromptTab() {
   };
 
   /**
+   * 썸네일 프롬프트를 settings.json에 저장
+   */
+  const saveThumbnailPrompt = async () => {
+    try {
+      if (!thumbnailPrompt || thumbnailPrompt.trim().length === 0) {
+        throw new Error("빈 템플릿은 저장할 수 없습니다.");
+      }
+
+      await window.api.setSetting({
+        key: "thumbnailPromptTemplate",
+        value: thumbnailPrompt.trim(),
+      });
+
+      setOriginalThumbnailPrompt(thumbnailPrompt.trim());
+    } catch (error) {
+      console.error("썸네일 프롬프트 저장 실패:", error);
+      throw error;
+    }
+  };
+
+  /**
    * 특정 카테고리의 프롬프트를 기본값으로 초기화
-   * @param {string} category - "script" 또는 "reference"
+   * @param {string} category - "script", "reference", "thumbnail"
    */
   const handleReset = (category) => {
     if (category === "script") setScriptPrompt(catDefault("script"));
-    else setReferencePrompt(catDefault("reference"));
+    else if (category === "reference") setReferencePrompt(catDefault("reference"));
+    else if (category === "thumbnail") setThumbnailPrompt(DEFAULT_TEMPLATE);
+
     showGlobalToast({
       type: "success",
       text: "프롬프트가 기본값으로 초기화되었습니다.",
@@ -457,6 +503,7 @@ function PromptTab() {
   // 프롬프트 글자 수 계산
   const scriptCount = scriptPrompt.length || 0;
   const referenceCount = referencePrompt.length || 0;
+  const thumbnailCount = thumbnailPrompt.length || 0;
 
   // 로딩 중일 때 스피너 표시
   if (loading) {
@@ -578,7 +625,7 @@ function PromptTab() {
                 appearance="primary"
                 icon={isSaving ? <LoadingSpinner size="tiny" /> : <SaveRegular />}
                 onClick={handleSaveAll}
-                disabled={isSaving || !scriptPrompt || !referencePrompt || !selectedName}
+                disabled={isSaving || !scriptPrompt || !referencePrompt || !thumbnailPrompt || !selectedName}
               >
                 {isSaving ? "저장 중..." : "저장하기"}
               </Button>
@@ -587,107 +634,155 @@ function PromptTab() {
         </div>
       </Card>
 
-      {/* ===== 에디터 영역 (2단 그리드) ===== */}
-      <div
+      {/* ===== 탭 네비게이션 ===== */}
+      <Card
+        className={cardStyles.settingsCard}
         style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: tokens.spacingHorizontalXL,
-          height: "calc(100vh - 400px)", // 화면 높이에 맞춰 조정
+          boxShadow: tokens.shadow8,
+          borderRadius: 12,
+          padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalXL}`,
+          marginBottom: tokens.spacingVerticalM,
         }}
       >
-        {/* script */}
-        <Card
-          className={cardStyles.settingsCard}
-          style={{
-            boxShadow: tokens.shadow8, // 그림자 추가
-            border: `1px solid ${tokens.colorNeutralStroke2}`, // 얇은 테두리
-            borderRadius: 16,
-            display: "flex",
-            flexDirection: "column",
-            height: "100%",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tokens.spacingVerticalM }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <EditRegular style={{ color: tokens.colorPaletteBlueForeground1 }} />
-              <Text weight="semibold" size={500}>
-                대본 생성 프롬프트
-              </Text>
-            </div>
-            <Button size="small" icon={<ArrowResetRegular />} onClick={() => handleReset("script")}>
-              기본값
-            </Button>
-          </div>
-          <div style={{ flex: 1, overflowY: "auto" }}>
-            <Textarea
-              value={scriptPrompt}
-              onChange={(_, d) => setScriptPrompt(d.value)}
-              resize="none"
-              style={{
-                height: "100%",
-                width: "100%",
-                fontSize: tokens.fontSizeBase300,
-                fontFamily: "monospace",
-                lineHeight: 1.6,
-                border: "none",
-                boxShadow: "none",
-                background: "transparent",
-                padding: 0,
-              }}
-            />
-          </div>
-          <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM }}>
-            {scriptCount.toLocaleString()} 글자 | 변수: {"{topic}, {duration}, {style}, {totalSeconds}, {minSceneCount}, {maxSceneCount}, {targetSceneCount}, {minCharacters}, {maxCharacters}, {avgCharactersPerScene}"}
-          </Text>
-        </Card>
+        <TabList selectedValue={selectedTab} onTabSelect={(_, data) => setSelectedTab(data.value)}>
+          <Tab value="script" icon={<EditRegular />}>
+            대본 생성
+          </Tab>
+          <Tab value="reference" icon={<DocumentTextRegular />}>
+            레퍼런스 분석
+          </Tab>
+          <Tab value="thumbnail" icon={<BrainCircuitRegular />}>
+            썸네일 생성
+          </Tab>
+        </TabList>
+      </Card>
 
-        {/* reference */}
-        <Card
-          className={cardStyles.settingsCard}
-          style={{
-            boxShadow: tokens.shadow8, // 그림자 추가
-            border: `1px solid ${tokens.colorNeutralStroke2}`, // 얇은 테두리
-            borderRadius: 16,
-            display: "flex",
-            flexDirection: "column",
-            height: "100%",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tokens.spacingVerticalM }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <DocumentTextRegular style={{ color: tokens.colorPalettePurpleForeground1 }} />
-              <Text weight="semibold" size={500}>
-                레퍼런스 분석 프롬프트
-              </Text>
+      {/* ===== 에디터 영역 (단일 탭 패널) ===== */}
+      <Card
+        className={cardStyles.settingsCard}
+        style={{
+          boxShadow: tokens.shadow8,
+          border: `1px solid ${tokens.colorNeutralStroke2}`,
+          borderRadius: 16,
+          display: "flex",
+          flexDirection: "column",
+          height: "calc(100vh - 400px)",
+        }}
+      >
+        {/* 대본 생성 탭 */}
+        {selectedTab === "script" && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tokens.spacingVerticalM }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <EditRegular style={{ color: tokens.colorPaletteBlueForeground1 }} />
+                <Text weight="semibold" size={500}>
+                  대본 생성 프롬프트
+                </Text>
+              </div>
+              <Button size="small" icon={<ArrowResetRegular />} onClick={() => handleReset("script")}>
+                기본값
+              </Button>
             </div>
-            <Button size="small" icon={<ArrowResetRegular />} onClick={() => handleReset("reference")}>
-              기본값
-            </Button>
-          </div>
-          <div style={{ flex: 1, overflowY: "auto" }}>
-            <Textarea
-              value={referencePrompt}
-              onChange={(_, d) => setReferencePrompt(d.value)}
-              resize="none"
-              style={{
-                height: "100%",
-                width: "100%",
-                fontSize: tokens.fontSizeBase300,
-                fontFamily: "monospace",
-                lineHeight: 1.6,
-                border: "none",
-                boxShadow: "none",
-                background: "transparent",
-                padding: 0,
-              }}
-            />
-          </div>
-          <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM }}>
-            {referenceCount.toLocaleString()} 글자 | 변수: {"{referenceText}, {topic}, {duration}, {totalSeconds}, {minSceneCount}, {maxSceneCount}"}
-          </Text>
-        </Card>
-      </div>
+            <div style={{ flex: 1, overflowY: "auto" }}>
+              <Textarea
+                value={scriptPrompt}
+                onChange={(_, d) => setScriptPrompt(d.value)}
+                resize="none"
+                style={{
+                  height: "100%",
+                  width: "100%",
+                  fontSize: tokens.fontSizeBase300,
+                  fontFamily: "monospace",
+                  lineHeight: 1.6,
+                  border: "none",
+                  boxShadow: "none",
+                  background: "transparent",
+                  padding: 0,
+                }}
+              />
+            </div>
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM }}>
+              {scriptCount.toLocaleString()} 글자 | 변수: {"{topic}, {duration}, {style}, {totalSeconds}, {minSceneCount}, {maxSceneCount}, {targetSceneCount}, {minCharacters}, {maxCharacters}, {avgCharactersPerScene}"}
+            </Text>
+          </>
+        )}
+
+        {/* 레퍼런스 분석 탭 */}
+        {selectedTab === "reference" && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tokens.spacingVerticalM }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <DocumentTextRegular style={{ color: tokens.colorPalettePurpleForeground1 }} />
+                <Text weight="semibold" size={500}>
+                  레퍼런스 분석 프롬프트
+                </Text>
+              </div>
+              <Button size="small" icon={<ArrowResetRegular />} onClick={() => handleReset("reference")}>
+                기본값
+              </Button>
+            </div>
+            <div style={{ flex: 1, overflowY: "auto" }}>
+              <Textarea
+                value={referencePrompt}
+                onChange={(_, d) => setReferencePrompt(d.value)}
+                resize="none"
+                style={{
+                  height: "100%",
+                  width: "100%",
+                  fontSize: tokens.fontSizeBase300,
+                  fontFamily: "monospace",
+                  lineHeight: 1.6,
+                  border: "none",
+                  boxShadow: "none",
+                  background: "transparent",
+                  padding: 0,
+                }}
+              />
+            </div>
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM }}>
+              {referenceCount.toLocaleString()} 글자 | 변수: {"{referenceText}, {topic}, {duration}, {totalSeconds}, {minSceneCount}, {maxSceneCount}"}
+            </Text>
+          </>
+        )}
+
+        {/* 썸네일 생성 탭 */}
+        {selectedTab === "thumbnail" && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tokens.spacingVerticalM }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <BrainCircuitRegular style={{ color: tokens.colorPaletteGreenForeground1 }} />
+                <Text weight="semibold" size={500}>
+                  썸네일 생성 프롬프트
+                </Text>
+              </div>
+              <Button size="small" icon={<ArrowResetRegular />} onClick={() => handleReset("thumbnail")}>
+                기본값
+              </Button>
+            </div>
+            <div style={{ flex: 1, overflowY: "auto" }}>
+              <Textarea
+                value={thumbnailPrompt}
+                onChange={(_, d) => setThumbnailPrompt(d.value)}
+                resize="none"
+                style={{
+                  height: "100%",
+                  width: "100%",
+                  fontSize: tokens.fontSizeBase300,
+                  fontFamily: "monospace",
+                  lineHeight: 1.6,
+                  border: "none",
+                  boxShadow: "none",
+                  background: "transparent",
+                  padding: 0,
+                }}
+              />
+            </div>
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM }}>
+              {thumbnailCount.toLocaleString()} 글자 | 변수: {"{content}, {referenceAnalysis}"}
+            </Text>
+          </>
+        )}
+      </Card>
     </div>
   );
 }
