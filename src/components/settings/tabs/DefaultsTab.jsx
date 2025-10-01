@@ -63,6 +63,10 @@ export default function DefaultsTab() {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [displayFolder, setDisplayFolder] = useState("");
 
+  // 썸네일 엔진 설정
+  const [thumbnailEngine, setThumbnailEngine] = useState("replicate");
+  const [thumbnailAnalysisEngine, setThumbnailAnalysisEngine] = useState("anthropic");
+
   /**
    * 컴포넌트 마운트 시 초기 데이터 로드
    */
@@ -73,7 +77,7 @@ export default function DefaultsTab() {
      */
     const loadAllSettings = async () => {
       try {
-        const settingsToLoad = ["llmModel"];
+        const settingsToLoad = ["llmModel", "thumbnailDefaultEngine", "thumbnailAnalysisEngine"];
 
         const loadedSettings = {};
         for (const key of settingsToLoad) {
@@ -89,6 +93,14 @@ export default function DefaultsTab() {
 
         if (Object.keys(loadedSettings).length > 0) {
           setSettings((prevSettings) => ({ ...prevSettings, ...loadedSettings }));
+
+          // 썸네일 엔진 설정 로드
+          if (loadedSettings.thumbnailDefaultEngine) {
+            setThumbnailEngine(loadedSettings.thumbnailDefaultEngine);
+          }
+          if (loadedSettings.thumbnailAnalysisEngine) {
+            setThumbnailAnalysisEngine(loadedSettings.thumbnailAnalysisEngine);
+          }
         }
       } catch (error) {
         console.error("기본 설정 로드 실패:", error);
@@ -150,16 +162,25 @@ export default function DefaultsTab() {
       const settingsToSave = [
         "llmModel",
         "videoSaveFolder",
+        "thumbnailDefaultEngine",
+        "thumbnailAnalysisEngine",
       ];
 
+      // 썸네일 엔진 설정을 settings 객체에 추가
+      const settingsWithThumbnail = {
+        ...settings,
+        thumbnailDefaultEngine: thumbnailEngine,
+        thumbnailAnalysisEngine: thumbnailAnalysisEngine,
+      };
+
       for (const key of settingsToSave) {
-        if (settings[key] !== undefined && settings[key] !== null) {
+        if (settingsWithThumbnail[key] !== undefined && settingsWithThumbnail[key] !== null) {
           try {
             await window.api.setSetting({
               key: key,
-              value: settings[key],
+              value: settingsWithThumbnail[key],
             });
-            console.log(`설정 저장: ${key} = ${settings[key]}`);
+            console.log(`설정 저장: ${key} = ${settingsWithThumbnail[key]}`);
           } catch (error) {
             console.warn(`설정 저장 실패: ${key}`, error);
           }
@@ -394,8 +415,8 @@ export default function DefaultsTab() {
             <PuzzlePieceRegular /> AI 모델 설정
           </Text>
 
-          {/* LLM 모델 설정 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: itemGap, maxWidth: "50%" }}>
+          {/* LLM 모델 및 썸네일 엔진 설정 */}
+          <div style={{ display: "grid", gridTemplateColumns: gridTemplate, gap: itemGap }}>
             <Field label="대본 생성 LLM 모델" hint="대본 생성에 사용할 AI 언어모델입니다.">
               <Dropdown
                 value={getDropdownValue(AI_OPTIONS.llmModels, settings.llmModel)}
@@ -410,6 +431,32 @@ export default function DefaultsTab() {
                     </Caption1>
                   </Option>
                 ))}
+              </Dropdown>
+            </Field>
+
+            <Field label="썸네일 생성 엔진" hint="썸네일 생성 시 기본으로 사용할 AI 엔진입니다.">
+              <Dropdown
+                value={thumbnailEngine === "replicate" ? "Replicate (고품질)" : thumbnailEngine}
+                selectedOptions={[thumbnailEngine]}
+                onOptionSelect={(_, data) => setThumbnailEngine(data.optionValue)}
+              >
+                <Option key="replicate" value="replicate" text="Replicate (고품질)">
+                  Replicate <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>(고품질)</Caption1>
+                </Option>
+              </Dropdown>
+            </Field>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: gridTemplate, gap: itemGap, marginTop: itemGap }}>
+            <Field label="이미지 분석 AI" hint="참고 이미지 분석에 사용할 AI 엔진입니다.">
+              <Dropdown
+                value={thumbnailAnalysisEngine === "anthropic" ? "Claude Sonnet 4 (고성능 분석)" : thumbnailAnalysisEngine}
+                selectedOptions={[thumbnailAnalysisEngine]}
+                onOptionSelect={(_, data) => setThumbnailAnalysisEngine(data.optionValue)}
+              >
+                <Option key="anthropic" value="anthropic" text="Claude Sonnet 4 (고성능 분석)">
+                  Claude Sonnet 4 <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>(고성능 분석)</Caption1>
+                </Option>
               </Dropdown>
             </Field>
           </div>

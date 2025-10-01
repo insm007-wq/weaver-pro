@@ -5,22 +5,18 @@ import {
   Caption1,
   Textarea,
   Field,
-  Label,
-  Dropdown,
-  Option,
-  Divider,
   tokens,
   Text,
   Card,
   Badge,
   Button,
 } from "@fluentui/react-components";
-import { SaveRegular, ArrowResetRegular, InfoRegular, PuzzlePieceRegular, EditRegular } from "@fluentui/react-icons";
+import { SaveRegular, ArrowResetRegular, InfoRegular, EditRegular } from "@fluentui/react-icons";
 import { DEFAULT_TEMPLATE } from "../../../constants/prompts";
-import { handleError, handleApiError } from "@utils";
-import { StandardCard, ActionButton, StatusBadge, LoadingSpinner } from "../../common";
+import { handleError } from "@utils";
+import { LoadingSpinner } from "../../common";
 import { showGlobalToast } from "../../common/GlobalToast";
-import { useContainerStyles, useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
+import { useContainerStyles, useCardStyles } from "../../../styles/commonStyles";
 
 /**
  * ThumbnailTab 컴포넌트
@@ -58,51 +54,20 @@ import { useContainerStyles, useCardStyles, useSettingsStyles } from "../../../s
  * @version 2.0.0
  */
 
-/* ================= 설정 옵션 상수들 ================= */
-
-/**
- * 기본 썸네일 생성 엔진 옵션
- */
-const ENGINE_OPTIONS = [
-  { value: "replicate", text: "Replicate", subtext: "(고품질)" },
-];
-
-/**
- * 이미지 분석 AI 엔진 옵션
- */
-const ANALYSIS_ENGINE_OPTIONS = [
-  { value: "anthropic", text: "Claude Sonnet 4", subtext: "(고성능 분석)" },
-];
-
-/**
- * 엔진 옵션에서 해당 값의 옵션 객체를 찾는 헬퍼 함수
- * @param {Array} options - 옵션 배열
- * @param {string} value - 찾을 값
- * @returns {Object} 찾은 옵션 객체 또는 첫 번째 옵션
- */
-const getEngineOption = (options, value) => options.find((o) => o.value === value) || options[0];
-
 function ThumbnailTab() {
   // Fluent UI 스타일 훅
   const containerStyles = useContainerStyles();
   const cardStyles = useCardStyles();
-  const settingsStyles = useSettingsStyles();
 
   // 프롬프트 템플릿 상태
   const [template, setTemplate] = useState("");
   const [originalTemplate, setOriginalTemplate] = useState("");
 
-  // 엔진 설정 상태
-  const [defaultEngine, setDefaultEngine] = useState("replicate");
-  const [originalEngine, setOriginalEngine] = useState("replicate");
-  const [analysisEngine, setAnalysisEngine] = useState("anthropic");
-  const [originalAnalysisEngine, setOriginalAnalysisEngine] = useState("anthropic");
 
   // UI 상태
   const [isModified, setIsModified] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saveLoading, setSaveLoading] = useState(false);
-  const [message, setMessage] = useState(null);
 
   /* ============ 초기화 및 상태 관리 ============ */
 
@@ -114,21 +79,11 @@ function ThumbnailTab() {
   }, []);
 
   /**
-   * 프롬프트 템플릿 수정 감지 (엔진 설정 제외)
-   * 엔진 설정은 드롭다운 변경 시 즉시 저장되므로 수정 상태에서 제외
+   * 프롬프트 템플릿 수정 감지
    */
   useEffect(() => {
     setIsModified(template !== originalTemplate);
   }, [template, originalTemplate]);
-
-  /**
-   * 상태 메시지 자동 숨김 (3초 후)
-   */
-  useEffect(() => {
-    if (!message) return;
-    const timer = setTimeout(() => setMessage(null), 3000);
-    return () => clearTimeout(timer);
-  }, [message]);
 
   /**
    * 썸네일 설정들을 로드하는 함수
@@ -138,19 +93,10 @@ function ThumbnailTab() {
     setLoading(true);
     try {
       const savedTemplate = await window.api.getSetting("thumbnailPromptTemplate");
-      const savedEngine = await window.api.getSetting("thumbnailDefaultEngine");
-      const savedAnalysisEngine = await window.api.getSetting("thumbnailAnalysisEngine");
-
       const templateToUse = savedTemplate || DEFAULT_TEMPLATE;
-      const engineToUse = savedEngine || "replicate";
-      const analysisEngineToUse = savedAnalysisEngine || "anthropic";
 
       setTemplate(templateToUse);
       setOriginalTemplate(templateToUse);
-      setDefaultEngine(engineToUse);
-      setOriginalEngine(engineToUse);
-      setAnalysisEngine(analysisEngineToUse);
-      setOriginalAnalysisEngine(analysisEngineToUse);
     } catch (error) {
       const { message } = handleError(error, "thumbnail_settings_load", {
         metadata: { action: "load_template" },
@@ -162,10 +108,6 @@ function ThumbnailTab() {
       });
       setTemplate(DEFAULT_TEMPLATE);
       setOriginalTemplate(DEFAULT_TEMPLATE);
-      setDefaultEngine("replicate");
-      setOriginalEngine("replicate");
-      setAnalysisEngine("anthropic");
-      setOriginalAnalysisEngine("anthropic");
     } finally {
       setLoading(false);
     }
@@ -238,63 +180,6 @@ function ThumbnailTab() {
     }
   }, []);
 
-  /* ============ 엔진 설정 자동 저장 함수들 ============ */
-
-  /**
-   * 기본 생성 엔진 변경 시 즉시 저장
-   * @param {string} newEngine - 새로 선택된 엔진
-   */
-  const handleEngineChange = useCallback(async (newEngine) => {
-    setDefaultEngine(newEngine);
-
-    try {
-      await window.api.setSetting({
-        key: "thumbnailDefaultEngine",
-        value: newEngine,
-      });
-      setOriginalEngine(newEngine);
-      showGlobalToast({
-        type: "success",
-        text: "기본 생성 엔진이 저장되었습니다.",
-      });
-    } catch (error) {
-      console.error("엔진 설정 저장 실패:", error);
-      showGlobalToast({
-        type: "error",
-        text: "엔진 설정 저장에 실패했습니다.",
-      });
-      // 실패 시 원래 값으로 되돌리기
-      setDefaultEngine(originalEngine);
-    }
-  }, [originalEngine]);
-
-  /**
-   * 이미지 분석 AI 변경 시 즉시 저장
-   * @param {string} newEngine - 새로 선택된 분석 엔진
-   */
-  const handleAnalysisEngineChange = useCallback(async (newEngine) => {
-    setAnalysisEngine(newEngine);
-
-    try {
-      await window.api.setSetting({
-        key: "thumbnailAnalysisEngine",
-        value: newEngine,
-      });
-      setOriginalAnalysisEngine(newEngine);
-      showGlobalToast({
-        type: "success",
-        text: "이미지 분석 AI가 저장되었습니다.",
-      });
-    } catch (error) {
-      console.error("분석 엔진 설정 저장 실패:", error);
-      showGlobalToast({
-        type: "error",
-        text: "분석 엔진 설정 저장에 실패했습니다.",
-      });
-      // 실패 시 원래 값으로 되돌리기
-      setAnalysisEngine(originalAnalysisEngine);
-    }
-  }, [originalAnalysisEngine]);
 
   if (loading) {
     return (
@@ -312,74 +197,10 @@ function ThumbnailTab() {
         style={{
           boxShadow: tokens.shadow16,
           borderRadius: 16,
-          padding: `0 ${tokens.spacingHorizontalXXL}`,
-          paddingTop: tokens.spacingVerticalXXL,
-          paddingBottom: tokens.spacingVerticalXXL,
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: tokens.spacingHorizontalXXL,
+          padding: tokens.spacingHorizontalXXL,
         }}
       >
-        {/* AI 엔진 설정 */}
-        <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <PuzzlePieceRegular style={{ color: tokens.colorPaletteBlueForeground1 }} />
-            <Text weight="semibold" size={500}>
-              AI 엔진 설정
-            </Text>
-          </div>
-          <Field style={{ marginBottom: tokens.spacingVerticalM }}>
-            <Label weight="semibold" size="large">
-              기본 생성 엔진
-            </Label>
-            <Dropdown
-              value={getEngineOption(ENGINE_OPTIONS, defaultEngine).text}
-              selectedOptions={[defaultEngine]}
-              onOptionSelect={(_, data) => handleEngineChange(data.optionValue)}
-              style={{ marginTop: tokens.spacingVerticalS }}
-            >
-              {ENGINE_OPTIONS.map((o) => (
-                <Option key={o.value} value={o.value} text={`${o.text} ${o.subtext}`}>
-                  {o.text} <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{o.subtext}</Caption1>
-                </Option>
-              ))}
-            </Dropdown>
-            <Caption1 style={{ marginTop: tokens.spacingVerticalXS, color: tokens.colorNeutralForeground3 }}>
-              썸네일 생성 시 기본으로 사용할 AI 엔진을 선택합니다.
-            </Caption1>
-          </Field>
-
-          <Field>
-            <Label weight="semibold" size="large">
-              이미지 분석 AI
-            </Label>
-            <Dropdown
-              value={getEngineOption(ANALYSIS_ENGINE_OPTIONS, analysisEngine).text}
-              selectedOptions={[analysisEngine]}
-              onOptionSelect={(_, data) => handleAnalysisEngineChange(data.optionValue)}
-              style={{ marginTop: tokens.spacingVerticalS }}
-            >
-              {ANALYSIS_ENGINE_OPTIONS.map((o) => (
-                <Option key={o.value} value={o.value} text={`${o.text} ${o.subtext}`}>
-                  {o.text} <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>{o.subtext}</Caption1>
-                </Option>
-              ))}
-            </Dropdown>
-            <Caption1 style={{ marginTop: tokens.spacingVerticalXS, color: tokens.colorNeutralForeground3 }}>
-              참고 이미지 분석에 사용할 AI 엔진을 선택합니다.
-            </Caption1>
-          </Field>
-          {/* 상태 메시지 */}
-          {message && (
-            <div style={{ marginTop: tokens.spacingVerticalL }}>
-              <StatusBadge status={message.type === "success" ? "success" : "error"} showIcon size="medium">
-                {message.text}
-              </StatusBadge>
-            </div>
-          )}
-        </div>
-
-        {/* 템플릿 편집 */}
+        {/* 프롬프트 템플릿 편집 */}
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tokens.spacingVerticalM }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -409,7 +230,7 @@ function ThumbnailTab() {
                 fontFamily: "monospace",
                 fontSize: "14px",
                 lineHeight: "1.4",
-                minHeight: "300px",
+                minHeight: "400px",
                 height: "100%",
               }}
               value={template}
