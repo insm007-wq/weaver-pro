@@ -140,16 +140,6 @@ const VoiceSettingsCard = memo(({ form, voices, voiceLoading, voiceError, onChan
                 <Badge appearance="outline" size="small">
                   {selectedVoice.gender === "MALE" ? "👨 남성" : selectedVoice.gender === "FEMALE" ? "👩 여성" : "🧑 중성"}
                 </Badge>
-                {selectedVoice.type && (
-                  <Badge appearance="outline" size="small">
-                    {selectedVoice.type}
-                  </Badge>
-                )}
-                {selectedVoice.language && (
-                  <Badge appearance="outline" size="small">
-                    {selectedVoice.language}
-                  </Badge>
-                )}
               </div>
 
               <div

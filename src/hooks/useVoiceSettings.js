@@ -165,10 +165,16 @@ export function useVoiceSettings(form) {
   const filterVoicesByEngine = (allItems, engine) => {
     switch (engine) {
       case "google":
-        // Google TTS: Neural2와 Wavenet 타입만 필터링
-        return allItems
-          .filter((voice) => voice.provider === "Google" && (voice.type === "Neural2" || voice.type === "Wavenet"))
-          .slice(0, 8);
+        // Google TTS: Wavenet만 사용 (Neural2 제외), 남자 2개, 여자 2개만 선택
+        const googleVoices = allItems.filter(
+          (voice) => voice.provider === "Google" && voice.type === "Wavenet"
+        );
+
+        // 성별로 분류
+        const maleVoices = googleVoices.filter(v => v.gender === "MALE").slice(0, 2);
+        const femaleVoices = googleVoices.filter(v => v.gender === "FEMALE").slice(0, 2);
+
+        return [...femaleVoices, ...maleVoices];
 
       // 향후 추가될 TTS 엔진들
       // case "amazon":

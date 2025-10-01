@@ -321,22 +321,33 @@ async function loadGoogleVoices(apiKey) {
 
 // 목소리 이름을 사용자 친화적으로 포맷
 function formatVoiceName(voiceName, ssmlGender) {
-  // 예: ko-KR-Wavenet-A -> 한국어 여성 (Wavenet A)
-  // 예: ko-KR-Neural2-B -> 한국어 남성 (Neural2 B)
+  // 예: ko-KR-Wavenet-A -> 목소리 1 (여성)
+
+  // 실제 Google API의 성별 정보 사용
+  const genderKorean = {
+    'MALE': '남성',
+    'FEMALE': '여성',
+    'NEUTRAL': '중성'
+  };
+  const gender = genderKorean[ssmlGender] || '중성';
+
   const parts = voiceName.split('-');
   if (parts.length >= 4) {
     const type = parts[2]; // Wavenet, Neural2, Standard
-    const variant = parts[3]; // A, B, C, etc.
+    const variant = parts[3]; // A, B, C, D
 
-    // 실제 Google API의 성별 정보 사용
-    const genderKorean = {
-      'MALE': '남성',
-      'FEMALE': '여성',
-      'NEUTRAL': '중성'
+    // Wavenet만 사용하고 A, B, C, D를 1, 2, 3, 4로 매핑
+    const voiceMap = {
+      'Wavenet-A': 1,
+      'Wavenet-B': 2,
+      'Wavenet-C': 3,
+      'Wavenet-D': 4,
     };
-    const gender = genderKorean[ssmlGender] || '중성';
 
-    return `한국어 ${gender} (${type} ${variant})`;
+    const voiceKey = `${type}-${variant}`;
+    const voiceNumber = voiceMap[voiceKey] || variant.charCodeAt(0) - 64;
+
+    return `목소리 ${voiceNumber} (${gender})`;
   }
   return voiceName;
 }
