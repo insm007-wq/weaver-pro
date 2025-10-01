@@ -73,7 +73,7 @@ export default function DefaultsTab() {
      */
     const loadAllSettings = async () => {
       try {
-        const settingsToLoad = ["defaultResolution", "imageModel", "imageResolution", "videoModel", "videoQuality", "llmModel"];
+        const settingsToLoad = ["llmModel"];
 
         const loadedSettings = {};
         for (const key of settingsToLoad) {
@@ -148,11 +148,6 @@ export default function DefaultsTab() {
     try {
       // 기본 설정들을 전역 설정에 저장
       const settingsToSave = [
-        "defaultResolution",
-        "imageModel",
-        "imageResolution",
-        "videoModel",
-        "videoQuality",
         "llmModel",
         "videoSaveFolder",
       ];
@@ -254,11 +249,6 @@ export default function DefaultsTab() {
 
       // 전역 설정에서도 기본값으로 초기화
       const settingsToReset = [
-        "defaultResolution",
-        "imageModel",
-        "imageResolution",
-        "videoModel",
-        "videoQuality",
         "llmModel",
         "videoSaveFolder",
       ];
@@ -389,24 +379,6 @@ export default function DefaultsTab() {
                 </Button>
               </div>
             </Field>
-
-            <Field label="기본 해상도" hint="새로 생성되는 영상의 기본 해상도입니다.">
-              <Dropdown
-                value={
-                  settings.defaultResolution === "1080p"
-                    ? "1920x1080 (Full HD)"
-                    : settings.defaultResolution === "720p"
-                    ? "1280x720 (HD)"
-                    : "3840x2160 (4K)"
-                }
-                selectedOptions={[settings.defaultResolution]}
-                onOptionSelect={(_, data) => setSettings((prev) => ({ ...prev, defaultResolution: data.optionValue }))}
-              >
-                <Option value="1080p">1920x1080 (Full HD)</Option>
-                <Option value="720p">1280x720 (HD)</Option>
-                <Option value="4k">3840x2160 (4K)</Option>
-              </Dropdown>
-            </Field>
           </div>
         </div>
 
@@ -421,76 +393,6 @@ export default function DefaultsTab() {
           >
             <PuzzlePieceRegular /> AI 모델 설정
           </Text>
-          {/* 이미지 생성 설정 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: itemGap, marginBottom: tokens.spacingVerticalL }}>
-            <Field label="이미지 생성 모델" hint="썸네일 및 이미지 생성에 사용할 AI 모델입니다.">
-              <Dropdown
-                value={getDropdownValue(AI_OPTIONS.imageModels, settings.imageModel)}
-                selectedOptions={[settings.imageModel]}
-                onOptionSelect={(_, data) => setSettings((prev) => ({ ...prev, imageModel: data.optionValue }))}
-              >
-                {AI_OPTIONS.imageModels.map((model) => (
-                  <Option key={model.value} value={model.value} text={`${model.text} (${model.provider}) - ${model.cost}${model.status === "준비 중" ? " - 준비 중" : ""}`} disabled={model.status === "준비 중"}>
-                    {model.text}{" "}
-                    <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-                      ({model.provider}) - {model.cost}
-                    </Caption1>
-                    {model.status === "준비 중" && (
-                      <Caption1 style={{ color: tokens.colorPaletteDarkOrangeBackground3, marginLeft: "4px" }}>- 준비 중</Caption1>
-                    )}
-                  </Option>
-                ))}
-              </Dropdown>
-            </Field>
-
-            <Field label="이미지 생성 해상도" hint="생성될 이미지의 기본 해상도입니다.">
-              <Dropdown
-                value={getDropdownValue(AI_OPTIONS.imageResolutions, settings.imageResolution)}
-                selectedOptions={[settings.imageResolution]}
-                onOptionSelect={(_, data) => setSettings((prev) => ({ ...prev, imageResolution: data.optionValue }))}
-              >
-                {AI_OPTIONS.imageResolutions.map((res) => (
-                  <Option key={res.value} value={res.value} text={`${res.text} (${res.speed})`}>
-                    {res.text} <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>({res.speed})</Caption1>
-                  </Option>
-                ))}
-              </Dropdown>
-            </Field>
-          </div>
-
-          {/* 비디오 생성 설정 */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: itemGap, marginBottom: tokens.spacingVerticalL }}>
-            <Field label="비디오 생성 모델" hint="동영상 생성에 사용할 AI 모델입니다.">
-              <Dropdown
-                value={getDropdownValue(AI_OPTIONS.videoModels, settings.videoModel)}
-                selectedOptions={[settings.videoModel]}
-                onOptionSelect={(_, data) => setSettings((prev) => ({ ...prev, videoModel: data.optionValue }))}
-              >
-                {AI_OPTIONS.videoModels.map((model) => (
-                  <Option key={model.value} value={model.value} text={`${model.text} (${model.provider})${model.status === "추천" ? ` - ⭐ ${model.status}` : ` - ${model.status}`}`} disabled={model.status === "준비 중"}>
-                    {model.text} <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>({model.provider})</Caption1>
-                    <Caption1 style={{ color: tokens.colorNeutralForeground3, marginLeft: "4px" }}>
-                      {model.status === "추천" ? ` - ⭐ ${model.status}` : ` - ${model.status}`}
-                    </Caption1>
-                  </Option>
-                ))}
-              </Dropdown>
-            </Field>
-
-            <Field label="비디오 생성 품질" hint="생성될 비디오의 기본 품질입니다.">
-              <Dropdown
-                value={getDropdownValue(AI_OPTIONS.videoQualities, settings.videoQuality)}
-                selectedOptions={[settings.videoQuality]}
-                onOptionSelect={(_, data) => setSettings((prev) => ({ ...prev, videoQuality: data.optionValue }))}
-              >
-                {AI_OPTIONS.videoQualities.map((quality) => (
-                  <Option key={quality.value} value={quality.value} text={`${quality.text} (${quality.speed})`}>
-                    {quality.text} <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>({quality.speed})</Caption1>
-                  </Option>
-                ))}
-              </Dropdown>
-            </Field>
-          </div>
 
           {/* LLM 모델 설정 */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: itemGap, maxWidth: "50%" }}>
@@ -510,25 +412,6 @@ export default function DefaultsTab() {
                 ))}
               </Dropdown>
             </Field>
-          </div>
-
-          <div className={settingsStyles.infoBox} style={{ marginTop: tokens.spacingVerticalXL }}>
-            <div className={settingsStyles.infoIcon}>
-              <InfoRegular />
-            </div>
-            <div className={settingsStyles.infoContent}>
-              <Text size={300} weight="semibold" style={{ marginBottom: tokens.spacingVerticalS }}>
-                {AI_MODEL_INFO.title}
-              </Text>
-              <Caption1 style={{ color: tokens.colorNeutralForeground3, lineHeight: 1.4 }}>
-                {AI_MODEL_INFO.description.map((line, index) => (
-                  <span key={index}>
-                    {line}
-                    {index < AI_MODEL_INFO.description.length - 1 && <br />}
-                  </span>
-                ))}
-              </Caption1>
-            </div>
           </div>
         </div>
 

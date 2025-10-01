@@ -615,11 +615,7 @@ function SceneList({
       const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
       const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
 
-      console.log("[음성 길이 로드] videoSaveFolder:", videoSaveFolder);
-      console.log("[음성 길이 로드] scenes.length:", scenes.length);
-
       if (!videoSaveFolder || scenes.length === 0) {
-        console.log("[음성 길이 로드] 조건 불만족으로 종료");
         return;
       }
 
@@ -629,27 +625,17 @@ function SceneList({
         return `${videoSaveFolder}\\audio\\parts\\scene-${sceneNumber}.mp3`;
       });
 
-      console.log("[음성 길이 로드] 음성 파일 경로들:", filePaths);
-
       // 모든 음성 파일의 duration 가져오기
       const result = await window.api.invoke("audio:getDurations", { filePaths });
-
-      console.log("[음성 길이 로드] API 결과:", result);
 
       if (result?.success && result?.results) {
         const durationsMap = {};
         result.results.forEach((item, index) => {
           if (item.success) {
             durationsMap[index] = item.duration;
-            console.log(`[음성 길이 로드] 씬 ${index + 1}: ${item.duration}초`);
-          } else {
-            console.log(`[음성 길이 로드] 씬 ${index + 1} 실패:`, item.error);
           }
         });
         setAudioDurations(durationsMap);
-        console.log("[음성 길이 로드] 최종 durationsMap:", durationsMap);
-      } else {
-        console.log("[음성 길이 로드] API 결과가 올바르지 않음");
       }
     } catch (error) {
       console.error("음성 파일 길이 로드 실패:", error);

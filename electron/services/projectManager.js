@@ -159,10 +159,48 @@ class ProjectManager {
       await this.migrateExistingProjects();
 
       // 설정에서 프로젝트 목록 가져오기
-      const projects = store.getProjects();
+      let projects = store.getProjects();
 
-      // 생성일 기준 내림차순 정렬
-      return projects.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      // 기본(default) 프로젝트가 없으면 추가
+      const hasDefaultProject = projects.some(p => p.id === 'default' || p.topic === 'default');
+      if (!hasDefaultProject) {
+        const rootFolder = this.getProjectRootFolder();
+        const defaultProjectDir = path.join(rootFolder, 'default');
+
+        // 기본 프로젝트 폴더가 존재하는지 확인
+        try {
+          await fs.access(defaultProjectDir);
+        } catch {
+          // 없으면 생성
+          await this.createProjectStructure(defaultProjectDir);
+        }
+
+        const defaultProject = {
+          id: 'default',
+          topic: 'default',
+          createdAt: new Date().toISOString(), // 최신 날짜로 설정하여 목록 맨 위에 표시
+          paths: {
+            root: defaultProjectDir,
+            output: path.join(defaultProjectDir, 'output'),
+            scripts: path.join(defaultProjectDir, 'scripts'),
+            audio: path.join(defaultProjectDir, 'audio'),
+            images: path.join(defaultProjectDir, 'images'),
+            video: path.join(defaultProjectDir, 'video'),
+            temp: path.join(defaultProjectDir, 'temp')
+          }
+        };
+
+        // 기본 프로젝트를 설정에 추가
+        store.addProject(defaultProject);
+        projects.push(defaultProject);
+      }
+
+      // 기본(default) 프로젝트를 맨 위로, 나머지는 생성일 기준 내림차순 정렬
+      return projects.sort((a, b) => {
+        if (a.id === 'default') return -1;
+        if (b.id === 'default') return 1;
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      });
     } catch (error) {
       console.error('❌ 프로젝트 목록 조회 실패:', error);
       return [];
@@ -286,6 +324,11 @@ class ProjectManager {
   // 프로젝트 삭제
   async deleteProject(projectId) {
     try {
+      // 기본(default) 프로젝트는 삭제 불가
+      if (projectId === 'default') {
+        return { success: false, error: '기본 프로젝트는 삭제할 수 없습니다.' };
+      }
+
       // 먼저 프로젝트 찾기
       const project = store.findProject(projectId);
       if (!project) {

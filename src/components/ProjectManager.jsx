@@ -225,6 +225,39 @@ export default function ProjectManager() {
           ? result.projects
           : [];
         setProjects(projects);
+
+        // 프로젝트가 기본(default)만 있을 경우 자동으로 선택 및 저장
+        if (projects.length === 1 && projects[0]?.id === 'default') {
+          const defaultProject = projects[0];
+          setSelectedProject(defaultProject);
+
+          // 설정 자동 업데이트
+          const newSettings = {
+            ...settings,
+            defaultProjectName: defaultProject.topic,
+            videoSaveFolder: defaultProject.paths.root,
+          };
+          setSettings(newSettings);
+
+          // 자동 저장
+          try {
+            await window.api.setSetting({
+              key: "defaultProjectName",
+              value: defaultProject.topic,
+            });
+            await window.api.setSetting({
+              key: "videoSaveFolder",
+              value: defaultProject.paths.root,
+            });
+
+            setOriginalSettings(newSettings);
+
+            // 전역 이벤트 발생
+            dispatchProjectSettingsUpdate(settings.projectRootFolder, defaultProject.topic);
+          } catch (saveError) {
+            console.error("기본 프로젝트 자동 저장 실패:", saveError);
+          }
+        }
       } else {
         console.error("프로젝트 목록 로드 실패:", result?.message || "알 수 없는 오류");
         setProjects([]); // 빈 배열로 설정하여 크래시 방지
@@ -494,9 +527,9 @@ export default function ProjectManager() {
       )}
 
       {/* 새 프로젝트 생성 */}
-      <Card style={{ marginBottom: sectionGap, padding: tokens.spacingVerticalL }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tokens.spacingVerticalM }}>
-          <Text size={500} weight="semibold">
+      <Card style={{ marginBottom: sectionGap, padding: tokens.spacingVerticalM }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showCreateForm ? tokens.spacingVerticalM : 0 }}>
+          <Text size={400} weight="semibold">
             🆕 새 프로젝트 생성
           </Text>
           <Button
@@ -548,7 +581,7 @@ export default function ProjectManager() {
       {/* 프로젝트 목록 */}
       <Card style={{ marginBottom: sectionGap, padding: tokens.spacingVerticalL }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tokens.spacingVerticalM }}>
-          <Text size={500} weight="semibold">
+          <Text size={400} weight="semibold">
             📋 프로젝트 목록
           </Text>
           <Button appearance="secondary" onClick={loadProjects} disabled={loading} icon={loading ? <Spinner size="tiny" /> : undefined}>
@@ -658,6 +691,7 @@ export default function ProjectManager() {
                       appearance="subtle"
                       icon={<DeleteRegular />}
                       size="small"
+                      disabled={project?.id === 'default'}
                       onClick={(e) => {
                         e.stopPropagation(); // 이벤트 버블링 방지
                         // project.id 안전성 검사
@@ -681,7 +715,7 @@ export default function ProjectManager() {
       {/* 프로젝트 설정 */}
       <Card style={{ padding: sectionGap }}>
         <Text
-          size={500}
+          size={400}
           weight="semibold"
           style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: tokens.spacingVerticalM }}
         >
@@ -692,18 +726,20 @@ export default function ProjectManager() {
           <Field label="프로젝트 루트 폴더" hint="모든 프로젝트가 생성될 기본 폴더입니다.">
             <Input
               value={settings.projectRootFolder}
-              contentBefore={<FolderRegular />}
+              contentBefore={<FolderRegular style={{ color: tokens.colorBrandForeground1 }} />}
               placeholder="예: C:\\WeaverPro\\"
               disabled={true}
+              input={{ style: { color: tokens.colorBrandForeground1 } }}
             />
           </Field>
 
           <Field label="기본 프로젝트 이름" hint="프로젝트 목록에서 선택하면 자동으로 업데이트됩니다.">
             <Input
               value={settings.defaultProjectName}
-              contentBefore={<DocumentRegular />}
+              contentBefore={<DocumentRegular style={{ color: tokens.colorBrandForeground1 }} />}
               placeholder="프로젝트 이름을 입력하세요"
               disabled={true}
+              input={{ style: { color: tokens.colorBrandForeground1 } }}
             />
           </Field>
         </div>
