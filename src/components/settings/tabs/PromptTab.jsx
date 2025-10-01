@@ -645,7 +645,7 @@ function PromptTab() {
             />
           </div>
           <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM }}>
-            {scriptCount.toLocaleString()} 글자 | 변수: {"{topic}, {duration}, {style}"}
+            {scriptCount.toLocaleString()} 글자 | 변수: {"{topic}, {duration}, {style}, {totalSeconds}, {minSceneCount}, {maxSceneCount}, {targetSceneCount}, {minCharacters}, {maxCharacters}, {avgCharactersPerScene}"}
           </Text>
         </Card>
 
@@ -691,7 +691,7 @@ function PromptTab() {
             />
           </div>
           <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM }}>
-            {referenceCount.toLocaleString()} 글자 | 변수: {"{referenceScript}, {topic}"}
+            {referenceCount.toLocaleString()} 글자 | 변수: {"{referenceText}, {topic}, {duration}, {totalSeconds}, {minSceneCount}, {maxSceneCount}"}
           </Text>
         </Card>
       </div>

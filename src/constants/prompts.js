@@ -1,125 +1,72 @@
 // 프롬프트 템플릿 관련 상수들
 
-// ✅ 대본 프롬프트(원문 그대로 전송). 필요시 사용자가 직접 템플릿을 편집함.
-export const DEFAULT_GENERATE_PROMPT = `다음 조건에 맞는 {duration}분 길이의 영상 대본을 작성해주세요:
+// ✅ 대본 생성 프롬프트 (Vrew 스타일 - 간결하고 명확함)
+export const DEFAULT_GENERATE_PROMPT = `다음 조건에 맞는 {duration}분 길이의 영상 대본을 작성해주세요.
 
-주제: {topic}
-스타일: {style}
-언어: 한국어
-최대 장면 수: {maxScenes}개
+📋 기본 정보:
+• 주제: {topic}
+• 스타일: {style}
+• 언어: 한국어
 
-## 📝 대본 작성 가이드
+📺 영상 구성 (반드시 준수):
+• 총 길이: {duration}분 ({totalSeconds}초)
+• 장면 구성: {minSceneCount}~{maxSceneCount}개 (권장: {targetSceneCount}개)
+• 각 장면: 7~10초 (40~60자)
 
-**실제 음성 시간 기준:**
-- 한국어 음성 속도: 분당 300-400자
-- 총 {duration}분 = 총 {minCharacters}-{maxCharacters}자 필요
-- 각 장면 평균 {avgCharactersPerScene}자 이상 필수
+📝 작성 방식:
+• 각 장면은 50~60자 (너무 짧으면 안됨!)
+• 각 장면마다 하나의 완결된 메시지 전달
+• 장면 간 자연스러운 흐름 유지
+• 지루하지 않게 적절한 템포 유지
+• 마크다운/불릿포인트 금지
+• 자연스러운 구어체 문단
 
-**장면별 분량 계산:**
-- 5초 = 25-35자
-- 10초 = 50-70자
-- 30초 = 150-200자
-- 60초 = 300-400자
+⚠️ 중요:
+1. 반드시 {minSceneCount}개 이상 장면 포함
+2. 전체 글자 수는 최소 {minCharacters}자 이상 필수!
+3. 각 장면은 50자 이상 작성 (40자 이하는 불합격)
+4. 요청 시간보다 최대 30% 길어져도 괜찮음
 
-**절대 규칙:**
-1. 각 장면의 duration은 실제 text 길이와 정확히 일치해야 함
-2. 짧은 텍스트에 긴 duration 절대 금지
-3. 총 텍스트 길이가 {minCharacters}자 미만이면 무조건 더 추가
-4. 모든 장면의 duration 합계가 정확히 {totalSeconds}초여야 함
-
-## 🎬 풍부하고 상세한 {duration}분 대본 생성 가이드
-
-**🔥 핵심 목표: 반드시 {duration}분 전체를 채우는 충분한 분량**
-- 절대로 짧은 대본을 작성하지 마세요
-- 각 주제를 깊이 있고 상세하게 다루어 시간을 충분히 채우세요
-- 시청자가 {duration}분 내내 몰입할 수 있는 풍부한 내용 제공
-
-**상세한 텍스트 작성 전략:**
-1. **인트로 확장**: 주제 소개를 단순히 한 문장이 아닌, 배경 설명, 중요성, 시청자 혜택까지 포함
-2. **구체적 예시 다수 포함**: 하나의 포인트마다 여러 개의 실제 사례와 예시 제시
-3. **단계별 상세 설명**: 과정이나 방법을 설명할 때 각 단계를 자세히 풀어서 설명
-4. **배경 정보 추가**: 왜 그런지, 어떤 원리인지 배경 지식까지 설명
-5. **시청자 관점 포함**: "여러분도 이런 경험 있으시죠?", "많은 분들이 궁금해하시는" 등 공감대 형성
-
-**필수 분량 검증:**
-- 각 장면 텍스트를 실제로 소리내서 읽어보세요
-- 읽는 시간이 설정한 duration과 정확히 맞는지 확인
-- 전체 텍스트 읽는데 정말로 {duration}분이 걸리는지 반드시 검증
-- 만약 부족하면 더 많은 설명, 예시, 배경 정보를 추가하세요
-
-**🔥 중요**: 반드시 유효한 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.
-
-응답 형식:
+📤 응답 형식 (JSON만 반환):
 {
-  "title": "흥미롭고 구체적인 영상 제목",
-  "total_duration": {duration},
-  "total_characters": "실제 총 글자 수 ({minCharacters}자 이상)",
+  "title": "대본 제목",
   "scenes": [
-    {
-      "scene_number": 1,
-      "text": "장면 1의 상세한 대본 텍스트입니다. 예를 들어, 이 주제가 왜 중요한지부터 시작해서 구체적인 예시를 들어 설명하겠습니다...",
-      "duration": 45,
-      "character_count": "이 장면의 실제 글자 수",
-      "visual_description": "이 장면에서 보여줄 구체적이고 상세한 시각적 요소 설명"
-    }
+    {"text": "첫 번째 장면 (50~60자)", "duration": 8},
+    {"text": "두 번째 장면 (50~60자)", "duration": 8},
+    ... (총 {minSceneCount}~{maxSceneCount}개 장면)
   ]
 }
 
-## 🚨 절대 준수 사항
+⚡ JSON만 출력하고 다른 설명은 절대 포함하지 마세요.`;
 
-**분량 절대 기준:**
-✅ 전체 시간: 정확히 NaN초 ({duration}분)
-✅ 최소 글자 수: {minCharacters}자 이상 (절대 이보다 적으면 안됨!)
-✅ 권장 글자 수: {minCharacters}-{maxCharacters}자
-✅ 각 장면마다 충분한 텍스트 분량 (duration에 맞는 적절한 길이)
+// ✅ 레퍼런스 분석 프롬프트 (간소화)
+export const DEFAULT_REFERENCE_PROMPT = `아래 레퍼런스 대본의 스타일을 분석하여 새로운 주제로 대본을 작성해주세요.
 
-**내용 풍부함 검증:**
-✅ 모든 장면이 구체적 예시와 상세 설명 포함
-✅ 단순한 나열이 아닌 깊이 있는 내용 전개
-✅ 시청자가 {duration}분 내내 몰입할 수 있는 정보량
-✅ "왜 그런지" 배경과 원리까지 설명
+📋 기본 정보:
+• 주제: {topic}
+• 분량: {duration}분 ({totalSeconds}초)
+• 장면 구성: {minSceneCount}~{maxSceneCount}개
 
-**기술적 요구사항:**
-✅ 모든 장면의 duration 합계가 정확히 NaN초
-✅ 각 장면 텍스트를 실제로 읽는 시간과 duration 일치
-✅ 짧은 텍스트에 긴 duration 설정 금지
-✅ 너무 긴 텍스트에 짧은 duration 설정 금지`;
-
-// ✅ 레퍼런스 프롬프트 — {referenceText}, {duration}, {topic}, {maxScenes}만 치환
-export const DEFAULT_REFERENCE_PROMPT = `## 레퍼런스 대본 분석 및 적용
-
-요청 사양:
-- 분량: {duration}분
-- 최대 장면 수: {maxScenes}개
-- 주제: {topic}
-- 언어: 한국어
-
-=== 레퍼런스 대본 ===
+📄 레퍼런스 대본:
 {referenceText}
-=== 레퍼런스 대본 끝 ===
 
-지시사항:
-1) 레퍼런스의 어투/톤, 전개 방식, 설명 기법을 분석하세요.
-2) 구조적 장점은 유지하되, 내용은 주제({topic})에 맞춰 **완전히 새로 작성**하세요.
-3) 총 분량이 {duration}분을 충족하도록 충분한 텍스트를 작성하세요.
-4) 씬은 1~{maxScenes}개로 구성하고, **각 씬의 텍스트 길이와 duration이 일치**하도록 작성하세요
-   (짧은 텍스트에 긴 duration 금지).
-5) 각 씬마다 화면에 보여줄 **시각적 설명(visual_description)**을 1~2문장 포함하세요.
+📝 작성 지침:
+1. 레퍼런스의 어투, 톤, 전개 방식 분석
+2. 구조는 유지하되 내용은 새로운 주제로 완전히 재작성
+3. 각 장면은 50~60자로 작성
+4. 자연스러운 흐름 유지
 
-반드시 유효한 JSON으로만 응답하세요:
+📤 응답 형식 (JSON만 반환):
 {
-  "title": "영상 제목",
-  "total_duration": {duration},
+  "title": "대본 제목",
   "scenes": [
-    {
-      "scene_number": 1,
-      "text": "씬 1의 상세 대본",
-      "duration": 60,
-      "character_count": "실제 글자 수",
-      "visual_description": "화면에 보여줄 내용"
-    }
+    {"text": "첫 번째 장면 (50~60자)", "duration": 8},
+    {"text": "두 번째 장면 (50~60자)", "duration": 8},
+    ... (총 {minSceneCount}~{maxSceneCount}개 장면)
   ]
-}`.trim();
+}
+
+⚡ JSON만 출력하고 다른 설명은 절대 포함하지 마세요.`.trim();
 
 export const DEFAULT_TEMPLATE = `{content}{referenceAnalysis}
 
