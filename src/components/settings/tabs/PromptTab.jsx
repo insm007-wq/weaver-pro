@@ -158,7 +158,6 @@ function PromptTab() {
    */
   useEffect(() => {
     loadPrompts();
-    loadThumbnailPrompt();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -171,10 +170,13 @@ function PromptTab() {
       // 기본 프롬프트들 찾기
       const dScript = prompts.find((p) => p.isDefault && p.category === "script");
       const dRef = prompts.find((p) => p.isDefault && p.category === "reference");
+      const dThumb = prompts.find((p) => p.isDefault && p.category === "thumbnail");
 
       // 에디터에 기본 프롬프트 설정
       setScriptPrompt(dScript?.content?.trim() ?? catDefault("script"));
       setReferencePrompt(dRef?.content?.trim() ?? catDefault("reference"));
+      setThumbnailPrompt(dThumb?.content?.trim() ?? DEFAULT_TEMPLATE);
+      setOriginalThumbnailPrompt(dThumb?.content?.trim() ?? DEFAULT_TEMPLATE);
 
       // 사용자 프롬프트가 있으면 첫 번째 사용자 프롬프트 선택, 없으면 기본 프롬프트 선택
       const userNames = uniqueUserNames(prompts);
@@ -210,21 +212,6 @@ function PromptTab() {
     }
   };
 
-  /**
-   * 썸네일 프롬프트를 settings.json에서 로드
-   */
-  const loadThumbnailPrompt = async () => {
-    try {
-      const savedTemplate = await window.api.getSetting("thumbnailPromptTemplate");
-      const templateToUse = savedTemplate || DEFAULT_TEMPLATE;
-      setThumbnailPrompt(templateToUse);
-      setOriginalThumbnailPrompt(templateToUse);
-    } catch (error) {
-      console.error("썸네일 프롬프트 로드 실패:", error);
-      setThumbnailPrompt(DEFAULT_TEMPLATE);
-      setOriginalThumbnailPrompt(DEFAULT_TEMPLATE);
-    }
-  };
 
   /* ============ 프롬프트 쌍 로드/저장 헬퍼 함수들 ============ */
 
@@ -241,7 +228,7 @@ function PromptTab() {
       const res = await api.invoke("prompts:getPairByName", name);
       if (!isOk(res)) throw new Error(res?.message || "load failed");
 
-      const { script, reference } = res.data || {};
+      const { script, reference, thumbnail } = res.data || {};
 
       // 프롬프트 ID 설정
       setSelectedScriptId(script?.id || "");
@@ -250,11 +237,13 @@ function PromptTab() {
       // 에디터에 프롬프트 내용 설정
       if (script) setScriptPrompt(script.content?.trim() ?? "");
       if (reference) setReferencePrompt(reference.content?.trim() ?? "");
+      if (thumbnail) setThumbnailPrompt(thumbnail.content?.trim() ?? "");
 
       // 기본 프롬프트 쌍인 경우 기본값으로 설정
-      if (!script && !reference && name === DEFAULT_PAIR_NAME) {
+      if (!script && !reference && !thumbnail && name === DEFAULT_PAIR_NAME) {
         setScriptPrompt(catDefault("script"));
         setReferencePrompt(catDefault("reference"));
+        setThumbnailPrompt(DEFAULT_TEMPLATE);
       }
     } catch (e) {
       console.error(e);
@@ -262,13 +251,14 @@ function PromptTab() {
   };
 
   /**
-   * 프롬프트 쌍을 저장 (대본 생성 + 레퍼런스 분석 프롬프트)
+   * 프롬프트 쌍을 저장 (대본 생성 + 레퍼런스 분석 + 썸네일 생성 프롬프트)
    * @param {string} name - 프롬프트 쌍 이름
    * @param {string} scriptText - 대본 생성 프롬프트 내용
    * @param {string} referenceText - 레퍼런스 분석 프롬프트 내용
+   * @param {string} thumbnailText - 썸네일 생성 프롬프트 내용
    * @returns {Object} API 응답 결과
    */
-  const savePair = async (name, scriptText, referenceText) => {
+  const savePair = async (name, scriptText, referenceText, thumbnailText) => {
     setIsSaving(true);
     const nm = (name || "").trim();
     if (!nm) throw new Error("name is empty");
@@ -278,6 +268,7 @@ function PromptTab() {
         name: nm,
         scriptContent: scriptText,
         referenceContent: referenceText,
+        thumbnailContent: thumbnailText,
       });
       if (!isOk(res)) throw new Error(res?.message || "save failed");
 
@@ -296,6 +287,8 @@ function PromptTab() {
       // 에디터 내용 업데이트
       setScriptPrompt(res.data?.script?.content ?? "");
       setReferencePrompt(res.data?.reference?.content ?? "");
+      setThumbnailPrompt(res.data?.thumbnail?.content ?? "");
+      setOriginalThumbnailPrompt(res.data?.thumbnail?.content ?? "");
 
       setIsSaving(false);
       return res;
@@ -345,7 +338,7 @@ function PromptTab() {
     }
 
     try {
-      await savePair(base, catDefault("script"), catDefault("reference"));
+      await savePair(base, catDefault("script"), catDefault("reference"), DEFAULT_TEMPLATE);
       setShowInlineCreate(false);
       setNewName("");
 
@@ -410,6 +403,7 @@ function PromptTab() {
         setSelectedReferenceId("");
         setScriptPrompt(catDefault("script"));
         setReferencePrompt(catDefault("reference"));
+        setThumbnailPrompt(DEFAULT_TEMPLATE);
       }
 
       showGlobalToast({
@@ -443,11 +437,8 @@ function PromptTab() {
       }
 
       // 기본 프롬프트도 수정 가능하도록 허용
-
-      await savePair(name, scriptPrompt, referencePrompt);
-
-      // 썸네일 프롬프트도 함께 저장
-      await saveThumbnailPrompt();
+      // 3개 프롬프트 모두 한 번에 저장
+      await savePair(name, scriptPrompt, referencePrompt, thumbnailPrompt);
 
       showGlobalToast({
         type: "success",
@@ -459,27 +450,6 @@ function PromptTab() {
         type: "error",
         text: "저장 중 오류가 발생했습니다.",
       });
-    }
-  };
-
-  /**
-   * 썸네일 프롬프트를 settings.json에 저장
-   */
-  const saveThumbnailPrompt = async () => {
-    try {
-      if (!thumbnailPrompt || thumbnailPrompt.trim().length === 0) {
-        throw new Error("빈 템플릿은 저장할 수 없습니다.");
-      }
-
-      await window.api.setSetting({
-        key: "thumbnailPromptTemplate",
-        value: thumbnailPrompt.trim(),
-      });
-
-      setOriginalThumbnailPrompt(thumbnailPrompt.trim());
-    } catch (error) {
-      console.error("썸네일 프롬프트 저장 실패:", error);
-      throw error;
     }
   };
 
