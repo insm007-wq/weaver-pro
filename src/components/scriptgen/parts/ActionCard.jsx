@@ -1,9 +1,57 @@
-import { memo, useMemo, useCallback, useState } from "react";
+import { memo, useMemo, useCallback, useState, useEffect } from "react";
 import { Card, Text, Button, tokens } from "@fluentui/react-components";
 import { DocumentEditRegular, SparkleRegular, PlayRegular, WarningRegular } from "@fluentui/react-icons";
 import { useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
 import { AI_ENGINE_OPTIONS } from "../../../constants/scriptSettings";
 import { generateAudioAndSubtitles } from "../../../utils/audioSubtitleGenerator";
+
+// 전체 작업 예상 시간 계산
+function getTotalEstimatedTime(mode, fullVideoState) {
+  if (!fullVideoState?.startTime) return "";
+
+  const steps = mode === "automation_mode"
+    ? ["script", "audio", "images", "video"]
+    : ["script", "audio", "subtitle"];
+
+  const now = new Date();
+  const elapsedMs = now - new Date(fullVideoState.startTime);
+
+  // 전체 평균 진행률
+  const totalProgress = steps.reduce((acc, step) =>
+    acc + (fullVideoState.progress?.[step] || 0), 0) / steps.length;
+
+  if (totalProgress <= 0) {
+    return ""; // 초기에는 표시 안함
+  }
+
+  if (totalProgress >= 100) return "";
+
+  // 전체 작업 예상 시간
+  const estimatedTotalMs = (elapsedMs / totalProgress) * 100;
+  const remainingMs = Math.max(0, estimatedTotalMs - elapsedMs);
+  const remainingMin = Math.floor(remainingMs / 1000 / 60);
+  const remainingSec = Math.floor((remainingMs / 1000) % 60);
+
+  if (remainingMin > 0) {
+    return `약 ${remainingMin}분 ${remainingSec}초 남음`;
+  } else if (remainingSec > 10) {
+    return `약 ${remainingSec}초 남음`;
+  } else {
+    return "곧 완료";
+  }
+}
+
+// 스텝 이름 변환
+function getStepDisplayName(step) {
+  const stepNames = {
+    script: "대본 생성 중",
+    audio: "음성 합성 중",
+    images: "이미지 생성 중",
+    video: "영상 합성 중",
+    subtitle: "자막 생성 중",
+  };
+  return stepNames[step] || step;
+}
 
 const ActionCard = memo(
   ({
@@ -25,6 +73,27 @@ const ActionCard = memo(
 
     // 작업 취소를 위한 AbortController 관리
     const [currentOperation, setCurrentOperation] = useState(null);
+
+    // 실시간 시간 업데이트를 위한 상태
+    const [estimatedTime, setEstimatedTime] = useState("");
+
+    // 실시간 시간 업데이트 (1초마다)
+    useEffect(() => {
+      if (!fullVideoState?.isGenerating) {
+        setEstimatedTime("");
+        return;
+      }
+
+      const updateTime = () => {
+        const time = getTotalEstimatedTime(fullVideoState.mode, fullVideoState);
+        setEstimatedTime(time);
+      };
+
+      updateTime(); // 즉시 실행
+      const interval = setInterval(updateTime, 1000); // 1초마다 업데이트
+
+      return () => clearInterval(interval);
+    }, [fullVideoState?.isGenerating, fullVideoState?.mode, fullVideoState?.startTime, fullVideoState?.progress]);
 
     // 안전한 폼 데이터 처리
     const safeForm = useMemo(
@@ -271,12 +340,24 @@ const ActionCard = memo(
             </Button>
           </div>
 
+          {/* 진행 상태 및 남은 시간 */}
+          {fullVideoState?.isGenerating && fullVideoState?.currentStep && (
+            <div style={{ marginTop: tokens.spacingVerticalXS }}>
+              <Text size={300} weight="semibold" style={{ color: "white" }}>
+                {getStepDisplayName(fullVideoState.currentStep)}
+                {estimatedTime && ` · ${estimatedTime}`}
+              </Text>
+            </div>
+          )}
+
           {/* 설명 영역 */}
-          <div style={styles.descriptionContainer}>
-            <Text size={200} style={{ color: "rgba(255,255,255,0.95)" }}>
-              {currentMode.description}
-            </Text>
-          </div>
+          {!fullVideoState?.isGenerating && (
+            <div style={styles.descriptionContainer}>
+              <Text size={200} style={{ color: "rgba(255,255,255,0.95)" }}>
+                {currentMode.description}
+              </Text>
+            </div>
+          )}
         </Card>
       );
     }

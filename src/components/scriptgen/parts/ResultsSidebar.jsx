@@ -24,7 +24,8 @@ const ResultsSidebar = memo(
   
 
   // 표시할 내용이 있는지 확인
-  const hasProgress = fullVideoState?.isGenerating || fullVideoState?.currentStep !== "idle";
+  const isComplete = ["complete", "completed"].includes(fullVideoState?.currentStep);
+  const hasProgress = (fullVideoState?.isGenerating || fullVideoState?.currentStep !== "idle") && !isComplete;
   const hasScript = doc || isLoading || (fullVideoState?.isGenerating && fullVideoState?.currentStep === "script");
 
   // 전혀 표시할 내용이 없으면 숨김
@@ -71,7 +72,7 @@ const ResultsSidebar = memo(
           </Button>
         </div>
 
-        {/* 1열 콘텐츠 */}
+        {/* 1열 콘텐츠 - 대본만 표시 */}
         <div
           style={{
             display: "flex",
@@ -80,18 +81,7 @@ const ResultsSidebar = memo(
             padding: "20px",
           }}
         >
-          {/* 진행률 섹션 - 헤더와 디바이더 제거 */}
-          {hasProgress && (
-            <div>
-              <MiniProgressPanel
-                fullVideoState={fullVideoState}
-                resetFullVideoState={resetFullVideoState}
-                api={api}
-              />
-            </div>
-          )}
-
-          {/* 대본 결과 섹션 - 헤더와 디바이더 제거 */}
+          {/* 대본 결과 섹션만 표시 */}
           {hasScript && (
             <div>
               <CompactScriptViewer
@@ -151,7 +141,7 @@ const ResultsSidebar = memo(
         </Button>
       </div>
 
-      {/* 스크롤 가능한 콘텐츠 영역 */}
+      {/* 스크롤 가능한 콘텐츠 영역 - 대본만 표시 */}
       <div
         style={{
           flex: 1,
@@ -159,18 +149,7 @@ const ResultsSidebar = memo(
           padding: "0",
         }}
       >
-        {/* 진행률 섹션 - 헤더와 접기/펼치기 제거 */}
-        {hasProgress && (
-          <div style={{ padding: "0 20px 16px" }}>
-            <MiniProgressPanel
-              fullVideoState={fullVideoState}
-              resetFullVideoState={resetFullVideoState}
-              api={api}
-            />
-          </div>
-        )}
-
-        {/* 대본 결과 섹션 - 헤더와 접기/펼치기 제거 */}
+        {/* 대본 결과 섹션만 표시 */}
         {hasScript && (
           <div style={{ padding: "0 20px 16px", height: "100%" }}>
             <CompactScriptViewer
@@ -432,69 +411,46 @@ function MiniProgressPanel({ fullVideoState, resetFullVideoState, api }) {
         </Text>
       </div>
 
-      {/* 현재 단계 */}
-      <Text size={200} style={{ color: tokens.colorNeutralForeground2, marginBottom: 8 }}>
-        현재: {getStepDisplayName(fullVideoState.currentStep)}
-      </Text>
-
-      {/* 미니 진행바 - 더 크고 파란색으로 */}
-      <div
-        style={{
-          width: "100%",
-          height: 8,
-          borderRadius: 4,
-          background: tokens.colorNeutralBackground3,
-          overflow: "hidden",
-          marginBottom: 10,
-        }}
-      >
-        <div
-          style={{
-            width: `${avgProgress}%`,
-            height: "100%",
-            background: isError
-              ? tokens.colorPaletteRedForeground1
-              : isComplete
-              ? tokens.colorPaletteGreenForeground1
-              : tokens.colorBrandBackground, // 파란색 진행바
-            transition: "width 300ms ease-out",
-          }}
-        />
-      </div>
-
-
-      {/* 최근 로그 - 완료 메시지 위치 조정 */}
-      {fullVideoState.logs && fullVideoState.logs.length > 0 && (
-        <div
-          style={{
-            background: tokens.colorNeutralBackground2,
-            borderRadius: 6,
-            padding: 8,
-            maxHeight: 150, // 로그 더 많이 보이게
-            overflowY: "auto",
-            marginBottom: 12, // 완료 메시지와 간격 추가
-          }}
-        >
-          <Text size={200} weight="semibold" style={{ marginBottom: 6, display: "block" }}>
-            진행 로그:
-          </Text>
-          {(fullVideoState.logs || []).map((log, idx) => (
-            <Text
-              key={idx}
-              size={200}
-              style={{
-                display: "block",
-                color: tokens.colorNeutralForeground2,
-                fontFamily: "monospace",
-                fontSize: "13px",
-                lineHeight: 1.4,
-              }}
-            >
-              {log.message}
+      {/* 현재 단계 및 총괄 시간 - 완료 시 숨김 */}
+      {!isComplete && (
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <Text size={200} style={{ color: tokens.colorNeutralForeground2 }}>
+              현재: {getStepDisplayName(fullVideoState.currentStep)}
             </Text>
-          ))}
-        </div>
+            {!isError && fullVideoState.isGenerating && (
+              <Text size={200} style={{ color: tokens.colorNeutralForeground3, fontFamily: 'monospace' }}>
+                전체: {getTotalEstimatedTime(fullVideoState.mode, fullVideoState)}
+              </Text>
+            )}
+          </div>
+
+          {/* 미니 진행바 - 더 크고 파란색으로 */}
+          <div
+            style={{
+              width: "100%",
+              height: 8,
+              borderRadius: 4,
+              background: tokens.colorNeutralBackground3,
+              overflow: "hidden",
+              marginBottom: 10,
+            }}
+          >
+            <div
+              style={{
+                width: `${avgProgress}%`,
+                height: "100%",
+                background: isError
+                  ? tokens.colorPaletteRedForeground1
+                  : tokens.colorBrandBackground, // 파란색 진행바
+                transition: "width 300ms ease-out",
+              }}
+            />
+          </div>
+        </>
       )}
+
+
 
       {/* 완료 시 액션 버튼 - 높이 증가 */}
       {isComplete && (
@@ -680,11 +636,11 @@ const CompactScriptViewer = memo(({ fullVideoState, doc, isLoading, form, global
 // 단계 표시명 매핑
 const getStepDisplayName = (step) => {
   const stepNames = {
-    script: "대본 생성",
-    audio: "음성 합성",
-    images: "이미지 생성",
-    video: "영상 합성",
-    subtitle: "자막 생성",
+    script: "대본 생성 중",
+    audio: "음성 합성 중",
+    images: "이미지 생성 중",
+    video: "영상 합성 중",
+    subtitle: "자막 생성 중",
     complete: "완료",
     completed: "완료",
     error: "오류",
