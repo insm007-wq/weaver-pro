@@ -19,12 +19,9 @@ const useStyles = makeStyles({
     right: 0,
     zIndex: 9999,
     ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
-    background: 'rgba(255, 255, 255, 0.95)',
-    backdropFilter: 'blur(20px)',
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)',
     transform: 'translateY(-100%)',
     transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    pointerEvents: 'none', // 배경은 클릭 차단하지 않음
   },
   containerVisible: {
     transform: 'translateY(0)',
@@ -35,6 +32,7 @@ const useStyles = makeStyles({
     ...shorthands.borderRadius(tokens.borderRadiusMedium),
     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
     border: 'none',
+    pointerEvents: 'auto', // MessageBar만 클릭 가능
   },
   successBar: {
     backgroundColor: `${tokens.colorPaletteLightGreenBackground2} !important`,
@@ -190,12 +188,13 @@ export default function GlobalToast() {
     hideTimerRef.current = setTimeout(() => setToast(null), 300);
   }, [clearTimers]);
 
-  if (!toast) return null;
+  // toast가 없거나 visible이 아니면 아예 렌더링하지 않음
+  if (!toast || !isVisible) return null;
 
   const isSuccess = toast.type === 'success';
 
   return (
-    <div className={mergeClasses(styles.container, isVisible && styles.containerVisible)}>
+    <div className={mergeClasses(styles.container, styles.containerVisible)}>
       <MessageBar
         intent={isSuccess ? 'success' : 'error'}
         className={mergeClasses(styles.messageBar, isSuccess ? styles.successBar : styles.errorBar)}

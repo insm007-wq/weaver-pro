@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Text, Button, Field, Input, Card, Caption1, tokens, Badge, Spinner } from "@fluentui/react-components";
+import { Text, Button, Field, Input, Card, Caption1, tokens, Badge, Spinner, Dialog, DialogTrigger, DialogSurface, DialogTitle, DialogBody, DialogActions, DialogContent } from "@fluentui/react-components";
 import {
   FolderRegular,
   InfoRegular,
@@ -94,6 +94,10 @@ export default function ProjectManager() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newProjectTopic, setNewProjectTopic] = useState("");
   const [creating, setCreating] = useState(false);
+
+  // 삭제 확인 다이얼로그 상태
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState(null);
 
   /**
    * 컴포넌트 마운트 시 초기 데이터 로드
@@ -408,9 +412,6 @@ export default function ProjectManager() {
         return;
       }
 
-      if (!confirm("정말로 이 프로젝트를 삭제하시겠습니까?")) {
-        return;
-      }
 
       // API 호출 안전성 검사
       if (!api?.invoke) {
@@ -433,16 +434,33 @@ export default function ProjectManager() {
           }
         }
 
-        setNewProjectTopic("");
-        setShowCreateForm(false);
-        setCreating(false);
-
         showGlobalToast({
           type: "success",
           text: "프로젝트가 삭제되었습니다.",
         });
 
         await refreshProjectData();
+
+        // 포커스 강제 리셋 - 여러 시점에서 시도
+        const resetFocus = () => {
+          try {
+            if (document.activeElement && document.activeElement !== document.body) {
+              document.activeElement.blur();
+            }
+            document.body.setAttribute('tabindex', '-1');
+            document.body.focus();
+            document.body.blur();
+            document.body.removeAttribute('tabindex');
+          } catch (e) {
+            console.error('포커스 리셋 오류:', e);
+          }
+        };
+
+        // 여러 번, 다른 타이밍에 포커스 리셋 시도
+        setTimeout(resetFocus, 0);
+        setTimeout(resetFocus, 50);
+        setTimeout(resetFocus, 100);
+        setTimeout(resetFocus, 200);
       } else {
         console.error("프로젝트 삭제 실패:", result.message);
         showGlobalToast({
@@ -694,9 +712,12 @@ export default function ProjectManager() {
                       disabled={project?.id === 'default'}
                       onClick={(e) => {
                         e.stopPropagation(); // 이벤트 버블링 방지
+                        // 버튼에서 포커스 제거
+                        e.currentTarget.blur();
                         // project.id 안전성 검사
                         if (project?.id) {
-                          deleteProject(project.id);
+                          setProjectToDelete(project.id);
+                          setDeleteDialogOpen(true);
                         } else {
                           console.error("삭제할 프로젝트 ID가 없습니다.");
                         }
@@ -793,6 +814,54 @@ export default function ProjectManager() {
           </Button>
         </div>
       </Card>
+
+      {/* 삭제 확인 다이얼로그 */}
+      <Dialog open={deleteDialogOpen} onOpenChange={(e, data) => setDeleteDialogOpen(data.open)}>
+        <DialogSurface style={{ maxWidth: '480px' }}>
+          <DialogBody>
+            <DialogTitle style={{ fontSize: tokens.fontSizeBase500, fontWeight: tokens.fontWeightSemibold }}>
+              ⚠️ 프로젝트 삭제
+            </DialogTitle>
+            <DialogContent style={{ paddingTop: tokens.spacingVerticalM, paddingBottom: tokens.spacingVerticalL }}>
+              <Text style={{ display: 'block', marginBottom: tokens.spacingVerticalS }}>
+                정말로 이 프로젝트를 삭제하시겠습니까?
+              </Text>
+              <Caption1 style={{ color: tokens.colorNeutralForeground3, display: 'block' }}>
+                이 작업은 되돌릴 수 없습니다. 프로젝트의 모든 파일과 데이터가 영구적으로 삭제됩니다.
+              </Caption1>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                appearance="secondary"
+                onClick={() => {
+                  setDeleteDialogOpen(false);
+                  setProjectToDelete(null);
+                }}
+              >
+                취소
+              </Button>
+              <Button
+                appearance="primary"
+                style={{
+                  backgroundColor: tokens.colorPaletteRedBackground3,
+                  color: tokens.colorNeutralForegroundOnBrand,
+                  borderColor: tokens.colorPaletteRedBorder2
+                }}
+                icon={<DeleteRegular />}
+                onClick={() => {
+                  setDeleteDialogOpen(false);
+                  if (projectToDelete) {
+                    deleteProject(projectToDelete);
+                    setProjectToDelete(null);
+                  }
+                }}
+              >
+                삭제하기
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
     </div>
   );
 }

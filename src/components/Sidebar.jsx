@@ -17,7 +17,7 @@ const useStyles = makeStyles({
   sidebar: {
     display: "flex",
     flexDirection: "column",
-    height: "100vh",
+    minHeight: "100vh",
     backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.borderRight("1px", "solid", tokens.colorNeutralStroke1),
     transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -90,7 +90,6 @@ const useStyles = makeStyles({
     flex: 1,
     display: "flex",
     flexDirection: "column",
-    overflowY: "auto",
     ...shorthands.padding(tokens.spacingVerticalL, "0"),
   },
   
@@ -195,6 +194,7 @@ const useStyles = makeStyles({
     backdropFilter: "blur(10px)",
     WebkitBackdropFilter: "blur(10px)",
     boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.1)",
+    marginTop: "auto",
   },
   
   footerContent: {
