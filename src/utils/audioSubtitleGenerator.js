@@ -3,14 +3,12 @@
  *
  * @description
  * 대본으로부터 음성 파일과 SRT 자막을 생성하는 통합 유틸리티
- * 대본 생성 모드와 자동화 모드를 모두 지원합니다.
  *
  * @features
  * - 🎤 TTS를 통한 음성 파일 생성
  * - 📝 SRT 자막 파일 생성
  * - 🔀 여러 음성 파일 자동 합치기
  * - 📊 진행률 추적 및 업데이트
- * - 🎯 모드별 분기 처리 (script_mode vs automation_mode)
  *
  * @author Weaver Pro Team
  * @version 1.0.0
@@ -20,7 +18,7 @@
  * 대본으로부터 음성과 자막을 생성하는 메인 함수
  *
  * @param {Object} scriptData - 생성된 대본 데이터
- * @param {string} mode - 실행 모드 ("script_mode" | "automation_mode")
+ * @param {string} mode - 실행 모드
  * @param {Object} options - 생성 옵션
  * @param {Object} options.form - 폼 설정 (TTS 엔진, 음성 ID 등)
  * @param {Array} options.voices - 사용 가능한 음성 목록
@@ -34,29 +32,11 @@
 export async function generateAudioAndSubtitles(scriptData, mode = "script_mode", options, outputPath = null) {
   const { form, voices, setFullVideoState, api, toast, addLog } = options;
 
+  // TTS 실제 duration 데이터를 저장할 변수
+  let ttsDurations = null;
+
   try {
-    if (mode === "script_mode") {
-      console.log("🎤 대본 생성 모드 - 자막 및 음성 생성 시작...");
-    } else {
-      console.log("🚀 자동화 모드 - 음성 생성 시작...");
-    }
-
-    // 1단계: SRT 자막 생성 (script_mode에서만)
-    if (mode === "script_mode") {
-      setFullVideoState(prev => ({
-        ...prev,
-        progress: { ...prev.progress, subtitle: 0 }
-      }));
-
-      console.log("📝 1단계: 자막 파일 생성 시작...");
-      await generateSubtitleFile(scriptData, mode, { api, toast, setFullVideoState, addLog });
-
-      setFullVideoState(prev => ({
-        ...prev,
-        progress: { ...prev.progress, subtitle: 100 }
-      }));
-      console.log("✅ 1단계 완료: 자막 파일 생성 완료");
-    }
+    console.log("🎤 대본 생성 모드 - 자막 및 음성 생성 시작...");
 
     // 2단계: 음성 생성 시작
     setFullVideoState(prev => ({
@@ -159,12 +139,7 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       }
     }
 
-    console.log("🔍 === TTS 결과 분석 ===");
-    console.log("🔍 audioResult:", audioResult);
-    console.log("🔍 audioResult 타입:", typeof audioResult);
-    console.log("🔍 audioResult.data:", audioResult?.data);
-    console.log("🔍 audioResult.data.ok:", audioResult?.data?.ok);
-    console.log("🔍 조건 체크:", audioResult && audioResult.data && audioResult.data.ok);
+    console.log("✅ TTS 응답 수신");
 
     if (audioResult && audioResult.data && audioResult.data.ok) {
       // 음성 생성 완료
@@ -174,16 +149,18 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       }));
 
       const audioFiles = audioResult.data.audioFiles;
-      console.log("✅ 음성 생성 완료:", audioFiles);
-      console.log("🔍 audioFiles 구조 확인:", JSON.stringify(audioFiles, null, 2));
-      console.log(`🎵 음성 파일 ${audioFiles.length}개가 생성되었습니다!`);
+      console.log(`✅ 음성 생성 완료: ${audioFiles.length}개 파일`);
+
+      // TTS 실제 duration 데이터 저장 (자막 생성에 사용)
+      ttsDurations = audioFiles.map(file => ({
+        sceneIndex: file.sceneIndex,
+        duration: file.duration || 0
+      }));
+      console.log("⏱️ TTS 실제 duration 데이터:", ttsDurations);
 
       // 먼저 base64 오디오 파일들을 디스크에 저장
       const savedAudioFiles = [];
-      console.log("🔍 === 개별 파일 저장 시작 ===");
-      console.log("🔍 audioFiles:", audioFiles);
-      console.log("🔍 audioFiles 길이:", audioFiles?.length);
-      console.log("🔍 audioFiles 타입:", typeof audioFiles);
+      console.log("💾 개별 파일 저장 시작...");
 
       if (audioFiles && audioFiles.length > 0) {
         console.log("✅ audioFiles 조건 통과 - 개별 파일 저장 루프 시작");
@@ -361,6 +338,23 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
           addLog(`🔍 audioResult가 null/undefined입니다`, "error");
         }
       }
+    }
+
+    // 자막 생성 (script_mode에서만, TTS duration 데이터 사용)
+    if (mode === "script_mode" && ttsDurations && ttsDurations.length > 0) {
+      console.log("📝 자막 생성 시작 (TTS 실제 duration 적용)...");
+      setFullVideoState(prev => ({
+        ...prev,
+        progress: { ...prev.progress, subtitle: 0 }
+      }));
+
+      await generateSubtitleFile(scriptData, mode, { api, toast, setFullVideoState, addLog }, ttsDurations);
+
+      setFullVideoState(prev => ({
+        ...prev,
+        progress: { ...prev.progress, subtitle: 100 }
+      }));
+      console.log("✅ 자막 생성 완료 (실제 오디오 길이 반영)");
     }
 
     // 모든 단계 완료 - 모드별 메시지
@@ -553,27 +547,15 @@ async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState
           addLog(`📊 합본 결과: ${mergeResult.outputPath || '경로 정보 없음'}`);
         }
 
-        // 대본 생성 모드에서만 자막 단계로 진행
-        if (mode === "script_mode") {
-          setFullVideoState(prev => ({
-            ...prev,
-            progress: { ...prev.progress, audio: 100 },
-            currentStep: "subtitle"
-          }));
+        setFullVideoState(prev => ({
+          ...prev,
+          progress: { ...prev.progress, audio: 100 },
+          currentStep: "subtitle"
+        }));
 
-          console.log("✅ 2단계 완료: 음성 파일 합치기 완료:", mergeResult.outputPath);
-          console.log(`🎵 2단계 완료: 통합 음성 파일이 생성되었습니다!`);
-          console.log("📝 3단계 시작: 자막을 생성합니다...");
-        } else {
-          // 자동화 모드에서는 음성 생성 완료
-          setFullVideoState(prev => ({
-            ...prev,
-            progress: { ...prev.progress, audio: 100 }
-          }));
-
-          console.log("✅ 자동화 모드 - 음성 파일 합치기 완료:", mergeResult.outputPath);
-          console.log(`🎵 음성 파일 합치기 완료: 통합 음성 파일이 생성되었습니다!`);
-        }
+        console.log("✅ 2단계 완료: 음성 파일 합치기 완료:", mergeResult.outputPath);
+        console.log(`🎵 2단계 완료: 통합 음성 파일이 생성되었습니다!`);
+        console.log("📝 3단계 시작: 자막을 생성합니다...");
       } else {
         console.error("❌ === 음성 파일 합치기 실패 ===");
         console.error("❌ mergeResult:", mergeResult);
@@ -603,8 +585,9 @@ async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState
  * @param {Object} scriptData - 대본 데이터
  * @param {string} mode - 실행 모드
  * @param {Object} options - 옵션 객체
+ * @param {Array} ttsDurations - TTS 실제 duration 데이터 (선택사항)
  */
-async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideoState, addLog }) {
+async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideoState, addLog }, ttsDurations = null) {
   console.log("🚀🚀🚀 === SRT 자막 생성 단계 시작 === 🚀🚀🚀");
 
   if (addLog) {
@@ -614,9 +597,17 @@ async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideo
   try {
     console.log("🎬 SRT 자막 생성 시작...");
 
-    const srtResult = await api.invoke("script/toSrt", {
-      doc: scriptData
-    });
+    // TTS duration 데이터가 있으면 ttsMarks로 전달
+    const payload = { doc: scriptData };
+    if (ttsDurations && ttsDurations.length > 0) {
+      payload.ttsMarks = ttsDurations;
+      console.log("⏱️ TTS 실제 duration을 자막에 적용:", ttsDurations.length, "개 장면");
+      if (addLog) {
+        addLog("⏱️ TTS 실제 오디오 길이를 자막에 반영합니다");
+      }
+    }
+
+    const srtResult = await api.invoke("script/toSrt", payload);
 
     console.log("📝 SRT 변환 결과:", srtResult);
 
@@ -706,32 +697,20 @@ async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideo
  * @param {Object} options - 옵션 객체
  */
 function handleCompletionByMode(mode, { setFullVideoState, toast, addLog }) {
-  if (mode === "script_mode") {
-    setFullVideoState(prev => ({
-      ...prev,
-      isGenerating: false,
-      currentStep: "completed",
-      progress: { ...prev.progress, subtitle: 100 }
-    }));
+  setFullVideoState(prev => ({
+    ...prev,
+    isGenerating: false,
+    currentStep: "completed",
+    progress: { ...prev.progress, subtitle: 100 }
+  }));
 
-    console.log("🎉 대본 생성 모드 완료!");
+  console.log("🎉 대본 생성 모드 완료!");
 
-    if (addLog) {
-      addLog("🎉 모든 작업이 완료되었습니다!");
-      addLog("📂 생성된 파일들을 확인해보세요.");
-      addLog("✅ 닫기 버튼을 클릭하여 창을 닫을 수 있습니다.");
-    }
-
-    console.log("🎉 3단계 완료: 대본, 음성, 자막이 모두 생성되었습니다!");
-
-  } else {
-    // 자동화 모드는 음성 생성까지만 여기서 처리
-    setFullVideoState(prev => ({
-      ...prev,
-      progress: { ...prev.progress, audio: 100 }
-    }));
-
-    console.log("🎉 자동화 모드 - 음성 생성 완료!");
-    console.log("🎵 2단계 완료: 음성이 생성되었습니다. 다음 단계를 진행해주세요.");
+  if (addLog) {
+    addLog("🎉 모든 작업이 완료되었습니다!");
+    addLog("📂 생성된 파일들을 확인해보세요.");
+    addLog("✅ 닫기 버튼을 클릭하여 창을 닫을 수 있습니다.");
   }
+
+  console.log("🎉 3단계 완료: 대본, 음성, 자막이 모두 생성되었습니다!");
 }

@@ -144,6 +144,12 @@ function buildPrompt({ topic, style, duration, referenceText, cpmMin, cpmMax }) 
 async function _buildPrompt(topic, duration, style, customPrompt = null, referenceScript = null, cpmMin = 320, cpmMax = 360) {
   const minCharacters = duration * cpmMin;
   const maxCharacters = duration * cpmMax;
+  const totalSeconds = duration * 60;
+  const secondsPerScene = 8;
+  const targetSceneCount = Math.round(totalSeconds / secondsPerScene);
+  const minSceneCount = Math.max(3, Math.floor(targetSceneCount * 0.9));
+  const maxSceneCount = Math.ceil(targetSceneCount * 1.3);
+  const avgCharactersPerScene = Math.round((minCharacters + maxCharacters) / 2 / targetSceneCount);
 
   let prompt;
 
@@ -153,7 +159,12 @@ async function _buildPrompt(topic, duration, style, customPrompt = null, referen
       .replace(/\{duration\}/g, duration)
       .replace(/\{style\}/g, style)
       .replace(/\{minCharacters\}/g, minCharacters)
-      .replace(/\{maxCharacters\}/g, maxCharacters);
+      .replace(/\{maxCharacters\}/g, maxCharacters)
+      .replace(/\{totalSeconds\}/g, totalSeconds)
+      .replace(/\{minSceneCount\}/g, minSceneCount)
+      .replace(/\{maxSceneCount\}/g, maxSceneCount)
+      .replace(/\{targetSceneCount\}/g, targetSceneCount)
+      .replace(/\{avgCharactersPerScene\}/g, avgCharactersPerScene);
   } else {
     prompt = buildPrompt({
       topic,

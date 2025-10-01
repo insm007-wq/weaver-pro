@@ -81,7 +81,7 @@ function extractSceneText(scene) {
   return "";
 }
 
-// 프롬프트 생성
+// 기본 프롬프트 생성
 function buildPrompt({ topic, style, duration, referenceText, cpmMin, cpmMax }) {
   // Vrew 스타일: 장면 수 기반 계산
   const totalSeconds = duration * 60;
@@ -151,6 +151,49 @@ function buildPrompt({ topic, style, duration, referenceText, cpmMin, cpmMax }) 
   return parts.join("\n");
 }
 
+// 커스텀 프롬프트 변수 치환 (Anthropic과 동일)
+function _buildPrompt(topic, duration, style, customPrompt = null, referenceScript = null, cpmMin = 300, cpmMax = 400) {
+  const minCharacters = duration * cpmMin;
+  const maxCharacters = duration * cpmMax;
+  const totalSeconds = duration * 60;
+  const secondsPerScene = 8;
+  const targetSceneCount = Math.round(totalSeconds / secondsPerScene);
+  const minSceneCount = Math.max(3, Math.floor(targetSceneCount * 0.9));
+  const maxSceneCount = Math.ceil(targetSceneCount * 1.3);
+  const avgCharactersPerScene = Math.round((minCharacters + maxCharacters) / 2 / targetSceneCount);
+
+  let prompt;
+
+  if (customPrompt && customPrompt.trim()) {
+    prompt = customPrompt
+      .replace(/\{topic\}/g, topic)
+      .replace(/\{duration\}/g, duration)
+      .replace(/\{style\}/g, style)
+      .replace(/\{minCharacters\}/g, minCharacters)
+      .replace(/\{maxCharacters\}/g, maxCharacters)
+      .replace(/\{totalSeconds\}/g, totalSeconds)
+      .replace(/\{minSceneCount\}/g, minSceneCount)
+      .replace(/\{maxSceneCount\}/g, maxSceneCount)
+      .replace(/\{targetSceneCount\}/g, targetSceneCount)
+      .replace(/\{avgCharactersPerScene\}/g, avgCharactersPerScene);
+  } else {
+    prompt = buildPrompt({
+      topic,
+      style,
+      duration,
+      referenceText: referenceScript,
+      cpmMin,
+      cpmMax,
+    });
+  }
+
+  if (referenceScript && referenceScript.trim()) {
+    prompt += `\n\n## 레퍼런스 대본 분석\n${referenceScript}`;
+  }
+
+  return prompt;
+}
+
 // 장면 정규화
 function normalizeScenes(scenes, targetDuration) {
   const actualSceneCount = scenes.length;
@@ -215,7 +258,8 @@ async function callReplicate(params) {
       referenceText,
       cpmMin,
       cpmMax,
-      model
+      model,
+      customPrompt: params.prompt
     });
   }
 
@@ -243,8 +287,8 @@ async function callReplicate(params) {
     console.log(`🔄 시도 ${attempt}/${maxRetries}: Replicate 대본 생성`);
 
     try {
-    // 3. 프롬프트 생성
-    const prompt = buildPrompt({ topic, style, duration, referenceText, cpmMin, cpmMax });
+    // 3. 프롬프트 생성 (커스텀 프롬프트 지원)
+    const prompt = await _buildPrompt(topic, duration, style, params.prompt, referenceText, cpmMin, cpmMax);
 
     console.log("📝 프롬프트 길이:", prompt.length, "자");
 
@@ -381,7 +425,7 @@ async function callReplicate(params) {
 // ============================================================
 // 장편 대본 생성 (청크 방식) - Replicate
 // ============================================================
-async function generateLongFormScriptReplicate({ topic, style, duration, referenceText, cpmMin, cpmMax, model }) {
+async function generateLongFormScriptReplicate({ topic, style, duration, referenceText, cpmMin, cpmMax, model, customPrompt }) {
   console.log(`🎬 Replicate 장편 콘텐츠 생성 모드: ${duration}분을 청크로 분할`);
 
   const CHUNK_DURATION = 5;
@@ -409,14 +453,7 @@ async function generateLongFormScriptReplicate({ topic, style, duration, referen
       ? `${topic} (전체 ${duration}분 중 ${chunkIndex + 1}/${chunkCount} 파트)`
       : `${topic} (전체 ${duration}분 중 ${chunkIndex + 1}/${chunkCount} 파트 - 이전 내용에서 자연스럽게 이어지도록)`;
 
-    const prompt = buildPrompt({
-      topic: chunkTopic,
-      style,
-      duration: chunkDuration,
-      referenceText,
-      cpmMin,
-      cpmMax
-    });
+    const prompt = await _buildPrompt(chunkTopic, chunkDuration, style, customPrompt, referenceText, cpmMin, cpmMax);
 
     const targetSceneCount = Math.round((chunkDuration * 60) / 8);
     const minSceneCount = Math.max(3, Math.floor(targetSceneCount * 0.9));
