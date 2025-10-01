@@ -204,28 +204,59 @@ async function synthesizeWithGoogle(scenes, options, progressCallback = null) {
 
 
 
-// Google TTS 목소리 목록을 가져오는 핸들러
+// TTS 엔진별 목소리 목록을 가져오는 핸들러
 ipcMain.handle("tts:listVoices", async (_evt, options = {}) => {
+  const { engine = "google" } = options;
   const voices = [];
 
   try {
-      // Google TTS 목소리 로드
-      try {
-        const googleApiKey = await getSecret("googleTtsApiKey");
-
-        if (googleApiKey) {
+    // 엔진별 분기 처리 (확장 가능한 구조)
+    switch (engine) {
+      case "google":
+        try {
+          const googleApiKey = await getSecret("googleTtsApiKey");
+          if (!googleApiKey) {
+            return {
+              ok: false,
+              code: 1004,
+              message: "Google TTS API 키가 설정되지 않았습니다. 설정 > API 키에서 설정해주세요."
+            };
+          }
           const googleVoices = await loadGoogleVoices(googleApiKey);
           voices.push(...googleVoices);
+        } catch (error) {
+          console.error('❌ Google TTS 목소리 로드 실패:', error);
+          return {
+            ok: false,
+            code: 1005,
+            message: `Google TTS 목소리 로드 실패: ${error.message}`
+          };
         }
-      } catch (error) {
-        console.error('❌ Google TTS 목소리 로드 실패:', error);
-      }
+        break;
+
+      // 향후 추가될 TTS 엔진들
+      // case "amazon":
+      //   const amazonVoices = await loadAmazonVoices(apiKey);
+      //   voices.push(...amazonVoices);
+      //   break;
+      // case "kt":
+      //   const ktVoices = await loadKTVoices(apiKey);
+      //   voices.push(...ktVoices);
+      //   break;
+
+      default:
+        return {
+          ok: false,
+          code: 1007,
+          message: `지원하지 않는 TTS 엔진입니다: ${engine}`
+        };
+    }
 
     if (voices.length === 0) {
       return {
         ok: false,
         code: 1004,
-        message: "API 키가 설정되지 않았습니다. 설정 탭에서 TTS API 키를 설정해주세요."
+        message: "사용 가능한 음성이 없습니다."
       };
     }
 

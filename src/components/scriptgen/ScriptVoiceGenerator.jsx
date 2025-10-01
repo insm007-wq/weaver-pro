@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { Text, tokens, Button, Card } from "@fluentui/react-components";
 import { useHeaderStyles, useContainerStyles } from "../../styles/commonStyles";
 import { DocumentEditRegular, VideoRegular, EyeRegular } from "@fluentui/react-icons";
@@ -77,6 +77,38 @@ function ScriptVoiceGenerator() {
     },
     [setDoc, setIsLoading]
   );
+
+  // 전역 설정에서 TTS 설정 불러오기
+  useEffect(() => {
+    const loadTtsSettings = async () => {
+      try {
+        const ttsEngine = await window.api.getSetting("ttsEngine");
+        const ttsSpeed = await window.api.getSetting("ttsSpeed");
+
+        if (ttsEngine) {
+          setForm((prev) => ({ ...prev, ttsEngine }));
+        }
+        if (ttsSpeed) {
+          setForm((prev) => ({ ...prev, speed: ttsSpeed }));
+        }
+      } catch (error) {
+        console.error("TTS 설정 로드 실패:", error);
+      }
+    };
+
+    loadTtsSettings();
+
+    // 설정 변경 이벤트 리스너
+    const handleSettingsChanged = () => {
+      loadTtsSettings();
+    };
+
+    window.addEventListener("settingsChanged", handleSettingsChanged);
+
+    return () => {
+      window.removeEventListener("settingsChanged", handleSettingsChanged);
+    };
+  }, []);
 
   return (
     <div className={containerStyles.container} style={{ overflowX: "hidden", maxWidth: "100vw" }}>

@@ -48,7 +48,7 @@ const VoiceSettingsCard = memo(({ form, voices, voiceLoading, voiceError, onChan
       }}
     >
       {/* 헤더 */}
-      <div className={settingsStyles.sectionHeader} style={{ marginBottom: 6 }}>
+      <div className={settingsStyles.sectionHeader} style={{ marginBottom: 8 }}>
         <div className={settingsStyles.sectionTitle} style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <MicRegular />
           <Text size={400} weight="semibold" style={{ letterSpacing: 0.2 }}>
@@ -56,212 +56,141 @@ const VoiceSettingsCard = memo(({ form, voices, voiceLoading, voiceError, onChan
           </Text>
         </div>
         <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
-          TTS 엔진 · 말하기 속도 · 목소리를 선택해 나레이션 톤을 맞춰요.
+          목소리를 선택해 나레이션 톤을 맞춰요. (TTS 엔진과 말하기 속도는 설정에서 변경)
         </Text>
       </div>
 
-      {/* 상단 상태 바 */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          minHeight: 24,
-          marginBottom: 6,
-        }}
-      >
-        {voiceLoading && (
-          <>
-            <Spinner size="tiny" />
-            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-              음성 목록을 불러오는 중…
-            </Text>
-          </>
-        )}
-        {!voiceLoading && !voiceError && (
-          <Badge appearance="tint" color="brand">
-            {voices.length ? `${voices.length}개 음성 사용 가능` : "목록 비어 있음"}
-          </Badge>
-        )}
-      </div>
+      {/* 로딩 상태 */}
+      {voiceLoading && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <Spinner size="tiny" />
+          <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+            음성 목록을 불러오는 중…
+          </Text>
+        </div>
+      )}
 
-      {/* 폼: 2열 그리드 */}
-      <div className={layoutStyles.gridTwo} style={{ gap: 12, alignItems: "start" }}>
-        {/* TTS 엔진 */}
+      {/* 목소리 선택 */}
+      <div>
         <Field
           label={
             <Text size={300} weight="semibold">
-              TTS 엔진
+              목소리
             </Text>
           }
           hint={
             <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-              Google: 안정적 발음
+              목록에서 원하는 톤을 고르세요.
             </Text>
           }
         >
           <Dropdown
-            value="Google Cloud TTS"
-            selectedOptions={["google"]}
-            onOptionSelect={(_, d) => onChange("ttsEngine", d.optionValue)}
-            size="medium" /* 🔧 large → medium */
+            value={selectedVoice?.name || (voiceLoading ? "불러오는 중…" : "목소리 선택")}
+            selectedOptions={form.voiceId ? [form.voiceId] : []}
+            onOptionSelect={(_, d) => onChange("voiceId", d.optionValue)}
+            size="medium"
+            disabled={voiceLoading || !!voiceError}
             style={{ minHeight: 36 }}
           >
-            <Option value="google">Google Cloud TTS</Option>
+            {voices.map((v) => (
+              <Option key={v.id} value={v.id}>
+                {v.name || v.id}
+                {v.type && (
+                  <Badge size="small" appearance="tint" style={{ marginLeft: 8 }}>
+                    {v.type}
+                  </Badge>
+                )}
+              </Option>
+            ))}
           </Dropdown>
-        </Field>
 
-        {/* 말하기 속도 */}
-        <Field
-          label={
-            <Text size={300} weight="semibold">
-              말하기 속도
-            </Text>
-          }
-          hint={
-            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-              0.95~1.05 범위가 대부분 콘텐츠에 무난
-            </Text>
-          }
-        >
-          <Dropdown
-            value={form.speed === "0.9" ? "느림 (0.9x)" : form.speed === "1.1" ? "빠름 (1.1x)" : "보통 (1.0x)"}
-            selectedOptions={[form.speed]}
-            onOptionSelect={(_, d) => onChange("speed", d.optionValue)}
-            size="medium" /* 🔧 large → medium */
-            style={{ minHeight: 36 }}
-          >
-            <Option value="0.9">느림 (0.9x)</Option>
-            <Option value="1.0">보통 (1.0x)</Option>
-            <Option value="1.1">빠름 (1.1x)</Option>
-          </Dropdown>
-        </Field>
-
-        {/* 목소리 */}
-        <div style={{ gridColumn: "1 / -1" }}>
-          <Field
-            label={
-              <Text size={300} weight="semibold">
-                목소리
-              </Text>
-            }
-            hint={
-              <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                엔진 선택 후 목록에서 원하는 톤을 고르세요.
-              </Text>
-            }
-          >
-            <Dropdown
-              value={selectedVoice?.name || (voiceLoading ? "불러오는 중…" : "목소리 선택")}
-              selectedOptions={form.voiceId ? [form.voiceId] : []}
-              onOptionSelect={(_, d) => onChange("voiceId", d.optionValue)}
-              size="medium" /* 🔧 large → medium */
-              disabled={voiceLoading || !!voiceError}
-              style={{ minHeight: 36 }}
+          {/* 선택한 목소리 정보 패널 */}
+          {selectedVoice && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: 12,
+                borderRadius: 12,
+                border: `1px solid ${tokens.colorNeutralStroke2}`,
+                background: tokens.colorNeutralBackground2,
+              }}
             >
-              {voices.map((v) => (
-                <Option key={v.id} value={v.id}>
-                  {v.name || v.id}
-                  {v.type && (
-                    <Badge size="small" appearance="tint" style={{ marginLeft: 8 }}>
-                      {v.type}
-                    </Badge>
-                  )}
-                </Option>
-              ))}
-            </Dropdown>
-
-            {/* 선택한 목소리 정보 패널 */}
-            {selectedVoice && (
               <div
                 style={{
-                  marginTop: 12,
-                  padding: 12,
-                  borderRadius: 12,
-                  border: `1px solid ${tokens.colorNeutralStroke2}`,
-                  background: tokens.colorNeutralBackground2,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 8,
                 }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: 8,
-                  }}
-                >
-                  <Text weight="semibold" size={300}>
-                    🎤 {selectedVoice.name}
-                  </Text>
-                  <Badge appearance="tint" color="brand">
-                    Google TTS
-                  </Badge>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 8,
-                    alignItems: "center",
-                    marginBottom: 6,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <Badge appearance="outline" size="small">
-                    {selectedVoice.gender === "MALE" ? "👨 남성" : selectedVoice.gender === "FEMALE" ? "👩 여성" : "🧑 중성"}
-                  </Badge>
-                  {selectedVoice.type && (
-                    <Badge appearance="outline" size="small">
-                      {selectedVoice.type}
-                    </Badge>
-                  )}
-                  {selectedVoice.language && (
-                    <Badge appearance="outline" size="small">
-                      {selectedVoice.language}
-                    </Badge>
-                  )}
-                </div>
-
-                <div
-                  style={{
-                    marginBottom: 10,
-                    padding: 10,
-                    borderRadius: 10,
-                    border: `1px dashed ${tokens.colorNeutralStroke2}`,
-                    background: tokens.colorNeutralBackground3,
-                  }}
-                >
-                  <Text size={200} style={{ color: tokens.colorNeutralForeground3, lineHeight: 1.5 }}>
-                    {getVoiceDescription(selectedVoice.name)}
-                  </Text>
-                </div>
-
-                <div style={{ display: "flex", gap: 8 }}>
-                  <Button
-                    appearance="secondary"
-                    size="small"
-                    icon={<PlayRegular />}
-                    onClick={() => onPreviewVoice(selectedVoice.id, selectedVoice.name)}
-                  >
-                    미리듣기
-                  </Button>
-                  <Button
-                    appearance="outline"
-                    size="small"
-                    icon={<StopRegular />}
-                    onClick={onStopVoice}
-                    style={{
-                      color: tokens.colorPaletteRedForeground1,
-                      borderColor: tokens.colorPaletteRedBorder1
-                    }}
-                  >
-                    중지
-                  </Button>
-                </div>
+                <Text weight="semibold" size={300}>
+                  🎤 {selectedVoice.name}
+                </Text>
               </div>
-            )}
-          </Field>
-        </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "center",
+                  marginBottom: 6,
+                  flexWrap: "wrap",
+                }}
+              >
+                <Badge appearance="outline" size="small">
+                  {selectedVoice.gender === "MALE" ? "👨 남성" : selectedVoice.gender === "FEMALE" ? "👩 여성" : "🧑 중성"}
+                </Badge>
+                {selectedVoice.type && (
+                  <Badge appearance="outline" size="small">
+                    {selectedVoice.type}
+                  </Badge>
+                )}
+                {selectedVoice.language && (
+                  <Badge appearance="outline" size="small">
+                    {selectedVoice.language}
+                  </Badge>
+                )}
+              </div>
+
+              <div
+                style={{
+                  marginBottom: 10,
+                  padding: 10,
+                  borderRadius: 10,
+                  border: `1px dashed ${tokens.colorNeutralStroke2}`,
+                  background: tokens.colorNeutralBackground3,
+                }}
+              >
+                <Text size={200} style={{ color: tokens.colorNeutralForeground3, lineHeight: 1.5 }}>
+                  {getVoiceDescription(selectedVoice.name)}
+                </Text>
+              </div>
+
+              <div style={{ display: "flex", gap: 8 }}>
+                <Button
+                  appearance="secondary"
+                  size="small"
+                  icon={<PlayRegular />}
+                  onClick={() => onPreviewVoice(selectedVoice.id, selectedVoice.name)}
+                >
+                  미리듣기
+                </Button>
+                <Button
+                  appearance="outline"
+                  size="small"
+                  icon={<StopRegular />}
+                  onClick={onStopVoice}
+                  style={{
+                    color: tokens.colorPaletteRedForeground1,
+                    borderColor: tokens.colorPaletteRedBorder1
+                  }}
+                >
+                  중지
+                </Button>
+              </div>
+            </div>
+          )}
+        </Field>
       </div>
 
       {/* 오류 패널 */}

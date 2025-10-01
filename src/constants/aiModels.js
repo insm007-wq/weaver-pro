@@ -6,7 +6,9 @@ export const DEFAULT_SETTINGS = {
   videoModel: "veo-3",
   imageResolution: "1024x1024",
   videoQuality: "1080p",
-  llmModel: "replicate",
+  llmModel: "anthropic",
+  ttsEngine: "google",
+  ttsSpeed: "1.0",
 };
 
 export const AI_OPTIONS = {
@@ -41,6 +43,24 @@ export const AI_OPTIONS = {
   llmModels: [
     { value: "replicate", text: "🦙 Replicate Llama 3", provider: "Replicate", cost: "저렴함" },
     { value: "anthropic", text: "🧠 Anthropic Claude", provider: "Anthropic", cost: "안정성" },
+  ],
+
+  ttsEngines: [
+    {
+      value: "google",
+      text: "Google Cloud TTS",
+      provider: "Google",
+      description: "안정적 발음, 자연스러운 한국어",
+      status: "available",
+      languages: ["ko-KR", "en-US", "ja-JP"]
+    },
+    // 향후 추가될 TTS 엔진들 (Amazon Polly, KT 보이스, ElevenLabs 등)
+  ],
+
+  ttsSpeeds: [
+    { value: "0.9", text: "느림 (0.9x)" },
+    { value: "1.0", text: "보통 (1.0x)" },
+    { value: "1.1", text: "빠름 (1.1x)" },
   ],
 };
 

@@ -163,9 +163,23 @@ export function useVoiceSettings(form) {
   }, [form.ttsEngine]);
 
   const filterVoicesByEngine = (allItems, engine) => {
-    return allItems
-      .filter((voice) => voice.provider === "Google" && (voice.type === "Neural2" || voice.type === "Wavenet"))
-      .slice(0, 8);
+    switch (engine) {
+      case "google":
+        // Google TTS: Neural2와 Wavenet 타입만 필터링
+        return allItems
+          .filter((voice) => voice.provider === "Google" && (voice.type === "Neural2" || voice.type === "Wavenet"))
+          .slice(0, 8);
+
+      // 향후 추가될 TTS 엔진들
+      // case "amazon":
+      //   return allItems.filter((voice) => voice.provider === "Amazon");
+      // case "kt":
+      //   return allItems.filter((voice) => voice.provider === "KT");
+
+      default:
+        // 기타 엔진: 모든 음성 반환
+        return allItems;
+    }
   };
 
   const previewVoice = useCallback(async (voiceId, voiceName) => {

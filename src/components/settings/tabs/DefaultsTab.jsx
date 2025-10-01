@@ -67,6 +67,10 @@ export default function DefaultsTab() {
   const [thumbnailEngine, setThumbnailEngine] = useState("replicate");
   const [thumbnailAnalysisEngine, setThumbnailAnalysisEngine] = useState("anthropic");
 
+  // TTS 설정
+  const [ttsEngine, setTtsEngine] = useState("google");
+  const [ttsSpeed, setTtsSpeed] = useState("1.0");
+
   /**
    * 컴포넌트 마운트 시 초기 데이터 로드
    */
@@ -77,7 +81,7 @@ export default function DefaultsTab() {
      */
     const loadAllSettings = async () => {
       try {
-        const settingsToLoad = ["llmModel", "thumbnailDefaultEngine", "thumbnailAnalysisEngine"];
+        const settingsToLoad = ["llmModel", "thumbnailDefaultEngine", "thumbnailAnalysisEngine", "ttsEngine", "ttsSpeed"];
 
         const loadedSettings = {};
         for (const key of settingsToLoad) {
@@ -100,6 +104,14 @@ export default function DefaultsTab() {
           }
           if (loadedSettings.thumbnailAnalysisEngine) {
             setThumbnailAnalysisEngine(loadedSettings.thumbnailAnalysisEngine);
+          }
+
+          // TTS 설정 로드
+          if (loadedSettings.ttsEngine) {
+            setTtsEngine(loadedSettings.ttsEngine);
+          }
+          if (loadedSettings.ttsSpeed) {
+            setTtsSpeed(loadedSettings.ttsSpeed);
           }
         }
       } catch (error) {
@@ -164,13 +176,17 @@ export default function DefaultsTab() {
         "videoSaveFolder",
         "thumbnailDefaultEngine",
         "thumbnailAnalysisEngine",
+        "ttsEngine",
+        "ttsSpeed",
       ];
 
-      // 썸네일 엔진 설정을 settings 객체에 추가
+      // 썸네일 엔진 및 TTS 설정을 settings 객체에 추가
       const settingsWithThumbnail = {
         ...settings,
         thumbnailDefaultEngine: thumbnailEngine,
         thumbnailAnalysisEngine: thumbnailAnalysisEngine,
+        ttsEngine: ttsEngine,
+        ttsSpeed: ttsSpeed,
       };
 
       for (const key of settingsToSave) {
@@ -272,7 +288,13 @@ export default function DefaultsTab() {
       const settingsToReset = [
         "llmModel",
         "videoSaveFolder",
+        "ttsEngine",
+        "ttsSpeed",
       ];
+
+      // TTS 설정도 기본값으로 초기화
+      setTtsEngine(DEFAULT_SETTINGS.ttsEngine);
+      setTtsSpeed(DEFAULT_SETTINGS.ttsSpeed);
 
       for (const key of settingsToReset) {
         if (DEFAULT_SETTINGS[key] !== undefined) {
@@ -456,6 +478,46 @@ export default function DefaultsTab() {
               >
                 <Option key="anthropic" value="anthropic" text="Claude Sonnet 4 (고성능 분석)">
                   Claude Sonnet 4 <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>(고성능 분석)</Caption1>
+                </Option>
+              </Dropdown>
+            </Field>
+          </div>
+
+          {/* TTS 설정 */}
+          <div style={{ display: "grid", gridTemplateColumns: gridTemplate, gap: itemGap, marginTop: itemGap }}>
+            <Field label="TTS 엔진" hint="음성 생성에 사용할 엔진입니다.">
+              <Dropdown
+                value={AI_OPTIONS.ttsEngines.find(e => e.value === ttsEngine)?.text || "선택해주세요"}
+                selectedOptions={[ttsEngine]}
+                onOptionSelect={(_, data) => setTtsEngine(data.optionValue)}
+              >
+                {AI_OPTIONS.ttsEngines
+                  .filter(engine => engine.status === "available")
+                  .map((engine) => (
+                    <Option key={engine.value} value={engine.value} text={engine.text}>
+                      {engine.text}{" "}
+                      <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                        ({engine.description})
+                      </Caption1>
+                    </Option>
+                  ))}
+              </Dropdown>
+            </Field>
+
+            <Field label="말하기 속도" hint="0.95~1.05 범위가 대부분 콘텐츠에 무난합니다.">
+              <Dropdown
+                value={ttsSpeed === "0.9" ? "느림 (0.9x)" : ttsSpeed === "1.1" ? "빠름 (1.1x)" : "보통 (1.0x)"}
+                selectedOptions={[ttsSpeed]}
+                onOptionSelect={(_, data) => setTtsSpeed(data.optionValue)}
+              >
+                <Option key="0.9" value="0.9" text="느림 (0.9x)">
+                  느림 (0.9x)
+                </Option>
+                <Option key="1.0" value="1.0" text="보통 (1.0x)">
+                  보통 (1.0x)
+                </Option>
+                <Option key="1.1" value="1.1" text="빠름 (1.1x)">
+                  빠름 (1.1x)
                 </Option>
               </Dropdown>
             </Field>
