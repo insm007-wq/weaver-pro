@@ -233,6 +233,11 @@ const ActionCard = memo(
           } else {
             console.error("대본 생성 오류:", error);
             setError(error.message);
+            setFullVideoState(prev => ({
+              ...prev,
+              error: error.message,
+              isGenerating: false,
+            }));
           }
         } finally {
           setIsLoading(false);
@@ -272,42 +277,41 @@ const ActionCard = memo(
           padding: tokens.spacingVerticalXL,
         },
         centeredCard: {
-          background: currentMode?.gradient || "transparent",
-          border: "none",
-          borderRadius: 12,
-          padding: tokens.spacingVerticalS,
-          color: "white",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
-          textAlign: "center",
+          padding: "12px 16px",
+          borderRadius: "16px",
+          border: `1px solid ${tokens.colorNeutralStroke2}`,
+          backgroundColor: tokens.colorNeutralBackground1,
           height: "fit-content",
           display: "flex",
           flexDirection: "column",
+          boxShadow: "none",
+        },
+        headerContainer: {
+          marginBottom: tokens.spacingVerticalS,
+        },
+        headerContent: {
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
         },
         buttonContainer: {
-          background: "rgba(255,255,255,0.1)",
-          borderRadius: 8,
-          padding: 4,
-          gap: 4,
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          marginTop: tokens.spacingVerticalS,
         },
         button: {
           width: "100%",
-          padding: "10px 16px",
+          padding: "12px 20px",
           fontSize: "14px",
           fontWeight: "bold",
-          backgroundColor: "rgba(255,255,255,0.9)",
-          color: "#333",
-          border: "none",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         },
         descriptionContainer: {
-          marginTop: tokens.spacingVerticalXS,
+          marginTop: tokens.spacingVerticalS,
           padding: tokens.spacingVerticalXS,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
         },
       }),
-      [currentMode?.gradient]
+      []
     );
 
     if (!selectedMode || !currentMode) {
@@ -326,11 +330,17 @@ const ActionCard = memo(
       return (
         <>
           <style>{loadingAnimation}</style>
-          <Card style={styles.centeredCard}>
+          <Card className={cardStyles.settingsCard} style={styles.centeredCard}>
             {/* 헤더 */}
-            <div style={{ marginBottom: tokens.spacingVerticalXS }}>
-              <Text size={300} weight="semibold" style={{ color: "white" }}>
-                {currentMode.title}
+            <div style={styles.headerContainer}>
+              <div style={styles.headerContent}>
+                <PlayRegular />
+                <Text size={400} weight="semibold" style={{ letterSpacing: 0.2 }}>
+                  {currentMode.title}
+                </Text>
+              </div>
+              <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
+                {currentMode.description}
               </Text>
             </div>
 
@@ -359,7 +369,7 @@ const ActionCard = memo(
               {/* 중지 버튼 (생성 중일 때만 표시) */}
               {fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" && (
                 <Button
-                  appearance="outline"
+                  appearance="secondary"
                   onClick={() => {
                     // 상태 초기화 (컨펌 없이 바로 실행)
                     setFullVideoState(prev => ({
@@ -371,27 +381,7 @@ const ActionCard = memo(
                     setIsLoading(false);
                     setDoc(null);
                   }}
-                  style={{
-                    width: "100%",
-                    padding: "10px 16px",
-                    fontSize: "14px",
-                    fontWeight: "bold",
-                    backgroundColor: "transparent",
-                    color: "white",
-                    border: "2px solid white",
-                    boxShadow: "none",
-                    transition: "all 0.2s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = "rgba(220, 53, 69, 0.2)";
-                    e.currentTarget.style.borderColor = "#dc3545";
-                    e.currentTarget.style.color = "#ff6b6b";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = "transparent";
-                    e.currentTarget.style.borderColor = "white";
-                    e.currentTarget.style.color = "white";
-                  }}
+                  style={styles.button}
                 >
                   ⏹️ 생성 중지
                 </Button>
@@ -399,22 +389,27 @@ const ActionCard = memo(
             </div>
 
 
-          {/* 설명 영역 */}
-          <div style={styles.descriptionContainer}>
-            {fullVideoState.error ? (
-              <Text style={{ color: "#ffcccc", fontWeight: 600, fontSize: "14px", lineHeight: "1.4" }}>
+          {/* 상태 메시지 영역 */}
+          {fullVideoState.error ? (
+            <div style={styles.descriptionContainer}>
+              <Text size={200} style={{ color: tokens.colorPaletteRedForeground1 }}>
                 ❌ 오류: {fullVideoState.error}
               </Text>
-            ) : fullVideoState.currentStep === "completed" ? (
-              <Text style={{ color: "#ccffcc", fontWeight: 600, fontSize: "14px", lineHeight: "1.4" }}>
+            </div>
+          ) : fullVideoState.currentStep === "completed" ? (
+            <div style={styles.descriptionContainer}>
+              <Text size={200} style={{ color: tokens.colorPaletteGreenForeground1 }}>
                 ✅ 대본 생성이 완료되었습니다! 새로운 주제로 다시 생성하시겠습니까?
               </Text>
-            ) : (
-              <Text style={{ color: "rgba(255,255,255,0.95)", fontSize: "14px", lineHeight: "1.4" }}>
-                {currentMode.description}
+            </div>
+          ) : isDisabled && validationState.errors.length > 0 ? (
+            <div style={styles.descriptionContainer}>
+              <Text size={200}>
+                <span style={{ color: tokens.colorPaletteRedForeground1, fontWeight: 600 }}>💡 필수 입력:</span>
+                <span style={{ color: tokens.colorNeutralForeground3 }}> {validationState.errors.join(", ")}</span>
               </Text>
-            )}
-          </div>
+            </div>
+          ) : null}
         </Card>
         </>
       );

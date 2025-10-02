@@ -384,7 +384,7 @@ function MiniProgressPanel({ fullVideoState, resetFullVideoState, api }) {
               ? tokens.colorPaletteRedBackground3
               : isComplete
               ? tokens.colorPaletteGreenBackground3
-              : tokens.colorBrandBackground,
+              : "#667eea",
             animation: !isComplete && !isError ? "pulse 2s infinite" : "none",
           }}
         />
@@ -402,7 +402,7 @@ function MiniProgressPanel({ fullVideoState, resetFullVideoState, api }) {
             <CountdownTimer
               targetTimeMs={getCountdownTime(fullVideoState.currentStep, fullVideoState.mode, fullVideoState)}
               size={100}
-              color={tokens.colorBrandForeground1}
+              color="#667eea"
             />
           )}
         </div>
@@ -442,7 +442,7 @@ function MiniProgressPanel({ fullVideoState, resetFullVideoState, api }) {
                 height: "100%",
                 background: isError
                   ? tokens.colorPaletteRedForeground1
-                  : tokens.colorBrandBackground, // 파란색 진행바
+                  : "#667eea", // 보라색 진행바
                 transition: "width 300ms ease-out",
               }}
             />
@@ -545,7 +545,7 @@ const CompactScriptViewer = memo(({ fullVideoState, doc, isLoading, form, global
                   border: `1px solid ${tokens.colorNeutralStroke1}`,
                 }}
               >
-                <Text size={250} weight="semibold" style={{ color: tokens.colorBrandForeground1, marginBottom: 6, display: "block" }}>
+                <Text size={250} weight="semibold" style={{ color: "#667eea", marginBottom: 6, display: "block" }}>
                   장면 {index + 1}
                   {scene?.duration && (
                     <span style={{ color: tokens.colorNeutralForeground3, fontWeight: "normal", marginLeft: 4 }}>

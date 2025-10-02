@@ -220,7 +220,7 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
               <EyeRegular
                 style={{
                   fontSize: 20,
-                  color: tokens.colorBrandForeground1,
+                  color: "#667eea",
                 }}
               />
               <div>
@@ -232,7 +232,7 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
                 </Text>
               </div>
             </div>
-            <Text size={200} style={{ color: tokens.colorBrandForeground1 }}>
+            <Text size={200} style={{ color: "#667eea" }}>
               클릭하여 열기
             </Text>
           </Card>
