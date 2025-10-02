@@ -35,11 +35,25 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
   // TTS 실제 duration 데이터를 저장할 변수
   let ttsDurations = null;
 
+  // 컴포넌트 마운트 상태 추적 (탭 전환 시 안전성)
+  let isMounted = true;
+
+  // 안전한 상태 업데이트 함수
+  const safeSetState = (updater) => {
+    if (isMounted && setFullVideoState) {
+      try {
+        setFullVideoState(updater);
+      } catch (err) {
+        console.warn("상태 업데이트 실패 (컴포넌트 언마운트됨):", err);
+      }
+    }
+  };
+
   try {
     console.log("🎤 대본 생성 모드 - 자막 및 음성 생성 시작...");
 
     // 2단계: 음성 생성 시작
-    setFullVideoState(prev => ({
+    safeSetState(prev => ({
       ...prev,
       progress: { ...prev.progress, audio: 25 }
     }));
@@ -83,7 +97,7 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
     try {
       ttsProgressListener = (data) => {
         const { current, total, progress } = data;
-        setFullVideoState((prev) => ({
+        safeSetState((prev) => ({
           ...prev,
           progress: { ...prev.progress, audio: progress },
         }));
@@ -143,7 +157,7 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
 
     if (audioResult && audioResult.data && audioResult.data.ok) {
       // 음성 생성 완료
-      setFullVideoState(prev => ({
+      safeSetState(prev => ({
         ...prev,
         progress: { ...prev.progress, audio: 75 }
       }));
@@ -326,14 +340,14 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
     // 자막 생성 (script_mode에서만, TTS duration 데이터 사용)
     if (mode === "script_mode" && ttsDurations && ttsDurations.length > 0) {
       console.log("📝 자막 생성 시작 (TTS 실제 duration 적용)...");
-      setFullVideoState(prev => ({
+      safeSetState(prev => ({
         ...prev,
         progress: { ...prev.progress, subtitle: 0 }
       }));
 
       await generateSubtitleFile(scriptData, mode, { api, toast, setFullVideoState, addLog }, ttsDurations);
 
-      setFullVideoState(prev => ({
+      safeSetState(prev => ({
         ...prev,
         progress: { ...prev.progress, subtitle: 100 }
       }));
@@ -347,13 +361,16 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
     console.error("음성/자막 생성 오류:", error);
 
     // 오류 발생 시 상태 초기화
-    setFullVideoState(prev => ({
+    safeSetState(prev => ({
       ...prev,
       isGenerating: false,
       currentStep: "error"
     }));
 
     console.error(`음성/자막 생성 실패: ${error.message}`);
+  } finally {
+    // 함수 종료 시 마운트 상태 해제 (탭 전환 후 상태 업데이트 방지)
+    isMounted = false;
   }
 }
 
@@ -365,6 +382,7 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
  * @param {Object} options - 옵션 객체
  */
 async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState, addLog }) {
+  const safeSetState = setFullVideoState;
   try {
     console.log("🎵 === mergeAudioFiles 함수 시작 ===");
     console.log("🎵 입력 audioFiles:", audioFiles);
@@ -509,7 +527,7 @@ async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState
           addLog(`📊 합본 결과: ${mergeResult.outputPath || '경로 정보 없음'}`);
         }
 
-        setFullVideoState(prev => ({
+        safeSetState(prev => ({
           ...prev,
           progress: { ...prev.progress, audio: 100 },
           currentStep: "subtitle"
@@ -550,6 +568,7 @@ async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState
  * @param {Array} ttsDurations - TTS 실제 duration 데이터 (선택사항)
  */
 async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideoState, addLog }, ttsDurations = null) {
+  const safeSetState = setFullVideoState;
   console.log("🚀🚀🚀 === SRT 자막 생성 단계 시작 === 🚀🚀🚀");
 
   if (addLog) {
@@ -659,12 +678,14 @@ async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideo
  * @param {Object} options - 옵션 객체
  */
 function handleCompletionByMode(mode, { setFullVideoState, toast, addLog }) {
-  setFullVideoState(prev => ({
-    ...prev,
-    isGenerating: false,
-    currentStep: "completed",
-    progress: { ...prev.progress, subtitle: 100 }
-  }));
+  if (setFullVideoState) {
+    setFullVideoState(prev => ({
+      ...prev,
+      isGenerating: false,
+      currentStep: "completed",
+      progress: { ...prev.progress, subtitle: 100 }
+    }));
+  }
 
   console.log("🎉 대본 생성 모드 완료!");
 

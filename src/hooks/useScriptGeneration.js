@@ -76,11 +76,13 @@ export function useScriptGeneration() {
         };
 
         const getTimeoutForDuration = (minutes) => {
-          if (minutes >= 90) return 600000;
-          if (minutes >= 60) return 480000;
-          if (minutes >= 30) return 300000;
-          if (minutes >= 20) return 180000;
-          return 120000;
+          // 장편은 청크로 나눠 생성하므로 충분한 시간 필요
+          if (minutes >= 90) return 900000;  // 90분+: 15분
+          if (minutes >= 60) return 720000;  // 60분+: 12분
+          if (minutes >= 30) return 600000;  // 30분+: 10분
+          if (minutes >= 20) return 360000;  // 20분+: 6분
+          if (minutes >= 10) return 240000;  // 10분+: 4분
+          return 120000;                      // 10분 미만: 2분
         };
 
         const timeoutMs = getTimeoutForDuration(form.durationMin);
