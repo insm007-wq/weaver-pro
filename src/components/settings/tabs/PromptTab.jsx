@@ -221,7 +221,6 @@ function PromptTab() {
     }
   };
 
-
   /* ============ 프롬프트 쌍 로드/저장 헬퍼 함수들 ============ */
 
   /**
@@ -309,7 +308,6 @@ function PromptTab() {
       throw e;
     }
   };
-
 
   /* ============ 드롭다운 옵션 ============ */
 
@@ -400,8 +398,8 @@ function PromptTab() {
       }
 
       // 삭제 이후 직접 상태를 관리 (useEffect 자동 호출 방지)
-      const updated = prompts.filter(p => p.name !== selectedName);
-      setPrompts(updated);  // prompts 업데이트 → 자동으로 UI 갱신됨
+      const updated = prompts.filter((p) => p.name !== selectedName);
+      setPrompts(updated); // prompts 업데이트 → 자동으로 UI 갱신됨
 
       const remainingNames = uniqueUserNames(updated);
       const allNames = remainingNames.length === 0 ? ["기본 프롬프트"] : remainingNames;
@@ -513,16 +511,8 @@ function PromptTab() {
           <div style={{ flex: "1 1 auto", minWidth: "200px" }}>
             <Field label="사용자 프롬프트 선택">
               <Dropdown
-                selectedOptions={
-                  nameOptions.length > 0 && selectedName && nameOptions.includes(selectedName)
-                    ? [selectedName]
-                    : []
-                }
-                value={
-                  nameOptions.length > 0
-                    ? (selectedName && nameOptions.includes(selectedName) ? selectedName : "")
-                    : ""
-                }
+                selectedOptions={nameOptions.length > 0 && selectedName && nameOptions.includes(selectedName) ? [selectedName] : []}
+                value={nameOptions.length > 0 ? (selectedName && nameOptions.includes(selectedName) ? selectedName : "") : ""}
                 onOptionSelect={async (_, d) => {
                   const name = d?.optionValue;
                   if (name) await activatePair(name);
@@ -684,7 +674,10 @@ function PromptTab() {
               />
             </div>
             <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM }}>
-              {scriptCount.toLocaleString()} 글자 | 변수: {"{topic}, {duration}, {style}, {totalSeconds}, {minSceneCount}, {maxSceneCount}, {targetSceneCount}, {minCharacters}, {maxCharacters}, {avgCharactersPerScene}"}
+              {scriptCount.toLocaleString()} 글자 | 변수:{" "}
+              {
+                "{topic}, {duration}, {style}, {totalSeconds}, {minSceneCount}, {maxSceneCount}, {targetSceneCount}, {minCharacters}, {maxCharacters}, {avgCharactersPerScene}"
+              }
             </Text>
           </>
         )}
@@ -722,7 +715,8 @@ function PromptTab() {
               />
             </div>
             <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM }}>
-              {referenceCount.toLocaleString()} 글자 | 변수: {"{referenceText}, {topic}, {duration}, {totalSeconds}, {minSceneCount}, {maxSceneCount}"}
+              {referenceCount.toLocaleString()} 글자 | 변수:{" "}
+              {"{referenceText}, {topic}, {duration}, {totalSeconds}, {minSceneCount}, {maxSceneCount}"}
             </Text>
           </>
         )}
