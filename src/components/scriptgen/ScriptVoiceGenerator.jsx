@@ -50,7 +50,7 @@ function ScriptVoiceGenerator() {
   // 커스텀 훅들
   const api = useApi();
   const { promptNames, promptLoading } = usePromptSettings();
-  const { doc, setDoc, isLoading, error, setIsLoading, setError, runGenerate } = useScriptGeneration();
+  const { doc, setDoc, isLoading, error, setIsLoading, setError, runGenerate, chunkProgress } = useScriptGeneration();
   const { voices, voiceLoading, voiceError, previewVoice, stopVoice, retryVoiceLoad } = useVoiceSettings(form);
 
   // 폼 변경 핸들러
@@ -148,6 +148,7 @@ function ScriptVoiceGenerator() {
           setError={setError}
           setIsLoading={setIsLoading}
           setDoc={setDoc}
+          chunkProgress={chunkProgress}
           centered={true}
         />
 

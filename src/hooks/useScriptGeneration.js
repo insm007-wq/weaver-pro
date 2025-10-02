@@ -12,11 +12,32 @@ export function useScriptGeneration() {
   const [doc, setDoc] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [chunkProgress, setChunkProgress] = useState(null);
 
   useEffect(() => {
     setDoc(null);
     setIsLoading(false);
     setError("");
+  }, []);
+
+  // LLM 청크 진행률 리스너
+  useEffect(() => {
+    const handleChunkProgress = (data) => {
+      console.log("📊 LLM 청크 진행률 수신:", data);
+      setChunkProgress(data);
+    };
+
+    // 리스너 등록
+    if (window.electronAPI?.on) {
+      window.electronAPI.on('llm:chunk-progress', handleChunkProgress);
+    }
+
+    // 클린업
+    return () => {
+      if (window.electronAPI?.off) {
+        window.electronAPI.off('llm:chunk-progress', handleChunkProgress);
+      }
+    };
   }, []);
 
   const getSelectedPromptContent = useCallback(
@@ -41,6 +62,7 @@ export function useScriptGeneration() {
     async (form, toast = null) => {
       setError("");
       setIsLoading(true);
+      setChunkProgress(null); // 진행률 초기화
 
       try {
         // 전역 설정에서 LLM 모델 가져오기
@@ -115,5 +137,6 @@ export function useScriptGeneration() {
     runGenerate,
     getSelectedPromptContent,
     AI_ENGINE_OPTIONS,
+    chunkProgress,  // 청크 진행률 추가
   };
 }

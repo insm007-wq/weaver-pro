@@ -12,7 +12,8 @@ ipcMain.handle("llm/generateScript", async (event, payload) => {
 
   switch (llm.toLowerCase()) {
     case "anthropic":
-      return await callAnthropic(payload);
+      // event 객체를 전달하여 진행률 전송 가능하도록
+      return await callAnthropic(payload, event);
 
     case "replicate":
     case "replicate-llama3":

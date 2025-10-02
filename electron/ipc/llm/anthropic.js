@@ -221,15 +221,15 @@ async function callAnthropicAPI(apiKey, prompt, minSceneCount = 5, isLongForm = 
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      // 재시도 시 지수 백오프
+      // 재시도 시 지수 백오프 (여유있게)
       if (attempt > 0) {
-        const backoffMs = Math.min(2000 * Math.pow(2, attempt - 1), 10000);
+        const backoffMs = Math.min(3000 * Math.pow(2, attempt - 1), 15000);  // 3초, 6초, 12초
         console.log(`⏳ LLM API 재시도 ${attempt}/${maxRetries} (${backoffMs}ms 대기)`);
         await new Promise(resolve => setTimeout(resolve, backoffMs));
       }
 
-      // 타임아웃 설정 (장편: 120초, 단편: 60초)
-      const timeoutMs = isLongForm ? 120000 : 60000;
+      // 타임아웃 설정 (여유있게 증가)
+      const timeoutMs = isLongForm ? 180000 : 90000;  // 장편: 3분, 단편: 1.5분
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -301,7 +301,7 @@ CRITICAL RULES:
 // ============================================================
 // 대본 생성 메인 함수 (청크 방식 지원)
 // ============================================================
-async function callAnthropic(params) {
+async function callAnthropic(params, event = null) {
   const {
     topic = "",
     style = "",
@@ -325,7 +325,8 @@ async function callAnthropic(params) {
       referenceText,
       cpmMin,
       cpmMax,
-      customPrompt: params.prompt
+      customPrompt: params.prompt,
+      event  // 진행률 전송을 위해 event 전달
     });
   }
 
@@ -389,7 +390,7 @@ async function callAnthropic(params) {
 // ============================================================
 // 장편 대본 생성 (청크 방식)
 // ============================================================
-async function generateLongFormScript({ topic, style, duration, referenceText, cpmMin, cpmMax, customPrompt }) {
+async function generateLongFormScript({ topic, style, duration, referenceText, cpmMin, cpmMax, customPrompt, event = null }) {
   console.log(`🎬 장편 콘텐츠 생성 모드: ${duration}분을 청크로 분할`);
 
   const CHUNK_DURATION = 5; // 5분씩 청크
@@ -408,6 +409,7 @@ async function generateLongFormScript({ topic, style, duration, referenceText, c
     const chunkDuration = isLastChunk ? duration - (chunkIndex * CHUNK_DURATION) : CHUNK_DURATION;
 
     console.log(`\n🔄 청크 ${chunkIndex + 1}/${chunkCount} 생성 중 (${chunkDuration}분)...`);
+    console.log(`⏱️ 예상 소요 시간: 약 60-90초 (응답 없음이 나타날 수 있으나 정상입니다)`);
 
     const chunkTopic = chunkIndex === 0
       ? `${topic} (전체 ${duration}분 중 ${chunkIndex + 1}/${chunkCount} 파트)`
@@ -450,6 +452,19 @@ async function generateLongFormScript({ topic, style, duration, referenceText, c
     });
 
     allScenes.push(...chunkScenes);
+
+    // 청크 완료 시 진행률 전송 (UI 업데이트)
+    if (event && event.sender) {
+      const progress = Math.round(((chunkIndex + 1) / chunkCount) * 100);
+      event.sender.send('llm:chunk-progress', {
+        current: chunkIndex + 1,
+        total: chunkCount,
+        progress: progress,
+        scenesGenerated: allScenes.length,
+        message: `청크 ${chunkIndex + 1}/${chunkCount} 완료 (${allScenes.length}개 장면 생성)`
+      });
+      console.log(`📤 진행률 전송: ${progress}% (청크 ${chunkIndex + 1}/${chunkCount})`);
+    }
   }
 
   const totalChars = allScenes.reduce((sum, s) => sum + s.charCount, 0);

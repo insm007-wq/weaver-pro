@@ -45,6 +45,7 @@ const ActionCard = memo(
     setError,
     setIsLoading,
     setDoc,
+    chunkProgress,
     centered = false,
   }) => {
     const cardStyles = useCardStyles();
@@ -338,6 +339,8 @@ const ActionCard = memo(
                 <span className={fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" ? "loading-text" : ""}>
                   {fullVideoState.currentStep === "completed"
                     ? currentMode.completedText
+                    : chunkProgress
+                    ? `청크 ${chunkProgress.current}/${chunkProgress.total} 생성 중... (${chunkProgress.progress}%)`
                     : fullVideoState.isGenerating && fullVideoState.currentStep && remainingTime
                     ? `${getStepDisplayName(fullVideoState.currentStep)} ${remainingTime}`
                     : fullVideoState.isGenerating
