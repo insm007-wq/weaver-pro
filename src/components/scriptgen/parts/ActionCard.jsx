@@ -72,14 +72,21 @@ const ActionCard = memo(
         const durationMin = form?.durationMin || 3;
         const currentStep = fullVideoState.currentStep;
 
-        // 각 단계별 예상 시간 (초)
-        const scriptEstimatedSec = durationMin <= 3 ? 40 : durationMin <= 5 ? 60 : durationMin <= 10 ? 90 : 120;
-        const audioEstimatedSec = durationMin * 60 * 0.3;
+        // 각 단계별 예상 시간 (초) - 더 현실적인 공식
+        const scriptEstimatedSec = Math.min(durationMin * 8, 600); // 최대 10분
+        const audioEstimatedSec = durationMin * 60 * 0.2; // 병렬 처리로 더 빠름
         const subtitleEstimatedSec = 10;
         const totalEstimatedSec = scriptEstimatedSec + audioEstimatedSec + subtitleEstimatedSec;
 
         // 전체 남은 시간 = 전체 예상 시간 - 경과 시간
         const remainingSec = Math.max(0, totalEstimatedSec - elapsedSec);
+
+        // 예상 시간을 초과하면 "생성 중..."만 표시
+        if (remainingSec === 0 && elapsedSec > totalEstimatedSec) {
+          setRemainingTime("생성 중...");
+          return;
+        }
+
         const remainingMin = Math.floor(remainingSec / 60);
         const remainingSecOnly = Math.floor(remainingSec % 60);
 
