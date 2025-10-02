@@ -338,7 +338,7 @@ const ActionCard = memo(
               >
                 <span className={fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" ? "loading-text" : ""}>
                   {fullVideoState.currentStep === "completed"
-                    ? currentMode.completedText
+                    ? "🔄 새 대본 생성"
                     : chunkProgress
                     ? `청크 ${chunkProgress.current}/${chunkProgress.total} 생성 중... (${chunkProgress.progress}%)`
                     : fullVideoState.isGenerating && fullVideoState.currentStep && remainingTime
@@ -348,14 +348,65 @@ const ActionCard = memo(
                     : currentMode.buttonText}
                 </span>
               </Button>
+
+              {/* 중지 버튼 (생성 중일 때만 표시) */}
+              {fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" && (
+                <Button
+                  appearance="outline"
+                  onClick={() => {
+                    // 상태 초기화 (컨펌 없이 바로 실행)
+                    setFullVideoState(prev => ({
+                      ...prev,
+                      isGenerating: false,
+                      currentStep: "idle",
+                      progress: { script: 0, audio: 0, images: 0, video: 0, subtitle: 0 }
+                    }));
+                    setIsLoading(false);
+                    setDoc(null);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "10px 16px",
+                    fontSize: "14px",
+                    fontWeight: "bold",
+                    backgroundColor: "transparent",
+                    color: "white",
+                    border: "2px solid white",
+                    boxShadow: "none",
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "rgba(220, 53, 69, 0.2)";
+                    e.currentTarget.style.borderColor = "#dc3545";
+                    e.currentTarget.style.color = "#ff6b6b";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                    e.currentTarget.style.borderColor = "white";
+                    e.currentTarget.style.color = "white";
+                  }}
+                >
+                  ⏹️ 생성 중지
+                </Button>
+              )}
             </div>
 
 
           {/* 설명 영역 */}
           <div style={styles.descriptionContainer}>
-            <Text size={200} style={{ color: "rgba(255,255,255,0.95)" }}>
-              {currentMode.description}
-            </Text>
+            {fullVideoState.error ? (
+              <Text style={{ color: "#ffcccc", fontWeight: 600, fontSize: "14px", lineHeight: "1.4" }}>
+                ❌ 오류: {fullVideoState.error}
+              </Text>
+            ) : fullVideoState.currentStep === "completed" ? (
+              <Text style={{ color: "#ccffcc", fontWeight: 600, fontSize: "14px", lineHeight: "1.4" }}>
+                ✅ 대본 생성이 완료되었습니다! 새로운 주제로 다시 생성하시겠습니까?
+              </Text>
+            ) : (
+              <Text style={{ color: "rgba(255,255,255,0.95)", fontSize: "14px", lineHeight: "1.4" }}>
+                {currentMode.description}
+              </Text>
+            )}
           </div>
         </Card>
         </>

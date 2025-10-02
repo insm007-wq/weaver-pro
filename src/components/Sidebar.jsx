@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { makeStyles, shorthands, tokens, Button, Text, Title3, Caption1, Tooltip, mergeClasses } from "@fluentui/react-components";
 import {
   FolderOpenRegular,
@@ -204,9 +204,14 @@ const useStyles = makeStyles({
   },
 });
 
-export default function Sidebar({ onSelectMenu }) {
+export default function Sidebar({ onSelectMenu, isScriptGenerating = false }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const styles = useStyles();
+
+  // 디버깅: prop 확인
+  useEffect(() => {
+    console.log("🟢 Sidebar - isScriptGenerating:", isScriptGenerating);
+  }, [isScriptGenerating]);
 
   const globalMenu = [
     {
@@ -282,13 +287,21 @@ export default function Sidebar({ onSelectMenu }) {
   };
 
   const MenuItem = ({ item, collapsed }) => {
+    // 대본 생성 중일 때 미디어 준비/다운로드 탭 비활성화
+    const isDisabled = isScriptGenerating && (item.key === "assemble" || item.key === "draft");
+
     const content = (
-      <div 
-        className={mergeClasses(styles.menuItem, collapsed && styles.menuItemCollapsed)} 
-        onClick={() => handleMenuClick(item.key)}
+      <div
+        className={mergeClasses(styles.menuItem, collapsed && styles.menuItemCollapsed)}
+        onClick={() => !isDisabled && handleMenuClick(item.key)}
+        style={{
+          opacity: isDisabled ? 0.5 : 1,
+          cursor: isDisabled ? "not-allowed" : "pointer",
+          pointerEvents: isDisabled ? "none" : "auto"
+        }}
       >
-        <div 
-          className={mergeClasses(styles.iconContainer, collapsed && styles.iconContainerCollapsed)} 
+        <div
+          className={mergeClasses(styles.iconContainer, collapsed && styles.iconContainerCollapsed)}
           style={{ color: item.color }}
         >
           {item.icon}
@@ -307,8 +320,19 @@ export default function Sidebar({ onSelectMenu }) {
     );
 
     if (collapsed) {
+      const tooltipText = isDisabled
+        ? "⚠️ 대본 생성 중에는 이동할 수 없습니다"
+        : `${item.label} - ${item.desc}`;
       return (
-        <Tooltip content={`${item.label} - ${item.desc}`} relationship="label" positioning="after">
+        <Tooltip content={tooltipText} relationship="label" positioning="after">
+          {content}
+        </Tooltip>
+      );
+    }
+
+    if (isDisabled) {
+      return (
+        <Tooltip content="⚠️ 대본 생성 중에는 이동할 수 없습니다" relationship="label" positioning="above">
           {content}
         </Tooltip>
       );

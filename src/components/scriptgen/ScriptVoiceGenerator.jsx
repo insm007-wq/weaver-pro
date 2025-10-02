@@ -23,7 +23,7 @@ import { makeDefaultForm } from "../../constants/scriptSettings";
 /**
  * 대본 & 음성 생성 메인 컴포넌트 (간소화됨)
  */
-function ScriptVoiceGenerator() {
+function ScriptVoiceGenerator({ onGeneratingChange }) {
   // 스타일 훅들
   const headerStyles = useHeaderStyles();
   const containerStyles = useContainerStyles();
@@ -109,6 +109,14 @@ function ScriptVoiceGenerator() {
       window.removeEventListener("settingsChanged", handleSettingsChanged);
     };
   }, []);
+
+  // 생성 상태 변경 시 부모에게 알림
+  useEffect(() => {
+    console.log("📢 생성 상태 변경:", fullVideoState.isGenerating);
+    if (onGeneratingChange) {
+      onGeneratingChange(fullVideoState.isGenerating);
+    }
+  }, [fullVideoState.isGenerating, onGeneratingChange]);
 
   return (
     <div className={containerStyles.container} style={{ overflowX: "hidden", maxWidth: "100vw" }}>
@@ -234,10 +242,10 @@ function ScriptVoiceGenerator() {
   );
 }
 
-export default function ScriptVoiceGeneratorWithBoundary() {
+export default function ScriptVoiceGeneratorWithBoundary({ onGeneratingChange }) {
   return (
     <PageErrorBoundary>
-      <ScriptVoiceGenerator />
+      <ScriptVoiceGenerator onGeneratingChange={onGeneratingChange} />
     </PageErrorBoundary>
   );
 }

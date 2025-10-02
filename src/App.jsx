@@ -97,9 +97,15 @@ const MemoizedLoadingFallback = memo(function LoadingFallback({ label = "로딩 
 function App() {
   const [projectName, setProjectName] = useState(null);
   const [currentPage, setCurrentPage] = useState(null);
+  const [isScriptGenerating, setIsScriptGenerating] = useState(false);
   const canOpenWithoutProject = true;
   const styles = useStyles();
   const fontStyles = useFontOverrideStyles();
+
+  // 디버깅: 상태 변경 확인
+  useEffect(() => {
+    console.log("🔴 App.jsx - isScriptGenerating:", isScriptGenerating);
+  }, [isScriptGenerating]);
 
   const handleCreateProject = useCallback((name) => {
     setProjectName(name);
@@ -141,7 +147,7 @@ function App() {
 
       <div className={styles.body}>
         <Suspense fallback={<MemoizedLoadingFallback />}>
-          <Sidebar onSelectMenu={handleSelectMenu} />
+          <Sidebar onSelectMenu={handleSelectMenu} isScriptGenerating={isScriptGenerating} />
         </Suspense>
 
         <main className={styles.main}>
@@ -187,7 +193,7 @@ function App() {
                 </KeepAlivePane>
 
                 <KeepAlivePane active={currentPage === "script"}>
-                  <ScriptVoiceGenerator />
+                  <ScriptVoiceGenerator onGeneratingChange={setIsScriptGenerating} />
                 </KeepAlivePane>
 
                 <KeepAlivePane active={currentPage === "assemble"}>
