@@ -5,50 +5,29 @@ import { useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
 import { AI_ENGINE_OPTIONS } from "../../../constants/scriptSettings";
 import { generateAudioAndSubtitles } from "../../../utils/audioSubtitleGenerator";
 
-// 전체 작업 예상 시간 계산
-function getTotalEstimatedTime(mode, fullVideoState) {
-  if (!fullVideoState?.startTime) return "";
-
-  const steps = mode === "automation_mode"
-    ? ["script", "audio", "images", "video"]
-    : ["script", "audio", "subtitle"];
-
-  const now = new Date();
-  const elapsedMs = now - new Date(fullVideoState.startTime);
-
-  // 전체 평균 진행률
-  const totalProgress = steps.reduce((acc, step) =>
-    acc + (fullVideoState.progress?.[step] || 0), 0) / steps.length;
-
-  if (totalProgress <= 0) {
-    return ""; // 초기에는 표시 안함
+// 로딩 애니메이션 스타일
+const loadingAnimation = `
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
   }
 
-  if (totalProgress >= 100) return "";
-
-  // 전체 작업 예상 시간
-  const estimatedTotalMs = (elapsedMs / totalProgress) * 100;
-  const remainingMs = Math.max(0, estimatedTotalMs - elapsedMs);
-  const remainingMin = Math.floor(remainingMs / 1000 / 60);
-  const remainingSec = Math.floor((remainingMs / 1000) % 60);
-
-  if (remainingMin > 0) {
-    return `약 ${remainingMin}분 ${remainingSec}초 남음`;
-  } else if (remainingSec > 10) {
-    return `약 ${remainingSec}초 남음`;
-  } else {
-    return "곧 완료";
+  .loading-text {
+    animation: pulse 2s ease-in-out infinite;
+    color: rgba(102, 126, 234, 0.8);
+    display: inline-flex;
+    align-items: center;
   }
-}
+`;
 
 // 스텝 이름 변환
 function getStepDisplayName(step) {
   const stepNames = {
-    script: "대본 생성 중",
-    audio: "음성 합성 중",
-    images: "이미지 생성 중",
-    video: "영상 합성 중",
-    subtitle: "자막 생성 중",
+    script: "대본 생성 중...",
+    audio: "음성 합성 중...",
+    images: "이미지 생성 중...",
+    video: "영상 합성 중...",
+    subtitle: "자막 생성 중...",
   };
   return stepNames[step] || step;
 }
@@ -75,25 +54,42 @@ const ActionCard = memo(
     const [currentOperation, setCurrentOperation] = useState(null);
 
     // 실시간 시간 업데이트를 위한 상태
-    const [estimatedTime, setEstimatedTime] = useState("");
+    const [remainingTime, setRemainingTime] = useState("");
 
     // 실시간 시간 업데이트 (1초마다)
     useEffect(() => {
-      if (!fullVideoState?.isGenerating) {
-        setEstimatedTime("");
+      if (!fullVideoState?.isGenerating || !fullVideoState?.startTime) {
+        setRemainingTime("");
         return;
       }
 
       const updateTime = () => {
-        const time = getTotalEstimatedTime(fullVideoState.mode, fullVideoState);
-        setEstimatedTime(time);
+        const now = new Date();
+        const startTime = new Date(fullVideoState.startTime);
+        const elapsedSec = Math.floor((now - startTime) / 1000);
+
+        const durationMin = form?.durationMin || 3;
+        const currentStep = fullVideoState.currentStep;
+
+        // 각 단계별 예상 시간 (초)
+        const scriptEstimatedSec = durationMin <= 3 ? 40 : durationMin <= 5 ? 60 : durationMin <= 10 ? 90 : 120;
+        const audioEstimatedSec = durationMin * 60 * 0.3;
+        const subtitleEstimatedSec = 10;
+        const totalEstimatedSec = scriptEstimatedSec + audioEstimatedSec + subtitleEstimatedSec;
+
+        // 전체 남은 시간 = 전체 예상 시간 - 경과 시간
+        const remainingSec = Math.max(0, totalEstimatedSec - elapsedSec);
+        const remainingMin = Math.floor(remainingSec / 60);
+        const remainingSecOnly = Math.floor(remainingSec % 60);
+
+        setRemainingTime(`${String(remainingMin).padStart(2, "0")}:${String(remainingSecOnly).padStart(2, "0")}`);
       };
 
       updateTime(); // 즉시 실행
       const interval = setInterval(updateTime, 1000); // 1초마다 업데이트
 
       return () => clearInterval(interval);
-    }, [fullVideoState?.isGenerating, fullVideoState?.mode, fullVideoState?.startTime, fullVideoState?.progress]);
+    }, [fullVideoState?.isGenerating, fullVideoState?.startTime, form?.durationMin]);
 
     // 안전한 폼 데이터 처리
     const safeForm = useMemo(
@@ -245,9 +241,10 @@ const ActionCard = memo(
           title: "📝 대본 생성 (기본 모드)",
           description: "빠르게 대본과 음성을 생성하여 콘텐츠 제작을 시작합니다",
           buttonText: "📝 대본 생성 시작",
-          loadingText: "대본 생성 중...",
+          loadingText: "대본 생성 중",
+          completedText: "✅ 대본 생성 완료",
           icon: DocumentEditRegular,
-          gradient: "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)",
+          gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
           estimatedTime: "3-5분",
           outputFormat: "대본 텍스트 + 음성 파일 + SRT 자막",
           onGenerate: () => runScriptMode(form),
@@ -319,46 +316,46 @@ const ActionCard = memo(
     // 중앙 배치 최적화 레이아웃
     if (centered) {
       return (
-        <Card style={styles.centeredCard}>
-          {/* 헤더 */}
-          <div style={{ marginBottom: tokens.spacingVerticalXS }}>
-            <Text size={300} weight="semibold" style={{ color: "white" }}>
-              {currentMode.title}
-            </Text>
-          </div>
-
-          {/* 실행 버튼 영역 */}
-          <div style={styles.buttonContainer}>
-            <Button
-              appearance="primary"
-              icon={fullVideoState.isGenerating ? <SparkleRegular /> : <PlayRegular />}
-              onClick={currentMode.onGenerate}
-              disabled={isDisabled}
-              style={styles.button}
-            >
-              {fullVideoState.isGenerating ? currentMode.loadingText : currentMode.buttonText}
-            </Button>
-          </div>
-
-          {/* 진행 상태 및 남은 시간 */}
-          {fullVideoState?.isGenerating && fullVideoState?.currentStep && (
-            <div style={{ marginTop: tokens.spacingVerticalXS }}>
+        <>
+          <style>{loadingAnimation}</style>
+          <Card style={styles.centeredCard}>
+            {/* 헤더 */}
+            <div style={{ marginBottom: tokens.spacingVerticalXS }}>
               <Text size={300} weight="semibold" style={{ color: "white" }}>
-                {getStepDisplayName(fullVideoState.currentStep)}
-                {estimatedTime && ` · ${estimatedTime}`}
+                {currentMode.title}
               </Text>
             </div>
-          )}
+
+            {/* 실행 버튼 영역 */}
+            <div style={styles.buttonContainer}>
+              <Button
+                appearance="primary"
+                icon={fullVideoState.isGenerating ? <SparkleRegular /> : <PlayRegular />}
+                onClick={currentMode.onGenerate}
+                disabled={isDisabled}
+                style={styles.button}
+              >
+                <span className={fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" ? "loading-text" : ""}>
+                  {fullVideoState.currentStep === "completed"
+                    ? currentMode.completedText
+                    : fullVideoState.isGenerating && fullVideoState.currentStep && remainingTime
+                    ? `${getStepDisplayName(fullVideoState.currentStep)} ${remainingTime}`
+                    : fullVideoState.isGenerating
+                    ? currentMode.loadingText
+                    : currentMode.buttonText}
+                </span>
+              </Button>
+            </div>
+
 
           {/* 설명 영역 */}
-          {!fullVideoState?.isGenerating && (
-            <div style={styles.descriptionContainer}>
-              <Text size={200} style={{ color: "rgba(255,255,255,0.95)" }}>
-                {currentMode.description}
-              </Text>
-            </div>
-          )}
+          <div style={styles.descriptionContainer}>
+            <Text size={200} style={{ color: "rgba(255,255,255,0.95)" }}>
+              {currentMode.description}
+            </Text>
+          </div>
         </Card>
+        </>
       );
     }
 

@@ -3,7 +3,7 @@ import { Card, Text, Dropdown, Option, Field, Badge, Button, Spinner, tokens } f
 import { MicRegular, PlayRegular, StopRegular, ShieldError24Regular } from "@fluentui/react-icons";
 import { useCardStyles, useSettingsStyles, useLayoutStyles } from "../../../styles/commonStyles";
 
-const VoiceSettingsCard = memo(({ form, voices, voiceLoading, voiceError, onChange, onPreviewVoice, onStopVoice, onRetryVoiceLoad, setForm }) => {
+const VoiceSettingsCard = memo(({ form, voices, voiceLoading, voiceError, onChange, onPreviewVoice, onStopVoice, onRetryVoiceLoad, setForm, disabled = false }) => {
   const cardStyles = useCardStyles();
   const settingsStyles = useSettingsStyles();
   const layoutStyles = useLayoutStyles();
@@ -89,7 +89,7 @@ const VoiceSettingsCard = memo(({ form, voices, voiceLoading, voiceError, onChan
             selectedOptions={form.voiceId ? [form.voiceId] : []}
             onOptionSelect={(_, d) => onChange("voiceId", d.optionValue)}
             size="medium"
-            disabled={voiceLoading || !!voiceError}
+            disabled={disabled || voiceLoading || !!voiceError}
             style={{ minHeight: 36 }}
           >
             {voices.map((v) => (
@@ -162,6 +162,7 @@ const VoiceSettingsCard = memo(({ form, voices, voiceLoading, voiceError, onChan
                   size="small"
                   icon={<PlayRegular />}
                   onClick={() => onPreviewVoice(selectedVoice.id, selectedVoice.name)}
+                  disabled={disabled}
                 >
                   미리듣기
                 </Button>
@@ -170,6 +171,7 @@ const VoiceSettingsCard = memo(({ form, voices, voiceLoading, voiceError, onChan
                   size="small"
                   icon={<StopRegular />}
                   onClick={onStopVoice}
+                  disabled={disabled}
                   style={{
                     color: tokens.colorPaletteRedForeground1,
                     borderColor: tokens.colorPaletteRedBorder1
@@ -211,10 +213,10 @@ const VoiceSettingsCard = memo(({ form, voices, voiceLoading, voiceError, onChan
             API 오류 ({voiceError.code || "unknown"}): {voiceError.message || "API 키가 설정되지 않았습니다."}
           </Text>
           <div style={{ display: "flex", gap: 8 }}>
-            <Button appearance="secondary" size="small" onClick={onRetryVoiceLoad}>
+            <Button appearance="secondary" size="small" onClick={onRetryVoiceLoad} disabled={disabled}>
               다시 시도
             </Button>
-            <Button appearance="outline" size="small" onClick={() => {}}>
+            <Button appearance="outline" size="small" onClick={() => {}} disabled={disabled}>
               API 키 설정
             </Button>
           </div>

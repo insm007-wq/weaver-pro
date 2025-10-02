@@ -68,17 +68,17 @@ function register() {
     }
   });
 
-  // 출력 폴더 열기
+  // 프로젝트 폴더 열기
   ipcMain.handle('project:openOutputFolder', async () => {
     try {
       const projectManager = getProjectManager();
       const project = projectManager.getCurrentProject();
-      
+
       if (!project) {
         return { success: false, message: '현재 활성 프로젝트가 없습니다.' };
       }
-      
-      await shell.openPath(project.paths.output);
+
+      await shell.openPath(project.paths.root);
       return { success: true };
     } catch (error) {
       return { success: false, message: error.message };

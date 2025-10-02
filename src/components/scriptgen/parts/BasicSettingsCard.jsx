@@ -7,7 +7,7 @@ import { validateAndSanitizeText } from "../../../utils/sanitizer";
 /**
  * 기본 설정 카드 (UI만 개선)
  */
-const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, setForm }) => {
+const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, setForm, disabled = false }) => {
   const [validationErrors, setValidationErrors] = useState({});
 
   // 안전한 폼 데이터 처리
@@ -155,6 +155,7 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
               size="medium"
               style={{ height: 36 }}
               aria-invalid={validationErrors.topic?.length > 0}
+              disabled={disabled}
             />
             {validationErrors.topic?.length > 0 && (
               <Text size={200} style={{ color: tokens.colorPaletteRedForeground2, marginTop: 4 }}>
@@ -178,6 +179,7 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
             onOptionSelect={(_, d) => onChange("style", d.optionValue)}
             size="medium" // 🔧 large → medium
             style={{ minHeight: 36 }} // 🔧 시각 높이 맞춤
+            disabled={disabled}
           >
             {STYLE_OPTIONS.map((style) => (
               <Option key={style.key} value={style.key}>
@@ -201,6 +203,7 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
             onOptionSelect={(_, d) => onChange("durationMin", parseInt(d.optionValue))}
             size="medium" // 🔧 large → medium
             style={{ minHeight: 36 }}
+            disabled={disabled}
           >
             {DURATION_OPTIONS.map((duration) => (
               <Option key={duration.key} value={duration.key.toString()}>
@@ -223,7 +226,7 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
             selectedOptions={safeForm.promptName ? [safeForm.promptName] : []}
             onOptionSelect={(_, d) => onChange("promptName", d.optionValue)}
             size="medium" // 🔧 large → medium
-            disabled={!!promptLoading || promptNames.length === 0}
+            disabled={disabled || !!promptLoading || promptNames.length === 0}
             style={{ minHeight: 36 }}
           >
             {promptNames.map((name) => (
@@ -253,7 +256,11 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
         {/* 레퍼런스 대본 (선택) - 전체 너비 */}
         <div style={styles.referenceContainer}>
           <div style={styles.switchContainer}>
-            <Switch checked={safeForm.showReferenceScript} onChange={(_, data) => onChange("showReferenceScript", data.checked)} />
+            <Switch
+              checked={safeForm.showReferenceScript}
+              onChange={(_, data) => onChange("showReferenceScript", data.checked)}
+              disabled={disabled}
+            />
             <Text
               size={300}
               weight="semibold"
@@ -288,6 +295,7 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
                 placeholder="예시: '안녕하세요! 오늘은 맛있는 요리를 만들어볼게요. 먼저 재료를 준비해주세요...'"
                 rows={6}
                 resize="none"
+                disabled={disabled}
                 style={{
                   ...styles.textareaContainer,
                   borderColor:

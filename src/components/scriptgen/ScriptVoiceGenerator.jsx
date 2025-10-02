@@ -152,7 +152,14 @@ function ScriptVoiceGenerator() {
         />
 
         {/* 2행: 기본 설정 (1열) */}
-        <BasicSettingsCard form={form} onChange={onChange} promptNames={promptNames} promptLoading={promptLoading} setForm={setForm} />
+        <BasicSettingsCard
+          form={form}
+          onChange={onChange}
+          promptNames={promptNames}
+          promptLoading={promptLoading}
+          setForm={setForm}
+          disabled={fullVideoState.isGenerating}
+        />
 
         {/* 3행: 음성 설정 (1열) */}
         <VoiceSettingsCard
@@ -165,6 +172,7 @@ function ScriptVoiceGenerator() {
           onStopVoice={stopVoice}
           onRetryVoiceLoad={retryVoiceLoad}
           setForm={setForm}
+          disabled={fullVideoState.isGenerating}
         />
 
         {/* 4행: 실시간 결과 (전체 폭) */}

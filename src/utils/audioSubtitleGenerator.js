@@ -170,7 +170,6 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
 
         for (let i = 0; i < audioFiles.length; i++) {
           const audioFile = audioFiles[i];
-          console.log(`🔍 처리 중인 파일 ${i + 1}/${audioFiles.length}:`, audioFile);
           const { fileName, base64, audioUrl } = audioFile;
 
           // 이미 audioUrl이 있는 경우 (파일이 이미 저장된 경우)
@@ -182,7 +181,6 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
               filePath: audioUrl
             });
             console.log(`✅ savedAudioFiles에 기존 파일 추가: ${fileName}`);
-            console.log(`🔍 현재 savedAudioFiles 길이: ${savedAudioFiles.length}`);
             continue;
           }
 
@@ -232,17 +230,9 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
               filePath: filePath
             });
 
-            console.log(`🔍 ${fileName} 저장 결과:`, saveResult);
-            console.log(`🔍 ${fileName} saveResult.success:`, saveResult?.success);
-            console.log(`🔍 ${fileName} saveResult.data:`, saveResult?.data);
-            console.log(`🔍 ${fileName} saveResult.data.ok:`, saveResult?.data?.ok);
-            console.log(`🔍 ${fileName} saveResult.data.path:`, saveResult?.data?.path);
 
             if (saveResult.success && saveResult.data?.ok) {
               const savedPath = saveResult.data.path;
-              console.log(`🔍 ${fileName} savedPath:`, savedPath);
-              console.log(`🔍 ${fileName} savedPath 타입:`, typeof savedPath);
-              console.log(`🔍 ${fileName} savedPath 유효성:`, savedPath && typeof savedPath === 'string' && savedPath.trim() !== '');
 
               if (savedPath && typeof savedPath === 'string' && savedPath.trim() !== '') {
                 const fileInfo = {
@@ -252,7 +242,6 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
                 };
                 savedAudioFiles.push(fileInfo);
                 console.log(`✅ savedAudioFiles에 추가됨: ${fileName}`, fileInfo);
-                console.log(`🔍 현재 savedAudioFiles 길이: ${savedAudioFiles.length}`);
 
                 if (addLog) {
                   addLog(`✅ 음성 파일 저장: ${fileName} → ${savedPath}`);
@@ -287,11 +276,6 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       }
 
       // 저장된 음성 파일들을 하나로 합치기
-      console.log("🔍 === 음성 파일 합치기 시작 ===");
-      console.log("🔍 savedAudioFiles:", savedAudioFiles);
-      console.log("🔍 savedAudioFiles 타입:", typeof savedAudioFiles);
-      console.log("🔍 savedAudioFiles 길이:", savedAudioFiles?.length);
-      console.log("🔍 savedAudioFiles가 배열인가?", Array.isArray(savedAudioFiles));
 
       if (savedAudioFiles && savedAudioFiles.length > 1) {
         if (addLog) {
@@ -312,7 +296,6 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
           }
         }
       } else if (savedAudioFiles && savedAudioFiles.length === 1) {
-        console.log("🔍 단일 파일이므로 합치기 건너뜀");
         if (addLog) {
           addLog(`✅ 단일 음성 파일 저장 완료: ${savedAudioFiles[0].fileName}`);
         }
@@ -391,13 +374,11 @@ async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState
     let projectName = 'default';
     try {
       const currentProjectIdResult = await window.api.getSetting('currentProjectId');
-      console.log("🔍 currentProjectIdResult:", currentProjectIdResult);
 
       if (currentProjectIdResult && currentProjectIdResult.value) {
         projectName = currentProjectIdResult.value;
       } else {
         const defaultProjectNameResult = await window.api.getSetting('defaultProjectName');
-        console.log("🔍 defaultProjectNameResult:", defaultProjectNameResult);
         if (defaultProjectNameResult && defaultProjectNameResult.value) {
           projectName = defaultProjectNameResult.value;
         }
@@ -406,7 +387,6 @@ async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState
       console.warn('프로젝트 정보 가져오기 실패, 기본값 사용:', error.message);
     }
 
-    console.log("🔍 최종 projectName:", projectName);
 
     const mergedFileName = `${projectName}.mp3`;
 
@@ -437,7 +417,6 @@ async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState
       outputPath = outputPath.replace(/\//g, '\\'); // 슬래시를 백슬래시로 통일
     }
 
-    console.log("🔍 디버그 - 최종 outputPath:", outputPath);
 
     console.log("🎵 합본 오디오 파일 경로:", outputPath);
 
@@ -448,31 +427,20 @@ async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState
     }
 
     if (outputPath) {
-      console.log("🔍 디버그 - 입력 audioFiles:", audioFiles);
-      console.log("🔍 디버그 - 입력 audioFiles 길이:", audioFiles.length);
-      console.log("🔍 디버그 - 입력 audioFiles 구조:", JSON.stringify(audioFiles, null, 2));
 
       const audioFilePaths = audioFiles
         .map((f, index) => {
-          console.log(`🔍 디버그 - 개별 파일 ${index}:`, f);
-          console.log(`🔍 디버그 - 개별 파일 ${index} 모든 속성:`, Object.keys(f));
-          console.log(`🔍 디버그 - 개별 파일 ${index} audioUrl:`, f.audioUrl);
-          console.log(`🔍 디버그 - 개별 파일 ${index} filePath:`, f.filePath);
-          console.log(`🔍 디버그 - 개별 파일 ${index} fileName:`, f.fileName);
           let path = f.audioUrl || f.filePath || f.path;
 
           // Windows 경로 정규화
           if (path && typeof path === 'string') {
             path = path.replace(/\//g, '\\'); // 슬래시를 백슬래시로 통일
-            console.log(`🔍 디버그 - 개별 파일 ${index} 정규화된 경로:`, path);
           }
 
-          console.log(`🔍 디버그 - 개별 파일 ${index} 최종 경로:`, path);
           return path;
         })
         .filter((url, index) => {
           const isValid = url && typeof url === 'string' && url !== "pending" && url.trim() !== '';
-          console.log(`🔍 디버그 - 파일 경로 유효성 ${index}:`, url, "->", isValid);
           if (!isValid) {
             console.error(`❌ 유효하지 않은 파일 경로 발견 ${index}:`, url, typeof url);
           }
@@ -520,7 +488,6 @@ async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState
       }
 
       // 파일 존재 여부 확인 로그 추가
-      console.log("🔍 FFmpeg 호출 직전 - 각 파일 존재 확인:");
       for (let i = 0; i < audioFilePaths.length; i++) {
         console.log(`  ${i + 1}. ${audioFilePaths[i]}`);
         if (addLog) {
@@ -533,11 +500,6 @@ async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState
         outputPath: outputPath
       });
 
-      console.log("🔍 음성 합본 결과:", mergeResult);
-      console.log("🔍 mergeResult 타입:", typeof mergeResult);
-      console.log("🔍 mergeResult.success:", mergeResult?.success);
-      console.log("🔍 mergeResult.message:", mergeResult?.message);
-      console.log("🔍 mergeResult.outputPath:", mergeResult?.outputPath);
 
       if (mergeResult && mergeResult.success) {
         if (addLog) {

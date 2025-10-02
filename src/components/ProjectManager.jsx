@@ -479,7 +479,7 @@ export default function ProjectManager() {
   };
 
   /**
-   * 현재 프로젝트의 출력 폴더를 시스템 파일 탐색기로 열기
+   * 현재 프로젝트 폴더를 시스템 파일 탐색기로 열기
    */
   const openOutputFolder = async () => {
     try {
@@ -487,7 +487,7 @@ export default function ProjectManager() {
       if (result.success) {
         showGlobalToast({
           type: "success",
-          text: "출력 폴더를 열었습니다.",
+          text: "프로젝트 폴더를 열었습니다.",
         });
       } else {
         showGlobalToast({
@@ -538,7 +538,7 @@ export default function ProjectManager() {
               </Caption1>
             </div>
             <Button appearance="primary" icon={<FolderOpenRegular />} onClick={openOutputFolder}>
-              출력 폴더 열기
+              폴더 열기
             </Button>
           </div>
         </Card>

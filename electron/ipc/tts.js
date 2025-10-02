@@ -129,11 +129,6 @@ async function synthesizeWithGoogle(scenes, options, progressCallback = null) {
     const sc = scenes[i];
     const finalVoiceName = voiceId || "ko-KR-Neural2-A";
 
-    // 진행률 업데이트
-    if (progressCallback) {
-      progressCallback(i, scenes.length);
-    }
-
     // 요청 전 대기 (API 안정성을 위해)
     if (i > 0) {
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -197,6 +192,11 @@ async function synthesizeWithGoogle(scenes, options, progressCallback = null) {
       mime: "audio/mpeg",
       duration: actualDuration, // 실제 측정된 duration 추가
     });
+
+    // 각 장면 완료 후 진행률 업데이트
+    if (progressCallback) {
+      progressCallback(i + 1, scenes.length);
+    }
   }
 
   return { ok: true, partsCount: parts.length, parts, provider: 'Google' };
