@@ -1,9 +1,47 @@
 // electron/ipc/tts.js
 const { ipcMain } = require("electron");
 const { getSecret } = require("../services/secrets");
+const path = require('path');
+const fs = require('fs').promises;
+const os = require('os');
 
 const GOOGLE_TTS_URL = "https://texttospeech.googleapis.com/v1/text:synthesize";
 const GOOGLE_VOICES_URL = "https://texttospeech.googleapis.com/v1/voices";
+
+// 임시 파일 정리 유틸리티
+async function cleanupTempFiles() {
+  try {
+    const tempDir = os.tmpdir();
+    const files = await fs.readdir(tempDir);
+
+    // temp-audio로 시작하는 파일들만 정리
+    const tempAudioFiles = files.filter(f => f.startsWith('temp-audio-'));
+
+    // 1시간 이상 된 파일만 삭제
+    const oneHourAgo = Date.now() - (60 * 60 * 1000);
+
+    for (const file of tempAudioFiles) {
+      try {
+        const filePath = path.join(tempDir, file);
+        const stats = await fs.stat(filePath);
+
+        if (stats.mtimeMs < oneHourAgo) {
+          await fs.unlink(filePath);
+        }
+      } catch (err) {
+        // 파일이 이미 삭제되었거나 접근 불가능한 경우 무시
+      }
+    }
+  } catch (err) {
+    // 임시 파일 정리 실패는 무시
+  }
+}
+
+// 주기적 임시 파일 정리 (30분마다)
+setInterval(cleanupTempFiles, 30 * 60 * 1000);
+
+// 앱 시작 시 한 번 정리
+cleanupTempFiles();
 
 // 새로운 tts:synthesize 핸들러 (ScriptVoiceGenerator에서 사용)
 ipcMain.handle("tts:synthesize", async (event, { scenes, ttsEngine, voiceId, speed }) => {
@@ -104,7 +142,7 @@ ipcMain.handle("tts/synthesizeByScenes", async (_evt, { doc, tts }) => {
   return await synthesizeWithGoogle(scenes, { voiceId: voiceId || voiceName, speakingRate, pitch });
 });
 
-// Google TTS 음성 합성
+// Google TTS 음성 합성 (병렬 처리 + 재시도)
 async function synthesizeWithGoogle(scenes, options, progressCallback = null) {
   const apiKey = await getSecret("googleTtsApiKey");
   if (!apiKey) {
@@ -119,20 +157,17 @@ async function synthesizeWithGoogle(scenes, options, progressCallback = null) {
     return parts.length >= 2 ? `${parts[0]}-${parts[1]}` : "ko-KR";
   })();
 
-  const parts = [];
-  const path = require('path');
-  const fs = require('fs').promises;
-  const os = require('os');
   const { execSync } = require('child_process');
 
-  for (let i = 0; i < scenes.length; i++) {
-    const sc = scenes[i];
-    const finalVoiceName = voiceId || "ko-KR-Neural2-A";
+  // 병렬 처리 설정 (동시 3개씩 처리)
+  const BATCH_SIZE = 3;
+  const parts = new Array(scenes.length);
+  let completedCount = 0;
 
-    // 요청 전 대기 (API 안정성을 위해)
-    if (i > 0) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
+  // 단일 씬 TTS 생성 함수 (재시도 로직 포함)
+  async function synthesizeScene(sceneIndex, maxRetries = 3) {
+    const sc = scenes[sceneIndex];
+    const finalVoiceName = voiceId || "ko-KR-Neural2-A";
 
     const body = {
       input: { text: String(sc.text || "") },
@@ -147,58 +182,105 @@ async function synthesizeWithGoogle(scenes, options, progressCallback = null) {
       },
     };
 
-    const res = await fetch(`${GOOGLE_TTS_URL}?key=${apiKey}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    let lastError = null;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // 재시도 시 지수 백오프
+        if (attempt > 0) {
+          const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+          console.log(`⏳ 씬 ${sceneIndex + 1} 재시도 ${attempt}/${maxRetries} (${backoffMs}ms 대기)`);
+          await new Promise(resolve => setTimeout(resolve, backoffMs));
+        }
 
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(`Google TTS 실패(${i + 1}): ${res.status} ${txt}`);
+        // 타임아웃 설정 (30초)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+        const res = await fetch(`${GOOGLE_TTS_URL}?key=${apiKey}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(`Google TTS 실패(${sceneIndex + 1}): ${res.status} ${txt}`);
+        }
+
+        const data = await res.json();
+        const base64 = data?.audioContent;
+        if (!base64) throw new Error(`Google TTS 응답 오류(${sceneIndex + 1})`);
+
+        // 실제 오디오 duration 측정
+        let actualDuration = 0;
+        try {
+          const tempDir = os.tmpdir();
+          const tempFile = path.join(tempDir, `temp-audio-${sceneIndex}-${Date.now()}.mp3`);
+
+          const buffer = Buffer.from(base64, 'base64');
+          await fs.writeFile(tempFile, buffer);
+
+          const ffprobeCmd = `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${tempFile}"`;
+          const durationOutput = execSync(ffprobeCmd, { encoding: 'utf-8' }).trim();
+          actualDuration = parseFloat(durationOutput);
+
+          await fs.unlink(tempFile).catch(() => {});
+        } catch (error) {
+          const charCount = (sc.text || "").length;
+          actualDuration = charCount / (240 / 60);
+        }
+
+        return {
+          fileName: `scene-${String(sceneIndex + 1).padStart(3, "0")}.mp3`,
+          base64,
+          mime: "audio/mpeg",
+          duration: actualDuration,
+        };
+      } catch (error) {
+        lastError = error;
+        console.warn(`❌ 씬 ${sceneIndex + 1} 시도 ${attempt + 1}/${maxRetries} 실패:`, error.message);
+
+        // 마지막 시도가 아니면 계속
+        if (attempt < maxRetries - 1) continue;
+      }
     }
 
-    const data = await res.json();
-    const base64 = data?.audioContent;
-    if (!base64) throw new Error(`Google TTS 응답 오류(${i + 1})`);
+    throw new Error(`씬 ${sceneIndex + 1} TTS 생성 실패 (${maxRetries}회 재시도): ${lastError?.message}`);
+  }
 
-    // 실제 오디오 duration 측정을 위해 임시 파일 생성
-    let actualDuration = 0;
-    try {
-      const tempDir = os.tmpdir();
-      const tempFile = path.join(tempDir, `temp-audio-${i}.mp3`);
+  // 배치 단위로 병렬 처리
+  for (let batchStart = 0; batchStart < scenes.length; batchStart += BATCH_SIZE) {
+    const batchEnd = Math.min(batchStart + BATCH_SIZE, scenes.length);
+    const batchPromises = [];
 
-      // base64를 파일로 저장
-      const buffer = Buffer.from(base64, 'base64');
-      await fs.writeFile(tempFile, buffer);
+    // 배치 내 씬들을 병렬로 처리
+    for (let i = batchStart; i < batchEnd; i++) {
+      batchPromises.push(
+        synthesizeScene(i).then(result => {
+          parts[i] = result;
+          completedCount++;
 
-      // ffprobe로 실제 duration 측정
-      const ffprobeCmd = `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${tempFile}"`;
-      const durationOutput = execSync(ffprobeCmd, { encoding: 'utf-8' }).trim();
-      actualDuration = parseFloat(durationOutput);
-
-      // 임시 파일 삭제
-      await fs.unlink(tempFile).catch(() => {});
-    } catch (error) {
-      // 폴백: 글자 수 기반 추정 (한국어 TTS speakingRate 1.05 기준)
-      // speakingRate 1.05 = 약 240-260자/분 = 4-4.3자/초
-      const charCount = (sc.text || "").length;
-      actualDuration = charCount / (240 / 60); // 240자/분 = 4자/초
+          // 진행률 업데이트
+          if (progressCallback) {
+            progressCallback(completedCount, scenes.length);
+          }
+        })
+      );
     }
 
-    parts.push({
-      fileName: `scene-${String(i + 1).padStart(3, "0")}.mp3`,
-      base64,
-      mime: "audio/mpeg",
-      duration: actualDuration, // 실제 측정된 duration 추가
-    });
+    // 현재 배치 완료 대기
+    await Promise.all(batchPromises);
 
-    // 각 장면 완료 후 진행률 업데이트
-    if (progressCallback) {
-      progressCallback(i + 1, scenes.length);
+    // 배치 간 짧은 대기 (API 부하 방지)
+    if (batchEnd < scenes.length) {
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
   }
 
+  console.log(`✅ TTS 생성 완료: ${parts.length}개 씬`);
   return { ok: true, partsCount: parts.length, parts, provider: 'Google' };
 }
 

@@ -214,38 +214,88 @@ function normalizeScenes(scenes, targetDuration) {
 }
 
 // ============================================================
-// API 호출
+// API 호출 (타임아웃 및 재시도 로직 추가)
 // ============================================================
-async function callAnthropicAPI(apiKey, prompt, minSceneCount = 5, isLongForm = false) {
-  const response = await fetch(ANTHROPIC_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: DEFAULT_MODEL,
-      max_tokens: isLongForm ? MAX_TOKENS : MAX_TOKENS - 100, // 장편은 최대 토큰 사용
-      system: `You are a professional Korean scriptwriter.
+async function callAnthropicAPI(apiKey, prompt, minSceneCount = 5, isLongForm = false, maxRetries = 3) {
+  let lastError = null;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      // 재시도 시 지수 백오프
+      if (attempt > 0) {
+        const backoffMs = Math.min(2000 * Math.pow(2, attempt - 1), 10000);
+        console.log(`⏳ LLM API 재시도 ${attempt}/${maxRetries} (${backoffMs}ms 대기)`);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+      }
+
+      // 타임아웃 설정 (장편: 120초, 단편: 60초)
+      const timeoutMs = isLongForm ? 120000 : 60000;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      const response = await fetch(ANTHROPIC_URL, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: DEFAULT_MODEL,
+          max_tokens: isLongForm ? MAX_TOKENS : MAX_TOKENS - 100,
+          system: `You are a professional Korean scriptwriter.
 CRITICAL RULES:
 1. Return ONLY valid JSON without any explanations or markdown.
 2. The "scenes" array MUST contain at least ${minSceneCount} scenes.
 3. ${isLongForm ? 'This is a LONG-FORM content. Generate as many scenes as possible (aim for ' + minSceneCount + '+).' : 'Each scene duration MUST sum to the requested total video time.'}
 4. Each scene text MUST be 50~60 Korean characters (not less than 50).
 5. ${isLongForm ? 'You MUST generate at least ' + minSceneCount + ' scenes or the response will be rejected.' : ''}`,
-      messages: [{ role: "user", content: prompt }],
-      temperature: isLongForm ? 0.7 : 0.2, // 장편은 창의성 높여서 더 많이 생성
-    }),
-  });
+          messages: [{ role: "user", content: prompt }],
+          temperature: isLongForm ? 0.7 : 0.2,
+        }),
+        signal: controller.signal
+      });
 
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "");
-    throw new Error(`Anthropic API Error ${response.status}: ${errorText}`);
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+
+        // 429 Rate Limit은 재시도, 401 등은 즉시 실패
+        if (response.status === 401 || response.status === 403) {
+          throw new Error(`Anthropic API 인증 오류 ${response.status}: API 키를 확인해주세요.`);
+        }
+
+        throw new Error(`Anthropic API Error ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      const result = data?.content?.[0]?.text || "";
+
+      if (!result) {
+        throw new Error("API 응답이 비어있습니다.");
+      }
+
+      console.log(`✅ LLM API 호출 성공 (시도 ${attempt + 1}/${maxRetries})`);
+      return result;
+
+    } catch (error) {
+      lastError = error;
+      console.error(`❌ LLM API 시도 ${attempt + 1}/${maxRetries} 실패:`, error.message);
+
+      // 타임아웃 또는 네트워크 오류는 재시도
+      const isRetryable = error.name === 'AbortError' ||
+                          error.message.includes('fetch') ||
+                          error.message.includes('network') ||
+                          error.message.includes('429');
+
+      if (!isRetryable || attempt === maxRetries - 1) {
+        break;
+      }
+    }
   }
 
-  const data = await response.json();
-  return data?.content?.[0]?.text || "";
+  throw new Error(`LLM API 호출 실패 (${maxRetries}회 재시도): ${lastError?.message}`);
 }
 
 // ============================================================
