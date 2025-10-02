@@ -1,6 +1,7 @@
 // electron/ipc/tts.js
 const { ipcMain } = require("electron");
 const { getSecret } = require("../services/secrets");
+const { getDefaultProjectRoot } = require("../utils/pathHelper");
 const path = require('path');
 const fs = require('fs').promises;
 const os = require('os');
@@ -91,7 +92,7 @@ ipcMain.handle("tts:synthesize", async (event, { scenes, ttsEngine, voiceId, spe
         }
       } else {
         // 폴백: 기본 경로 사용
-        const projectRoot = store.get('projectRootFolder') || 'C:\\WeaverPro';
+        const projectRoot = store.get('projectRootFolder') || getDefaultProjectRoot();
         const defaultProjectName = store.get('defaultProjectName') || 'default';
         audioPartsDir = path.join(projectRoot, defaultProjectName, 'audio', 'parts');
       }
@@ -493,7 +494,7 @@ ipcMain.handle("tts:regenerateScene", async (event, { sceneIndex, sceneText, voi
         }
       } else {
         // 폴백: 기본 경로 사용
-        const projectRoot = store.get('projectRootFolder') || 'C:\\WeaverPro';
+        const projectRoot = store.get('projectRootFolder') || getDefaultProjectRoot();
         audioPartsDir = path.join(projectRoot, 'audio', 'parts');
       }
 

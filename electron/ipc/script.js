@@ -1,5 +1,6 @@
 // electron/ipc/script.js
 const { ipcMain } = require("electron");
+const { getDefaultProjectRoot } = require("../utils/pathHelper");
 
 /** 초(실수 가능) -> "HH:MM:SS,mmm" */
 function toSrtTime(sec) {
@@ -97,7 +98,7 @@ ipcMain.handle("script:getSubtitlePath", async (_evt, { filename }) => {
       console.warn("⚠️ 현재 프로젝트가 설정되지 않았습니다. 기본 경로를 사용합니다.");
 
       // 폴백: 기본 경로 사용
-      const projectRoot = store.get('projectRootFolder') || 'C:\\WeaverPro';
+      const projectRoot = store.get('projectRootFolder') || getDefaultProjectRoot();
       const defaultProjectName = store.get('defaultProjectName') || 'default';
       const scriptsDir = path.join(projectRoot, defaultProjectName, 'scripts');
 
@@ -168,7 +169,7 @@ ipcMain.handle("script:getAudioPath", async (_evt, { filename }) => {
       console.warn("⚠️ 현재 프로젝트가 설정되지 않았습니다. 기본 경로를 사용합니다.");
 
       // 폴백: 기본 경로 사용
-      const projectRoot = store.get('projectRootFolder') || 'C:\\WeaverPro';
+      const projectRoot = store.get('projectRootFolder') || getDefaultProjectRoot();
       const defaultProjectName = store.get('defaultProjectName') || 'default';
       const audioDir = path.join(projectRoot, defaultProjectName, 'audio');
 

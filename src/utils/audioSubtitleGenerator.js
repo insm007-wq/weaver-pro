@@ -220,18 +220,20 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
                 } catch (dirError) {
                   console.warn("개별 음성 파일용 audio 폴더 생성 실패:", dirError);
                 }
-                filePath = `${audioFolder}\\${fileName}`;
+                // 크로스 플랫폼 경로 (슬래시 사용, electron이 자동 변환)
+                filePath = `${audioFolder}/${fileName}`;
               } else {
-                filePath = `C:\\WeaverPro\\audio\\${fileName}`;
+                // 백엔드에서 기본 경로 처리
+                filePath = null; // electron이 처리
               }
             } catch (error) {
-              console.warn("설정 가져오기 실패, 기본 경로 사용:", error);
-              filePath = `C:\\WeaverPro\\audio\\${fileName}`;
+              console.warn("설정 가져오기 실패, electron이 기본 경로 처리");
+              filePath = null; // electron이 처리
             }
 
-            // Windows 경로 정규화
+            // 경로 정규화 (electron이 OS에 맞게 처리)
             if (filePath && typeof filePath === 'string') {
-              filePath = filePath.replace(/\//g, '\\'); // 슬래시를 백슬래시로 통일
+              // 슬래시 사용 (electron이 OS에 맞게 변환)
               console.log("📁 정규화된 개별 파일 경로:", filePath);
             }
 
@@ -408,23 +410,23 @@ async function mergeAudioFiles(audioFiles, mode, { api, toast, setFullVideoState
 
     const mergedFileName = `${projectName}.mp3`;
 
-    // 간단하게 현재 프로젝트 설정 사용
-    let outputPath = `C:\\WeaverPro\\${projectName}\\audio\\${mergedFileName}`;
+    // 크로스 플랫폼 경로 (슬래시 사용)
+    let outputPath = null; // electron이 기본 경로 처리
 
     try {
       const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
       const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
 
       if (videoSaveFolder && typeof videoSaveFolder === 'string' && videoSaveFolder.trim() !== '') {
-        // audio 폴더 생성 확인
-        const audioFolder = `${videoSaveFolder}\\audio`;
+        // audio 폴더 생성 확인 (슬래시 사용)
+        const audioFolder = `${videoSaveFolder}/audio`;
         try {
           await api.invoke("fs:mkDirRecursive", { dirPath: audioFolder });
           console.log("📁 audio 폴더 생성/확인 완료:", audioFolder);
         } catch (dirError) {
           console.warn("audio 폴더 생성 실패:", dirError);
         }
-        outputPath = `${audioFolder}\\${mergedFileName}`;
+        outputPath = `${audioFolder}/${mergedFileName}`;
       }
     } catch (error) {
       console.warn("설정 가져오기 실패, 기본 경로 사용:", error);

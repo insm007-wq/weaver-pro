@@ -57,7 +57,7 @@ import { useApi } from "../hooks/useApi";
  * @property {string} defaultProjectName - 기본 프로젝트 이름
  */
 const DEFAULT_PROJECT_SETTINGS = {
-  projectRootFolder: "C:\\WeaverPro\\",
+  // projectRootFolder는 electron에서 OS별로 자동 설정됨
   defaultProjectName: "default",
 };
 
@@ -748,7 +748,7 @@ export default function ProjectManager() {
             <Input
               value={settings.projectRootFolder}
               contentBefore={<FolderRegular style={{ color: tokens.colorBrandForeground1 }} />}
-              placeholder="예: C:\\WeaverPro\\"
+              placeholder="예: /Users/username/Documents/WeaverPro (Mac) 또는 C:\\WeaverPro (Windows)"
               disabled={true}
               input={{ style: { color: tokens.colorBrandForeground1 } }}
             />

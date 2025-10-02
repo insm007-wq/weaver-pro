@@ -437,15 +437,15 @@ async function mergeAudioFiles(audioFiles, api, addLog) {
     addLog(`🎵 === 오디오 합본 프로세스 시작 ===`);
 
     const mergedFileName = `default.mp3`;
-    let outputPath = `C:\\WeaverPro\\default\\audio\\${mergedFileName}`;
+    let outputPath = null; // electron이 기본 경로 처리
 
     try {
       const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
       const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
       if (videoSaveFolder && typeof videoSaveFolder === "string" && videoSaveFolder.trim() !== "") {
-        const audioFolder = `${videoSaveFolder}\\audio`;
+        const audioFolder = `${videoSaveFolder}/audio`;
         await api.invoke("fs:mkDirRecursive", { dirPath: audioFolder }).catch(() => {});
-        outputPath = `${audioFolder}\\${mergedFileName}`;
+        outputPath = `${audioFolder}/${mergedFileName}`;
       }
     } catch {}
 
@@ -477,11 +477,11 @@ async function renameSingleAudioFile(audioFile, api, addLog) {
     try {
       const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
       const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
-      const audioFolder = `${videoSaveFolder}\\audio`;
+      const audioFolder = `${videoSaveFolder}/audio`;
       await api.invoke("fs:mkDirRecursive", { dirPath: audioFolder }).catch(() => {});
-      outputPath = `${audioFolder}\\${targetFileName}`;
+      outputPath = `${audioFolder}/${targetFileName}`;
     } catch {
-      outputPath = `C:\\WeaverPro\\default\\audio\\${targetFileName}`;
+      outputPath = null; // electron이 기본 경로 처리
     }
 
     const copyResult = await api.invoke("audio/mergeFiles", {
@@ -511,7 +511,7 @@ async function generateSubtitleFile(scriptData, api, addLog) {
     try {
       const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
       const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
-      const audioFilePath = videoSaveFolder ? `${videoSaveFolder}\\audio\\default.mp3` : "C:\\WeaverPro\\default\\audio\\default.mp3";
+      const audioFilePath = videoSaveFolder ? `${videoSaveFolder}/audio/default.mp3` : null;
       const durationResult = await api.invoke("ffmpeg:duration", audioFilePath);
       if (durationResult.success && durationResult.seconds > 0) totalAudioDurationSec = durationResult.seconds;
     } catch {}
@@ -568,10 +568,10 @@ async function generateSubtitleFile(scriptData, api, addLog) {
     try {
       const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
       const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
-      srtFilePath = `${videoSaveFolder}\\scripts\\subtitle.srt`;
-      await api.invoke("fs:mkDirRecursive", { dirPath: `${videoSaveFolder}\\scripts` }).catch(() => {});
+      srtFilePath = `${videoSaveFolder}/scripts/subtitle.srt`;
+      await api.invoke("fs:mkDirRecursive", { dirPath: `${videoSaveFolder}/scripts` }).catch(() => {});
     } catch {}
-    if (!srtFilePath) srtFilePath = "C:\\WeaverPro\\default\\scripts\\subtitle.srt";
+    if (!srtFilePath) srtFilePath = null; // electron이 기본 경로 처리
 
     await api.invoke("files:writeText", { filePath: srtFilePath, content: srtContent });
     addLog(`✅ SRT 자막 생성 완료: ${srtFilePath}`);

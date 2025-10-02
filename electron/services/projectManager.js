@@ -10,6 +10,7 @@ const { app } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
 const store = require('./store');
+const { getDefaultProjectRoot } = require('../utils/pathHelper');
 
 class ProjectManager {
   constructor() {
@@ -39,7 +40,8 @@ class ProjectManager {
       console.warn('설정값 읽기 실패, 기본값 사용:', error.message);
     }
 
-    return 'C:\\WeaverPro';
+    // OS에 맞는 기본 경로 반환
+    return getDefaultProjectRoot();
   }
 
   // 새 프로젝트 생성

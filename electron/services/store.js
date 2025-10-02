@@ -2,6 +2,7 @@
 const Store = require("electron-store");
 const { app } = require("electron");
 const path = require("path");
+const { getDefaultProjectRoot } = require("../utils/pathHelper");
 
 // weaver-pro 폴더로 강제 설정
 const store = new Store({
@@ -12,10 +13,11 @@ const store = new Store({
 // 실제 파일 저장 경로 로그 출력
 console.log("📁 electron-store 설정 파일 경로:", store.path);
 
-// 기본값 설정으로 파일 생성 강제
+// 기본값 설정으로 파일 생성 강제 (OS별 경로)
 if (!store.has('projectRootFolder')) {
-  store.set('projectRootFolder', 'C:\\WeaverPro\\');
-  console.log("✅ 기본 projectRootFolder 설정됨");
+  const defaultPath = getDefaultProjectRoot();
+  store.set('projectRootFolder', defaultPath);
+  console.log(`✅ 기본 projectRootFolder 설정됨 (${process.platform}): ${defaultPath}`);
 }
 
 if (!store.has('defaultProjectName')) {
