@@ -269,6 +269,9 @@ const FileSelection = memo(
         gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
         gap: tokens.spacingHorizontalL,
         padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL} ${tokens.spacingVerticalL}`,
+        flex: 1,
+        overflowY: "auto",
+        overflowX: "hidden",
       }),
       []
     );
@@ -304,9 +307,10 @@ const FileSelection = memo(
           padding: "12px 16px",
           borderRadius: "16px",
           border: `1px solid ${tokens.colorNeutralStroke2}`,
-          height: "fit-content",
+          height: "350px",
           display: "flex",
           flexDirection: "column",
+          overflow: "hidden",
         }}
       >
         <div style={{ marginBottom: tokens.spacingVerticalS }}>

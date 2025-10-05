@@ -40,6 +40,9 @@ export { usePromptSettings } from './usePromptSettings';
 export { useFileManagement } from './useFileManagement';
 export { useKeywordExtraction } from './useKeywordExtraction';
 
+// ===== 위저드 스텝 관련 훅들 =====
+export { useWizardStep } from './useWizardStep';
+
 // ===== 카테고리별 네임스페이스 export =====
 export * as api from './api';
 export * as storage from './storage';

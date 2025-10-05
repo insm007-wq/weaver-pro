@@ -137,6 +137,19 @@ function App() {
     };
   }, []);
 
+  // 미디어 다운로드 페이지로 이동하는 커스텀 이벤트 리스너
+  useEffect(() => {
+    const handleNavigateToDownload = () => {
+      setCurrentPage('draft');
+    };
+
+    window.addEventListener('navigate-to-download', handleNavigateToDownload);
+
+    return () => {
+      window.removeEventListener('navigate-to-download', handleNavigateToDownload);
+    };
+  }, []);
+
   return (
     <div className={mergeClasses(styles.root, fontStyles.globalFont)}>
       <Suspense fallback={<MemoizedLoadingFallback label="헤더 로딩 중..." />}>
