@@ -150,6 +150,19 @@ function App() {
     };
   }, []);
 
+  // 영상 완성 페이지로 이동하는 커스텀 이벤트 리스너
+  useEffect(() => {
+    const handleNavigateToRefine = () => {
+      setCurrentPage('refine');
+    };
+
+    window.addEventListener('navigate-to-refine', handleNavigateToRefine);
+
+    return () => {
+      window.removeEventListener('navigate-to-refine', handleNavigateToRefine);
+    };
+  }, []);
+
   return (
     <div className={mergeClasses(styles.root, fontStyles.globalFont)}>
       <Suspense fallback={<MemoizedLoadingFallback label="헤더 로딩 중..." />}>

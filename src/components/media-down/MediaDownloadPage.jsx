@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Text, Button, Card, Spinner, ProgressBar, Badge, Avatar, Divider, Slider, Dropdown, Option } from "@fluentui/react-components";
 import { useHeaderStyles, useContainerStyles } from "../../styles/commonStyles";
 import {
@@ -10,6 +10,8 @@ import {
   SettingsRegular,
   InfoRegular,
   ArrowClockwiseRegular,
+  VideoClip24Regular,
+  DismissCircle24Regular,
 } from "@fluentui/react-icons";
 import { PageErrorBoundary } from "../common/ErrorBoundary";
 import { showError, showSuccess } from "../common/GlobalToast";
@@ -34,12 +36,15 @@ function MediaDownloadPage() {
   const [downloadProgress, setDownloadProgress] = useState({});
   const [downloadedVideos, setDownloadedVideos] = useState([]);
   const [downloadOptions, setDownloadOptions] = useState({
-    videosPerKeyword: 1,
+    videosPerKeyword: 2,
     maxFileSize: 20,
     minResolution: "1080p",
     aspectRatio: "16:9",
   });
   const [keywordsLoaded, setKeywordsLoaded] = useState(false);
+  const [downloadCancelled, setDownloadCancelled] = useState(false);
+  const cancelledRef = useRef(false);
+  const progressListenerRef = useRef(null);
 
   // ===== 초기 로드 및 설정 변경 감지
   useEffect(() => {
@@ -114,6 +119,8 @@ function MediaDownloadPage() {
     if (keywords.length === 0) return showError("추출된 키워드가 없습니다. 먼저 미디어 준비에서 키워드를 추출해주세요.");
 
     setIsDownloading(true);
+    setDownloadCancelled(false);
+    cancelledRef.current = false;
     setDownloadProgress({});
     setDownloadedVideos([]);
 
@@ -121,6 +128,9 @@ function MediaDownloadPage() {
 
     try {
       const onProgress = (p) => {
+        // 취소된 경우 프로그레스 업데이트 무시
+        if (cancelledRef.current) return;
+
         const { keyword, status, progress, filename, error, videoIndex, totalVideos, videoSuffix } = p;
         setDownloadProgress((prev) => ({
           ...prev,
@@ -177,20 +187,53 @@ function MediaDownloadPage() {
       };
 
       const off = window.api.onVideoDownloadProgress(onProgress);
+      progressListenerRef.current = off;
+
       const result = await window.api.downloadVideosByKeywords({
         keywords: keywordArray,
         provider: selectedProvider,
         options: downloadOptions,
       });
-      off();
 
-      if (result.success) showSuccess(`영상 다운로드 완료: ${result.summary.success}/${result.summary.total}개 성공`);
-      else showError(`영상 다운로드 실패: ${result.error}`);
+      if (off) off();
+      progressListenerRef.current = null;
+
+      // 취소되지 않은 경우에만 성공/실패 메시지 표시
+      if (!cancelledRef.current) {
+        if (result.success) showSuccess(`영상 다운로드 완료: ${result.summary.success}/${result.summary.total}개 성공`);
+        else showError(`영상 다운로드 실패: ${result.error}`);
+      }
     } catch (e) {
       console.error(e);
       showError(`영상 다운로드 중 오류가 발생했습니다: ${e.message}`);
     } finally {
       setIsDownloading(false);
+      setDownloadCancelled(false);
+    }
+  };
+
+  // ===== 다운로드 취소
+  const cancelDownload = async () => {
+    cancelledRef.current = true;
+    setDownloadCancelled(true);
+    setIsDownloading(false);
+
+    // 프로그레스 리스너 즉시 제거
+    if (progressListenerRef.current) {
+      progressListenerRef.current();
+      progressListenerRef.current = null;
+    }
+
+    // 백엔드에 취소 요청
+    try {
+      if (window.api?.cancelVideoDownload) {
+        await window.api.cancelVideoDownload();
+        console.log("[취소] 백엔드에 취소 요청 완료");
+      }
+      showSuccess("다운로드가 취소되었습니다.");
+    } catch (error) {
+      console.error("[취소] 실패:", error);
+      showError("다운로드 취소 중 오류가 발생했습니다.");
     }
   };
 
@@ -263,7 +306,7 @@ function MediaDownloadPage() {
           style={{
             padding: 20,
             gridArea: "source",
-            minHeight: 132, // ✅ 높이 고정
+            minHeight: 180,
             display: "flex",
             flexDirection: "column",
             gap: 16,
@@ -280,7 +323,7 @@ function MediaDownloadPage() {
               size="large"
               appearance={selectedProvider === "pexels" ? "primary" : "secondary"}
               onClick={() => setSelectedProvider("pexels")}
-              style={{ flex: 1, whiteSpace: "nowrap" }} // ✅ 줄바꿈 방지
+              style={{ flex: 1, whiteSpace: "nowrap" }}
             >
               <Avatar name="Pexels" size={20} style={{ marginRight: 8, backgroundColor: "#05A081" }} />
               Pexels
@@ -289,16 +332,38 @@ function MediaDownloadPage() {
               size="large"
               appearance={selectedProvider === "pixabay" ? "primary" : "secondary"}
               onClick={() => setSelectedProvider("pixabay")}
-              style={{ flex: 1, whiteSpace: "nowrap" }} // ✅ 줄바꿈 방지
+              style={{ flex: 1, whiteSpace: "nowrap" }}
             >
               <Avatar name="Pixabay" size={20} style={{ marginRight: 8, backgroundColor: "#02BE6E" }} />
               Pixabay
             </Button>
           </div>
+
+          {/* 소스 설명 */}
+          <div
+            style={{
+              padding: 12,
+              backgroundColor: "#f8fafc",
+              borderRadius: 8,
+              border: "1px solid #eef1f6",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <InfoRegular style={{ fontSize: 16, color: "#5e6ad2" }} />
+              <Text size={300} weight="semibold">
+                {selectedProvider === "pexels" ? "Pexels" : "Pixabay"} 특징
+              </Text>
+            </div>
+            <Text size={200} style={{ color: "#7a869a", lineHeight: 1.5 }}>
+              {selectedProvider === "pexels"
+                ? "• 고품질 프리미엄 영상 제공\n• 다양한 해상도 및 포맷 지원\n• 빠른 다운로드 속도"
+                : "• 방대한 무료 영상 라이브러리\n• 다국어 검색 지원\n• 다양한 카테고리 제공"}
+            </Text>
+          </div>
         </Card>
 
         {/* 좌중: 키워드 */}
-        <Card style={{ padding: 20, gridArea: "keywords" }}>
+        <Card style={{ padding: 20, gridArea: "keywords", display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <VideoRegular style={{ fontSize: 18 }} />
@@ -319,59 +384,86 @@ function MediaDownloadPage() {
             </div>
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-              gap: 8,
-              maxHeight: 300,
-              overflowY: "auto",
-              paddingRight: 4,
-            }}
-          >
-            {!keywordsLoaded ? (
-              <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: 20 }}>
-                <Spinner size="small" style={{ marginBottom: 8 }} />
-                <Text size={300}>키워드를 불러오는 중...</Text>
-              </div>
-            ) : keywords.length === 0 ? (
-              <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: 20 }}>
-                <Text size={300} style={{ color: "#666" }}>
-                  추출된 키워드가 없습니다.
-                  <br />
-                  먼저 미디어 준비에서 키워드를 추출해주세요.
-                </Text>
-              </div>
-            ) : (
-              keywords.map((k) => (
-                <Badge
-                  key={k}
-                  appearance={selectedKeywords.has(k) ? "filled" : "outline"}
-                  style={{ cursor: "pointer", padding: "8px 12px", textAlign: "center" }}
-                  onClick={() => toggleKeyword(k)}
-                >
-                  {k}
-                </Badge>
-              ))
-            )}
+          <div style={{ flex: 1 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+                gap: 8,
+                maxHeight: 300,
+                overflowY: "auto",
+                paddingRight: 4,
+              }}
+            >
+              {!keywordsLoaded ? (
+                <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: 20 }}>
+                  <Spinner size="small" style={{ marginBottom: 8 }} />
+                  <Text size={300}>키워드를 불러오는 중...</Text>
+                </div>
+              ) : keywords.length === 0 ? (
+                <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: 20 }}>
+                  <Text size={300} style={{ color: "#666" }}>
+                    추출된 키워드가 없습니다.
+                    <br />
+                    먼저 미디어 준비에서 키워드를 추출해주세요.
+                  </Text>
+                </div>
+              ) : (
+                keywords.map((k) => {
+                  const isSelected = selectedKeywords.has(k);
+                  return (
+                    <Badge
+                      key={k}
+                      appearance={isSelected ? "filled" : "outline"}
+                      style={{
+                        cursor: "pointer",
+                        padding: "8px 12px",
+                        textAlign: "center",
+                        backgroundColor: isSelected ? "#e6f4ff" : "transparent",
+                        color: isSelected ? "#0078d4" : "#666",
+                        borderColor: isSelected ? "#91caff" : "#e0e0e0",
+                        fontWeight: isSelected ? 600 : 500,
+                      }}
+                      onClick={() => toggleKeyword(k)}
+                    >
+                      {k}
+                    </Badge>
+                  );
+                })
+              )}
+            </div>
           </div>
 
-          <Divider style={{ margin: "16px 0" }} />
+          <div style={{ marginTop: "auto" }}>
+            <Divider style={{ margin: "16px 0" }} />
 
-          <Button
-            appearance="primary"
-            size="large"
-            disabled={selectedKeywords.size === 0 || isDownloading}
-            onClick={startDownload}
-            style={{ width: "100%" }}
-          >
-            <ArrowDownloadRegular style={{ marginRight: 8 }} />
-            {isDownloading ? "다운로드 중..." : `${selectedKeywords.size}개 키워드로 다운로드`}
-          </Button>
+            {isDownloading ? (
+              <Button
+                appearance="secondary"
+                size="large"
+                onClick={cancelDownload}
+                style={{ width: "100%" }}
+              >
+                <DismissCircle24Regular style={{ marginRight: 8 }} />
+                취소
+              </Button>
+            ) : (
+              <Button
+                appearance="primary"
+                size="large"
+                disabled={selectedKeywords.size === 0}
+                onClick={startDownload}
+                style={{ width: "100%" }}
+              >
+                <ArrowDownloadRegular style={{ marginRight: 8 }} />
+                {`${selectedKeywords.size}개 키워드로 다운로드`}
+              </Button>
+            )}
+          </div>
         </Card>
 
         {/* 우상: 옵션 — 슬라이더/드롭다운 100% 폭 */}
-        <Card style={{ padding: 20, gridArea: "options" }}>
+        <Card style={{ padding: 20, gridArea: "options", display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
             <SettingsRegular style={{ fontSize: 18 }} />
             <Text size={400} weight="semibold">
@@ -379,7 +471,7 @@ function MediaDownloadPage() {
             </Text>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
             {/* 1) 영상 개수 */}
             <div style={row}>
               <Text size={300} weight="medium">
@@ -396,7 +488,7 @@ function MediaDownloadPage() {
                 />
                 <div style={{ display: "flex", justifyContent: "space-between", ...smallHint, marginTop: 4 }}>
                   <span>1개</span>
-                  <span>현재: {downloadOptions.videosPerKeyword}개</span>
+                  <span style={{ color: "#0078d4", fontSize: 13, fontWeight: 500 }}>현재: {downloadOptions.videosPerKeyword}개</span>
                   <span>5개</span>
                 </div>
               </div>
@@ -418,7 +510,7 @@ function MediaDownloadPage() {
                 />
                 <div style={{ display: "flex", justifyContent: "space-between", ...smallHint, marginTop: 4 }}>
                   <span>1MB</span>
-                  <span>현재: {downloadOptions.maxFileSize}MB</span>
+                  <span style={{ color: "#0078d4", fontSize: 13, fontWeight: 500 }}>현재: {downloadOptions.maxFileSize}MB</span>
                   <span>20MB</span>
                 </div>
               </div>
@@ -501,7 +593,7 @@ function MediaDownloadPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <InfoRegular style={{ fontSize: 16, color: "#5e6ad2" }} />
                 <Text size={200} weight="semibold">
-                  현재 선택 요약
+                  <span style={{ color: "#0078d4" }}>현재</span> 선택 요약
                 </Text>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -522,6 +614,25 @@ function MediaDownloadPage() {
                 팁: 1080p + 16:9는 대부분의 가로형 콘텐츠에 적합하고, 용량은 10–20MB가 품질·속도 균형이 좋아요.
               </Text>
             </div>
+
+          </div>
+
+          {/* 영상 완성 이동 버튼 */}
+          <div style={{ marginTop: "auto" }}>
+            <Divider style={{ margin: "16px 0" }} />
+            <Button
+              appearance="primary"
+              size="large"
+              icon={<VideoClip24Regular />}
+              disabled={isDownloading || downloadedVideos.length === 0}
+              onClick={() => {
+                const event = new CustomEvent("navigate-to-refine");
+                window.dispatchEvent(event);
+              }}
+              style={{ width: "100%" }}
+            >
+              영상 완성으로 이동
+            </Button>
           </div>
         </Card>
 
@@ -535,7 +646,7 @@ function MediaDownloadPage() {
                   다운로드 진행상황
                 </Text>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 300, overflowY: "auto" }}>
                 {Array.from(selectedKeywords).map((k) => {
                   const progress = downloadProgress[k];
                   return (
@@ -550,11 +661,7 @@ function MediaDownloadPage() {
                           )}
                         </div>
                         <Text size={200} style={{ color: "#666" }}>
-                          {progress?.status === "completed"
-                            ? "완료"
-                            : progress?.status === "failed"
-                            ? "실패"
-                            : `${progress?.progress || 0}%`}
+                          {progress?.status === "completed" ? "완료" : progress?.status === "failed" ? "실패" : `${progress?.progress || 0}%`}
                         </Text>
                       </div>
                       <ProgressBar value={progress?.progress || 0} max={100} />

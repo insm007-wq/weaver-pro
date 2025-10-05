@@ -2,7 +2,6 @@ import React, { memo, useMemo } from "react";
 import { tokens, Text, Card, Button } from "@fluentui/react-components";
 import { ArrowRight24Regular, LinkSquare24Regular, DismissCircle24Regular } from "@fluentui/react-icons";
 import FileSelection from "./FileSelection";
-import ProjectStats from "./ProjectStats";
 
 /**
  * 1단계: 파일 업로드

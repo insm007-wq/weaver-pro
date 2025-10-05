@@ -291,6 +291,9 @@ contextBridge.exposeInMainWorld("api", {
   // ========================================================================
   downloadVideosByKeywords: (payload) => ipcRenderer.invoke("video:downloadByKeywords", payload),
 
+  // 영상 다운로드 취소
+  cancelVideoDownload: () => ipcRenderer.invoke("video:cancelDownload"),
+
   // 영상 다운로드 진행률 수신
   onVideoDownloadProgress: (handler) => {
     if (typeof handler !== "function") return () => {};

@@ -20,6 +20,35 @@ const store = require("../services/store"); // ✅ 인스턴스를 그대로 사
 const { getSecret } = require("../services/secrets"); // keytar 기반 API 키 조회
 
 // ---------------------------------------------------------------------------
+// 취소 관리
+// ---------------------------------------------------------------------------
+let downloadCancelled = false;
+let currentRequests = [];
+
+function resetCancellation() {
+  downloadCancelled = false;
+  currentRequests = [];
+}
+
+function cancelDownload() {
+  downloadCancelled = true;
+  // 진행 중인 모든 HTTP 요청 중단
+  currentRequests.forEach(req => {
+    try {
+      req.destroy();
+    } catch (e) {
+      console.warn("[취소] 요청 중단 실패:", e.message);
+    }
+  });
+  currentRequests = [];
+  console.log("[영상 다운로드] 취소 요청됨");
+}
+
+function isCancelled() {
+  return downloadCancelled;
+}
+
+// ---------------------------------------------------------------------------
 // 공통 유틸
 // ---------------------------------------------------------------------------
 function assertVideoSaveFolder() {
@@ -250,6 +279,11 @@ async function downloadVideoOptimized(url, filename, onProgress) {
       // 없으면 계속
     }
 
+    // 취소 확인
+    if (isCancelled()) {
+      throw new Error("다운로드가 취소되었습니다");
+    }
+
     // 다운로드
     const { buffer, size } = await new Promise((resolve, reject) => {
       const protocol = url.startsWith("https:") ? https : http;
@@ -269,6 +303,13 @@ async function downloadVideoOptimized(url, filename, onProgress) {
         const chunks = [];
 
         response.on("data", (chunk) => {
+          // 취소 확인
+          if (isCancelled()) {
+            request.destroy();
+            reject(new Error("다운로드가 취소되었습니다"));
+            return;
+          }
+
           chunks.push(chunk);
           downloadedSize += chunk.length;
 
@@ -279,13 +320,29 @@ async function downloadVideoOptimized(url, filename, onProgress) {
         });
 
         response.on("end", () => {
+          // 취소 확인
+          if (isCancelled()) {
+            reject(new Error("다운로드가 취소되었습니다"));
+            return;
+          }
           resolve({ buffer: Buffer.concat(chunks), size: downloadedSize });
         });
 
         response.on("error", reject);
       });
 
+      // 요청 추적
+      currentRequests.push(request);
+
       request.on("error", reject);
+      request.on("close", () => {
+        // 완료된 요청 제거
+        const index = currentRequests.indexOf(request);
+        if (index > -1) {
+          currentRequests.splice(index, 1);
+        }
+      });
+
       request.setTimeout(60000, () => {
         request.destroy();
         reject(new Error("다운로드 타임아웃 (60초)"));
@@ -356,6 +413,12 @@ async function downloadVideosForKeywords(keywords, provider, options = {}, onPro
   let failureCount = 0;
 
   for (let i = 0; i < keywords.length; i++) {
+    // 취소 확인
+    if (isCancelled()) {
+      console.log("[영상 다운로드] 취소됨");
+      break;
+    }
+
     const keyword = String(keywords[i] || "").trim();
     if (!keyword) {
       console.warn(`[영상 다운로드] 빈 키워드 스킵: 인덱스 ${i}`);
@@ -552,6 +615,9 @@ function registerVideoDownloadIPC() {
       console.log(`[영상 다운로드 IPC] 시작: ${cleanedKeywords.length}개 키워드, ${provider} 프로바이더`);
       console.log(`[영상 다운로드 IPC] 옵션:`, options);
 
+      // 다운로드 시작 시 취소 플래그 리셋
+      resetCancellation();
+
       const result = await downloadVideosForKeywords(cleanedKeywords, provider, options, (progress) => {
         try {
           event.sender.send("video:downloadProgress", progress);
@@ -574,6 +640,18 @@ function registerVideoDownloadIPC() {
         summary: { total: 0, success: 0, failed: 0 },
         duration,
       };
+    }
+  });
+
+  // 취소 핸들러 등록
+  ipcMain.removeHandler("video:cancelDownload");
+  ipcMain.handle("video:cancelDownload", async () => {
+    try {
+      cancelDownload();
+      return { success: true };
+    } catch (error) {
+      console.error("[영상 다운로드 취소 IPC] 실패:", error.message);
+      return { success: false, error: error.message };
     }
   });
 
