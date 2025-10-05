@@ -104,7 +104,7 @@ if (!gotLock) {
   app.whenReady().then(async () => {
     try {
       console.log("[main] App is ready, starting initialization...");
-      
+
       if (process.platform === "win32") {
         app.setAppUserModelId(process.env.APP_ID || "weaver-pro");
       }
@@ -139,8 +139,7 @@ if (!gotLock) {
     // 헬스/설정/기타
     safeRequire("ipc/tests", () => require("./ipc/tests"));
     safeRequire("ipc/replicate", () => require("./ipc/replicate"));
-    safeRequire("ipc/imagen3", () => require("./ipc/imagen3"));
-    safeRequire("ipc/settings", () => require("./ipc/settings"));
+    const settingsModule = safeRequire("ipc/settings", () => require("./ipc/settings"));
     safeRequire("ipc/health", () => require("./ipc/health"));
     safeRequire("ipc/image-analyzer", () => require("./ipc/image-analyzer"));
     safeRequire("ipc/llm/index", () => require("./ipc/llm/index"));
@@ -190,6 +189,16 @@ if (!gotLock) {
         return { success: false, message: error.message };
       }
     });
+
+    /* -----------------------------------------------------------------------
+     * 기본 설정 초기화 (IPC 등록 완료 후)
+     * -------------------------------------------------------------------- */
+    console.log("[main] Initializing default settings...");
+    if (settingsModule && settingsModule.initializeDefaultSettings) {
+      settingsModule.initializeDefaultSettings();
+    } else {
+      console.warn("[main] settingsModule or initializeDefaultSettings not available");
+    }
 
     /* -----------------------------------------------------------------------
      * 메인 윈도우

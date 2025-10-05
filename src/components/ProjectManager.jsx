@@ -57,7 +57,7 @@ import { useApi } from "../hooks/useApi";
  * @property {string} defaultProjectName - 기본 프로젝트 이름
  */
 const DEFAULT_PROJECT_SETTINGS = {
-  // projectRootFolder는 electron에서 OS별로 자동 설정됨
+  projectRootFolder: "", // 빈 문자열로 초기화 (electron에서 설정됨)
   defaultProjectName: "default",
 };
 

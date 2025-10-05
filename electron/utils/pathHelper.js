@@ -19,8 +19,8 @@ function getDefaultWeaverProPath() {
 
   switch (platform) {
     case 'win32':
-      // Windows: C:\Users\[username]\Documents\WeaverPro
-      return path.join(homeDir, 'Documents', 'WeaverPro');
+      // Windows: C:\WeaverPro
+      return 'C:\\WeaverPro';
 
     case 'darwin':
       // Mac: /Users/[username]/Documents/WeaverPro

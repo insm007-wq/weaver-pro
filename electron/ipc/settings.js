@@ -5,6 +5,96 @@ const { getSecret, setSecret } = require("../services/secrets");
 const fs = require("fs").promises;
 const path = require("path");
 const { app } = require("electron");
+const { getDefaultWeaverProPath } = require("../utils/pathHelper");
+
+/* ========================================================================== */
+/* helpers                                                                    */
+/* ========================================================================== */
+
+/**
+ * 첫 실행 시 기본 설정 초기화
+ */
+function initializeDefaultSettings() {
+  const isFirstRun = !store.has('appInitialized');
+
+  if (isFirstRun) {
+    console.log('[settings] 첫 실행 감지 - 기본 설정 초기화 시작');
+
+    // 전역 AI 모델 설정
+    store.set('llmModel', 'anthropic');
+    store.set('videoModel', 'stable-video');  // veo-3 대신 stable-video 사용
+    store.set('imageModel', 'sdxl');
+    store.set('imageResolution', '1024x1024');
+    store.set('videoQuality', '1080p');
+
+    // TTS 설정
+    store.set('ttsEngine', 'google');
+    store.set('ttsSpeed', '1.0');
+
+    // 프로젝트 관리 기본값
+    const defaultProjectPath = getDefaultWeaverProPath();
+    store.set('projectRootFolder', defaultProjectPath);
+    store.set('defaultProjectName', 'default');  // 기본 프로젝트 이름
+    store.set('videoSaveFolder', path.join(defaultProjectPath, 'default'));  // 기본 비디오 저장 폴더
+    store.set('defaultResolution', '1080p');
+
+    // 기본 프로젝트 폴더 물리적 생성
+    try {
+      const fs = require('fs');
+      if (!fs.existsSync(defaultProjectPath)) {
+        fs.mkdirSync(defaultProjectPath, { recursive: true });
+        console.log(`[settings] 기본 프로젝트 폴더 생성: ${defaultProjectPath}`);
+      }
+
+      // 기본 "default" 프로젝트 구조 생성
+      const defaultProjectStructurePath = path.join(defaultProjectPath, 'default');
+      if (!fs.existsSync(defaultProjectStructurePath)) {
+        console.log(`[settings] 기본 "default" 프로젝트 구조 생성 시작`);
+
+        const folders = ['output', 'scripts', 'audio', 'images', 'video', 'temp'];
+
+        // default 프로젝트 루트 폴더 생성
+        fs.mkdirSync(defaultProjectStructurePath, { recursive: true });
+
+        // 하위 폴더들 생성
+        for (const folder of folders) {
+          const folderPath = path.join(defaultProjectStructurePath, folder);
+          fs.mkdirSync(folderPath, { recursive: true });
+        }
+
+        console.log(`[settings] 기본 "default" 프로젝트 구조 생성 완료: ${defaultProjectStructurePath}`);
+      }
+    } catch (error) {
+      console.warn(`[settings] 기본 프로젝트 폴더 생성 실패: ${error.message}`);
+    }
+
+    // 기타 기본 설정
+    store.set('temperature', 0.7);
+    store.set('cpmMin', 300);
+    store.set('cpmMax', 400);
+
+    // 기본 프롬프트 강제 생성 (처음 사용자용)
+    const existingPrompts = store.get('prompts', []);
+    const hasDefaultPrompt = existingPrompts.some(p => p.name === "기본 프롬프트");
+
+    if (!hasDefaultPrompt) {
+      console.log('[settings] 기본 프롬프트가 없음 - 강제 생성');
+      const defaultPrompts = createDefaultPrompts();
+      store.set('prompts', defaultPrompts);
+      broadcastChanged({ key: "prompts", value: defaultPrompts });
+    }
+
+    // 초기화 완료 플래그
+    store.set('appInitialized', true);
+
+    console.log('[settings] 기본 설정 초기화 완료:', {
+      llmModel: 'anthropic',
+      videoModel: 'stable-video',
+      imageModel: 'sdxl',
+      projectRootFolder: defaultProjectPath
+    });
+  }
+}
 
 /* ========================================================================== */
 /* helpers                                                                    */
@@ -200,7 +290,7 @@ let isCreatingDefaultPrompts = false;
 
 // 기본 프롬프트 생성 함수
 function createDefaultPrompts() {
-  const { DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT, DEFAULT_TEMPLATE } = require("../../src/constants/prompts");
+  const { DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT, DEFAULT_TEMPLATE } = require("../constants/defaultPrompts");
   const now = Date.now();
 
   return [
@@ -1260,3 +1350,12 @@ ipcMain.handle("prompts:reset", async (_e) => {
     return { ok: false, message: String(error?.message || error) };
   }
 });
+
+// 모듈 초기화 시 기본 설정 확인은 main.js에서 수동 호출
+// initializeDefaultSettings(); // 제거: main.js에서 수동으로 호출
+
+module.exports = {
+  initializeDefaultSettings
+};
+
+console.log("🚀 설정 시스템 초기화 완료");
