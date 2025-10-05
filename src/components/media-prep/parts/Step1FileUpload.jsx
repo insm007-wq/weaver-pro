@@ -121,7 +121,7 @@ const Step1FileUpload = memo(
                 boxShadow: `0 2px 8px ${tokens.colorBrandBackground}60`,
               }}
             >
-              다음 단계
+              다음 단계: 키워드 추출
             </Button>
           ) : (
             <div

@@ -404,7 +404,7 @@ const Step2KeywordExtraction = memo(
                 boxShadow: `0 2px 8px ${tokens.colorBrandBackground}60`,
               }}
             >
-              다음 단계
+              다음 단계: 완료
             </Button>
           ) : (
             <div
