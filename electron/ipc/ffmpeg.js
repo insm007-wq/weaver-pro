@@ -75,6 +75,7 @@ function register() {
     ipcMain.removeHandler("ffmpeg:duration");
     ipcMain.removeHandler("audio:getDuration");
     ipcMain.removeHandler("audio:getDurations");
+    ipcMain.removeHandler("video:export");
   } catch {}
 
   ipcMain.handle(
@@ -189,6 +190,94 @@ function register() {
       return { success: true, results };
     } catch (error) {
       console.error("여러 음성 파일 길이 가져오기 실패:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // 씬 기반 전체 프로젝트 내보내기
+  ipcMain.handle("video:export", async (event, scenes) => {
+    try {
+      console.log("🎬 비디오 내보내기 시작...", { sceneCount: scenes.length });
+
+      // videoSaveFolder 가져오기
+      const videoSaveFolder = store.get("videoSaveFolder");
+      if (!videoSaveFolder) {
+        throw new Error("비디오 저장 폴더가 설정되지 않았습니다.");
+      }
+
+      // output 폴더 생성
+      const outputFolder = path.join(videoSaveFolder, "output");
+      await fsp.mkdir(outputFolder, { recursive: true });
+
+      // 출력 파일명 (타임스탬프 포함)
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const outputPath = path.join(outputFolder, `video_${timestamp}.mp4`);
+
+      // SRT 자막 파일 생성
+      const srtPath = path.join(outputFolder, `subtitle_${timestamp}.srt`);
+      await generateSrtFromScenes(scenes, srtPath);
+
+      // 씬별 미디어 파일 추출 및 오디오 duration 계산
+      const mediaFiles = [];
+      const sceneDurationsMs = [];
+
+      for (let i = 0; i < scenes.length; i++) {
+        const scene = scenes[i];
+
+        // 미디어 파일 경로
+        if (!scene.asset?.path) {
+          throw new Error(`씬 ${i + 1}에 미디어가 없습니다.`);
+        }
+        mediaFiles.push(scene.asset.path);
+
+        // 오디오 duration으로 씬 길이 결정
+        if (scene.audioPath && fs.existsSync(scene.audioPath)) {
+          try {
+            const duration = await probeDurationSec(scene.audioPath);
+            sceneDurationsMs.push(Math.floor(duration * 1000));
+            console.log(`씬 ${i + 1} 길이: ${duration.toFixed(2)}초`);
+          } catch (error) {
+            console.error(`씬 ${i + 1} 오디오 duration 측정 실패:`, error);
+            sceneDurationsMs.push(3000); // 기본 3초
+          }
+        } else {
+          console.warn(`씬 ${i + 1}에 오디오 파일이 없습니다.`);
+          sceneDurationsMs.push(3000); // 기본 3초
+        }
+      }
+
+      // 전체 TTS 오디오 파일 경로
+      const fullAudioPath = path.join(videoSaveFolder, "audio", "default.mp3");
+      const audioFiles = fs.existsSync(fullAudioPath) ? [fullAudioPath] : [];
+
+      console.log("📊 내보내기 정보:", {
+        mediaFiles: mediaFiles.length,
+        audioFiles: audioFiles.length,
+        sceneDurationsMs,
+        outputPath,
+        srtPath
+      });
+
+      // FFmpeg로 영상 합성
+      const result = await composeVideoFromScenes({
+        event,
+        scenes,
+        mediaFiles,
+        audioFiles,
+        outputPath,
+        srtPath,
+        sceneDurationsMs
+      });
+
+      if (result.success) {
+        console.log("✅ 비디오 내보내기 성공:", outputPath);
+        return { success: true, outputPath };
+      } else {
+        throw new Error(result.error || "비디오 합성 실패");
+      }
+
+    } catch (error) {
+      console.error("❌ 비디오 내보내기 실패:", error);
       return { success: false, error: error.message };
     }
   });
@@ -584,6 +673,252 @@ function extractDuration(output) {
     s = parseInt(m[3], 10),
     cs = parseInt(m[4], 10);
   return h * 3600 + mi * 60 + s + cs / 100;
+}
+
+// ----------------------------------------------------------------------------
+// 씬에서 SRT 자막 파일 생성
+// ----------------------------------------------------------------------------
+async function generateSrtFromScenes(scenes, srtPath) {
+  try {
+    let srtContent = "";
+    let accumulatedTime = 0; // ms
+
+    for (let i = 0; i < scenes.length; i++) {
+      const scene = scenes[i];
+
+      // 오디오 파일에서 duration 가져오기
+      let durationMs = 3000; // 기본값
+      if (scene.audioPath && fs.existsSync(scene.audioPath)) {
+        try {
+          const duration = await probeDurationSec(scene.audioPath);
+          durationMs = Math.floor(duration * 1000);
+        } catch (error) {
+          console.error(`씬 ${i + 1} duration 측정 실패:`, error);
+        }
+      }
+
+      const startTime = accumulatedTime;
+      const endTime = accumulatedTime + durationMs;
+
+      // SRT 형식: 시:분:초,밀리초
+      const formatTime = (ms) => {
+        const totalSec = Math.floor(ms / 1000);
+        const hours = Math.floor(totalSec / 3600);
+        const minutes = Math.floor((totalSec % 3600) / 60);
+        const seconds = totalSec % 60;
+        const milliseconds = ms % 1000;
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')},${String(milliseconds).padStart(3, '0')}`;
+      };
+
+      srtContent += `${i + 1}\n`;
+      srtContent += `${formatTime(startTime)} --> ${formatTime(endTime)}\n`;
+      srtContent += `${scene.text || ''}\n\n`;
+
+      accumulatedTime = endTime;
+    }
+
+    await fsp.writeFile(srtPath, srtContent, "utf8");
+    console.log("✅ SRT 자막 파일 생성 완료:", srtPath);
+    return srtPath;
+  } catch (error) {
+    console.error("❌ SRT 자막 파일 생성 실패:", error);
+    throw error;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// 씬 기반 비디오 합성 (비디오/이미지 혼합 지원)
+// ----------------------------------------------------------------------------
+async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, outputPath, srtPath, sceneDurationsMs }) {
+  let tempDir;
+  try {
+    tempDir = path.join(app.getPath("userData"), "ffmpeg-temp");
+  } catch {
+    const os = require("os");
+    tempDir = path.join(os.tmpdir(), "weaver-pro-ffmpeg-temp");
+  }
+  await fsp.mkdir(tempDir, { recursive: true });
+
+  // 임시 파일 정리
+  try {
+    const olds = await fsp.readdir(tempDir);
+    for (const f of olds) {
+      if (f.startsWith("concat_") || f.startsWith("clip_") || f.startsWith("scene_")) {
+        try {
+          await fsp.unlink(path.join(tempDir, f));
+        } catch {}
+      }
+    }
+  } catch {}
+
+  const videoClips = [];
+  const MIN_CLIP_DURATION = 0.25;
+
+  // 각 씬별로 클립 생성 (비디오는 그대로, 이미지는 duration 적용)
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i];
+    const mediaPath = mediaFiles[i];
+    const durSec = Math.max(MIN_CLIP_DURATION, (sceneDurationsMs[i] || 3000) / 1000);
+
+    console.log(`📹 씬 ${i + 1}/${scenes.length} 처리 중... (${scene.asset.type})`);
+
+    if (scene.asset.type === "video") {
+      // 비디오: 속도 조절하여 오디오 길이에 맞춤
+      const videoClipOut = path.join(tempDir, `scene_${String(i).padStart(3, "0")}_${Date.now()}.mp4`);
+
+      // 원본 비디오 길이 측정
+      let originalDuration = durSec;
+      try {
+        originalDuration = await probeDurationSec(mediaPath);
+      } catch (error) {
+        console.warn(`비디오 ${i + 1} 길이 측정 실패, 기본값 사용`);
+      }
+
+      // 속도 조절 계산 (setpts)
+      const speedFactor = originalDuration / durSec;
+      const ptsValue = speedFactor.toFixed(3);
+
+      const vfChain = `setpts=${ptsValue}*PTS,scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p`;
+
+      const videoArgs = [
+        "-y",
+        "-hide_banner",
+        "-i", mediaPath,
+        "-vf", vfChain,
+        "-t", durSec.toFixed(3),
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "23",
+        "-r", "24",
+        "-pix_fmt", "yuv420p",
+        "-an", // 오디오 제거 (나중에 TTS 추가)
+        "-avoid_negative_ts", "make_zero",
+        "-fflags", "+genpts",
+        videoClipOut
+      ];
+
+      await new Promise((resolve, reject) => {
+        const proc = spawn(ffmpegPath, videoArgs, { windowsHide: true });
+        let stderr = '';
+        proc.stderr.on('data', (d) => stderr += d.toString());
+        proc.on("close", (code) => {
+          if (code === 0) resolve();
+          else reject(new Error(`비디오 클립 ${i + 1} 생성 실패\n${stderr}`));
+        });
+        proc.on("error", (err) => reject(err));
+      });
+
+      videoClips.push(videoClipOut);
+      console.log(`✅ 비디오 씬 ${i + 1} 완료: ${durSec.toFixed(2)}초`);
+
+    } else if (scene.asset.type === "image") {
+      // 이미지: duration 동안 정지 화면
+      const imageClipOut = path.join(tempDir, `scene_${String(i).padStart(3, "0")}_${Date.now()}.mp4`);
+      const vfChain = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p`;
+
+      const imageArgs = [
+        "-y",
+        "-hide_banner",
+        "-loop", "1",
+        "-i", mediaPath,
+        "-t", durSec.toFixed(3),
+        "-vf", vfChain,
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "23",
+        "-r", "24",
+        "-pix_fmt", "yuv420p",
+        "-avoid_negative_ts", "make_zero",
+        "-fflags", "+genpts",
+        imageClipOut
+      ];
+
+      await new Promise((resolve, reject) => {
+        const proc = spawn(ffmpegPath, imageArgs, { windowsHide: true });
+        let stderr = '';
+        proc.stderr.on('data', (d) => stderr += d.toString());
+        proc.on("close", (code) => {
+          if (code === 0) resolve();
+          else reject(new Error(`이미지 클립 ${i + 1} 생성 실패\n${stderr}`));
+        });
+        proc.on("error", (err) => reject(err));
+      });
+
+      videoClips.push(imageClipOut);
+      console.log(`✅ 이미지 씬 ${i + 1} 완료: ${durSec.toFixed(2)}초`);
+    }
+
+    // 진행률 전송
+    if (event?.sender) {
+      const progress = Math.round((i + 1) / scenes.length * 50); // 0-50%
+      event.sender.send("ffmpeg:progress", progress);
+    }
+  }
+
+  if (videoClips.length === 0) {
+    throw new Error("생성된 비디오 클립이 없습니다");
+  }
+
+  // concat list 파일 생성
+  const listFile = path.join(tempDir, `concat_${Date.now()}.txt`);
+  const concatContent = videoClips.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n");
+  await fsp.writeFile(listFile, concatContent, "utf8");
+
+  // 최종 합성 (concat + 오디오 + 자막)
+  const finalArgs = [
+    "-y",
+    "-hide_banner",
+    "-f", "concat",
+    "-safe", "0",
+    "-i", listFile
+  ];
+
+  if (audioFiles && audioFiles.length > 0) {
+    finalArgs.push("-i", audioFiles[0]);
+    finalArgs.push("-map", "0:v", "-map", "1:a");
+  } else {
+    finalArgs.push("-map", "0:v");
+  }
+
+  // 자막 추가
+  let vf = "format=yuv420p";
+  if (srtPath && fs.existsSync(srtPath)) {
+    const srt = srtPath.replace(/\\/g, "/").replace(/:/g, "\\:");
+    const style = "FontName=Malgun Gothic,Outline=2,BorderStyle=3,Shadow=0,FontSize=24";
+    vf = `subtitles='${srt}':charenc=UTF-8:force_style='${style}',` + vf;
+  }
+
+  finalArgs.push(
+    "-vf", vf,
+    "-c:v", "libx264",
+    "-profile:v", "main",
+    "-pix_fmt", "yuv420p",
+    "-preset", "veryfast",
+    "-crf", "23",
+    "-movflags", "+faststart",
+    "-avoid_negative_ts", "make_zero",
+    "-fflags", "+genpts"
+  );
+
+  if (audioFiles && audioFiles.length > 0) {
+    finalArgs.push("-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2");
+  }
+
+  finalArgs.push(outputPath);
+
+  console.log("🎬 최종 합성 시작...");
+  const result = await runFFmpeg(finalArgs, (progress) => {
+    if (event?.sender) {
+      const mapped = 50 + Math.round((progress / 100) * 50); // 50-100%
+      event.sender.send("ffmpeg:progress", Math.min(99, mapped));
+    }
+  });
+
+  if (result.success && event?.sender) {
+    event.sender.send("ffmpeg:progress", 100);
+  }
+
+  return result;
 }
 
 module.exports = { register };

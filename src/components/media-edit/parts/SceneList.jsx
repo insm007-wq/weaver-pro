@@ -393,6 +393,62 @@ function SceneList({
     }
   }, [scenes, setScenes]);
 
+  // 미디어 없음 자동 할당 핸들러
+  const handleAutoAssignMissingOnly = useCallback(async () => {
+    console.log("[미디어 없음 자동 할당] 버튼 클릭됨!");
+
+    if (!scenes || scenes.length === 0) {
+      showError("할당할 씬이 없습니다.");
+      return;
+    }
+
+    // 미디어가 없는 씬만 필터링
+    const missingScenes = scenes.filter(scene => !scene.asset?.path && scene.text && scene.text.trim().length > 0);
+
+    if (missingScenes.length === 0) {
+      showError("미디어가 없는 씬이 없습니다.");
+      return;
+    }
+
+    setIsAssigning(true);
+    try {
+      console.log("[미디어 없음 자동 할당] 시작:", { missingCount: missingScenes.length });
+
+      // 미디어가 없는 씬만 할당
+      const assignedMissingScenes = await assignVideosToScenes(missingScenes, {
+        minScore: 0.1,
+        allowDuplicates: false,
+      });
+
+      // 전체 씬 배열에 결과 병합
+      const updatedScenes = [...scenes];
+      let assignedIndex = 0;
+
+      for (let i = 0; i < updatedScenes.length; i++) {
+        if (!updatedScenes[i].asset?.path && updatedScenes[i].text && updatedScenes[i].text.trim().length > 0) {
+          updatedScenes[i] = assignedMissingScenes[assignedIndex];
+          assignedIndex++;
+        }
+      }
+
+      setScenes(updatedScenes);
+
+      const assignedCount = assignedMissingScenes.filter(scene => scene.asset?.path).length;
+      const totalMissing = missingScenes.length;
+
+      if (assignedCount > 0) {
+        showSuccess(`미디어 없는 ${assignedCount}/${totalMissing}개 씬에 영상을 할당했습니다.`);
+      } else {
+        showError("자동으로 할당할 수 있는 영상이 없습니다. 먼저 미디어 다운로드에서 영상을 다운로드해주세요.");
+      }
+    } catch (error) {
+      console.error("[미디어 없음 자동 할당] 오류:", error);
+      showError(`자동 할당 중 오류가 발생했습니다: ${error.message}`);
+    } finally {
+      setIsAssigning(false);
+    }
+  }, [scenes, setScenes]);
+
   // 우클릭 컨텍스트 메뉴 핸들러
   const handleContextMenu = useCallback((event, index) => {
     event.preventDefault();
@@ -687,7 +743,15 @@ function SceneList({
           >
             {isAssigning ? "할당 중..." : "자동 할당"}
           </Button>
-          <Button appearance="subtle" size="small" icon={<ArrowSyncRegular />} />
+          <Button
+            appearance="primary"
+            size="small"
+            icon={<AutoFitWidthRegular />}
+            onClick={handleAutoAssignMissingOnly}
+            disabled={isAssigning || scenes.length === 0}
+          >
+            {isAssigning ? "할당 중..." : "미디어 없음"}
+          </Button>
         </div>
       </div>
 

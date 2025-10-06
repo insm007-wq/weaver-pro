@@ -52,6 +52,18 @@ const useStyles = makeStyles({
     color: `${tokens.colorPaletteRedForeground2} !important`,
     boxShadow: '0 4px 16px rgba(220, 38, 38, 0.1)',
   },
+  infoBar: {
+    backgroundColor: `${tokens.colorPaletteLightBlueBackground2} !important`,
+    borderLeft: `4px solid ${tokens.colorPaletteLightBlueBorder2}`,
+    color: `${tokens.colorPaletteLightBlueForeground2} !important`,
+    boxShadow: '0 4px 16px rgba(59, 130, 246, 0.1)',
+  },
+  warningBar: {
+    backgroundColor: `${tokens.colorPaletteYellowBackground2} !important`,
+    borderLeft: `4px solid ${tokens.colorPaletteYellowBorder2}`,
+    color: `${tokens.colorPaletteYellowForeground2} !important`,
+    boxShadow: '0 4px 16px rgba(251, 191, 36, 0.1)',
+  },
   messageContent: {
     fontWeight: tokens.fontWeightSemibold,
     fontSize: tokens.fontSizeBase300,
@@ -134,6 +146,8 @@ export const hideGlobalToast = () => toastManager.hide();
 // 편의 함수들
 export const showSuccess = (text) => showGlobalToast({ type: 'success', text });
 export const showError = (text) => showGlobalToast({ type: 'error', text });
+export const showInfo = (text) => showGlobalToast({ type: 'info', text });
+export const showWarning = (text) => showGlobalToast({ type: 'warning', text });
 
 export default function GlobalToast() {
   const [toast, setToast] = useState(null);
@@ -158,6 +172,13 @@ export default function GlobalToast() {
     if (autoHideTimerRef.current) clearTimeout(autoHideTimerRef.current);
   }, []);
 
+  // 수동 닫기 (useEffect보다 먼저 정의)
+  const handleClose = useCallback(() => {
+    clearTimers();
+    setIsVisible(false);
+    hideTimerRef.current = setTimeout(() => setToast(null), 300);
+  }, [clearTimers]);
+
   // 토스트 표시/숨김 애니메이션
   useEffect(() => {
     clearTimers();
@@ -176,7 +197,12 @@ export default function GlobalToast() {
   useEffect(() => {
     if (!toast || !isVisible) return;
 
-    const duration = toast.type === 'error' ? 5000 : 3000;
+    // 타입에 따라 표시 시간 조정
+    let duration = 3000; // 기본 3초 (success, info)
+    if (toast.type === 'error' || toast.type === 'warning') {
+      duration = 5000; // error와 warning은 5초
+    }
+
     autoHideTimerRef.current = setTimeout(() => {
       handleClose();
     }, duration);
@@ -186,25 +212,36 @@ export default function GlobalToast() {
         clearTimeout(autoHideTimerRef.current);
       }
     };
-  }, [toast, isVisible]);
-
-  // 수동 닫기
-  const handleClose = useCallback(() => {
-    clearTimers();
-    setIsVisible(false);
-    hideTimerRef.current = setTimeout(() => setToast(null), 300);
-  }, [clearTimers]);
+  }, [toast, isVisible, handleClose]);
 
   // toast가 없으면 렌더링하지 않음
   if (!toast) return null;
 
-  const isSuccess = toast.type === 'success';
+  const getStyleClass = () => {
+    switch (toast.type) {
+      case 'success': return styles.successBar;
+      case 'error': return styles.errorBar;
+      case 'warning': return styles.warningBar;
+      case 'info': return styles.infoBar;
+      default: return styles.infoBar;
+    }
+  };
+
+  const getIntent = () => {
+    switch (toast.type) {
+      case 'success': return 'success';
+      case 'error': return 'error';
+      case 'warning': return 'warning';
+      case 'info': return 'info';
+      default: return 'info';
+    }
+  };
 
   return (
     <div className={mergeClasses(styles.container, isVisible && styles.containerVisible)}>
       <MessageBar
-        intent={isSuccess ? 'success' : 'error'}
-        className={mergeClasses(styles.messageBar, isSuccess ? styles.successBar : styles.errorBar)}
+        intent={getIntent()}
+        className={mergeClasses(styles.messageBar, getStyleClass())}
       >
         <MessageBarBody>
           <span className={styles.messageContent}>{toast.text}</span>

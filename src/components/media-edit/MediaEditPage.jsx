@@ -153,7 +153,7 @@ function MediaEditPage() {
               />
 
               {/* 편집 도구 컴포넌트 */}
-              <SceneEditor selectedScene={selectedScene} />
+              <SceneEditor selectedScene={selectedScene} scenes={scenes} />
             </div>
           </div>
         )}
