@@ -381,6 +381,10 @@ contextBridge.exposeInMainWorld("api", {
   // ========================================================================
   exportVideo: (scenes) => ipcRenderer.invoke("video:export", scenes),
 
+  // 비디오 내보내기 취소
+  // ========================================================================
+  cancelExport: () => ipcRenderer.invoke("video:cancelExport"),
+
 });
 
 // ============================================================================

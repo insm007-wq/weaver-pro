@@ -10,7 +10,7 @@ import SceneList from "./parts/SceneList";
 import VideoPreview from "./parts/VideoPreview";
 import SceneEditor from "./parts/SceneEditor";
 
-function MediaEditPage() {
+function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
   const headerStyles = useHeaderStyles();
   const containerStyles = useContainerStyles();
 
@@ -152,7 +152,12 @@ function MediaEditPage() {
               />
 
               {/* 편집 도구 컴포넌트 */}
-              <SceneEditor scenes={scenes} onSceneSelect={handleSceneSelect} />
+              <SceneEditor
+                scenes={scenes}
+                onSceneSelect={handleSceneSelect}
+                isVideoExporting={isVideoExporting}
+                setIsVideoExporting={setIsVideoExporting}
+              />
             </div>
           </div>
         )}

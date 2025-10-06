@@ -98,6 +98,7 @@ function App() {
   const [projectName, setProjectName] = useState(null);
   const [currentPage, setCurrentPage] = useState(null);
   const [isScriptGenerating, setIsScriptGenerating] = useState(false);
+  const [isVideoExporting, setIsVideoExporting] = useState(false);
   const canOpenWithoutProject = true;
   const styles = useStyles();
   const fontStyles = useFontOverrideStyles();
@@ -173,7 +174,11 @@ function App() {
 
       <div className={styles.body}>
         <Suspense fallback={<MemoizedLoadingFallback />}>
-          <Sidebar onSelectMenu={handleSelectMenu} isScriptGenerating={isScriptGenerating} />
+          <Sidebar
+            onSelectMenu={handleSelectMenu}
+            isScriptGenerating={isScriptGenerating}
+            isVideoExporting={isVideoExporting}
+          />
         </Suspense>
 
         <main className={styles.main}>
@@ -231,7 +236,10 @@ function App() {
                 </KeepAlivePane>
 
                 <KeepAlivePane active={currentPage === "refine"}>
-                  <MediaEditPage />
+                  <MediaEditPage
+                    isVideoExporting={isVideoExporting}
+                    setIsVideoExporting={setIsVideoExporting}
+                  />
                 </KeepAlivePane>
 
 

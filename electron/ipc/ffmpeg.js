@@ -85,6 +85,10 @@ try {
   ffprobePath = null;
 }
 
+// 현재 실행 중인 FFmpeg 프로세스 (취소용)
+let currentFfmpegProcess = null;
+let isExportCancelled = false;
+
 // ----------------------------------------------------------------------------
 // 등록
 // ----------------------------------------------------------------------------
@@ -96,6 +100,7 @@ function register() {
     ipcMain.removeHandler("audio:getDuration");
     ipcMain.removeHandler("audio:getDurations");
     ipcMain.removeHandler("video:export");
+    ipcMain.removeHandler("video:cancelExport");
   } catch {}
 
   ipcMain.handle("ffmpeg:compose", async (event, { audioFiles, imageFiles, outputPath, subtitlePath = null, sceneDurationsMs = null, options = {} }) => {
@@ -214,6 +219,10 @@ function register() {
   // 씬 기반 전체 프로젝트 내보내기
   ipcMain.handle("video:export", async (event, scenes) => {
     try {
+      // 취소 플래그 초기화
+      isExportCancelled = false;
+      currentFfmpegProcess = null;
+
       console.log(`\n🎬 비디오 내보내기 시작: ${scenes.length}개 씬`);
 
       // videoSaveFolder 가져오기
@@ -327,6 +336,32 @@ function register() {
       }
     } catch (error) {
       console.error("❌ 비디오 내보내기 실패:", error);
+      return { success: false, error: error.message };
+    } finally {
+      // 완료 또는 실패 시 취소 플래그 리셋
+      isExportCancelled = false;
+      currentFfmpegProcess = null;
+    }
+  });
+
+  // 영상 내보내기 취소
+  ipcMain.handle("video:cancelExport", async () => {
+    try {
+      console.log("🚫 영상 내보내기 취소 요청");
+      isExportCancelled = true;
+
+      if (currentFfmpegProcess) {
+        try {
+          currentFfmpegProcess.kill("SIGKILL");
+          console.log("✅ FFmpeg 프로세스 종료");
+        } catch (error) {
+          console.error("FFmpeg 프로세스 종료 실패:", error);
+        }
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("영상 내보내기 취소 실패:", error);
       return { success: false, error: error.message };
     }
   });
@@ -751,8 +786,19 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
 // ----------------------------------------------------------------------------
 function runFFmpeg(args, progressCallback = null, isCheck = false) {
   return new Promise((resolve) => {
+    // 취소 확인
+    if (isExportCancelled) {
+      console.log("✋ FFmpeg 실행 취소됨");
+      return resolve({ success: false, error: "사용자에 의해 취소되었습니다" });
+    }
+
     const timeoutMs = isCheck ? 10000 : 15 * 60 * 1000;
     const proc = spawn(ffmpegPath, args, { windowsHide: true });
+
+    // 현재 프로세스 저장 (취소용)
+    if (!isCheck) {
+      currentFfmpegProcess = proc;
+    }
 
     let out = "",
       err = "",
@@ -793,13 +839,24 @@ function runFFmpeg(args, progressCallback = null, isCheck = false) {
       if (completed) return;
       completed = true;
       clearTimeout(timer);
+
+      // 현재 프로세스 초기화
+      if (currentFfmpegProcess === proc) {
+        currentFfmpegProcess = null;
+      }
+
       if (code === 0 || isCheck) {
         resolve({ success: code === 0, output: out || err, duration: extractDuration(err), size: 0 });
       } else {
-        // ✅ stderr 로그 출력 (마지막 1000자)
-        console.error(`❌ FFmpeg 실행 실패 (코드: ${code})`);
-        console.error(`stderr:\n${err.slice(-1000)}`);
-        resolve({ success: false, error: err || `FFmpeg exited with code ${code}` });
+        // 취소로 인한 종료인지 확인
+        if (isExportCancelled) {
+          resolve({ success: false, error: "사용자에 의해 취소되었습니다" });
+        } else {
+          // ✅ stderr 로그 출력 (마지막 1000자)
+          console.error(`❌ FFmpeg 실행 실패 (코드: ${code})`);
+          console.error(`stderr:\n${err.slice(-1000)}`);
+          resolve({ success: false, error: err || `FFmpeg exited with code ${code}` });
+        }
       }
     });
 
@@ -807,6 +864,12 @@ function runFFmpeg(args, progressCallback = null, isCheck = false) {
       if (completed) return;
       completed = true;
       clearTimeout(timer);
+
+      // 현재 프로세스 초기화
+      if (currentFfmpegProcess === proc) {
+        currentFfmpegProcess = null;
+      }
+
       resolve({ success: false, error: e.message });
     });
   });
@@ -939,6 +1002,12 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
 
   // 각 씬별로 클립 생성 (비디오는 그대로, 이미지는 duration 적용)
   for (let i = 0; i < scenes.length; i++) {
+    // 취소 확인
+    if (isExportCancelled) {
+      console.log("✋ 영상 내보내기가 취소되었습니다");
+      throw new Error("사용자에 의해 취소되었습니다");
+    }
+
     const scene = scenes[i];
     const mediaPath = mediaFiles[i];
     const durSec = Math.max(MIN_CLIP_DURATION, (sceneDurationsMs[i] || 3000) / 1000);

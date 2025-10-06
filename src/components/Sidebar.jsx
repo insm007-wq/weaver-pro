@@ -87,10 +87,10 @@ const useStyles = makeStyles({
   },
   
   mainContent: {
-    flex: 1,
     display: "flex",
     flexDirection: "column",
     ...shorthands.padding(tokens.spacingVerticalL, "0"),
+    paddingBottom: tokens.spacingVerticalM,
   },
   
   navigation: {
@@ -109,7 +109,7 @@ const useStyles = makeStyles({
   },
   
   menuSection: {
-    marginBottom: tokens.spacingVerticalXL,
+    marginBottom: tokens.spacingVerticalL,
   },
   
   menuItem: {
@@ -188,13 +188,10 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
   },
   footer: {
-    ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalL),
+    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalL),
     ...shorthands.borderTop("1px", "solid", tokens.colorNeutralStroke1),
-    backgroundColor: tokens.colorNeutralBackground2,
-    backdropFilter: "blur(10px)",
-    WebkitBackdropFilter: "blur(10px)",
-    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.1)",
-    marginTop: "auto",
+    marginTop: tokens.spacingVerticalL,
+    marginBottom: tokens.spacingVerticalM,
   },
   
   footerContent: {
@@ -202,9 +199,13 @@ const useStyles = makeStyles({
     flexDirection: "column",
     ...shorthands.gap(tokens.spacingVerticalXS),
   },
+
+  footerSpacer: {
+    flex: 1,
+  },
 });
 
-export default function Sidebar({ onSelectMenu, isScriptGenerating = false }) {
+export default function Sidebar({ onSelectMenu, isScriptGenerating = false, isVideoExporting = false }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const styles = useStyles();
 
@@ -288,7 +289,10 @@ export default function Sidebar({ onSelectMenu, isScriptGenerating = false }) {
 
   const MenuItem = ({ item, collapsed }) => {
     // 대본 생성 중일 때 미디어 준비/다운로드/영상 완성 탭 비활성화
-    const isDisabled = isScriptGenerating && (item.key === "assemble" || item.key === "draft" || item.key === "refine");
+    // 영상 생성 중일 때 대본/미디어 준비/미디어 다운로드 탭 비활성화
+    const isDisabled =
+      (isScriptGenerating && (item.key === "assemble" || item.key === "draft" || item.key === "refine")) ||
+      (isVideoExporting && (item.key === "script" || item.key === "assemble" || item.key === "draft"));
 
     const content = (
       <div
@@ -320,9 +324,16 @@ export default function Sidebar({ onSelectMenu, isScriptGenerating = false }) {
     );
 
     if (collapsed) {
-      const tooltipText = isDisabled
-        ? "⚠️ 대본 생성 중에는 이동할 수 없습니다"
-        : `${item.label} - ${item.desc}`;
+      let tooltipText;
+      if (isDisabled) {
+        if (isScriptGenerating) {
+          tooltipText = "⚠️ 대본 생성 중에는 이동할 수 없습니다";
+        } else if (isVideoExporting) {
+          tooltipText = "⚠️ 영상 생성 중에는 이동할 수 없습니다";
+        }
+      } else {
+        tooltipText = `${item.label} - ${item.desc}`;
+      }
       return (
         <Tooltip content={tooltipText} relationship="label" positioning="after">
           {content}
@@ -331,8 +342,11 @@ export default function Sidebar({ onSelectMenu, isScriptGenerating = false }) {
     }
 
     if (isDisabled) {
+      const warningText = isScriptGenerating
+        ? "⚠️ 대본 생성 중에는 이동할 수 없습니다"
+        : "⚠️ 영상 생성 중에는 이동할 수 없습니다";
       return (
-        <Tooltip content="⚠️ 대본 생성 중에는 이동할 수 없습니다" relationship="label" positioning="above">
+        <Tooltip content={warningText} relationship="label" positioning="above">
           {content}
         </Tooltip>
       );
@@ -397,16 +411,19 @@ export default function Sidebar({ onSelectMenu, isScriptGenerating = false }) {
 
       {/* Footer */}
       {!isCollapsed && (
-        <div className={styles.footer}>
-          <div className={styles.footerContent}>
-            <Text size={200} weight="medium">
-              Version 1.0.0
-            </Text>
-            <Caption1 color="subtle">
-              © 2025 Weaver Pro
-            </Caption1>
+        <>
+          <div className={styles.footer}>
+            <div className={styles.footerContent}>
+              <Text size={200} weight="medium">
+                Version 1.0.0
+              </Text>
+              <Caption1 color="subtle">
+                © 2025 Weaver Pro
+              </Caption1>
+            </div>
           </div>
-        </div>
+          <div className={styles.footerSpacer} />
+        </>
       )}
     </aside>
   );

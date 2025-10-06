@@ -7,7 +7,7 @@ import {
 } from "@fluentui/react-icons";
 import { showSuccess, showError, showInfo } from "../../common/GlobalToast";
 
-function SceneEditor({ scenes, onSceneSelect }) {
+function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExporting }) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [audioDurations, setAudioDurations] = useState({});
@@ -149,6 +149,7 @@ function SceneEditor({ scenes, onSceneSelect }) {
     }
 
     setIsExporting(true);
+    setIsVideoExporting?.(true);
     setExportProgress(0);
     setExportStartTime(Date.now());
     setEstimatedTimeRemaining(null);
@@ -168,9 +169,21 @@ function SceneEditor({ scenes, onSceneSelect }) {
       showError("영상 내보내기 중 오류가 발생했습니다.");
     } finally {
       setIsExporting(false);
+      setIsVideoExporting?.(false);
       setExportProgress(0);
       setExportStartTime(null);
       setEstimatedTimeRemaining(null);
+    }
+  };
+
+  // 영상 내보내기 취소
+  const handleCancelExport = async () => {
+    try {
+      await window.api?.cancelExport?.();
+      showInfo("영상 내보내기를 취소했습니다.");
+    } catch (error) {
+      console.error("취소 실패:", error);
+      showError("취소 중 오류가 발생했습니다.");
     }
   };
 
@@ -348,6 +361,13 @@ function SceneEditor({ scenes, onSceneSelect }) {
                 </Text>
               )}
             </div>
+            <Button
+              appearance="secondary"
+              onClick={handleCancelExport}
+              style={{ width: "100%", marginTop: 8 }}
+            >
+              취소
+            </Button>
           </div>
         ) : (
           <Button
