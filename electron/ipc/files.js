@@ -7,7 +7,7 @@
 // - 디렉토리 관리 유틸리티
 // ============================================================================
 
-const { ipcMain, dialog, app, BrowserWindow } = require("electron");
+const { ipcMain, dialog, app, BrowserWindow, shell } = require("electron");
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
@@ -427,5 +427,67 @@ ipcMain.handle("files:listDirectory", async (_evt, dirPath) => {
   } catch (error) {
     console.error("❌ files:listDirectory 실패:", error);
     return { success: false, message: error.message };
+  }
+});
+
+/** ✅ 파일 탐색기에서 파일 보기 */
+ipcMain.handle("shell:showInFolder", async (_evt, { filePath }) => {
+  try {
+    console.log("📂 shell:showInFolder 호출됨:", filePath);
+
+    if (!filePath || typeof filePath !== "string") {
+      return { success: false, message: "filePath_required" };
+    }
+
+    // 파일 존재 확인
+    if (!fs.existsSync(filePath)) {
+      return { success: false, message: "file_not_found" };
+    }
+
+    // 파일을 선택한 상태로 탐색기 열기
+    shell.showItemInFolder(filePath);
+    console.log("✅ shell:showInFolder 완료:", filePath);
+
+    return { success: true };
+  } catch (error) {
+    console.error("❌ shell:showInFolder 실패:", error);
+    return { success: false, message: error.message };
+  }
+});
+
+/** ✅ URL에서 파일 다운로드 및 저장 (사용자 선택) */
+ipcMain.handle("file:save-url", async (_evt, { url, suggestedName }) => {
+  try {
+    console.log("💾 file:save-url 호출됨:", { url, suggestedName });
+
+    if (!url || typeof url !== "string") {
+      return { ok: false, message: "url_required" };
+    }
+
+    // 파일 저장 대화상자 표시
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: "파일 저장",
+      defaultPath: suggestedName || "download.jpg",
+      filters: [
+        { name: "이미지 파일", extensions: ["jpg", "jpeg", "png", "gif", "webp"] },
+        { name: "모든 파일", extensions: ["*"] }
+      ],
+      buttonLabel: "저장"
+    });
+
+    if (canceled || !filePath) {
+      console.log("❌ 사용자가 저장을 취소함");
+      return { ok: false, message: "canceled" };
+    }
+
+    // URL에서 파일 다운로드
+    console.log("🌐 URL 다운로드 시작:", url);
+    await streamDownloadToFile(url, filePath);
+    console.log("✅ file:save-url 완료:", filePath);
+
+    return { ok: true, path: filePath };
+  } catch (error) {
+    console.error("❌ file:save-url 실패:", error);
+    return { ok: false, message: error.message };
   }
 });

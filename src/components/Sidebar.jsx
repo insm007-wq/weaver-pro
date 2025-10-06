@@ -287,8 +287,8 @@ export default function Sidebar({ onSelectMenu, isScriptGenerating = false }) {
   };
 
   const MenuItem = ({ item, collapsed }) => {
-    // 대본 생성 중일 때 미디어 준비/다운로드 탭 비활성화
-    const isDisabled = isScriptGenerating && (item.key === "assemble" || item.key === "draft");
+    // 대본 생성 중일 때 미디어 준비/다운로드/영상 완성 탭 비활성화
+    const isDisabled = isScriptGenerating && (item.key === "assemble" || item.key === "draft" || item.key === "refine");
 
     const content = (
       <div

@@ -43,8 +43,14 @@ function MediaDownloadPage() {
   });
   const [keywordsLoaded, setKeywordsLoaded] = useState(false);
   const [downloadCancelled, setDownloadCancelled] = useState(false);
+  const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState(null);
+  const [completedVideosCount, setCompletedVideosCount] = useState(0);
   const cancelledRef = useRef(false);
   const progressListenerRef = useRef(null);
+  const downloadStartTimeRef = useRef(null);
+  const totalVideosRef = useRef(0);
+  const countdownIntervalRef = useRef(null);
+  const isTimeEstimatedRef = useRef(false); // 시간 예측 완료 여부
 
   // ===== 초기 로드 및 설정 변경 감지
   useEffect(() => {
@@ -78,6 +84,12 @@ function MediaDownloadPage() {
         window.api.off("settings:changed", handleSettingsChanged);
       }
       window.removeEventListener("focus", handleFocus);
+
+      // 카운트다운 타이머 정리
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
     };
   }, []);
 
@@ -123,8 +135,33 @@ function MediaDownloadPage() {
     cancelledRef.current = false;
     setDownloadProgress({});
     setDownloadedVideos([]);
+    downloadStartTimeRef.current = Date.now();
+    setCompletedVideosCount(0);
+    isTimeEstimatedRef.current = false;
+
+    // 기존 카운트다운 타이머 정리
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
 
     const keywordArray = Array.from(selectedKeywords);
+    // 전체 다운로드할 비디오 개수 계산
+    totalVideosRef.current = keywordArray.length * downloadOptions.videosPerKeyword;
+
+    // 초기 예상 시간 설정 (비디오당 평균 5초로 가정)
+    const initialEstimate = totalVideosRef.current * 5;
+    setEstimatedTimeRemaining(initialEstimate);
+
+    // 초기 카운트다운 시작
+    countdownIntervalRef.current = setInterval(() => {
+      setEstimatedTimeRemaining(prev => {
+        if (prev === null || prev <= 0) {
+          return 0;
+        }
+        return Math.max(0, prev - 1);
+      });
+    }, 1000);
 
     try {
       const onProgress = (p) => {
@@ -132,6 +169,30 @@ function MediaDownloadPage() {
         if (cancelledRef.current) return;
 
         const { keyword, status, progress, filename, error, videoIndex, totalVideos, videoSuffix } = p;
+
+        // 비디오 완료 시 카운트 증가
+        if (status === "completed" && filename) {
+          setCompletedVideosCount(prev => {
+            const newCount = prev + 1;
+
+            // 처음 1개 비디오 완료 후 정확한 시간으로 업데이트 (한 번만)
+            if (!isTimeEstimatedRef.current && newCount >= 1 && downloadStartTimeRef.current && totalVideosRef.current > 0) {
+              const elapsedTime = (Date.now() - downloadStartTimeRef.current) / 1000; // 초 단위
+              const timePerVideo = elapsedTime / newCount;
+              const remainingVideos = totalVideosRef.current - newCount;
+              const estimatedRemaining = Math.max(0, remainingVideos * timePerVideo);
+
+              // 정확한 시간으로 업데이트
+              setEstimatedTimeRemaining(estimatedRemaining);
+              isTimeEstimatedRef.current = true;
+
+              console.log(`[시간 예측] 첫 ${newCount}개 완료, 비디오당 ${timePerVideo.toFixed(1)}초, 남은 시간: ${estimatedRemaining.toFixed(0)}초`);
+            }
+
+            return newCount;
+          });
+        }
+
         setDownloadProgress((prev) => ({
           ...prev,
           [keyword]: {
@@ -209,6 +270,17 @@ function MediaDownloadPage() {
     } finally {
       setIsDownloading(false);
       setDownloadCancelled(false);
+      downloadStartTimeRef.current = null;
+      totalVideosRef.current = 0;
+      isTimeEstimatedRef.current = false;
+      setEstimatedTimeRemaining(null);
+      setCompletedVideosCount(0);
+
+      // 카운트다운 타이머 정리
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
     }
   };
 
@@ -217,6 +289,17 @@ function MediaDownloadPage() {
     cancelledRef.current = true;
     setDownloadCancelled(true);
     setIsDownloading(false);
+    downloadStartTimeRef.current = null;
+    totalVideosRef.current = 0;
+    isTimeEstimatedRef.current = false;
+    setEstimatedTimeRemaining(null);
+    setCompletedVideosCount(0);
+
+    // 카운트다운 타이머 정리
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
 
     // 프로그레스 리스너 즉시 제거
     if (progressListenerRef.current) {
@@ -438,15 +521,40 @@ function MediaDownloadPage() {
             <Divider style={{ margin: "16px 0" }} />
 
             {isDownloading ? (
-              <Button
-                appearance="secondary"
-                size="large"
-                onClick={cancelDownload}
-                style={{ width: "100%" }}
-              >
-                <DismissCircle24Regular style={{ marginRight: 8 }} />
-                취소
-              </Button>
+              <div style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                padding: 16,
+                backgroundColor: "#f8f8f8",
+                borderRadius: 8,
+                border: "1px solid #e0e0e0"
+              }}>
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 4
+                }}>
+                  <Text size={300} weight="semibold">다운로드 진행 중</Text>
+                  {estimatedTimeRemaining !== null && estimatedTimeRemaining > 0 && (
+                    <Badge appearance="filled" color="informative" size="small">
+                      {estimatedTimeRemaining >= 3600
+                        ? `${Math.floor(estimatedTimeRemaining / 3600)}시간 ${Math.floor((estimatedTimeRemaining % 3600) / 60)}분 남음`
+                        : `${Math.floor(estimatedTimeRemaining / 60)}분 ${Math.floor(estimatedTimeRemaining % 60)}초 남음`}
+                    </Badge>
+                  )}
+                </div>
+                <Button
+                  appearance="secondary"
+                  size="medium"
+                  onClick={cancelDownload}
+                  style={{ width: "100%" }}
+                >
+                  <DismissCircle24Regular style={{ marginRight: 8 }} />
+                  다운로드 취소
+                </Button>
+              </div>
             ) : (
               <Button
                 appearance="primary"
@@ -640,12 +748,36 @@ function MediaDownloadPage() {
         <Card style={{ padding: 20, gridArea: "bottom" }}>
           {isDownloading && (
             <div style={{ marginBottom: downloadedVideos.length > 0 ? 16 : 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-                <Spinner size="small" />
-                <Text size={400} weight="semibold">
-                  다운로드 진행상황
-                </Text>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <Spinner size="small" />
+                  <Text size={400} weight="semibold">
+                    다운로드 진행상황
+                  </Text>
+                  <Badge appearance="filled" color="informative" size="small">
+                    {completedVideosCount}/{totalVideosRef.current}
+                  </Badge>
+                </div>
+                {estimatedTimeRemaining !== null && estimatedTimeRemaining > 0 && (
+                  <Text size={200} style={{ color: "#666" }}>
+                    {estimatedTimeRemaining >= 3600
+                      ? `남은 시간: 약 ${Math.floor(estimatedTimeRemaining / 3600)}시간 ${Math.floor((estimatedTimeRemaining % 3600) / 60)}분`
+                      : `남은 시간: 약 ${Math.floor(estimatedTimeRemaining / 60)}분 ${Math.floor(estimatedTimeRemaining % 60)}초`}
+                  </Text>
+                )}
               </div>
+              {totalVideosRef.current > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <ProgressBar
+                    value={completedVideosCount}
+                    max={totalVideosRef.current}
+                    thickness="medium"
+                  />
+                  <Text size={200} style={{ color: "#666", marginTop: 4, textAlign: "center", display: "block" }}>
+                    전체 진행률: {Math.round((completedVideosCount / totalVideosRef.current) * 100)}%
+                  </Text>
+                </div>
+              )}
               <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 300, overflowY: "auto" }}>
                 {Array.from(selectedKeywords).map((k) => {
                   const progress = downloadProgress[k];

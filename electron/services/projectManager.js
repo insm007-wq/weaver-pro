@@ -25,16 +25,10 @@ class ProjectManager {
   // 프로젝트 루트 폴더 가져오기 (날짜 폴더 제외)
   getProjectRootFolder() {
     try {
-      // 프로젝트 전용 설정 확인
+      // 프로젝트 전용 설정 확인 (오직 projectRootFolder만 사용)
       const projectRootFolder = store.get('projectRootFolder');
       if (projectRootFolder && typeof projectRootFolder === 'string' && projectRootFolder.trim()) {
         return projectRootFolder.trim();
-      }
-
-      // 백워드 호환성: 기존 videoSaveFolder 설정 확인
-      const userSetting = store.get('videoSaveFolder');
-      if (userSetting && typeof userSetting === 'string' && userSetting.trim()) {
-        return userSetting.trim();
       }
     } catch (error) {
       console.warn('설정값 읽기 실패, 기본값 사용:', error.message);
