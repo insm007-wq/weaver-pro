@@ -884,7 +884,7 @@ function SceneList({
                 {/* 미디어 상태 표시 */}
                 {hasMedia && (
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <Badge appearance="tint" color="success" size="small">
+                    <Badge appearance="tint" color="success" size="small" style={{ fontSize: "12px" }}>
                       <CheckmarkCircleRegular style={{ fontSize: 12, marginRight: 3 }} />
                       {sceneWithDefaults.asset.type === "image" ? "이미지" : "영상"} 연결됨
                     </Badge>

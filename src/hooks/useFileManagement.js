@@ -61,7 +61,24 @@ export const useFileManagement = () => {
         return;
       }
 
-      setScenes(parsedScenes);
+      // videoSaveFolder 가져오기
+      const videoSaveFolder = await getSetting("videoSaveFolder");
+
+      // 각 씬에 audioPath 추가 (audio/parts/scene-XXX.mp3)
+      const scenesWithAudio = parsedScenes.map((scene, index) => {
+        if (videoSaveFolder) {
+          const sceneNumber = String(index + 1).padStart(3, "0");
+          const audioPath = `${videoSaveFolder}\\audio\\parts\\scene-${sceneNumber}.mp3`;
+          return {
+            ...scene,
+            audioPath: audioPath,
+            audioGenerated: true
+          };
+        }
+        return scene;
+      });
+
+      setScenes(scenesWithAudio);
       setSrtConnected(true);
       setSrtFilePath(file.path);
 
@@ -165,10 +182,22 @@ export const useFileManagement = () => {
           const parsedScenes = parseSrtToScenes(content);
 
           if (parsedScenes.length > 0) {
-            setScenes(parsedScenes);
+            // 각 씬에 audioPath 추가 (audio/parts/scene-XXX.mp3)
+            const scenesWithAudio = parsedScenes.map((scene, index) => {
+              const sceneNumber = String(index + 1).padStart(3, "0");
+              const audioPath = `${videoSaveFolder}\\audio\\parts\\scene-${sceneNumber}.mp3`;
+              return {
+                ...scene,
+                audioPath: audioPath,
+                audioGenerated: true
+              };
+            });
+
+            setScenes(scenesWithAudio);
             setSrtConnected(true);
             setSrtFilePath(srtPath);
             loadedSrt = true;
+            console.log("[SRT 로드] audioPath가 추가된 씬:", scenesWithAudio[0]);
           }
         } else {
           console.warn("SRT 파일이 존재하지 않음:", srtPath);

@@ -28,6 +28,18 @@ function MediaEditPage() {
   // 선택된 씬 정보
   const selectedScene = scenes[selectedSceneIndex] || null;
 
+  // 디버깅: 선택된 씬의 audioPath 확인
+  useEffect(() => {
+    if (selectedScene) {
+      console.log("[MediaEditPage] 선택된 씬:", {
+        index: selectedSceneIndex,
+        text: selectedScene.text,
+        audioPath: selectedScene.audioPath,
+        hasAudioPath: !!selectedScene.audioPath
+      });
+    }
+  }, [selectedScene, selectedSceneIndex]);
+
   // 페이지 로드시 자동으로 프로젝트 파일들 로드 (한 번만)
   useEffect(() => {
     if (!hasTriedLoadRef.current) {
@@ -41,6 +53,7 @@ function MediaEditPage() {
 
       return () => clearTimeout(timer);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 선택된 씬의 미디어 URL 로드 (비디오 및 이미지 모두 지원)
@@ -66,13 +79,6 @@ function MediaEditPage() {
     };
 
     loadMediaUrl();
-
-    // 클린업: 이전 미디어 URL 해제
-    return () => {
-      if (videoUrl && selectedScene?.asset?.path) {
-        window.api?.revokeVideoUrl?.(selectedScene.asset.path);
-      }
-    };
   }, [selectedScene?.asset?.path]);
 
   // 씬 선택 핸들러 (간소화)
