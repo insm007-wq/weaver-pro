@@ -447,10 +447,7 @@ export default function DefaultsTab() {
               >
                 {AI_OPTIONS.llmModels.map((model) => (
                   <Option key={model.value} value={model.value} text={`${model.text} (${model.provider} - ${model.cost})`}>
-                    {model.text}{" "}
-                    <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-                      ({model.provider} - {model.cost})
-                    </Caption1>
+                    {`${model.text} (${model.provider} - ${model.cost})`}
                   </Option>
                 ))}
               </Dropdown>
@@ -463,7 +460,7 @@ export default function DefaultsTab() {
                 onOptionSelect={(_, data) => setThumbnailEngine(data.optionValue)}
               >
                 <Option key="replicate" value="replicate" text="Replicate (고품질)">
-                  Replicate <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>(고품질)</Caption1>
+                  Replicate (고품질)
                 </Option>
               </Dropdown>
             </Field>
@@ -477,7 +474,7 @@ export default function DefaultsTab() {
                 onOptionSelect={(_, data) => setThumbnailAnalysisEngine(data.optionValue)}
               >
                 <Option key="anthropic" value="anthropic" text="Claude Sonnet 4 (고성능 분석)">
-                  Claude Sonnet 4 <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>(고성능 분석)</Caption1>
+                  Claude Sonnet 4 (고성능 분석)
                 </Option>
               </Dropdown>
             </Field>
@@ -494,11 +491,8 @@ export default function DefaultsTab() {
                 {AI_OPTIONS.ttsEngines
                   .filter(engine => engine.status === "available")
                   .map((engine) => (
-                    <Option key={engine.value} value={engine.value} text={engine.text}>
-                      {engine.text}{" "}
-                      <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-                        ({engine.description})
-                      </Caption1>
+                    <Option key={engine.value} value={engine.value} text={`${engine.text} (${engine.description})`}>
+                      {`${engine.text} (${engine.description})`}
                     </Option>
                   ))}
               </Dropdown>

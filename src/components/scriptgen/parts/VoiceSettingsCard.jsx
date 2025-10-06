@@ -93,7 +93,7 @@ const VoiceSettingsCard = memo(({ form, voices, voiceLoading, voiceError, onChan
             style={{ minHeight: 36 }}
           >
             {voices.map((v) => (
-              <Option key={v.id} value={v.id}>
+              <Option key={v.id} value={v.id} text={`${v.name || v.id}${v.type ? ` (${v.type})` : ''}`}>
                 {v.name || v.id}
                 {v.type && (
                   <Badge size="small" appearance="tint" style={{ marginLeft: 8 }}>

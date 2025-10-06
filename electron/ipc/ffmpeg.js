@@ -34,6 +34,26 @@ async function loadMusicMetadata() {
   }
 }
 
+// HEX 색상을 ASS ABGR 형식으로 변환하는 헬퍼 함수
+// 예: #FF0000 (빨강) -> &H000000FF
+function hexToAssColor(hex, alpha = 0) {
+  // # 제거
+  hex = hex.replace('#', '');
+
+  // RGB 추출
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+
+  // ABGR 형식으로 변환 (alpha는 00=불투명, FF=완전투명)
+  const alphaHex = Math.max(0, Math.min(255, alpha)).toString(16).padStart(2, '0').toUpperCase();
+  const rHex = r.toString(16).padStart(2, '0').toUpperCase();
+  const gHex = g.toString(16).padStart(2, '0').toUpperCase();
+  const bHex = b.toString(16).padStart(2, '0').toUpperCase();
+
+  return `&H${alphaHex}${bHex}${gHex}${rHex}`;
+}
+
 // 음성 파일의 duration을 가져오는 함수 (FFmpeg 사용)
 async function getAudioDuration(filePath) {
   try {
@@ -646,12 +666,40 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
       alignment = subtitleSettings.horizontalAlign === "left" ? 7 : subtitleSettings.horizontalAlign === "right" ? 9 : 8;
     }
 
-    const outline = subtitleSettings.useOutline ? subtitleSettings.outlineWidth || 2 : 0;
-    const shadow = subtitleSettings.useShadow ? 1 : 0;
     const marginV = Math.round(subtitleSettings.verticalPadding || 40);
     const fontSize = subtitleSettings.fontSize || 24;
 
-    const style = `FontName=${fontName},Fontsize=${fontSize},Alignment=${alignment},MarginV=${marginV},Outline=${outline},BorderStyle=3,Shadow=${shadow}`;
+    // 텍스트 색상
+    const primaryColour = hexToAssColor(subtitleSettings.textColor || '#FFFFFF', 0);
+
+    // 폰트 굵기
+    const bold = (subtitleSettings.fontWeight || 600) >= 600 ? 1 : 0;
+
+    // 글자 간격
+    const spacing = subtitleSettings.letterSpacing || 0;
+
+    // 배경 사용 여부에 따라 BorderStyle과 색상 설정이 달라짐
+    let borderStyle, outlineColour, backColour, outline, shadow;
+
+    if (subtitleSettings.useBackground) {
+      // BorderStyle=3: 불투명 박스 모드
+      // OutlineColour = 박스(배경) 색상, BackColour = 그림자 색상
+      borderStyle = 3;
+      const backgroundAlpha = Math.round((100 - (subtitleSettings.backgroundOpacity || 80)) * 2.55);
+      outlineColour = hexToAssColor(subtitleSettings.backgroundColor || '#000000', backgroundAlpha);
+      backColour = hexToAssColor('#000000', 0); // 그림자 색상
+      outline = 0; // BorderStyle=3에서는 outline 두께 무시됨
+      shadow = 0;
+    } else {
+      // BorderStyle=1: 아웃라인 + 그림자 모드 (일반 모드)
+      borderStyle = 1;
+      outlineColour = hexToAssColor(subtitleSettings.outlineColor || '#000000', 0);
+      backColour = hexToAssColor('#000000', 0);
+      outline = subtitleSettings.useOutline ? (subtitleSettings.outlineWidth || 2) : 0;
+      shadow = subtitleSettings.useShadow ? 1 : 0;
+    }
+
+    const style = `FontName=${fontName},Fontsize=${fontSize},PrimaryColour=${primaryColour},OutlineColour=${outlineColour},BackColour=${backColour},Bold=${bold},Spacing=${spacing},Alignment=${alignment},MarginV=${marginV},Outline=${outline},BorderStyle=${borderStyle},Shadow=${shadow}`;
 
     // 자막과 포맷 필터 체인
     filterComplex += `;[outv]subtitles='${srt}':charenc=UTF-8:force_style='${style}',format=yuv420p[v]`;
@@ -1104,12 +1152,40 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
       alignment = subtitleSettings.horizontalAlign === "left" ? 7 : subtitleSettings.horizontalAlign === "right" ? 9 : 8;
     }
 
-    const outline = subtitleSettings.useOutline ? subtitleSettings.outlineWidth || 2 : 0;
-    const shadow = subtitleSettings.useShadow ? 1 : 0;
     const marginV = Math.round(subtitleSettings.verticalPadding || 40);
     const fontSize = subtitleSettings.fontSize || 24;
 
-    const style = `FontName=${fontName},Fontsize=${fontSize},Alignment=${alignment},MarginV=${marginV},Outline=${outline},BorderStyle=3,Shadow=${shadow}`;
+    // 텍스트 색상
+    const primaryColour = hexToAssColor(subtitleSettings.textColor || '#FFFFFF', 0);
+
+    // 폰트 굵기
+    const bold = (subtitleSettings.fontWeight || 600) >= 600 ? 1 : 0;
+
+    // 글자 간격
+    const spacing = subtitleSettings.letterSpacing || 0;
+
+    // 배경 사용 여부에 따라 BorderStyle과 색상 설정이 달라짐
+    let borderStyle, outlineColour, backColour, outline, shadow;
+
+    if (subtitleSettings.useBackground) {
+      // BorderStyle=3: 불투명 박스 모드
+      // OutlineColour = 박스(배경) 색상, BackColour = 그림자 색상
+      borderStyle = 3;
+      const backgroundAlpha = Math.round((100 - (subtitleSettings.backgroundOpacity || 80)) * 2.55);
+      outlineColour = hexToAssColor(subtitleSettings.backgroundColor || '#000000', backgroundAlpha);
+      backColour = hexToAssColor('#000000', 0); // 그림자 색상
+      outline = 0; // BorderStyle=3에서는 outline 두께 무시됨
+      shadow = 0;
+    } else {
+      // BorderStyle=1: 아웃라인 + 그림자 모드 (일반 모드)
+      borderStyle = 1;
+      outlineColour = hexToAssColor(subtitleSettings.outlineColor || '#000000', 0);
+      backColour = hexToAssColor('#000000', 0);
+      outline = subtitleSettings.useOutline ? (subtitleSettings.outlineWidth || 2) : 0;
+      shadow = subtitleSettings.useShadow ? 1 : 0;
+    }
+
+    const style = `FontName=${fontName},Fontsize=${fontSize},PrimaryColour=${primaryColour},OutlineColour=${outlineColour},BackColour=${backColour},Bold=${bold},Spacing=${spacing},Alignment=${alignment},MarginV=${marginV},Outline=${outline},BorderStyle=${borderStyle},Shadow=${shadow}`;
 
     // 자막과 포맷 필터 체인
     filterComplex += `;[outv]subtitles='${srt}':charenc=UTF-8:force_style='${style}',format=yuv420p[v]`;
