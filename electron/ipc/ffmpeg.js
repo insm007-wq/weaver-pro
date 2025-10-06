@@ -574,7 +574,49 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
   let vf = "format=yuv420p";
   if (subtitlePath && fs.existsSync(subtitlePath)) {
     let srt = subtitlePath.replace(/\\/g, "/").replace(/:/g, "\\:");
-    const style = "FontName=Malgun Gothic,Outline=2,BorderStyle=3,Shadow=0";
+
+    // 전역 자막 설정 로드
+    const subtitleSettings = store.get("subtitleSettings", {
+      fontFamily: "malgun-gothic",
+      fontSize: 24,
+      position: "bottom",
+      horizontalAlign: "center",
+      useOutline: true,
+      outlineWidth: 2,
+      useShadow: false,
+      verticalPadding: 40,
+      maxLines: 2
+    });
+
+    // 폰트 이름 매핑
+    const fontMap = {
+      "noto-sans": "Noto Sans KR",
+      "malgun-gothic": "Malgun Gothic",
+      "apple-sd-gothic": "AppleSDGothicNeo",
+      "nanumgothic": "NanumGothic",
+      "arial": "Arial",
+      "helvetica": "Helvetica",
+      "roboto": "Roboto"
+    };
+    const fontName = fontMap[subtitleSettings.fontFamily] || "Malgun Gothic";
+
+    // ASS 스타일 생성 (FFmpeg subtitles 필터용)
+    // Alignment: 1=좌하, 2=중하, 3=우하, 4=좌중, 5=중중, 6=우중, 7=좌상, 8=중상, 9=우상
+    let alignment = 2; // 기본: 중앙 하단
+    if (subtitleSettings.position === "bottom") {
+      alignment = subtitleSettings.horizontalAlign === "left" ? 1 : subtitleSettings.horizontalAlign === "right" ? 3 : 2;
+    } else if (subtitleSettings.position === "center") {
+      alignment = subtitleSettings.horizontalAlign === "left" ? 4 : subtitleSettings.horizontalAlign === "right" ? 6 : 5;
+    } else if (subtitleSettings.position === "top") {
+      alignment = subtitleSettings.horizontalAlign === "left" ? 7 : subtitleSettings.horizontalAlign === "right" ? 9 : 8;
+    }
+
+    const outline = subtitleSettings.useOutline ? subtitleSettings.outlineWidth || 2 : 0;
+    const shadow = subtitleSettings.useShadow ? 1 : 0;
+    const marginV = Math.round(subtitleSettings.verticalPadding || 40);
+    const fontSize = subtitleSettings.fontSize || 24;
+
+    const style = `FontName=${fontName},Fontsize=${fontSize},Alignment=${alignment},MarginV=${marginV},Outline=${outline},BorderStyle=3,Shadow=${shadow}`;
     vf = `subtitles='${srt}':charenc=UTF-8:force_style='${style}',` + vf;
   }
 
@@ -884,7 +926,48 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
   let vf = "format=yuv420p";
   if (srtPath && fs.existsSync(srtPath)) {
     const srt = srtPath.replace(/\\/g, "/").replace(/:/g, "\\:");
-    const style = "FontName=Malgun Gothic,Outline=2,BorderStyle=3,Shadow=0,FontSize=24";
+
+    // 전역 자막 설정 로드
+    const subtitleSettings = store.get("subtitleSettings", {
+      fontFamily: "malgun-gothic",
+      fontSize: 24,
+      position: "bottom",
+      horizontalAlign: "center",
+      useOutline: true,
+      outlineWidth: 2,
+      useShadow: false,
+      verticalPadding: 40,
+      maxLines: 2
+    });
+
+    // 폰트 이름 매핑
+    const fontMap = {
+      "noto-sans": "Noto Sans KR",
+      "malgun-gothic": "Malgun Gothic",
+      "apple-sd-gothic": "AppleSDGothicNeo",
+      "nanumgothic": "NanumGothic",
+      "arial": "Arial",
+      "helvetica": "Helvetica",
+      "roboto": "Roboto"
+    };
+    const fontName = fontMap[subtitleSettings.fontFamily] || "Malgun Gothic";
+
+    // ASS 스타일 생성
+    let alignment = 2; // 기본: 중앙 하단
+    if (subtitleSettings.position === "bottom") {
+      alignment = subtitleSettings.horizontalAlign === "left" ? 1 : subtitleSettings.horizontalAlign === "right" ? 3 : 2;
+    } else if (subtitleSettings.position === "center") {
+      alignment = subtitleSettings.horizontalAlign === "left" ? 4 : subtitleSettings.horizontalAlign === "right" ? 6 : 5;
+    } else if (subtitleSettings.position === "top") {
+      alignment = subtitleSettings.horizontalAlign === "left" ? 7 : subtitleSettings.horizontalAlign === "right" ? 9 : 8;
+    }
+
+    const outline = subtitleSettings.useOutline ? subtitleSettings.outlineWidth || 2 : 0;
+    const shadow = subtitleSettings.useShadow ? 1 : 0;
+    const marginV = Math.round(subtitleSettings.verticalPadding || 40);
+    const fontSize = subtitleSettings.fontSize || 24;
+
+    const style = `FontName=${fontName},Fontsize=${fontSize},Alignment=${alignment},MarginV=${marginV},Outline=${outline},BorderStyle=3,Shadow=${shadow}`;
     vf = `subtitles='${srt}':charenc=UTF-8:force_style='${style}',` + vf;
   }
 
