@@ -15,7 +15,7 @@ const autoOpenDevtools =
 function createMainWindow() {
   const win = new BrowserWindow({
     width: 1440,
-    height: 900,
+    height: 1000,
     minWidth: 1280,
     minHeight: 720,
     backgroundColor: "#f5f7fa",

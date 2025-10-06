@@ -7,7 +7,7 @@ import {
 } from "@fluentui/react-icons";
 import { showSuccess, showError, showInfo } from "../../common/GlobalToast";
 
-function SceneEditor({ scenes }) {
+function SceneEditor({ scenes, onSceneSelect }) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [audioDurations, setAudioDurations] = useState({});
@@ -80,6 +80,8 @@ function SceneEditor({ scenes }) {
         completedScenes: 0,
         missingMedia: 0,
         missingAudio: 0,
+        missingMediaScenes: [],
+        missingAudioScenes: [],
         estimatedDuration: 0
       };
     }
@@ -87,9 +89,11 @@ function SceneEditor({ scenes }) {
     let completedScenes = 0;
     let missingMedia = 0;
     let missingAudio = 0;
+    let missingMediaScenes = [];
+    let missingAudioScenes = [];
     let estimatedDuration = 0;
 
-    scenes.forEach(scene => {
+    scenes.forEach((scene, index) => {
       const hasMedia = scene.asset?.path;
       const hasAudio = scene.audioPath;
 
@@ -98,9 +102,11 @@ function SceneEditor({ scenes }) {
       }
       if (!hasMedia) {
         missingMedia++;
+        missingMediaScenes.push(index);
       }
       if (!hasAudio) {
         missingAudio++;
+        missingAudioScenes.push(index);
       }
 
       // 예상 길이 계산: 실제 오디오 파일 길이 사용
@@ -120,6 +126,8 @@ function SceneEditor({ scenes }) {
       completedScenes,
       missingMedia,
       missingAudio,
+      missingMediaScenes,
+      missingAudioScenes,
       estimatedDuration
     };
   };
@@ -209,15 +217,101 @@ function SceneEditor({ scenes }) {
               </Text>
             </div>
             {stats.missingMedia > 0 && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <Text size={200} style={{ color: "#d13438" }}>미디어 없음</Text>
-                <Text size={200} weight="semibold" style={{ color: "#d13438" }}>{stats.missingMedia}개</Text>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text size={200} style={{ color: "#d13438" }}>미디어 없음</Text>
+                  <Text size={200} weight="semibold" style={{ color: "#d13438" }}>{stats.missingMedia}개</Text>
+                </div>
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, 38px)",
+                  gap: 4,
+                  marginLeft: 4,
+                  maxHeight: "80px",
+                  overflowY: "auto",
+                  padding: "2px"
+                }}>
+                  {stats.missingMediaScenes.map(sceneIndex => (
+                    <button
+                      key={sceneIndex}
+                      onClick={() => onSceneSelect?.(sceneIndex)}
+                      style={{
+                        padding: "2px 8px",
+                        fontSize: "11px",
+                        backgroundColor: "#fef0f0",
+                        color: "#d13438",
+                        border: "1px solid #ffcccb",
+                        borderRadius: 4,
+                        cursor: "pointer",
+                        fontWeight: 500,
+                        transition: "all 0.2s",
+                        height: "24px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = "#d13438";
+                        e.currentTarget.style.color = "#fff";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "#fef0f0";
+                        e.currentTarget.style.color = "#d13438";
+                      }}
+                    >
+                      #{sceneIndex + 1}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
             {stats.missingAudio > 0 && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <Text size={200} style={{ color: "#d13438" }}>오디오 없음</Text>
-                <Text size={200} weight="semibold" style={{ color: "#d13438" }}>{stats.missingAudio}개</Text>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text size={200} style={{ color: "#d13438" }}>오디오 없음</Text>
+                  <Text size={200} weight="semibold" style={{ color: "#d13438" }}>{stats.missingAudio}개</Text>
+                </div>
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, 38px)",
+                  gap: 4,
+                  marginLeft: 4,
+                  maxHeight: "80px",
+                  overflowY: "auto",
+                  padding: "2px"
+                }}>
+                  {stats.missingAudioScenes.map(sceneIndex => (
+                    <button
+                      key={sceneIndex}
+                      onClick={() => onSceneSelect?.(sceneIndex)}
+                      style={{
+                        padding: "2px 8px",
+                        fontSize: "11px",
+                        backgroundColor: "#fef0f0",
+                        color: "#d13438",
+                        border: "1px solid #ffcccb",
+                        borderRadius: 4,
+                        cursor: "pointer",
+                        fontWeight: 500,
+                        transition: "all 0.2s",
+                        height: "24px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = "#d13438";
+                        e.currentTarget.style.color = "#fff";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "#fef0f0";
+                        e.currentTarget.style.color = "#d13438";
+                      }}
+                    >
+                      #{sceneIndex + 1}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

@@ -250,10 +250,11 @@ async function searchPixabayVideos(apiKey, query, perPage = 3, options = {}) {
 // ---------------------------------------------------------------------------
 // 안전하고 최적화된 영상 다운로드
 // - videoSaveFolder/video 경로 사용
+// - maxFileSize 실시간 체크 및 스킵 처리
 // ---------------------------------------------------------------------------
-async function downloadVideoOptimized(url, filename, onProgress) {
+async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 20) {
   try {
-    console.log(`[영상 다운로드] 시작: ${filename}`);
+    console.log(`[영상 다운로드] 시작: ${filename} (최대 크기: ${maxFileSize}MB)`);
 
     const videoSaveFolder = assertVideoSaveFolder();
     const videoPath = path.join(videoSaveFolder, "video");
@@ -285,13 +286,13 @@ async function downloadVideoOptimized(url, filename, onProgress) {
     }
 
     // 다운로드
-    const { buffer, size } = await new Promise((resolve, reject) => {
+    const { buffer, size, skipped } = await new Promise((resolve, reject) => {
       const protocol = url.startsWith("https:") ? https : http;
 
       const request = protocol.get(url, (response) => {
         // 리다이렉트
         if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-          return downloadVideoOptimized(response.headers.location, filename, onProgress).then(resolve).catch(reject);
+          return downloadVideoOptimized(response.headers.location, filename, onProgress, maxFileSize).then(resolve).catch(reject);
         }
 
         if (response.statusCode !== 200) {
@@ -299,6 +300,15 @@ async function downloadVideoOptimized(url, filename, onProgress) {
         }
 
         const totalSize = parseInt(response.headers["content-length"] || "0", 10);
+        const maxBytes = maxFileSize * 1024 * 1024;
+
+        // 전체 크기를 알 수 있고 이미 초과한 경우 즉시 스킵
+        if (totalSize > 0 && totalSize > maxBytes) {
+          request.destroy();
+          console.log(`[영상 다운로드] 크기 초과로 스킵: ${filename} (${bytesToMB(totalSize).toFixed(1)}MB > ${maxFileSize}MB)`);
+          return resolve({ buffer: null, size: totalSize, skipped: true });
+        }
+
         let downloadedSize = 0;
         const chunks = [];
 
@@ -310,8 +320,16 @@ async function downloadVideoOptimized(url, filename, onProgress) {
             return;
           }
 
-          chunks.push(chunk);
           downloadedSize += chunk.length;
+
+          // 실시간 크기 체크 - 초과 시 즉시 중단
+          if (downloadedSize > maxBytes) {
+            request.destroy();
+            console.log(`[영상 다운로드] 다운로드 중 크기 초과로 스킵: ${filename} (${bytesToMB(downloadedSize).toFixed(1)}MB > ${maxFileSize}MB)`);
+            return resolve({ buffer: null, size: downloadedSize, skipped: true });
+          }
+
+          chunks.push(chunk);
 
           if (onProgress && totalSize > 0) {
             const progress = Math.round((downloadedSize / totalSize) * 100);
@@ -325,7 +343,7 @@ async function downloadVideoOptimized(url, filename, onProgress) {
             reject(new Error("다운로드가 취소되었습니다"));
             return;
           }
-          resolve({ buffer: Buffer.concat(chunks), size: downloadedSize });
+          resolve({ buffer: Buffer.concat(chunks), size: downloadedSize, skipped: false });
         });
 
         response.on("error", reject);
@@ -348,6 +366,17 @@ async function downloadVideoOptimized(url, filename, onProgress) {
         reject(new Error("다운로드 타임아웃 (60초)"));
       });
     });
+
+    // 스킵된 경우 처리
+    if (skipped) {
+      return {
+        success: false,
+        filename,
+        error: `파일 크기 초과 (${bytesToMB(size).toFixed(1)}MB > ${maxFileSize}MB)`,
+        skipped: true,
+        size,
+      };
+    }
 
     await fs.writeFile(filePath, buffer);
     console.log(`[영상 다운로드] 완료: ${filename} (${Math.round(size / 1024 / 1024)}MB)`);
@@ -505,7 +534,7 @@ async function downloadVideosForKeywords(keywords, provider, options = {}, onPro
             totalVideos: videos.length,
             videoSuffix,
           });
-        });
+        }, options.maxFileSize || 20);
 
         results.push({
           keyword: videoKeyword,
@@ -524,7 +553,11 @@ async function downloadVideosForKeywords(keywords, provider, options = {}, onPro
           console.log(`[영상 다운로드] "${keyword}${videoSuffix}" 완료 ✓ (${video.width}x${video.height}, ${Math.round(video.size / 1024 / 1024)}MB)`);
         } else {
           failureCount++;
-          console.warn(`[영상 다운로드] "${keyword}${videoSuffix}" 실패: ${downloadResult.error}`);
+          if (downloadResult.skipped) {
+            console.warn(`[영상 다운로드] "${keyword}${videoSuffix}" 스킵: ${downloadResult.error}`);
+          } else {
+            console.warn(`[영상 다운로드] "${keyword}${videoSuffix}" 실패: ${downloadResult.error}`);
+          }
         }
 
         onProgress?.({

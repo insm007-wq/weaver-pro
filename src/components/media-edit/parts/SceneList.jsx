@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { Text, Button, Card, Badge, Avatar, Input, Textarea } from "@fluentui/react-components";
 import {
   DocumentTextRegular,
@@ -52,6 +52,20 @@ function SceneList({
 
   // 음성 파일 duration 상태
   const [audioDurations, setAudioDurations] = useState({});
+
+  // 씬 카드 refs (자동 스크롤용)
+  const sceneRefs = useRef([]);
+
+  // 선택된 씬으로 자동 스크롤
+  useEffect(() => {
+    if (selectedSceneIndex >= 0 && sceneRefs.current[selectedSceneIndex]) {
+      sceneRefs.current[selectedSceneIndex].scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }
+  }, [selectedSceneIndex]);
+
   // 시간 포맷 헬퍼
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -780,7 +794,11 @@ function SceneList({
             const isDragOver = dragOverSceneIndex === index;
 
             return (
-              <div key={scene.id} style={{ position: "relative" }}>
+              <div
+                key={scene.id}
+                ref={(el) => (sceneRefs.current[index] = el)}
+                style={{ position: "relative" }}
+              >
                 <div
                   style={{
                     padding: 12,

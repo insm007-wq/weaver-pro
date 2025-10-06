@@ -51,7 +51,7 @@ function createWindowFallback() {
 
   const win = new BrowserWindow({
     width: 1280,
-    height: 820,
+    height: 1000,
     show: false,
     backgroundColor: "#ffffff",
     autoHideMenuBar: true,

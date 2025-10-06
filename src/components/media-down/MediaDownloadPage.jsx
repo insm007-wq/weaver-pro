@@ -537,9 +537,11 @@ function MediaDownloadPage() {
                   marginBottom: 4
                 }}>
                   <Text size={300} weight="semibold">다운로드 진행 중</Text>
-                  {estimatedTimeRemaining !== null && estimatedTimeRemaining > 0 && (
+                  {estimatedTimeRemaining !== null && (
                     <Badge appearance="filled" color="informative" size="small">
-                      {estimatedTimeRemaining >= 3600
+                      {estimatedTimeRemaining <= 0
+                        ? "거의 완료 중..."
+                        : estimatedTimeRemaining >= 3600
                         ? `${Math.floor(estimatedTimeRemaining / 3600)}시간 ${Math.floor((estimatedTimeRemaining % 3600) / 60)}분 남음`
                         : `${Math.floor(estimatedTimeRemaining / 60)}분 ${Math.floor(estimatedTimeRemaining % 60)}초 남음`}
                     </Badge>
@@ -758,9 +760,11 @@ function MediaDownloadPage() {
                     {completedVideosCount}/{totalVideosRef.current}
                   </Badge>
                 </div>
-                {estimatedTimeRemaining !== null && estimatedTimeRemaining > 0 && (
+                {estimatedTimeRemaining !== null && (
                   <Text size={200} style={{ color: "#666" }}>
-                    {estimatedTimeRemaining >= 3600
+                    {estimatedTimeRemaining <= 0
+                      ? "거의 완료 중..."
+                      : estimatedTimeRemaining >= 3600
                       ? `남은 시간: 약 ${Math.floor(estimatedTimeRemaining / 3600)}시간 ${Math.floor((estimatedTimeRemaining % 3600) / 60)}분`
                       : `남은 시간: 약 ${Math.floor(estimatedTimeRemaining / 60)}분 ${Math.floor(estimatedTimeRemaining % 60)}초`}
                   </Text>
