@@ -491,3 +491,59 @@ ipcMain.handle("file:save-url", async (_evt, { url, suggestedName }) => {
     return { ok: false, message: error.message };
   }
 });
+
+/** ✅ 파일을 프로젝트 폴더에 저장 (드래그 앤 드롭용) */
+ipcMain.handle("files/saveToProject", async (_evt, { category, fileName, buffer }) => {
+  try {
+    console.log("💾 files/saveToProject 호출됨:", { category, fileName, bufferSize: buffer?.byteLength });
+
+    if (!category || !fileName || !buffer) {
+      return { ok: false, message: "category, fileName, buffer 필수" };
+    }
+
+    const store = require('../services/store');
+    const { getProjectManager } = require('../services/projectManager');
+
+    // 현재 프로젝트 가져오기
+    const currentProjectId = store.getCurrentProjectId();
+
+    if (!currentProjectId) {
+      return { ok: false, message: "프로젝트가 선택되지 않았습니다." };
+    }
+
+    const projectManager = getProjectManager();
+    let currentProject = store.getCurrentProject();
+
+    if (!currentProject) {
+      currentProject = await projectManager.findProjectById(currentProjectId);
+      if (!currentProject) {
+        return { ok: false, message: `프로젝트를 찾을 수 없습니다: ${currentProjectId}` };
+      }
+      projectManager.setCurrentProject(currentProject);
+    }
+
+    // 카테고리별 폴더 경로 (videos 또는 images)
+    let targetDir;
+    if (category === "videos") {
+      targetDir = currentProject.paths.video;
+    } else if (category === "images") {
+      targetDir = currentProject.paths.images;
+    } else {
+      return { ok: false, message: `지원하지 않는 카테고리: ${category}` };
+    }
+
+    // 디렉토리 생성
+    ensureDirSync(targetDir);
+
+    // 파일 저장
+    const filePath = path.join(targetDir, fileName);
+    const bufferData = toBuffer(buffer);
+    await fs.promises.writeFile(filePath, bufferData);
+
+    console.log("✅ files/saveToProject 완료:", filePath);
+    return { ok: true, path: filePath };
+  } catch (error) {
+    console.error("❌ files/saveToProject 실패:", error);
+    return { ok: false, message: error.message };
+  }
+});
