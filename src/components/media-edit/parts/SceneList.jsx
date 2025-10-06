@@ -721,6 +721,7 @@ function SceneList({
         display: "flex",
         flexDirection: "column",
         gap: 16,
+        height: "fit-content",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -755,11 +756,9 @@ function SceneList({
         </div>
       </div>
 
-      {/* 씬 목록 스크롤 */}
+      {/* 씬 목록 */}
       <div
         style={{
-          flex: 1,
-          overflowY: "auto",
           display: "flex",
           flexDirection: "column",
           gap: 8,

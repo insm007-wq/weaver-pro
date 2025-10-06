@@ -1,22 +1,33 @@
 import React, { useState, useEffect } from "react";
-import { Text, Button, Card, Divider, Badge, Spinner, ProgressBar } from "@fluentui/react-components";
+import { Text, Button, Card, Spinner, ProgressBar, Dialog, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions } from "@fluentui/react-components";
 import {
   SettingsRegular,
-  VideoRegular,
-  ImageRegular,
   ArrowExportRegular,
+  CheckmarkCircle24Filled,
 } from "@fluentui/react-icons";
 import { showSuccess, showError, showInfo } from "../../common/GlobalToast";
 
-function SceneEditor({ selectedScene, scenes }) {
+function SceneEditor({ scenes }) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [audioDurations, setAudioDurations] = useState({});
+  const [exportStartTime, setExportStartTime] = useState(null);
+  const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState(null);
+  const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
+  const [exportedFilePath, setExportedFilePath] = useState("");
 
   // FFmpeg 진행률 이벤트 리스너
   useEffect(() => {
     const handleProgress = (progress) => {
       setExportProgress(progress);
+
+      // 남은 시간 계산
+      if (exportStartTime && progress > 0) {
+        const elapsedTime = (Date.now() - exportStartTime) / 1000; // 초 단위
+        const estimatedTotalTime = (elapsedTime / progress) * 100;
+        const remaining = Math.max(0, estimatedTotalTime - elapsedTime);
+        setEstimatedTimeRemaining(remaining);
+      }
     };
 
     if (window.api?.on) {
@@ -28,7 +39,7 @@ function SceneEditor({ selectedScene, scenes }) {
         window.api.off("ffmpeg:progress", handleProgress);
       }
     };
-  }, []);
+  }, [exportStartTime]);
 
   // 오디오 파일 길이 로드
   useEffect(() => {
@@ -131,13 +142,16 @@ function SceneEditor({ selectedScene, scenes }) {
 
     setIsExporting(true);
     setExportProgress(0);
+    setExportStartTime(Date.now());
+    setEstimatedTimeRemaining(null);
     showInfo("영상 내보내기를 시작합니다...");
 
     try {
       const result = await window.api?.exportVideo?.(scenes);
 
       if (result?.success) {
-        showSuccess(`영상이 성공적으로 내보내졌습니다!\n경로: ${result.outputPath}`);
+        setExportedFilePath(result.outputPath || "");
+        setCompletionDialogOpen(true);
       } else {
         showError(result?.error || "영상 내보내기에 실패했습니다.");
       }
@@ -147,6 +161,8 @@ function SceneEditor({ selectedScene, scenes }) {
     } finally {
       setIsExporting(false);
       setExportProgress(0);
+      setExportStartTime(null);
+      setEstimatedTimeRemaining(null);
     }
   };
 
@@ -228,9 +244,16 @@ function SceneEditor({ selectedScene, scenes }) {
               <Text size={300} weight="medium">영상을 생성하는 중...</Text>
             </div>
             <ProgressBar value={exportProgress / 100} />
-            <Text size={200} style={{ color: "#666", textAlign: "center" }}>
-              {exportProgress}% 완료
-            </Text>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Text size={200} style={{ color: "#666" }}>
+                {exportProgress.toFixed(1)}% 완료
+              </Text>
+              {estimatedTimeRemaining !== null && estimatedTimeRemaining > 0 && (
+                <Text size={200} style={{ color: "#666" }}>
+                  남은 시간: {Math.floor(estimatedTimeRemaining / 60)}분 {Math.floor(estimatedTimeRemaining % 60)}초
+                </Text>
+              )}
+            </div>
           </div>
         ) : (
           <Button
@@ -249,92 +272,80 @@ function SceneEditor({ selectedScene, scenes }) {
         </Text>
       </div>
 
-      {selectedScene && (
-        <>
-          <Divider />
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* 현재 미디어 정보 */}
-          <div>
-            <Text size={400} weight="medium" style={{ marginBottom: 12, fontSize: "15px" }}>
-              현재 미디어
-            </Text>
-            {selectedScene.asset?.path ? (
-              <div
-                style={{
-                  padding: 12,
-                  backgroundColor: "#f3f9ff",
-                  borderRadius: 8,
-                  border: "1px solid #b3d6fc",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                  {selectedScene.asset.type === "image" ? (
-                    <ImageRegular style={{ fontSize: 16, color: "#0078d4" }} />
-                  ) : (
-                    <VideoRegular style={{ fontSize: 16, color: "#0078d4" }} />
-                  )}
-                  <Text size={200} weight="medium">
-                    {selectedScene.asset.type === "image" ? "이미지" : "영상"} 연결됨
-                  </Text>
-                </div>
+      {/* 완료 다이얼로그 */}
+      <Dialog open={completionDialogOpen} onOpenChange={(e, data) => setCompletionDialogOpen(data.open)}>
+        <DialogSurface style={{ maxWidth: "540px" }}>
+          <DialogBody>
+            <DialogTitle style={{
+              fontSize: "18px",
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              gap: 12
+            }}>
+              <CheckmarkCircle24Filled style={{ color: "#0f7b0f" }} />
+              영상 내보내기 완료
+            </DialogTitle>
+            <DialogContent style={{ paddingTop: 16, paddingBottom: 24 }}>
+              <div style={{
+                padding: 16,
+                backgroundColor: "#f3f9ff",
+                borderRadius: 8,
+                border: "1px solid #b3d6fc",
+                marginBottom: 16
+              }}>
+                <Text size={300} weight="semibold" style={{ display: "block", marginBottom: 8 }}>
+                  🎉 영상이 성공적으로 생성되었습니다!
+                </Text>
+                <Text size={200} style={{ display: "block", color: "#666", marginBottom: 8 }}>
+                  생성된 영상 파일:
+                </Text>
                 <Text
                   size={200}
                   style={{
-                    color: "#666",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                    marginBottom: 4,
+                    display: "block",
+                    color: "#0078d4",
+                    wordBreak: "break-all",
+                    fontFamily: "monospace",
+                    backgroundColor: "#fafafa",
+                    padding: "8px 12px",
+                    borderRadius: 4,
+                    border: "1px solid #e1dfdd"
                   }}
                 >
-                  {selectedScene.asset.filename || selectedScene.asset.path}
+                  {exportedFilePath}
                 </Text>
-                {selectedScene.asset.keyword && (
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-                    <Badge appearance="outline" size="small">
-                      키워드: {selectedScene.asset.keyword}
-                    </Badge>
-                    {selectedScene.asset.resolution && (
-                      <Badge appearance="outline" size="small">
-                        {selectedScene.asset.resolution}
-                      </Badge>
-                    )}
-                    {selectedScene.asset.provider && (
-                      <Badge appearance="outline" size="small">
-                        {selectedScene.asset.provider}
-                      </Badge>
-                    )}
-                  </div>
-                )}
               </div>
-            ) : (
-              <div
-                style={{
-                  padding: 12,
-                  backgroundColor: "#fdf6f6",
-                  borderRadius: 8,
-                  border: "1px solid #f1b2b2",
-                  textAlign: "center",
+              <Text size={300} style={{ display: "block", color: "#666" }}>
+                파일 탐색기에서 영상을 확인하시겠습니까?
+              </Text>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                appearance="secondary"
+                onClick={() => setCompletionDialogOpen(false)}
+              >
+                닫기
+              </Button>
+              <Button
+                appearance="primary"
+                onClick={async () => {
+                  if (exportedFilePath && window.api?.invoke) {
+                    try {
+                      await window.api.invoke("shell:showInFolder", { filePath: exportedFilePath });
+                    } catch (error) {
+                      console.error("파일 탐색기 열기 실패:", error);
+                    }
+                  }
+                  setCompletionDialogOpen(false);
                 }}
               >
-                <Text size={300} style={{ color: "#a4262c", fontSize: "13px" }}>
-                  연결된 미디어가 없습니다
-                </Text>
-              </div>
-            )}
-          </div>
-        </div>
-        </>
-      )}
-
-      {!selectedScene && (
-        <div style={{ textAlign: "center", padding: 20 }}>
-          <Text size={400} style={{ color: "#666", fontSize: "14px" }}>
-            씬를 선택하면 편집 도구가 표시됩니다
-          </Text>
-        </div>
-      )}
+                파일 위치 열기
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
     </Card>
   );
 }

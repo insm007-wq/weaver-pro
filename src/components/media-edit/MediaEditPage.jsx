@@ -90,10 +90,9 @@ function MediaEditPage() {
   const mainGrid = {
     display: "grid",
     gridTemplateColumns: "1.1fr 1fr",
-    gridTemplateRows: "1fr",
     gap: 24,
-    height: "100%",
-    minHeight: "600px",
+    alignItems: "flex-start",
+    height: "calc(100vh - 200px)",
   };
 
   // 우측 영역 레이아웃
@@ -101,7 +100,6 @@ function MediaEditPage() {
     display: "flex",
     flexDirection: "column",
     gap: 24,
-    height: "100%",
   };
 
   return (
@@ -134,17 +132,18 @@ function MediaEditPage() {
 
         {(srtConnected || mp3Connected) && (
           <div style={mainGrid}>
-            {/* 좌측: 씬 목록 컴포넌트 (자체 상태 관리) */}
-            <SceneList
-              scenes={scenes}
-              setScenes={setScenes}
-              selectedSceneIndex={selectedSceneIndex}
-              onSceneSelect={handleSceneSelect}
-            />
+            {/* 좌측: 씬 목록 컴포넌트 (스크롤 가능) */}
+            <div style={{ height: "100%", overflowY: "auto" }}>
+              <SceneList
+                scenes={scenes}
+                setScenes={setScenes}
+                selectedSceneIndex={selectedSceneIndex}
+                onSceneSelect={handleSceneSelect}
+              />
+            </div>
 
-            {/* 우측: 프리뷰 + 편집 도구 영역 */}
+            {/* 우측: 프리뷰 + 편집 도구 영역 (고정) */}
             <div style={rightPanelGrid}>
-              {/* 프리뷰 컴포넌트 (자체 상태 관리) */}
               <VideoPreview
                 ref={videoRef}
                 selectedScene={selectedScene}
@@ -153,7 +152,7 @@ function MediaEditPage() {
               />
 
               {/* 편집 도구 컴포넌트 */}
-              <SceneEditor selectedScene={selectedScene} scenes={scenes} />
+              <SceneEditor scenes={scenes} />
             </div>
           </div>
         )}
