@@ -165,9 +165,9 @@ export const useFileManagement = () => {
 
       // 파일 경로 구성
       const srtPath = `${videoSaveFolder}/scripts/subtitle.srt`;
-      const mp3Path = `${videoSaveFolder}/audio/default.mp3`;
+      const audioPartsFolder = `${videoSaveFolder}/audio/parts`;
 
-      console.log("[대본에서 가져오기] 구성된 경로:", { srtPath, mp3Path });
+      console.log("[대본에서 가져오기] 구성된 경로:", { srtPath, audioPartsFolder });
 
       let loadedSrt = false;
       let loadedMp3 = false;
@@ -206,19 +206,43 @@ export const useFileManagement = () => {
         console.error("SRT 로드 실패:", error);
       }
 
-      // MP3 파일 로드
+      // 개별 MP3 파일 로드
       try {
-        console.log("[MP3 로드] 파일 존재 확인 시작:", mp3Path);
-        const mp3Exists = await window.api?.checkPathExists?.(mp3Path);
-        console.log("[MP3 로드] 파일 존재 확인 결과:", mp3Exists);
-        if (mp3Exists?.exists && mp3Exists?.isFile) {
-          const duration = await getMp3DurationSafe(mp3Path);
-          setMp3Connected(true);
-          setMp3FilePath(mp3Path);
-          setAudioDur(duration);
-          loadedMp3 = true;
+        console.log("[MP3 로드] 개별 오디오 파일 확인 시작:", audioPartsFolder);
+        const folderExists = await window.api?.checkPathExists?.(audioPartsFolder);
+
+        if (folderExists?.exists && folderExists?.isDirectory) {
+          // 씬 개수만큼 개별 오디오 파일 확인
+          let foundAudioFiles = 0;
+          let totalDuration = 0;
+
+          for (let i = 0; i < (scenes.length || 10); i++) {
+            const sceneNumber = String(i + 1).padStart(3, "0");
+            const audioPath = `${audioPartsFolder}/scene-${sceneNumber}.mp3`;
+            const audioExists = await window.api?.checkPathExists?.(audioPath);
+
+            if (audioExists?.exists && audioExists?.isFile) {
+              foundAudioFiles++;
+              try {
+                const duration = await getMp3DurationSafe(audioPath);
+                totalDuration += duration;
+              } catch (error) {
+                console.warn(`씬 ${i + 1} 오디오 길이 측정 실패:`, error);
+              }
+            }
+          }
+
+          if (foundAudioFiles > 0) {
+            setMp3Connected(true);
+            setMp3FilePath(audioPartsFolder); // 폴더 경로 저장
+            setAudioDur(totalDuration);
+            loadedMp3 = true;
+            console.log(`[MP3 로드] ${foundAudioFiles}개 오디오 파일 발견, 총 길이: ${totalDuration.toFixed(2)}초`);
+          } else {
+            console.warn("개별 오디오 파일이 존재하지 않음:", audioPartsFolder);
+          }
         } else {
-          console.warn("MP3 파일이 존재하지 않음:", mp3Path);
+          console.warn("오디오 폴더가 존재하지 않음:", audioPartsFolder);
         }
       } catch (error) {
         console.error("MP3 로드 실패:", error);

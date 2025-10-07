@@ -99,20 +99,16 @@ export async function generateAudioStep(scriptData, form, addLog, setFullVideoSt
       }
     }
 
-    // 합치기 or 복사 → default.mp3
-    if (savedAudioFiles.length > 1) {
-      await mergeAudioFiles(savedAudioFiles, api, addLog);
-    } else if (savedAudioFiles.length === 1) {
-      await renameSingleAudioFile(savedAudioFiles[0], api, addLog);
-    } else {
-      throw new Error("저장된 음성 파일이 없어서 합본을 진행할 수 없습니다.");
+    // 개별 음성 파일 생성 완료 (default.mp3 생성하지 않음)
+    if (savedAudioFiles.length === 0) {
+      throw new Error("저장된 음성 파일이 없습니다.");
     }
 
     // 1차 자막 파일 생성 (대략)
     await generateSubtitleFile(scriptData, api, addLog);
 
     addLog(`🎵 === TTS 단계 완료 ===`);
-    addLog(`✅ 합본/복사 완료: default.mp3 생성`);
+    addLog(`✅ 개별 음성 파일 생성 완료: ${savedAudioFiles.length}개`);
 
     return audioFiles;
   } catch (error) {
@@ -264,11 +260,22 @@ export async function generateVideoStep(scriptData, audioFiles, imageFiles, addL
     const finalOutputPath = `${outputFolder}\\final_video.mp4`;
     addLog(`📁 영상 파일 저장 위치: ${finalOutputPath}`);
 
-    // 음성 파일 = default.mp3
-    const audioFilePath = `${videoSaveFolder}\\audio\\default.mp3`;
-    addLog(`🎵 음성 파일: ${audioFilePath}`);
-    const audioExists = await api.invoke("files:exists", audioFilePath).catch(() => false);
-    if (!audioExists) throw new Error(`음성 파일이 존재하지 않습니다: ${audioFilePath}`);
+    // 개별 음성 파일 경로 구성
+    const audioFolder = `${videoSaveFolder}\\audio\\parts`;
+    const audioFilePaths = [];
+    for (let i = 0; i < (scriptData?.scenes?.length || 0); i++) {
+      const sceneNum = i + 1;
+      const fileName = `scene-${String(sceneNum).padStart(3, "0")}.mp3`;
+      const filePath = `${audioFolder}\\${fileName}`;
+      const exists = await api.invoke("files:exists", filePath).catch(() => false);
+      if (exists) {
+        audioFilePaths.push(filePath);
+      } else {
+        addLog(`⚠️ 음성 파일 없음: ${filePath}`, "warning");
+      }
+    }
+    if (audioFilePaths.length === 0) throw new Error("사용 가능한 음성 파일이 없습니다.");
+    addLog(`🎵 개별 음성 파일 ${audioFilePaths.length}개 확인됨`);
 
     // 이미지 파일 유효 경로
     const validImageFiles = (imageFiles || []).map((img) => img.localPath).filter(Boolean);
@@ -286,39 +293,41 @@ export async function generateVideoStep(scriptData, audioFiles, imageFiles, addL
     if (usedCount === 0) throw new Error("사용할 씬/이미지 개수가 0입니다.");
     addLog(`🔍 사용할 개수: ${usedCount}개 (이미지: ${existingImageFiles.length}, 씬: ${scenes.length})`);
 
-    // 오디오 총 길이
-    addLog("🎵 오디오 총 길이 측정 중...");
-    addLog(`🔍 오디오 파일 경로: ${audioFilePath}`);
+    // 개별 오디오 파일 길이 측정
+    addLog("🎵 개별 오디오 파일 길이 측정 중...");
+    const audioDurations = [];
+    let totalAudioDurationSec = 0;
 
-    let totalAudioDurationSec = 10;
-    let measurementMethod = "기본값";
+    for (let i = 0; i < audioFilePaths.length; i++) {
+      const audioPath = audioFilePaths[i];
+      try {
+        const durationResult = await api.invoke("ffmpeg:duration", audioPath);
+        const actualResult = durationResult?.data || durationResult;
+        const seconds = actualResult?.seconds;
 
-    try {
-      addLog("🔍 ffmpeg:duration IPC 호출 중...");
-      const durationResult = await api.invoke("ffmpeg:duration", audioFilePath);
-      addLog(`🔍 ffmpeg:duration 결과: ${JSON.stringify(durationResult)}`);
-
-      // IPC 결과가 이중 래핑되어 있음: {success, data: {success, seconds}}
-      const actualResult = durationResult?.data || durationResult;
-      const seconds = actualResult?.seconds;
-
-      if (durationResult?.success && actualResult?.success && seconds > 0) {
-        totalAudioDurationSec = seconds;
-        measurementMethod = "ffmpeg:duration IPC";
-        addLog(`✅ 오디오 길이 측정 성공: ${totalAudioDurationSec.toFixed(2)}초`);
-      } else {
-        addLog(`❌ ffmpeg:duration 실패: ${durationResult?.message || actualResult?.message || "결과 없음"}`, "error");
-        throw new Error("ffmpeg:duration 호출 실패");
+        if (durationResult?.success && actualResult?.success && seconds > 0) {
+          audioDurations.push(seconds);
+          totalAudioDurationSec += seconds;
+          addLog(`✅ ${i + 1}번 오디오: ${seconds.toFixed(2)}초`);
+        } else {
+          addLog(`⚠️ ${i + 1}번 오디오 길이 측정 실패, 기본값 1초 사용`, "warning");
+          audioDurations.push(1);
+          totalAudioDurationSec += 1;
+        }
+      } catch (error) {
+        addLog(`❌ ${i + 1}번 오디오 길이 측정 오류: ${error.message}`, "error");
+        audioDurations.push(1);
+        totalAudioDurationSec += 1;
       }
-    } catch (error) {
-      addLog(`❌ 오디오 길이 측정 오류: ${error.message}`, "error");
-      addLog(`⚠️ 기본값 ${totalAudioDurationSec}초 사용`, "warning");
-      measurementMethod = `기본값 (오류: ${error.message})`;
+    }
+
+    if (totalAudioDurationSec === 0) {
+      totalAudioDurationSec = 10;
+      addLog(`⚠️ 오디오 길이 측정 실패, 기본값 10초 사용`, "warning");
     }
 
     const totalAudioMs = Math.max(1000, Math.floor(totalAudioDurationSec * 1000));
-    addLog(`🎵 최종 오디오 길이: ${totalAudioDurationSec.toFixed(2)}초 (${measurementMethod})`);
-    addLog(`🔍 총 오디오 시간(ms): ${totalAudioMs}`);
+    addLog(`🎵 총 오디오 길이: ${totalAudioDurationSec.toFixed(2)}초 (개별 파일 합산)`);
 
     // 텍스트 길이를 기반으로 씬 시간 분배 (최소 1.2초 보장)
     const usedScenes = scenes.slice(0, usedCount);
@@ -398,7 +407,7 @@ export async function generateVideoStep(scriptData, audioFiles, imageFiles, addL
     const result = await api.invoke(
       "ffmpeg:compose",
       {
-        audioFiles: [audioFilePath],
+        audioFiles: audioFilePaths,
         imageFiles: existingImageFiles.slice(0, usedCount),
         outputPath: finalOutputPath,
         subtitlePath: subtitleFilePath,
@@ -431,70 +440,6 @@ export async function generateVideoStep(scriptData, audioFiles, imageFiles, addL
   }
 }
 
-/** 여러 음성 파일 합치기 */
-async function mergeAudioFiles(audioFiles, api, addLog) {
-  try {
-    addLog(`🎵 === 오디오 합본 프로세스 시작 ===`);
-
-    const mergedFileName = `default.mp3`;
-    let outputPath = null; // electron이 기본 경로 처리
-
-    try {
-      const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
-      const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
-      if (videoSaveFolder && typeof videoSaveFolder === "string" && videoSaveFolder.trim() !== "") {
-        const audioFolder = `${videoSaveFolder}/audio`;
-        await api.invoke("fs:mkDirRecursive", { dirPath: audioFolder }).catch(() => {});
-        outputPath = `${audioFolder}/${mergedFileName}`;
-      }
-    } catch {}
-
-    const audioFilePaths = audioFiles.map((f) => f.audioUrl || f.filePath).filter((url) => typeof url === "string" && url.trim() !== "");
-
-    if (audioFilePaths.length === 0) {
-      addLog(`⚠️ 합칠 음성 파일이 없습니다`, "warning");
-      return;
-    }
-
-    const mergeResult = await api.invoke("audio/mergeFiles", { audioFiles: audioFilePaths, outputPath });
-    if (mergeResult.success) {
-      addLog(`✅ 음성 파일 합치기 완료: ${mergedFileName}`);
-    } else {
-      addLog(`❌ 음성 파일 합치기 실패: ${mergeResult.message}`, "error");
-    }
-  } catch (error) {
-    addLog(`❌ 음성 파일 합치기 오류: ${error.message}`, "error");
-  }
-}
-
-/** 단일 오디오 복사 → default.mp3 */
-async function renameSingleAudioFile(audioFile, api, addLog) {
-  try {
-    addLog(`🎵 === 단일 오디오 파일 복사 시작 ===`);
-
-    const targetFileName = `default.mp3`;
-    let outputPath;
-    try {
-      const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
-      const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
-      const audioFolder = `${videoSaveFolder}/audio`;
-      await api.invoke("fs:mkDirRecursive", { dirPath: audioFolder }).catch(() => {});
-      outputPath = `${audioFolder}/${targetFileName}`;
-    } catch {
-      outputPath = null; // electron이 기본 경로 처리
-    }
-
-    const copyResult = await api.invoke("audio/mergeFiles", {
-      audioFiles: [audioFile.filePath],
-      outputPath,
-    });
-
-    if (!copyResult.success) throw new Error(copyResult.message || "복사 실패");
-    addLog(`✅ 음성 파일 복사 완료: ${targetFileName}`);
-  } catch (error) {
-    addLog(`❌ 음성 파일 복사 오류: ${error.message}`, "error");
-  }
-}
 
 /** 자동화 모드용 자막 파일 생성(1차, 대략값) */
 async function generateSubtitleFile(scriptData, api, addLog) {
@@ -506,14 +451,37 @@ async function generateSubtitleFile(scriptData, api, addLog) {
       return;
     }
 
-    // 오디오 길이
+    // 개별 오디오 파일 길이 합산
     let totalAudioDurationSec = 10;
     try {
       const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
       const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
-      const audioFilePath = videoSaveFolder ? `${videoSaveFolder}/audio/default.mp3` : null;
-      const durationResult = await api.invoke("ffmpeg:duration", audioFilePath);
-      if (durationResult.success && durationResult.seconds > 0) totalAudioDurationSec = durationResult.seconds;
+      if (videoSaveFolder) {
+        const audioFolder = `${videoSaveFolder}/audio/parts`;
+        let totalDuration = 0;
+        let measuredFiles = 0;
+
+        for (let i = 0; i < scriptData.scenes.length; i++) {
+          const sceneNum = i + 1;
+          const fileName = `scene-${String(sceneNum).padStart(3, "0")}.mp3`;
+          const filePath = `${audioFolder}/${fileName}`;
+
+          try {
+            const durationResult = await api.invoke("ffmpeg:duration", filePath);
+            const actualResult = durationResult?.data || durationResult;
+            const seconds = actualResult?.seconds;
+
+            if (durationResult?.success && actualResult?.success && seconds > 0) {
+              totalDuration += seconds;
+              measuredFiles++;
+            }
+          } catch {}
+        }
+
+        if (measuredFiles > 0) {
+          totalAudioDurationSec = totalDuration;
+        }
+      }
     } catch {}
 
     const totalAudioMs = Math.floor(totalAudioDurationSec * 1000);

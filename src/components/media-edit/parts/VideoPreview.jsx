@@ -495,7 +495,7 @@ const VideoPreview = memo(function VideoPreview({
     // 재생 준비 완료 (로그 불필요)
   }, [selectedSceneIndex]);
 
-  const handleAudioError = useCallback((e) => {
+  const handleAudioError = useCallback(async (e) => {
     const audio = e.target;
     const error = audio.error;
 
@@ -527,10 +527,34 @@ const VideoPreview = memo(function VideoPreview({
       networkState: audio.networkState
     });
 
+    // blob URL이 만료된 경우 자동으로 재생성 시도
+    if (error && error.code === error.MEDIA_ERR_SRC_NOT_SUPPORTED && selectedScene?.audioPath) {
+      console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} blob URL 재생성 시도...`);
+
+      try {
+        // 캐시 제거
+        if (window.api?.revokeVideoUrl) {
+          window.api.revokeVideoUrl(selectedScene.audioPath);
+        }
+
+        // 새로운 blob URL 생성
+        const newAudioUrl = await window.api?.videoPathToUrl?.(selectedScene.audioPath, { cache: false });
+
+        if (newAudioUrl && newAudioUrl.startsWith('blob:')) {
+          setTtsAudioUrl(newAudioUrl);
+          setHasAudio(true);
+          console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} blob URL 재생성 성공`);
+          return; // 재생성 성공하면 초기화하지 않음
+        }
+      } catch (retryError) {
+        console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 재생성 실패:`, retryError);
+      }
+    }
+
     // 오디오 상태 초기화
     setHasAudio(false);
     setAudioDuration(0);
-  }, [selectedSceneIndex]);
+  }, [selectedSceneIndex, selectedScene]);
 
   const handleAudioEnded = useCallback(() => {
     // 오디오가 끝나면 비디오도 정지

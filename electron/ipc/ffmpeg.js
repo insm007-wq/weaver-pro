@@ -243,24 +243,38 @@ function register() {
       const srtPath = path.join(outputFolder, `subtitle_${timestamp}.srt`);
       await generateSrtFromScenes(scenes, srtPath);
 
-      // 전체 TTS 오디오 파일 경로
-      const fullAudioPath = path.join(videoSaveFolder, "audio", "default.mp3");
-      const audioFiles = fs.existsSync(fullAudioPath) ? [fullAudioPath] : [];
-
-      // ✅ 1. 전체 오디오 길이 먼저 측정
+      // 개별 TTS 오디오 파일 경로 구성
+      const audioFolder = path.join(videoSaveFolder, "audio", "parts");
+      const audioFiles = [];
       let totalAudioDurationMs = 0;
-      if (audioFiles.length > 0) {
-        try {
-          const totalSec = await probeDurationSec(fullAudioPath);
-          totalAudioDurationMs = Math.floor(totalSec * 1000);
-          console.log(`📊 전체 오디오 길이: ${totalSec.toFixed(2)}초`);
-        } catch (error) {
-          console.error("전체 오디오 길이 측정 실패:", error);
-          totalAudioDurationMs = scenes.length * 3000; // 기본값
+
+      // ✅ 1. 개별 오디오 파일 수집 및 길이 측정
+      for (let i = 0; i < scenes.length; i++) {
+        const sceneNum = i + 1;
+        const fileName = `scene-${String(sceneNum).padStart(3, "0")}.mp3`;
+        const filePath = path.join(audioFolder, fileName);
+
+        if (fs.existsSync(filePath)) {
+          audioFiles.push(filePath);
+          try {
+            const duration = await probeDurationSec(filePath);
+            totalAudioDurationMs += Math.floor(duration * 1000);
+            console.log(`✅ ${sceneNum}번 오디오: ${duration.toFixed(2)}초`);
+          } catch (error) {
+            console.error(`씬 ${sceneNum} 오디오 길이 측정 실패:`, error);
+            totalAudioDurationMs += 3000; // 기본값 3초
+          }
+        } else {
+          console.warn(`⚠️ 씬 ${sceneNum} 오디오 파일 없음: ${filePath}`);
+          totalAudioDurationMs += 3000; // 기본값 3초
         }
-      } else {
-        totalAudioDurationMs = scenes.length * 3000; // 기본값
       }
+
+      if (audioFiles.length === 0) {
+        throw new Error("사용 가능한 오디오 파일이 없습니다.");
+      }
+
+      console.log(`📊 총 오디오 길이: ${(totalAudioDurationMs / 1000).toFixed(2)}초 (${audioFiles.length}개 파일 합산)`);
 
       // ✅ 2. 씬별 미디어 파일 추출 및 개별 오디오 duration 계산
       const mediaFiles = [];
@@ -984,12 +998,15 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
   const videoClips = [];
   const MIN_CLIP_DURATION = 0.25;
 
-  // ✅ 전체 오디오 길이 계산
+  // ✅ 전체 오디오 길이 계산 (모든 오디오 파일 합산)
   let totalAudioSec = 0;
-  if (audioFiles && audioFiles.length > 0 && audioFiles[0]) {
+  if (audioFiles && audioFiles.length > 0) {
     try {
-      totalAudioSec = await probeDurationSec(audioFiles[0]);
-      console.log(`📊 전체 오디오 길이: ${totalAudioSec.toFixed(2)}초`);
+      for (const audioFile of audioFiles) {
+        const duration = await probeDurationSec(audioFile);
+        totalAudioSec += duration;
+      }
+      console.log(`📊 전체 오디오 길이: ${totalAudioSec.toFixed(2)}초 (${audioFiles.length}개 파일)`);
     } catch (error) {
       console.warn(`오디오 길이 측정 실패: ${error.message}`);
       totalAudioSec = sceneDurationsMs.reduce((sum, dur) => sum + dur, 0) / 1000;
@@ -1171,15 +1188,29 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
     finalArgs.push("-i", clip);
   });
 
-  // 오디오 파일 추가
-  const audioInputIndex = videoClips.length;
+  // 모든 오디오 파일 추가
+  const audioInputIndexStart = videoClips.length;
   if (audioFiles && audioFiles.length > 0) {
-    finalArgs.push("-i", audioFiles[0]);
+    audioFiles.forEach((audioFile) => {
+      finalArgs.push("-i", audioFile);
+    });
   }
 
   // filter_complex로 concat (PTS 안정화)
   let filterInputs = videoClips.map((_, i) => `[${i}:v]`).join("");
   let filterComplex = `${filterInputs}concat=n=${videoClips.length}:v=1:a=0[outv]`;
+
+  // 오디오도 concat (여러 개인 경우)
+  let hasAudioFilter = false;
+  if (audioFiles && audioFiles.length > 1) {
+    const audioFilterInputs = audioFiles.map((_, i) => `[${audioInputIndexStart + i}:a]`).join("");
+    filterComplex += `;${audioFilterInputs}concat=n=${audioFiles.length}:v=0:a=1[outa]`;
+    hasAudioFilter = true;
+  } else if (audioFiles && audioFiles.length === 1) {
+    // 오디오 파일이 1개면 그냥 레이블만 붙임 (anull 필터 사용)
+    filterComplex += `;[${audioInputIndexStart}:a]anull[outa]`;
+    hasAudioFilter = true;
+  }
 
   // 자막 필터 통합
   let finalVideoLabel = "[outv]";
@@ -1270,7 +1301,7 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
   // 맵핑
   finalArgs.push("-map", finalVideoLabel);
   if (audioFiles && audioFiles.length > 0) {
-    finalArgs.push("-map", `${audioInputIndex}:a`);
+    finalArgs.push("-map", "[outa]");
   }
 
   finalArgs.push(

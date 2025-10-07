@@ -201,20 +201,23 @@ function SceneList({
           audioUpdatedAt: audioUpdatedAt // 오디오 업데이트 타임스탬프 (캐시 무효화용)
         };
 
-        // 이후 씬들의 시간도 연쇄적으로 조정
+        // 이후 씬들의 시간도 연쇄적으로 조정 (불변성 유지)
         for (let i = sceneIndex + 1; i < updatedScenes.length; i++) {
           const prevEnd = updatedScenes[i - 1].end;
           const currentDuration = audioDurations[i] || (updatedScenes[i].end - updatedScenes[i].start);
-          updatedScenes[i].start = prevEnd;
-          updatedScenes[i].end = prevEnd + currentDuration;
+          updatedScenes[i] = {
+            ...updatedScenes[i],
+            start: prevEnd,
+            end: prevEnd + currentDuration
+          };
         }
 
         setScenes(updatedScenes);
         showSuccess(`씬 ${sceneIndex + 1} 음성이 재생성되었습니다. (${newDuration?.toFixed(1)}초)`);
 
-        // 모든 씬의 오디오 캐시 제거 (다른 씬의 캐시 오염 방지)
-        if (window.api?.revokeAllBlobUrls) {
-          window.api.revokeAllBlobUrls();
+        // 수정된 씬의 오디오 캐시만 제거
+        if (window.api?.revokeVideoUrl && currentScene.audioPath) {
+          window.api.revokeVideoUrl(currentScene.audioPath);
         }
 
         // SRT 파일도 업데이트
