@@ -16,18 +16,10 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
   const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
   const [exportedFilePath, setExportedFilePath] = useState("");
 
-  // FFmpeg 진행률 이벤트 리스너
+  // FFmpeg 진행률 이벤트 리스너 (진행률만 업데이트)
   useEffect(() => {
     const handleProgress = (progress) => {
       setExportProgress(progress);
-
-      // 남은 시간 계산
-      if (exportStartTime && progress > 0) {
-        const elapsedTime = (Date.now() - exportStartTime) / 1000; // 초 단위
-        const estimatedTotalTime = (elapsedTime / progress) * 100;
-        const remaining = Math.max(0, estimatedTotalTime - elapsedTime);
-        setEstimatedTimeRemaining(remaining);
-      }
     };
 
     if (window.api?.on) {
@@ -39,7 +31,21 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
         window.api.off("ffmpeg:progress", handleProgress);
       }
     };
-  }, [exportStartTime]);
+  }, []);
+
+  // 카운트다운 타이머 (1초마다 감소)
+  useEffect(() => {
+    if (!isExporting || estimatedTimeRemaining === null) return;
+
+    const interval = setInterval(() => {
+      setEstimatedTimeRemaining(prev => {
+        if (prev === null || prev <= 0) return 0;
+        return Math.max(0, prev - 1);
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isExporting, estimatedTimeRemaining !== null]);
 
   // 오디오 파일 길이 로드
   useEffect(() => {
@@ -148,11 +154,16 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
       return;
     }
 
+    // 영상 길이 기반 예상 인코딩 시간 계산
+    // 실제 인코딩 시간 = 영상 길이의 65% (35% 감소)
+    const videoDuration = stats.estimatedDuration; // 초 단위
+    const estimatedEncodingTime = Math.ceil(videoDuration * 0.65);
+
     setIsExporting(true);
     setIsVideoExporting?.(true);
     setExportProgress(0);
     setExportStartTime(Date.now());
-    setEstimatedTimeRemaining(null);
+    setEstimatedTimeRemaining(estimatedEncodingTime);
     showInfo("영상 내보내기를 시작합니다...");
 
     try {
@@ -355,12 +366,19 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
               <Text size={200} style={{ color: "#666" }}>
                 {exportProgress.toFixed(1)}% 완료
               </Text>
-              {estimatedTimeRemaining !== null && estimatedTimeRemaining > 0 && (
+              {estimatedTimeRemaining !== null && (
                 <Text size={200} style={{ color: "#666" }}>
-                  남은 시간: {Math.floor(estimatedTimeRemaining / 60)}분 {Math.floor(estimatedTimeRemaining % 60)}초
+                  {estimatedTimeRemaining <= 0
+                    ? "거의 완료 중..."
+                    : `남은 시간: ${Math.floor(estimatedTimeRemaining / 60)}분 ${Math.floor(estimatedTimeRemaining % 60)}초`}
                 </Text>
               )}
             </div>
+            {estimatedTimeRemaining !== null && estimatedTimeRemaining > 30 && (
+              <Text size={200} style={{ color: "#999", fontStyle: "italic", textAlign: "center" }}>
+                💡 예상 시간은 대략적인 값이며 실제와 다를 수 있습니다
+              </Text>
+            )}
             <Button
               appearance="secondary"
               onClick={handleCancelExport}
@@ -416,9 +434,10 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
                 </Text>
                 <Text
                   size={200}
+                  weight="semibold"
                   style={{
                     display: "block",
-                    color: "#0078d4",
+                    color: "#242424",
                     wordBreak: "break-all",
                     fontFamily: "monospace",
                     backgroundColor: "#fafafa",
