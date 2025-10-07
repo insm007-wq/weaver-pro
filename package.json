@@ -57,6 +57,7 @@
     "appId": "com.weaverpro.app",
     "npmRebuild": false,
     "asar": true,
+    "publish": null,
     "asarUnpack": [
       "node_modules/ffmpeg-static/**/*",
       "node_modules/sharp/**/*",
@@ -92,7 +93,10 @@
           "arch": ["x64", "arm64"]
         }
       ],
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
     },
     "linux": {
       "target": [
