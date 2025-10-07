@@ -56,6 +56,17 @@
     "productName": "Weaver Pro",
     "appId": "com.weaverpro.app",
     "npmRebuild": false,
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**/*",
+      "node_modules/sharp/**/*",
+      "node_modules/playwright/**/*",
+      "node_modules/playwright-core/**/*",
+      "node_modules/@playwright/**/*",
+      "node_modules/puppeteer-core/**/*",
+      "node_modules/puppeteer-extra/**/*",
+      "node_modules/puppeteer-extra-plugin-stealth/**/*"
+    ],
     "files": [
       "dist/**/*",
       "electron/**/*",
@@ -72,7 +83,6 @@
           "arch": ["x64"]
         }
       ],
-      "icon": "build/icon.ico.png",
       "signAndEditExecutable": false
     },
     "mac": {
@@ -82,7 +92,6 @@
           "arch": ["x64", "arm64"]
         }
       ],
-      "icon": "build/icon.icns.png",
       "category": "public.app-category.productivity"
     },
     "linux": {
@@ -92,14 +101,15 @@
           "arch": ["x64"]
         }
       ],
-      "icon": "build/icon.png",
       "category": "Utility"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "perMachine": false,
+      "allowElevation": true
     }
   }
 }

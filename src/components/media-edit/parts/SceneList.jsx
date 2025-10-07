@@ -378,9 +378,6 @@ function SceneList({
 
   // 자동 영상 할당 핸들러 (에러 핸들링 강화)
   const handleAutoAssignVideos = useCallback(async () => {
-    console.log("[UI 자동 할당] 🚀 버튼 클릭됨!");
-    console.log("[UI 자동 할당] 현재 scenes:", scenes);
-
     // 입력 검증
     if (!scenes || scenes.length === 0) {
       showError("할당할 씬이 없습니다.");
@@ -396,38 +393,15 @@ function SceneList({
 
     setIsAssigning(true);
     try {
-      console.log("[UI 자동 할당] 시작:", { sceneCount: scenes.length });
-      console.log("[UI 자동 할당] assignVideosToScenes 함수 호출 전...");
-
       const assignedScenes = await assignVideosToScenes(scenes, {
         minScore: 0.1, // VREW 스타일: 관대한 매칭
         allowDuplicates: false, // 중복 방지
       });
 
-      console.log("[UI 자동 할당] assignVideosToScenes 완료:", { assignedScenes });
-
-      // 할당 결과 디버깅
-      console.log("[자동 할당] 할당 전 scenes:", scenes);
-      console.log("[자동 할당] 할당 후 assignedScenes:", assignedScenes);
-
-      // 씬 업데이트
       setScenes(assignedScenes);
 
-      // 할당 결과 확인
       const assignedCount = assignedScenes.filter((scene) => scene.asset?.path).length;
       const totalCount = assignedScenes.length;
-
-      console.log("[자동 할당] 할당된 씬 수:", assignedCount, "/", totalCount);
-
-      // 할당된 씬들의 상세 정보 출력
-      assignedScenes.forEach((scene, index) => {
-        if (scene.asset?.path) {
-          console.log(`[자동 할당] 씬 ${index + 1}:`, {
-            text: scene.text,
-            asset: scene.asset,
-          });
-        }
-      });
 
       if (assignedCount > 0) {
         showSuccess(`${assignedCount}/${totalCount}개 씬에 영상을 자동으로 할당했습니다.`);
@@ -444,8 +418,6 @@ function SceneList({
 
   // 미디어 없음 자동 할당 핸들러
   const handleAutoAssignMissingOnly = useCallback(async () => {
-    console.log("[미디어 없음 자동 할당] 버튼 클릭됨!");
-
     if (!scenes || scenes.length === 0) {
       showError("할당할 씬이 없습니다.");
       return;
@@ -461,8 +433,6 @@ function SceneList({
 
     setIsAssigning(true);
     try {
-      console.log("[미디어 없음 자동 할당] 시작:", { missingCount: missingScenes.length });
-
       // 미디어가 없는 씬만 할당
       const assignedMissingScenes = await assignVideosToScenes(missingScenes, {
         minScore: 0.1,
@@ -511,10 +481,7 @@ function SceneList({
     if (contextMenuSceneIndex === -1) return;
 
     try {
-      console.log("[미디어 교체] 영상 선택 시작...");
-
       const result = await window.api.invoke("files/select", { type: "video" });
-      console.log("[미디어 교체] 파일 선택 결과:", result);
 
       if (!result?.canceled && result?.filePath) {
         const updatedScenes = [...scenes];

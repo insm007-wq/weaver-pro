@@ -71,7 +71,6 @@ function createWindowFallback() {
     win.webContents.openDevTools({ mode: "detach" });
   } else {
     win.loadFile(path.join(__dirname, "../dist/index.html")).catch((e) => console.error("loadFile:", e));
-    win.webContents.openDevTools({ mode: "detach" });
   }
 
   win.once("ready-to-show", () => win.show());

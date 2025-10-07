@@ -1,17 +1,30 @@
 // electron/ipc/audio.js
-const { ipcMain } = require("electron");
+const { ipcMain, app } = require("electron");
 const path = require("path");
-
-// FFmpeg 경로 설정
-const ffmpegPath = path.join(__dirname, '..', '..', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
-
-// FFmpeg 경로 확인
 const fs = require("fs");
-if (!fs.existsSync(ffmpegPath)) {
-  console.error("❌ FFmpeg 바이너리를 찾을 수 없습니다:", ffmpegPath);
-  console.log("📦 ffmpeg-static 패키지가 설치되어 있는지 확인하세요");
-} else {
+
+// FFmpeg 경로 설정 (ASAR 패키징 대응)
+
+let ffmpegPath;
+try {
+  ffmpegPath = require("ffmpeg-static");
+
+  // ASAR 패키징된 경우, app.asar를 app.asar.unpacked로 변경
+  if (ffmpegPath && ffmpegPath.includes('app.asar')) {
+    ffmpegPath = ffmpegPath.replace('app.asar', 'app.asar.unpacked');
+    console.log("✅ FFmpeg ASAR unpacked 경로:", ffmpegPath);
+  }
+
   console.log("✅ FFmpeg 바이너리 확인:", ffmpegPath);
+} catch (err) {
+  console.error("❌ FFmpeg 바이너리를 찾을 수 없습니다:", err);
+  // 폴백 경로 (unpacked 사용)
+  const appPath = app.getAppPath();
+  if (appPath.includes('app.asar')) {
+    ffmpegPath = path.join(appPath.replace('app.asar', 'app.asar.unpacked'), 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
+  } else {
+    ffmpegPath = path.join(__dirname, '..', '..', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
+  }
 }
 
 // ESM 패키지(music-metadata)를 CJS에서 안전하게 로드하기 위한 helper

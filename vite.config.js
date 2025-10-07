@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 
 export default defineConfig({
+  base: './', // Electron에서 사용하기 위해 상대 경로로 설정
   plugins: [react({
     jsxRuntime: 'automatic'
   })],

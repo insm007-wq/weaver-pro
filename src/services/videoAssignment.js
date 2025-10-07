@@ -4,10 +4,7 @@
 // - 고도화된 키워드 기반 유사도 계산
 // - 한국어-영어 동의어 매칭
 // - 실시간 키워드 분석 및 추천
-// - 테스트 모드 지원 (설정 무관 작동)
 // ============================================================================
-
-console.log("🔥 [videoAssignment.js] VREW 스타일 파일 로드됨 - Enhanced 2025 v2.0");
 
 import { getSetting } from "../utils/ipcSafe";
 
@@ -188,140 +185,81 @@ function calculateSceneVideoScore(scene, videoInfo) {
  */
 export async function discoverAvailableVideos() {
   try {
-    console.log("[영상 발견] 🚀 영상 발견 시작");
-
-    // 설정에서 videoSaveFolder 가져오기 (매번 fresh하게 가져오기)
+    // 설정에서 videoSaveFolder 가져오기
     const videoSaveFolderResult = await getSetting("videoSaveFolder");
-    console.log("[영상 발견] getSetting 원본 결과:", videoSaveFolderResult);
-
-    // 결과가 객체인 경우 value 속성 추출
     let videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
-    console.log("[영상 발견] videoSaveFolder 설정 (원본):", videoSaveFolder);
-    console.log("[영상 발견] videoSaveFolder 타입:", typeof videoSaveFolder);
 
     if (!videoSaveFolder || typeof videoSaveFolder !== 'string') {
-      console.warn("[영상 발견] videoSaveFolder 설정이 없거나 잘못됨:", videoSaveFolder);
+      console.error("[영상 발견] videoSaveFolder 설정이 없음");
       return [];
     }
 
-    // Node.js/Electron 표준: 슬래시(/) 사용 (Windows에서도 작동)
+    // Node.js/Electron 표준: 슬래시(/) 사용
     videoSaveFolder = videoSaveFolder.replace(/\\/g, '/');
-    console.log("[영상 발견] videoSaveFolder (정규화):", videoSaveFolder);
-
     const videoPath = `${videoSaveFolder}/video`;
-    console.log("[영상 발견] 영상 경로:", videoPath);
-    console.log("[영상 발견] 현재 시간:", new Date().toISOString());
 
     // 디렉토리 존재 확인
     if (!window?.api?.checkPathExists) {
-      console.error("[영상 발견] window.api.checkPathExists API 없음");
+      console.error("[영상 발견] API 없음");
       return [];
     }
 
     const dirExists = await window.api.checkPathExists(videoPath);
-    console.log("[영상 발견] 디렉토리 존재 확인 결과:", dirExists);
-    console.log("[영상 발견] dirExists.exists:", dirExists?.exists);
-    console.log("[영상 발견] dirExists.isDirectory:", dirExists?.isDirectory);
-    console.log("[영상 발견] dirExists.isFile:", dirExists?.isFile);
-
     if (!dirExists?.exists) {
-      console.error("[영상 발견] ❌ 영상 디렉토리가 존재하지 않음:", videoPath);
-      console.error("[영상 발견] videoSaveFolder가 올바른지 확인하세요:", videoSaveFolder);
+      console.error("[영상 발견] 디렉토리 없음:", videoPath);
       return [];
     }
 
-    // isDirectory가 명시적으로 false인 경우만 에러 (undefined는 허용)
     if (dirExists?.isFile === true) {
-      console.error("[영상 발견] ❌ 경로가 파일임 (디렉토리가 아님):", videoPath);
+      console.error("[영상 발견] 파일임 (디렉토리 아님):", videoPath);
       return [];
     }
 
-    console.log("[영상 발견] ✅ 디렉토리 확인됨:", videoPath);
-
-    // 실제 파일 목록 가져오기
+    // 파일 목록 가져오기
     if (!window?.api?.listDirectory) {
-      console.error("[영상 발견] window.api.listDirectory API 없음");
+      console.error("[영상 발견] listDirectory API 없음");
       return [];
     }
 
-    console.log("[영상 발견] listDirectory 호출 중...");
     const result = await window.api.listDirectory(videoPath);
-    console.log("[영상 발견] listDirectory 결과:", result);
-    console.log("[영상 발견] result.success:", result?.success);
-    console.log("[영상 발견] result.files 개수:", result?.files?.length);
-
-    if (!result?.success) {
-      console.error("[영상 발견] ❌ listDirectory 실패:", result?.message);
+    if (!result?.success || !Array.isArray(result.files)) {
+      console.error("[영상 발견] 파일 목록 가져오기 실패");
       return [];
     }
 
-    if (!result.files || !Array.isArray(result.files)) {
-      console.error("[영상 발견] ❌ 파일 목록이 배열이 아님:", result.files);
+    if (result.files.length === 0) {
+      console.warn("[영상 발견] 디렉토리 비어있음:", videoPath);
       return [];
     }
 
     const files = result.files;
     const videos = [];
 
-    console.log(`[영상 발견] ✅ ${files.length}개 파일 발견, MP4 파일 필터링 중...`);
-
-    if (files.length === 0) {
-      console.warn("[영상 발견] ⚠️ 디렉토리가 비어있음:", videoPath);
-      return [];
-    }
-
-    let mp4Count = 0;
-    let skippedCount = 0;
-
     for (const file of files) {
-      // MP4 파일만 처리
-      if (!file.name.toLowerCase().endsWith('.mp4')) {
-        skippedCount++;
+      if (!file.name.toLowerCase().endsWith('.mp4') || !file.isFile) {
         continue;
       }
-
-      if (!file.isFile) {
-        console.warn(`[영상 발견] ⏭️ 디렉토리임 (스킵): ${file.name}`);
-        skippedCount++;
-        continue;
-      }
-
-      mp4Count++;
-      console.log(`[영상 발견] 🎬 MP4 파일 처리 중 (${mp4Count}): ${file.name}`);
 
       const keyword = extractKeywordFromFilename(file.name);
-      console.log(`[영상 발견] 추출된 키워드: "${keyword}"`);
-
       if (!keyword || keyword === "unknown") {
-        console.warn(`[영상 발견] ⚠️ 키워드를 추출할 수 없음: ${file.name}`);
         continue;
       }
 
-      const videoInfo = {
+      videos.push({
         filename: file.name,
         path: `${videoPath}/${file.name}`,
         keyword,
         size: file.size || 0,
         resolution: extractResolutionFromFilename(file.name),
         provider: extractProviderFromFilename(file.name),
-      };
-
-      videos.push(videoInfo);
-      console.log(`[영상 발견] ✅ 추가됨 (${videos.length}): ${videoInfo.keyword} → ${videoInfo.filename}`);
+      });
     }
 
-    console.log(`[영상 발견] 📊 요약:`);
-    console.log(`[영상 발견] - 전체 파일: ${files.length}개`);
-    console.log(`[영상 발견] - MP4 파일: ${mp4Count}개`);
-    console.log(`[영상 발견] - 스킵됨: ${skippedCount}개`);
-    console.log(`[영상 발견] - 유효한 영상: ${videos.length}개`);
-    console.log(`[영상 발견] 🎯 발견된 키워드:`, videos.map(v => v.keyword).join(', '));
-
+    console.log(`[영상 발견] ${videos.length}개 영상 발견 (${videoPath})`);
     return videos;
 
   } catch (error) {
-    console.error("[영상 발견] ❌ 치명적 오류:", error);
-    console.error("[영상 발견] 오류 스택:", error.stack);
+    console.error("[영상 발견] 오류:", error.message);
     return [];
   }
 }
@@ -350,87 +288,67 @@ function extractProviderFromFilename(filename) {
  */
 export async function assignVideosToScenes(scenes, options = {}) {
   try {
-    console.log("[영상 할당] 🎬 VREW 스타일 자동 할당 시작");
-    console.log("[영상 할당] 입력 씬 수:", scenes?.length || 0);
-
-    const {
-      minScore = 0.1, // VREW 스타일: 더 관대한 매칭
-      allowDuplicates = false,
-    } = options;
-
-    console.log("[영상 할당] 옵션:", { minScore, allowDuplicates });
+    const { minScore = 0.1, allowDuplicates = false } = options;
 
     if (!Array.isArray(scenes) || scenes.length === 0) {
-      console.warn("[영상 할당] 씬이 없음");
       return [];
     }
 
-    // 1. 사용 가능한 영상 발견
-    console.log("[영상 할당] 1️⃣ 영상 발견 단계");
     const availableVideos = await discoverAvailableVideos();
-
     if (availableVideos.length === 0) {
       console.warn("[영상 할당] 사용 가능한 영상이 없음");
       return scenes;
     }
 
-    console.log(`[영상 할당] ✅ ${availableVideos.length}개 영상 사용 가능`);
-    availableVideos.forEach(video => {
-      console.log(`[영상 할당] 📹 ${video.keyword} (${video.filename})`);
-    });
-
-    // 2. 씬별 매칭 점수 계산
     const assignments = [];
     const usedVideos = new Set();
 
     for (let i = 0; i < scenes.length; i++) {
       const scene = scenes[i];
-      console.log(`[영상 할당] 🎯 씬 ${i + 1}/${scenes.length} 처리 중`);
-      console.log(`[영상 할당] 씬 텍스트: "${scene.text}"`);
 
-      // 이미 영상이 할당된 씬은 스킵
       if (scene.asset?.path) {
-        console.log(`[영상 할당] ⏭️ 씬 ${i + 1} 이미 할당됨: ${scene.asset.path}`);
         assignments.push({ scene, video: null, score: 0 });
         continue;
       }
 
-      // 씬 키워드 추출
-      const sceneKeywords = extractKeywordsFromText(scene.text);
-      console.log(`[영상 할당] 씬 키워드: [${sceneKeywords.join(', ')}]`);
-
       let bestVideo = null;
       let bestScore = 0;
 
-      // 각 영상과의 매칭 점수 계산
+      // 1차: 키워드 매칭 시도
       for (const video of availableVideos) {
         if (!allowDuplicates && usedVideos.has(video.path)) {
-          console.log(`[영상 할당] ⏭️ 영상 "${video.keyword}" 이미 사용됨`);
           continue;
         }
 
         const score = calculateSceneVideoScore(scene, video);
-        console.log(`[영상 할당] 점수: "${video.keyword}" = ${score.toFixed(3)}`);
-
         if (score > bestScore && score >= minScore) {
           bestVideo = video;
           bestScore = score;
         }
       }
 
-      if (bestVideo) {
-        console.log(`[영상 할당] ✅ 씬 ${i + 1} → "${bestVideo.keyword}" (점수: ${bestScore.toFixed(3)})`);
-        if (!allowDuplicates) {
-          usedVideos.add(bestVideo.path);
+      // 2차: 매칭 실패 시 사용 가능한 영상 중 랜덤 선택
+      if (!bestVideo && availableVideos.length > 0) {
+        const unusedVideos = availableVideos.filter(v => !usedVideos.has(v.path));
+        if (unusedVideos.length > 0) {
+          bestVideo = unusedVideos[Math.floor(Math.random() * unusedVideos.length)];
+          bestScore = 0; // 랜덤 할당이므로 점수 0
+          console.log(`[영상 할당] 씬 ${i + 1}: 키워드 매칭 실패, 랜덤 할당 - ${bestVideo.filename}`);
+        } else if (allowDuplicates) {
+          // 중복 허용이면 전체에서 랜덤 선택
+          bestVideo = availableVideos[Math.floor(Math.random() * availableVideos.length)];
+          bestScore = 0;
+          console.log(`[영상 할당] 씬 ${i + 1}: 중복 허용 랜덤 할당 - ${bestVideo.filename}`);
         }
-      } else {
+      }
+
+      if (bestVideo && !allowDuplicates) {
+        usedVideos.add(bestVideo.path);
       }
 
       assignments.push({ scene, video: bestVideo, score: bestScore });
     }
 
-    // 3. 할당 결과를 씬에 적용
-    console.log("[영상 할당] 3️⃣ 할당 결과 적용");
     const assignedScenes = assignments.map(({ scene, video }) => {
       if (!video) return scene;
 
@@ -448,12 +366,12 @@ export async function assignVideosToScenes(scenes, options = {}) {
     });
 
     const assignedCount = assignments.filter(a => a.video).length;
-    console.log(`[영상 할당] 🏁 완료: ${assignedCount}/${scenes.length}개 씬에 영상 할당`);
+    console.log(`[영상 할당] 완료: ${assignedCount}/${scenes.length}개 씬에 할당`);
 
     return assignedScenes;
 
   } catch (error) {
-    console.error("[영상 할당] 치명적 오류:", error);
+    console.error("[영상 할당] 오류:", error.message);
     return scenes;
   }
 }
@@ -464,11 +382,9 @@ export async function assignVideosToScenes(scenes, options = {}) {
 export async function getRecommendedVideosForScene(scene, limit = 5) {
   if (!scene?.text) return [];
 
-  console.log(`[영상 추천] 씬 "${scene.text}"에 대한 추천 영상 검색`);
-
   const availableVideos = await discoverAvailableVideos();
 
-  const scored = availableVideos
+  return availableVideos
     .map(video => ({
       ...video,
       score: calculateSceneVideoScore(scene, video)
@@ -476,11 +392,6 @@ export async function getRecommendedVideosForScene(scene, limit = 5) {
     .filter(item => item.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
-
-  console.log(`[영상 추천] ${scored.length}개 추천 영상:`,
-    scored.map(v => `${v.keyword}(${v.score.toFixed(2)})`));
-
-  return scored;
 }
 
 /**
@@ -490,19 +401,14 @@ export function analyzeSceneKeywords(sceneText) {
   if (!sceneText) return [];
 
   const keywords = extractKeywordsFromText(sceneText);
-  const analysis = keywords.map(keyword => {
-    // 한국어 키워드인 경우 영어 매핑 찾기
+  return keywords.map(keyword => {
     const englishMappings = KEYWORD_MAPPING[keyword] || [];
-
     return {
       korean: keyword,
       english: englishMappings,
       type: /[가-힣]/.test(keyword) ? 'korean' : 'english'
     };
   });
-
-  console.log(`[키워드 분석] "${sceneText}" →`, analysis);
-  return analysis;
 }
 
 export default {

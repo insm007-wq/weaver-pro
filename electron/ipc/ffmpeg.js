@@ -75,7 +75,28 @@ async function getAudioDuration(filePath) {
   }
 }
 
-const ffmpegPath = path.join(__dirname, "..", "..", "node_modules", "ffmpeg-static", "ffmpeg.exe");
+// ffmpeg-static: ASAR 패키징 대응
+let ffmpegPath;
+try {
+  ffmpegPath = require("ffmpeg-static");
+
+  // ASAR 패키징된 경우, app.asar를 app.asar.unpacked로 변경
+  if (ffmpegPath && ffmpegPath.includes('app.asar')) {
+    ffmpegPath = ffmpegPath.replace('app.asar', 'app.asar.unpacked');
+    console.log("[ffmpeg] ASAR unpacked path:", ffmpegPath);
+  }
+
+  console.log("[ffmpeg] ffmpeg-static path:", ffmpegPath);
+} catch (err) {
+  console.error("[ffmpeg] Failed to load ffmpeg-static:", err);
+  // 폴백: 하드코딩된 경로 (unpacked 사용)
+  const appPath = app.getAppPath();
+  if (appPath.includes('app.asar')) {
+    ffmpegPath = path.join(appPath.replace('app.asar', 'app.asar.unpacked'), 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
+  } else {
+    ffmpegPath = path.join(__dirname, "..", "..", "node_modules", "ffmpeg-static", "ffmpeg.exe");
+  }
+}
 
 // ffprobe 사용 가능하면 최우선
 let ffprobePath = null;
