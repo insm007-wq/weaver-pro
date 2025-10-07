@@ -183,14 +183,31 @@ const VideoPreview = memo(function VideoPreview({
     }
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  // 컴포넌트 언마운트 시 애니메이션 프레임 정리
+  // 컴포넌트 언마운트 시 리소스 정리
   useEffect(() => {
     return () => {
+      // 애니메이션 프레임 정리
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
+
+      // 오디오 정리
+      const audio = audioRef.current;
+      if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+
+      // blob URL 정리 (메모리 누수 방지)
+      if (ttsAudioUrl && ttsAudioUrl.startsWith('blob:')) {
+        try {
+          URL.revokeObjectURL(ttsAudioUrl);
+        } catch (e) {
+          // blob URL 해제 실패 (무시)
+        }
+      }
     };
-  }, []);
+  }, [ttsAudioUrl]);
 
   // 오디오 duration이 로드되면 비디오 duration과 비교
   useEffect(() => {
@@ -320,19 +337,14 @@ const VideoPreview = memo(function VideoPreview({
   // TTS 오디오 로딩 (씬별 음성 파일 로드)
   useEffect(() => {
     let isMounted = true; // cleanup을 위한 플래그
+    let retryTimeout = null; // 재시도 timeout 참조
 
     const loadTtsAudio = async () => {
-      console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 로딩 시작:`, {
-        audioPath: selectedScene?.audioPath,
-        hasAudioPath: !!selectedScene?.audioPath
-      });
-
       // 씬 변경 시 이전 오디오 정지
       const audio = audioRef.current;
       if (audio) {
         audio.pause();
         audio.currentTime = 0;
-        console.log(`[TTS 오디오] 이전 오디오 정지`);
       }
 
       // 씬 변경 시 duration과 currentTime 초기화
@@ -342,7 +354,6 @@ const VideoPreview = memo(function VideoPreview({
       setIsPlaying(false);
 
       if (!selectedScene?.audioPath) {
-        console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} audioPath가 없습니다.`);
         if (isMounted) {
           setTtsAudioUrl(null);
           setHasAudio(false);
@@ -351,17 +362,13 @@ const VideoPreview = memo(function VideoPreview({
       }
 
       try {
-        console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 음성 로딩 시도:`, selectedScene.audioPath);
-
         // 파일 존재 여부 확인
         const pathCheck = await window.api?.checkPathExists?.(selectedScene.audioPath);
 
         if (!isMounted) return; // 컴포넌트가 언마운트되었으면 중단
 
-        console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 파일 존재:`, pathCheck);
-
         if (!pathCheck?.exists || !pathCheck?.isFile) {
-          console.warn(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 파일이 존재하지 않습니다:`, selectedScene.audioPath);
+          console.warn(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 파일 없음:`, selectedScene.audioPath);
           if (isMounted) {
             setTtsAudioUrl(null);
             setHasAudio(false);
@@ -369,17 +376,54 @@ const VideoPreview = memo(function VideoPreview({
           return;
         }
 
-        const audioUrl = await window.api?.videoPathToUrl?.(selectedScene.audioPath);
+        // audioUpdatedAt이 있으면 캐시 무효화 (TTS 재생성된 경우)
+        let useCache = true;
+        if (selectedScene.audioUpdatedAt) {
+          if (window.api?.revokeVideoUrl) {
+            window.api.revokeVideoUrl(selectedScene.audioPath);
+          }
+          useCache = false;
+        }
+
+        const audioUrl = await window.api?.videoPathToUrl?.(selectedScene.audioPath, { cache: useCache });
 
         if (!isMounted) return; // 컴포넌트가 언마운트되었으면 중단
 
-        console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} URL 생성:`, audioUrl);
+        if (!audioUrl || typeof audioUrl !== 'string' || !audioUrl.startsWith('blob:')) {
+          console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} URL 생성 실패, 재시도 중...`);
 
-        if (audioUrl && isMounted) {
-          console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} setTtsAudioUrl 호출:`, audioUrl);
+          // 재시도: 캐시 제거 후 다시 시도
+          if (window.api?.revokeVideoUrl) {
+            window.api.revokeVideoUrl(selectedScene.audioPath);
+          }
+
+          // 100ms 후 재시도 (cleanup에서 취소 가능)
+          retryTimeout = setTimeout(async () => {
+            if (!isMounted) return;
+
+            try {
+              const retryUrl = await window.api?.videoPathToUrl?.(selectedScene.audioPath, { cache: false });
+
+              if (retryUrl && retryUrl.startsWith('blob:') && isMounted) {
+                setTtsAudioUrl(retryUrl);
+                setHasAudio(true);
+              } else {
+                if (isMounted) {
+                  setTtsAudioUrl(null);
+                  setHasAudio(false);
+                }
+              }
+            } catch (retryError) {
+              console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 재시도 실패:`, retryError);
+            }
+          }, 100);
+
+          return;
+        }
+
+        if (isMounted) {
           setTtsAudioUrl(audioUrl);
           setHasAudio(true);
-          console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} state 업데이트 완료`);
         }
       } catch (error) {
         if (isMounted) {
@@ -395,55 +439,104 @@ const VideoPreview = memo(function VideoPreview({
     // Cleanup: 컴포넌트 언마운트 또는 씬 변경 시
     return () => {
       isMounted = false;
+
+      // 재시도 timeout 취소
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
+
+      // 이전 오디오 정리
+      const audio = audioRef.current;
+      if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
     };
-  }, [selectedScene?.audioPath, selectedSceneIndex]);
+  }, [selectedScene?.audioPath, selectedScene?.audioUpdatedAt, selectedSceneIndex]);
+
+  // ttsAudioUrl이 변경되면 오디오 엘리먼트 강제 리로드
+  useEffect(() => {
+    if (ttsAudioUrl && audioRef.current) {
+      const audio = audioRef.current;
+      console.log(`[TTS 오디오] URL 변경 감지, 강제 리로드:`, ttsAudioUrl);
+
+      // 오디오 엘리먼트 강제 리로드
+      audio.load();
+    }
+  }, [ttsAudioUrl]);
+
 
   // 오디오 이벤트 핸들러들 (메모이제이션)
   const handleAudioLoadedData = useCallback((e) => {
-    console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 음성 로드 완료 (HTML)`);
     const audio = e.target;
     if (audio.duration && isFinite(audio.duration)) {
       setAudioDuration(audio.duration);
-      console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} duration (HTML):`, audio.duration);
     }
 
     // 비디오가 이미 재생 중이면 오디오도 함께 재생
     const video = videoRef?.current;
     if (video && !video.paused) {
       audio.currentTime = video.currentTime;
-      audio.play().then(() => {
-        console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 비디오와 동기화하여 재생 시작`);
-      }).catch((error) => {
-        console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 동기화 재생 실패:`, error);
+      audio.play().catch((error) => {
+        console.error(`[TTS 오디오] 동기화 재생 실패:`, error);
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSceneIndex]); // videoRef는 ref이므로 의존성에서 제외
 
   const handleAudioLoadedMetadata = useCallback((e) => {
-    console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 메타데이터 로드 완료`);
     const audio = e.target;
     if (audio.duration && isFinite(audio.duration)) {
       setAudioDuration(audio.duration);
-      console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} duration (metadata):`, audio.duration);
     }
   }, [selectedSceneIndex]);
 
   const handleAudioCanPlay = useCallback(() => {
-    console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 재생 준비 완료`);
+    // 재생 준비 완료 (로그 불필요)
   }, [selectedSceneIndex]);
 
   const handleAudioError = useCallback((e) => {
-    console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 재생 오류:`, e);
+    const audio = e.target;
+    const error = audio.error;
+
+    let errorMessage = "알 수 없는 오류";
+    if (error) {
+      switch (error.code) {
+        case error.MEDIA_ERR_ABORTED:
+          errorMessage = "오디오 로드가 중단되었습니다";
+          break;
+        case error.MEDIA_ERR_NETWORK:
+          errorMessage = "네트워크 오류로 오디오를 로드할 수 없습니다";
+          break;
+        case error.MEDIA_ERR_DECODE:
+          errorMessage = "오디오 디코딩 오류";
+          break;
+        case error.MEDIA_ERR_SRC_NOT_SUPPORTED:
+          errorMessage = "오디오 형식이 지원되지 않거나 파일을 찾을 수 없습니다";
+          break;
+        default:
+          errorMessage = `오류 코드: ${error.code}`;
+      }
+    }
+
+    console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 재생 오류:`, {
+      message: errorMessage,
+      src: audio.src,
+      error: error,
+      readyState: audio.readyState,
+      networkState: audio.networkState
+    });
+
+    // 오디오 상태 초기화
+    setHasAudio(false);
+    setAudioDuration(0);
   }, [selectedSceneIndex]);
 
   const handleAudioEnded = useCallback(() => {
-    console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 재생 완료`);
     // 오디오가 끝나면 비디오도 정지
     const video = videoRef?.current;
     if (video && !video.paused) {
       video.pause();
-      console.log("[TTS 오디오] 오디오 종료로 인해 비디오도 정지됨");
     }
     setIsPlaying(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps

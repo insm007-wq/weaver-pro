@@ -99,59 +99,126 @@ function SceneList({
     setEditingEndTime("");
   }, []);
 
+  // SRT 파일 업데이트 함수
+  const updateSrtFile = useCallback(async (updatedScenes) => {
+    try {
+      // videoSaveFolder 경로 가져오기
+      const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
+      const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
+
+      if (!videoSaveFolder) {
+        console.warn("videoSaveFolder를 찾을 수 없습니다.");
+        return;
+      }
+
+      // SRT 생성을 위한 데이터 구성
+      const doc = { scenes: updatedScenes };
+
+      // SRT 생성 API 호출
+      const result = await window.api.invoke("script/toSrt", { doc });
+
+      if (result?.success && result?.data?.srt) {
+        // SRT 파일 경로 구성
+        const srtFilePath = `${videoSaveFolder}\\scripts\\subtitle.srt`;
+
+        // scripts 디렉토리 생성 (없는 경우)
+        await window.api.invoke("fs:mkDirRecursive", { dirPath: `${videoSaveFolder}\\scripts` }).catch(() => {});
+
+        // SRT 파일 저장
+        await window.api.invoke("files:writeText", { filePath: srtFilePath, content: result.data.srt });
+
+        console.log(`✅ SRT 파일 업데이트 완료: ${srtFilePath}`);
+      }
+    } catch (error) {
+      console.error("❌ SRT 파일 업데이트 실패:", error);
+    }
+  }, []);
+
   // 개별 씬 TTS 재생성 핸들러
   const regenerateSceneTTS = useCallback(async (sceneIndex, sceneText) => {
     try {
-      console.log(`[TTS 재생성] 씬 ${sceneIndex + 1} 음성 생성 시작...`);
+      // 입력 유효성 검사
+      if (!sceneText || sceneText.trim().length === 0) {
+        throw new Error("생성할 텍스트가 비어있습니다.");
+      }
 
-      // 단일 씬 데이터 구성
-      const singleScene = {
-        id: `scene_${sceneIndex + 1}`,
-        text: sceneText,
-        start: scenes[sceneIndex]?.start || 0,
-        end: scenes[sceneIndex]?.end || 0
+      if (sceneIndex < 0 || sceneIndex >= scenes.length) {
+        throw new Error("잘못된 씬 인덱스입니다.");
+      }
+
+      const voiceSettings = {
+        voiceId: ttsSettings.voice,
+        speakingRate: parseFloat(ttsSettings.speed),
+        pitch: parseFloat(ttsSettings.pitch),
+        volumeGainDb: 2.0
       };
 
       // 새로운 단일 씬 TTS API 호출 (사용자 설정 사용)
       const result = await window.api.ttsRegenerateScene({
         sceneIndex: sceneIndex,
         sceneText: sceneText,
-        voiceSettings: {
-          voiceId: ttsSettings.voice,
-          speakingRate: parseFloat(ttsSettings.speed),
-          pitch: parseFloat(ttsSettings.pitch),
-          volumeGainDb: 2.0
-        }
+        voiceSettings: voiceSettings
       });
 
       if (result?.ok && result?.audioFile) {
         const audioFile = result.audioFile;
-        console.log(`[TTS 재생성] 씬 ${sceneIndex + 1} 음성 생성 완료:`, audioFile.audioUrl);
 
         // 새로 생성된 음성 파일의 duration 가져오기
+        let newDuration = null;
         try {
           const durationResult = await window.api.invoke("audio:getDuration", { filePath: audioFile.audioUrl });
           if (durationResult?.success) {
+            newDuration = durationResult.duration;
             setAudioDurations(prev => ({
               ...prev,
-              [sceneIndex]: durationResult.duration
+              [sceneIndex]: newDuration
             }));
           }
         } catch (error) {
-          console.error("새 음성 파일 길이 가져오기 실패:", error);
+          console.error("음성 파일 길이 가져오기 실패:", error);
         }
 
-        // 씬 데이터에 audioPath 추가/업데이트
+        // 씬 데이터에 audioPath 추가/업데이트 + 시간 자동 조정
         const updatedScenes = [...scenes];
+        const currentScene = updatedScenes[sceneIndex];
+
+        // 이전 씬의 end 시간 (시작 기준점)
+        const prevSceneEnd = sceneIndex > 0 ? updatedScenes[sceneIndex - 1].end : 0;
+
+        // 새 음성 길이에 맞게 시간 업데이트
+        const newStart = prevSceneEnd;
+        const newEnd = newDuration ? newStart + newDuration : currentScene.end;
+
+        const audioUpdatedAt = Date.now();
+
         updatedScenes[sceneIndex] = {
-          ...updatedScenes[sceneIndex],
+          ...currentScene,
           audioPath: audioFile.audioUrl,
           audioGenerated: true,
-          audioFileName: audioFile.fileName
+          audioFileName: audioFile.fileName,
+          start: newStart,
+          end: newEnd,
+          audioUpdatedAt: audioUpdatedAt // 오디오 업데이트 타임스탬프 (캐시 무효화용)
         };
-        setScenes(updatedScenes);
 
-        showSuccess(`씬 ${sceneIndex + 1} 음성이 재생성되었습니다.`);
+        // 이후 씬들의 시간도 연쇄적으로 조정
+        for (let i = sceneIndex + 1; i < updatedScenes.length; i++) {
+          const prevEnd = updatedScenes[i - 1].end;
+          const currentDuration = audioDurations[i] || (updatedScenes[i].end - updatedScenes[i].start);
+          updatedScenes[i].start = prevEnd;
+          updatedScenes[i].end = prevEnd + currentDuration;
+        }
+
+        setScenes(updatedScenes);
+        showSuccess(`씬 ${sceneIndex + 1} 음성이 재생성되었습니다. (${newDuration?.toFixed(1)}초)`);
+
+        // 모든 씬의 오디오 캐시 제거 (다른 씬의 캐시 오염 방지)
+        if (window.api?.revokeAllBlobUrls) {
+          window.api.revokeAllBlobUrls();
+        }
+
+        // SRT 파일도 업데이트
+        await updateSrtFile(updatedScenes);
       } else {
         throw new Error(result?.error || "TTS 생성 실패");
       }
@@ -159,7 +226,7 @@ function SceneList({
       console.error(`[TTS 재생성] 씬 ${sceneIndex + 1} 실패:`, error);
       showError(`씬 ${sceneIndex + 1} 음성 생성에 실패했습니다: ${error.message}`);
     }
-  }, [scenes, setScenes, ttsSettings]);
+  }, [scenes, setScenes, ttsSettings, audioDurations, updateSrtFile]);
 
   // 미리듣기 함수
   const handlePreviewTTS = useCallback(async (text) => {
@@ -245,41 +312,6 @@ function SceneList({
       setCurrentPreviewAudio(null);
     }
   }, [currentPreviewAudio, ttsSettings]);
-
-  // SRT 파일 업데이트 함수
-  const updateSrtFile = useCallback(async (updatedScenes) => {
-    try {
-      // videoSaveFolder 경로 가져오기
-      const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
-      const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
-
-      if (!videoSaveFolder) {
-        console.warn("videoSaveFolder를 찾을 수 없습니다.");
-        return;
-      }
-
-      // SRT 생성을 위한 데이터 구성
-      const doc = { scenes: updatedScenes };
-
-      // SRT 생성 API 호출
-      const result = await window.api.invoke("script/toSrt", { doc });
-
-      if (result?.success && result?.data?.srt) {
-        // SRT 파일 경로 구성
-        const srtFilePath = `${videoSaveFolder}\\scripts\\subtitle.srt`;
-
-        // scripts 디렉토리 생성 (없는 경우)
-        await window.api.invoke("fs:mkDirRecursive", { dirPath: `${videoSaveFolder}\\scripts` }).catch(() => {});
-
-        // SRT 파일 저장
-        await window.api.invoke("files:writeText", { filePath: srtFilePath, content: result.data.srt });
-
-        console.log(`✅ SRT 파일 업데이트 완료: ${srtFilePath}`);
-      }
-    } catch (error) {
-      console.error("❌ SRT 파일 업데이트 실패:", error);
-    }
-  }, []);
 
   // 미리듣기 중지 함수
   const handleStopPreview = useCallback(() => {
@@ -663,12 +695,17 @@ function SceneList({
           window.api.invoke("settings:get", "pitch")
         ]);
 
-        setTtsSettings({
+        console.log("[TTS 설정 로드] 원본 값:", { ttsEngine, voice, speed, pitch });
+
+        const loadedSettings = {
           ttsEngine: ttsEngine || "google",
           voice: voice || "ko-KR-Standard-A",
           speed: speed || "1.0",
           pitch: pitch || "-1"
-        });
+        };
+
+        console.log("[TTS 설정 로드] 최종 값:", loadedSettings);
+        setTtsSettings(loadedSettings);
       } catch (error) {
         console.error("TTS 설정 로드 실패:", error);
         // 기본 설정 유지

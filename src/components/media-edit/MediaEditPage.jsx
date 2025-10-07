@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Text, Button, Card } from "@fluentui/react-components";
 import { useHeaderStyles, useContainerStyles } from "../../styles/commonStyles";
 import { VideoRegular } from "@fluentui/react-icons";
@@ -25,18 +25,15 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
   const videoRef = useRef(null);
   const hasTriedLoadRef = useRef(false);
 
-  // 선택된 씬 정보
-  const selectedScene = scenes[selectedSceneIndex] || null;
+  // 선택된 씬 정보 (useMemo로 제대로 추적)
+  const selectedScene = useMemo(() => {
+    return scenes[selectedSceneIndex] || null;
+  }, [scenes, selectedSceneIndex]);
 
-  // 디버깅: 선택된 씬의 audioPath 확인
+  // 씬 선택 시 로그 (디버깅용)
   useEffect(() => {
-    if (selectedScene) {
-      console.log("[MediaEditPage] 선택된 씬:", {
-        index: selectedSceneIndex,
-        text: selectedScene.text,
-        audioPath: selectedScene.audioPath,
-        hasAudioPath: !!selectedScene.audioPath
-      });
+    if (selectedScene && !selectedScene.audioPath) {
+      console.warn(`[MediaEditPage] 씬 ${selectedSceneIndex + 1} audioPath 없음`);
     }
   }, [selectedScene, selectedSceneIndex]);
 
