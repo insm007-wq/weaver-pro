@@ -4,7 +4,6 @@ import {
   ArrowLeft24Regular,
   Checkmark24Filled,
   DocumentBulletList24Regular,
-  MusicNote224Regular,
   LightbulbFilament24Regular,
   ArrowDownload24Regular,
 } from "@fluentui/react-icons";
@@ -15,9 +14,7 @@ import {
 const Step3Complete = ({
   // Summary data
   srtConnected,
-  mp3Connected,
   srtFilePath,
-  mp3FilePath,
   scenesCount,
   totalDuration,
   keywordsCount,
@@ -34,11 +31,6 @@ const Step3Complete = ({
     if (!srtFilePath) return { fileName: "없음", displayPath: "" };
     return getFileInfo(srtFilePath);
   }, [srtFilePath, getFileInfo]);
-
-  const mp3FileInfo = useMemo(() => {
-    if (!mp3FilePath) return { fileName: "없음", displayPath: "" };
-    return getFileInfo(mp3FilePath);
-  }, [mp3FilePath, getFileInfo]);
 
   // 초기화 핸들러
   const handleReset = () => {
@@ -134,41 +126,6 @@ const Step3Complete = ({
               >
                 {scenesCount}개 씬 · {totalDuration.toFixed(1)}초
               </Text>
-            </div>
-          </div>
-
-          {/* MP3 파일 정보 */}
-          <div
-            style={{
-              padding: tokens.spacingVerticalM,
-              backgroundColor: tokens.colorNeutralBackground2,
-              borderRadius: "12px",
-              border: `1px solid ${tokens.colorNeutralStroke2}`,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: tokens.spacingVerticalS }}>
-              <MusicNote224Regular style={{ color: tokens.colorBrandForeground1 }} />
-              <Text size={400} weight="semibold">
-                오디오 파일
-              </Text>
-            </div>
-            <div style={{ marginLeft: "32px" }}>
-              {mp3Connected ? (
-                <>
-                  <Text size={300} style={{ display: "block", color: tokens.colorNeutralForeground2 }}>
-                    {mp3FileInfo.fileName}
-                  </Text>
-                  {mp3FileInfo.displayPath && (
-                    <Text size={200} style={{ display: "block", color: tokens.colorNeutralForeground3, marginTop: 2 }}>
-                      📁 {mp3FileInfo.displayPath}
-                    </Text>
-                  )}
-                </>
-              ) : (
-                <Text size={300} style={{ display: "block", color: tokens.colorNeutralForeground3 }}>
-                  업로드하지 않음 (선택사항)
-                </Text>
-              )}
             </div>
           </div>
 

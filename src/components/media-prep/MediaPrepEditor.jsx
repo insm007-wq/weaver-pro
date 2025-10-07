@@ -25,7 +25,6 @@ function MediaPrepEditor() {
   const containerStyles = useContainerStyles();
   const headerStyles = useHeaderStyles();
   const srtInputId = useId("srt-input");
-  const mp3InputId = useId("mp3-input");
 
   // Custom Hooks
   const fileManagement = useFileManagement();
@@ -82,13 +81,6 @@ function MediaPrepEditor() {
             srtInputRef={fileManagement.srtInputRef}
             handleSrtUpload={fileManagement.handleSrtUpload}
             srtInputId={srtInputId}
-            mp3Connected={fileManagement.mp3Connected}
-            mp3FilePath={fileManagement.mp3FilePath}
-            audioDur={fileManagement.audioDur}
-            openMp3Picker={fileManagement.openMp3Picker}
-            mp3InputRef={fileManagement.mp3InputRef}
-            handleMp3Upload={fileManagement.handleMp3Upload}
-            mp3InputId={mp3InputId}
             handleInsertFromScript={fileManagement.handleInsertFromScript}
             handleReset={fileManagement.handleReset}
             // Navigation
@@ -120,9 +112,7 @@ function MediaPrepEditor() {
           <Step3Complete
             // Summary data
             srtConnected={fileManagement.srtConnected}
-            mp3Connected={fileManagement.mp3Connected}
             srtFilePath={fileManagement.srtFilePath}
-            mp3FilePath={fileManagement.mp3FilePath}
             scenesCount={fileManagement.scenes.length}
             totalDuration={totalDur}
             keywordsCount={keywordExtraction.assets.length}

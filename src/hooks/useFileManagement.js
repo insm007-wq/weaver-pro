@@ -19,7 +19,6 @@ export const useFileManagement = () => {
 
   // Refs
   const srtInputRef = useRef(null);
-  const mp3InputRef = useRef(null);
 
   // 파일명과 경로 정보를 가져오는 헬퍼 함수
   const getFileInfo = useCallback((filePath) => {
@@ -94,59 +93,10 @@ export const useFileManagement = () => {
     }
   }, []);
 
-  // MP3 파일 업로드 처리
-  const handleMp3Upload = useCallback(async (fileOrEvent) => {
-    let file;
-
-    // 파일 객체가 직접 전달된 경우 (DropZone에서)
-    if (fileOrEvent.name) {
-      file = fileOrEvent;
-    } else {
-      // 이벤트 객체가 전달된 경우 (input onChange에서)
-      const files = fileOrEvent.target.files;
-      if (!files || files.length === 0) return;
-      file = files[0];
-    }
-    const validExtensions = [".mp3", ".wav", ".m4a"];
-    const isValid = validExtensions.some(ext =>
-      file.name.toLowerCase().endsWith(ext)
-    );
-
-    if (!isValid) {
-      showError("MP3, WAV, M4A 파일만 업로드 가능합니다.");
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const duration = await getMp3DurationSafe(file.path);
-
-      setMp3Connected(true);
-      setMp3FilePath(file.path);
-      setAudioDur(duration);
-
-      // 설정 저장
-      await setSetting({ key: "paths.mp3", value: file.path });
-
-      showSuccess(`오디오 파일이 업로드되었습니다. (${duration.toFixed(1)}초)`);
-    } catch (error) {
-      console.error("오디오 업로드 오류:", error);
-      showError("오디오 파일 업로드 중 오류가 발생했습니다.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
   // 파일 선택 다이얼로그 열기
   const openSrtPicker = useCallback(() => {
     if (srtInputRef.current) {
       srtInputRef.current.click();
-    }
-  }, []);
-
-  const openMp3Picker = useCallback(() => {
-    if (mp3InputRef.current) {
-      mp3InputRef.current.click();
     }
   }, []);
 
@@ -251,9 +201,11 @@ export const useFileManagement = () => {
       console.log("[대본에서 가져오기] 최종 결과:", { loadedSrt, loadedMp3 });
 
       if (loadedSrt && loadedMp3) {
-        showSuccess("대본에서 파일들을 성공적으로 가져왔습니다.");
-      } else if (loadedSrt || loadedMp3) {
-        showSuccess("일부 파일을 가져왔습니다. 나머지는 수동으로 업로드해주세요.");
+        showSuccess("자막 파일과 오디오 파일을 가져왔습니다.");
+      } else if (loadedSrt) {
+        showSuccess("자막 파일을 가져왔습니다. (오디오 파일은 대본 탭에서 생성해주세요)");
+      } else if (loadedMp3) {
+        showSuccess("오디오 파일을 찾았습니다. 자막 파일을 업로드해주세요.");
       } else {
         showError("가져올 파일이 없습니다. 대본 탭에서 먼저 대본을 생성하세요.");
       }
@@ -276,7 +228,6 @@ export const useFileManagement = () => {
 
     // 파일 입력 필드 초기화
     if (srtInputRef.current) srtInputRef.current.value = "";
-    if (mp3InputRef.current) mp3InputRef.current.value = "";
 
     showSuccess("모든 파일이 초기화되었습니다.");
   }, []);
@@ -293,13 +244,10 @@ export const useFileManagement = () => {
 
     // Refs
     srtInputRef,
-    mp3InputRef,
 
     // Handlers
     handleSrtUpload,
-    handleMp3Upload,
     openSrtPicker,
-    openMp3Picker,
     handleInsertFromScript,
     handleReset,
     getFileInfo,

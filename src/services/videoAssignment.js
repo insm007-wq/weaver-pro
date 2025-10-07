@@ -190,17 +190,27 @@ export async function discoverAvailableVideos() {
   try {
     console.log("[영상 발견] 🚀 영상 발견 시작");
 
-    // 설정에서 videoSaveFolder 가져오기
-    const videoSaveFolder = await getSetting("videoSaveFolder");
-    console.log("[영상 발견] videoSaveFolder 설정:", videoSaveFolder);
+    // 설정에서 videoSaveFolder 가져오기 (매번 fresh하게 가져오기)
+    const videoSaveFolderResult = await getSetting("videoSaveFolder");
+    console.log("[영상 발견] getSetting 원본 결과:", videoSaveFolderResult);
 
-    if (!videoSaveFolder) {
-      console.warn("[영상 발견] videoSaveFolder 설정이 없음");
+    // 결과가 객체인 경우 value 속성 추출
+    let videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
+    console.log("[영상 발견] videoSaveFolder 설정 (원본):", videoSaveFolder);
+    console.log("[영상 발견] videoSaveFolder 타입:", typeof videoSaveFolder);
+
+    if (!videoSaveFolder || typeof videoSaveFolder !== 'string') {
+      console.warn("[영상 발견] videoSaveFolder 설정이 없거나 잘못됨:", videoSaveFolder);
       return [];
     }
 
+    // Node.js/Electron 표준: 슬래시(/) 사용 (Windows에서도 작동)
+    videoSaveFolder = videoSaveFolder.replace(/\\/g, '/');
+    console.log("[영상 발견] videoSaveFolder (정규화):", videoSaveFolder);
+
     const videoPath = `${videoSaveFolder}/video`;
     console.log("[영상 발견] 영상 경로:", videoPath);
+    console.log("[영상 발견] 현재 시간:", new Date().toISOString());
 
     // 디렉토리 존재 확인
     if (!window?.api?.checkPathExists) {
@@ -209,12 +219,24 @@ export async function discoverAvailableVideos() {
     }
 
     const dirExists = await window.api.checkPathExists(videoPath);
-    console.log("[영상 발견] 디렉토리 존재 확인:", dirExists);
+    console.log("[영상 발견] 디렉토리 존재 확인 결과:", dirExists);
+    console.log("[영상 발견] dirExists.exists:", dirExists?.exists);
+    console.log("[영상 발견] dirExists.isDirectory:", dirExists?.isDirectory);
+    console.log("[영상 발견] dirExists.isFile:", dirExists?.isFile);
 
     if (!dirExists?.exists) {
-      console.warn("[영상 발견] 영상 디렉토리가 존재하지 않음:", videoPath);
+      console.error("[영상 발견] ❌ 영상 디렉토리가 존재하지 않음:", videoPath);
+      console.error("[영상 발견] videoSaveFolder가 올바른지 확인하세요:", videoSaveFolder);
       return [];
     }
+
+    // isDirectory가 명시적으로 false인 경우만 에러 (undefined는 허용)
+    if (dirExists?.isFile === true) {
+      console.error("[영상 발견] ❌ 경로가 파일임 (디렉토리가 아님):", videoPath);
+      return [];
+    }
+
+    console.log("[영상 발견] ✅ 디렉토리 확인됨:", videoPath);
 
     // 실제 파일 목록 가져오기
     if (!window?.api?.listDirectory) {
@@ -222,30 +244,56 @@ export async function discoverAvailableVideos() {
       return [];
     }
 
+    console.log("[영상 발견] listDirectory 호출 중...");
     const result = await window.api.listDirectory(videoPath);
-    console.log("[영상 발견] 파일 목록 결과:", result);
+    console.log("[영상 발견] listDirectory 결과:", result);
+    console.log("[영상 발견] result.success:", result?.success);
+    console.log("[영상 발견] result.files 개수:", result?.files?.length);
 
-    if (!result?.success || !result.files) {
-      console.warn("[영상 발견] 파일 목록을 가져올 수 없음:", result?.message);
+    if (!result?.success) {
+      console.error("[영상 발견] ❌ listDirectory 실패:", result?.message);
+      return [];
+    }
+
+    if (!result.files || !Array.isArray(result.files)) {
+      console.error("[영상 발견] ❌ 파일 목록이 배열이 아님:", result.files);
       return [];
     }
 
     const files = result.files;
     const videos = [];
 
-    console.log(`[영상 발견] ${files.length}개 파일 발견, MP4 파일 필터링 중...`);
+    console.log(`[영상 발견] ✅ ${files.length}개 파일 발견, MP4 파일 필터링 중...`);
+
+    if (files.length === 0) {
+      console.warn("[영상 발견] ⚠️ 디렉토리가 비어있음:", videoPath);
+      return [];
+    }
+
+    let mp4Count = 0;
+    let skippedCount = 0;
 
     for (const file of files) {
       // MP4 파일만 처리
-      if (!file.name.toLowerCase().endsWith('.mp4') || !file.isFile) {
+      if (!file.name.toLowerCase().endsWith('.mp4')) {
+        skippedCount++;
         continue;
       }
 
-      console.log(`[영상 발견] 처리 중: ${file.name}`);
+      if (!file.isFile) {
+        console.warn(`[영상 발견] ⏭️ 디렉토리임 (스킵): ${file.name}`);
+        skippedCount++;
+        continue;
+      }
+
+      mp4Count++;
+      console.log(`[영상 발견] 🎬 MP4 파일 처리 중 (${mp4Count}): ${file.name}`);
 
       const keyword = extractKeywordFromFilename(file.name);
+      console.log(`[영상 발견] 추출된 키워드: "${keyword}"`);
+
       if (!keyword || keyword === "unknown") {
-        console.warn("[영상 발견] 키워드를 추출할 수 없음:", file.name);
+        console.warn(`[영상 발견] ⚠️ 키워드를 추출할 수 없음: ${file.name}`);
         continue;
       }
 
@@ -259,14 +307,21 @@ export async function discoverAvailableVideos() {
       };
 
       videos.push(videoInfo);
-      console.log(`[영상 발견] ✅ 추가됨: ${videoInfo.keyword} (${videoInfo.filename})`);
+      console.log(`[영상 발견] ✅ 추가됨 (${videos.length}): ${videoInfo.keyword} → ${videoInfo.filename}`);
     }
 
-    console.log(`[영상 발견] 총 ${videos.length}개 영상 발견:`, videos.map(v => v.keyword));
+    console.log(`[영상 발견] 📊 요약:`);
+    console.log(`[영상 발견] - 전체 파일: ${files.length}개`);
+    console.log(`[영상 발견] - MP4 파일: ${mp4Count}개`);
+    console.log(`[영상 발견] - 스킵됨: ${skippedCount}개`);
+    console.log(`[영상 발견] - 유효한 영상: ${videos.length}개`);
+    console.log(`[영상 발견] 🎯 발견된 키워드:`, videos.map(v => v.keyword).join(', '));
+
     return videos;
 
   } catch (error) {
-    console.error("[영상 발견] 오류:", error);
+    console.error("[영상 발견] ❌ 치명적 오류:", error);
+    console.error("[영상 발견] 오류 스택:", error.stack);
     return [];
   }
 }

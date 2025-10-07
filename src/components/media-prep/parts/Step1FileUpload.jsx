@@ -18,13 +18,6 @@ const Step1FileUpload = memo(
     srtInputRef,
     handleSrtUpload,
     srtInputId,
-    mp3Connected,
-    mp3FilePath,
-    audioDur,
-    openMp3Picker,
-    mp3InputRef,
-    handleMp3Upload,
-    mp3InputId,
     handleInsertFromScript,
     handleReset,
     // Step navigation
@@ -65,7 +58,7 @@ const Step1FileUpload = memo(
               </Text>
             </div>
             <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-              자막(SRT) 파일과 오디오 파일을 드래그하거나 클릭하여 업로드하세요
+              자막(SRT) 파일을 드래그하거나 클릭하여 업로드하세요
             </Text>
           </div>
         </Card>
@@ -81,13 +74,6 @@ const Step1FileUpload = memo(
           srtInputRef={srtInputRef}
           handleSrtUpload={handleSrtUpload}
           srtInputId={srtInputId}
-          mp3Connected={mp3Connected}
-          mp3FilePath={mp3FilePath}
-          audioDur={audioDur}
-          openMp3Picker={openMp3Picker}
-          mp3InputRef={mp3InputRef}
-          handleMp3Upload={handleMp3Upload}
-          mp3InputId={mp3InputId}
           handleInsertFromScript={handleInsertFromScript}
           handleReset={handleReset}
         />
