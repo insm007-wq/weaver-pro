@@ -29,13 +29,20 @@
  * @returns {Promise<void>}
  */
 export async function generateAudioAndSubtitles(scriptData, mode = "script_mode", options, outputPath = null) {
-  const { form, voices, setFullVideoState, api, toast, addLog } = options;
+  const { form, voices, setFullVideoState, api, toast, addLog, abortSignal } = options;
 
   // TTS 실제 duration 데이터를 저장할 변수
   let ttsDurations = null;
 
   // 컴포넌트 마운트 상태 추적 (탭 전환 시 안전성)
   let isMounted = true;
+
+  // 중단 체크 함수
+  const checkAborted = () => {
+    if (abortSignal?.aborted) {
+      throw new Error("작업이 취소되었습니다.");
+    }
+  };
 
   // 안전한 상태 업데이트 함수
   const safeSetState = (updater) => {
@@ -50,6 +57,7 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
 
   try {
     console.log("🎤 대본 생성 모드 - 자막 및 음성 생성 시작...");
+    checkAborted(); // 시작 전 체크
 
     // 2단계: 음성 생성 시작
     safeSetState(prev => ({
@@ -127,6 +135,8 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       console.warn("TTS 리스너 설정 실패:", listenerError);
     }
 
+    checkAborted(); // TTS 호출 전 체크
+
     let audioResult;
     try {
       audioResult = await api.invoke("tts:synthesize", {
@@ -138,6 +148,8 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       }, {
         timeout: timeoutMs
       });
+
+      checkAborted(); // TTS 완료 후 체크
     } finally {
       // 리스너들 제거
       try {
@@ -315,6 +327,8 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
 
     // 자막 생성 (script_mode에서만, TTS duration 데이터 사용)
     if (mode === "script_mode" && ttsDurations && ttsDurations.length > 0) {
+      checkAborted(); // 자막 생성 전 체크
+
       console.log("📝 자막 생성 시작 (TTS 실제 duration 적용)...");
       safeSetState(prev => ({
         ...prev,

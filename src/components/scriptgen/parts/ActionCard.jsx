@@ -223,12 +223,14 @@ const ActionCard = memo(
               setFullVideoState,
               api,
               addLog,
+              abortSignal: abortController.signal,
             });
           } else {
             throw new Error("대본이 생성되지 않았습니다. 먼저 대본을 생성해주세요.");
           }
         } catch (error) {
-          if (error.name === "AbortError") {
+          if (error.name === "AbortError" || error.message === "작업이 취소되었습니다.") {
+            console.log("⏹️ 작업 취소됨");
             addLog("⏹️ 작업이 취소되었습니다.", "info");
           } else {
             console.error("대본 생성 오류:", error);
@@ -347,44 +349,62 @@ const ActionCard = memo(
             {/* 실행 버튼 영역 */}
             <div style={styles.buttonContainer}>
               <Button
-                appearance="primary"
-                icon={fullVideoState.isGenerating ? <SparkleRegular /> : <PlayRegular />}
-                onClick={currentMode.onGenerate}
-                disabled={isDisabled}
-                style={styles.button}
-              >
-                <span className={fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" ? "loading-text" : ""}>
-                  {fullVideoState.currentStep === "completed"
-                    ? "🔄 새 대본 생성"
-                    : chunkProgress
-                    ? `청크 ${chunkProgress.current}/${chunkProgress.total} 생성 중... (${chunkProgress.progress}%)`
-                    : fullVideoState.isGenerating && fullVideoState.currentStep && remainingTime
-                    ? `${getStepDisplayName(fullVideoState.currentStep)} ${remainingTime}`
-                    : fullVideoState.isGenerating
-                    ? currentMode.loadingText
-                    : currentMode.buttonText}
-                </span>
-              </Button>
+                appearance={fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" ? "secondary" : "primary"}
+                icon={fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" ? null : <PlayRegular />}
+                onClick={() => {
+                  // 생성 중이면 중지, 아니면 생성 시작
+                  if (fullVideoState.isGenerating && fullVideoState.currentStep !== "completed") {
+                    // 중지 로직: AbortController로 실제 작업 중단
+                    if (currentOperation) {
+                      console.log("🛑 작업 중단 요청");
+                      currentOperation.abort();
+                      setCurrentOperation(null);
+                    }
 
-              {/* 중지 버튼 (생성 중일 때만 표시) */}
-              {fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" && (
-                <Button
-                  appearance="secondary"
-                  onClick={() => {
-                    // 상태 초기화 (컨펌 없이 바로 실행)
+                    // 상태 초기화
                     setFullVideoState(prev => ({
                       ...prev,
                       isGenerating: false,
                       currentStep: "idle",
-                      progress: { script: 0, audio: 0, images: 0, video: 0, subtitle: 0 }
+                      progress: { script: 0, audio: 0, images: 0, video: 0, subtitle: 0 },
+                      error: null
                     }));
                     setIsLoading(false);
                     setDoc(null);
-                  }}
-                  style={styles.button}
-                >
-                  ⏹️ 생성 중지
-                </Button>
+                  } else {
+                    // 생성 시작
+                    currentMode.onGenerate();
+                  }
+                }}
+                disabled={!fullVideoState.isGenerating && isDisabled}
+                style={{
+                  ...styles.button,
+                  ...(fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" && {
+                    borderColor: tokens.colorPaletteRedBorder2,
+                    color: tokens.colorPaletteRedForeground1,
+                  })
+                }}
+              >
+                {fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" ? (
+                  "⏹ 생성 중지"
+                ) : (
+                  <span className={fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" ? "loading-text" : ""}>
+                    {fullVideoState.currentStep === "completed"
+                      ? "🔄 새 대본 생성"
+                      : currentMode.buttonText}
+                  </span>
+                )}
+              </Button>
+
+              {/* 생성 중 진행 상황 텍스트 */}
+              {fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" && (
+                <Text size={200} style={{ color: tokens.colorNeutralForeground3, textAlign: "center" }}>
+                  {chunkProgress
+                    ? `청크 ${chunkProgress.current}/${chunkProgress.total} 생성 중... (${chunkProgress.progress}%)`
+                    : fullVideoState.currentStep && remainingTime
+                    ? `${getStepDisplayName(fullVideoState.currentStep)} ${remainingTime}`
+                    : currentMode.loadingText}
+                </Text>
               )}
             </div>
 

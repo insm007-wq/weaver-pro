@@ -191,6 +191,17 @@ export function useVoiceSettings(form) {
   const previewVoice = useCallback(async (voiceId, voiceName) => {
     try {
       console.log(`🎵 목소리 미리듣기 시작: ${voiceName} (${voiceId})`);
+
+      // 이전 오디오가 있으면 먼저 중지
+      setCurrentAudio((prevAudio) => {
+        if (prevAudio) {
+          prevAudio.pause();
+          prevAudio.currentTime = 0;
+          console.log("🛑 이전 음성 재생 중지");
+        }
+        return null;
+      });
+
       const sampleText = "안녕하세요. 이것은 목소리 미리듣기 샘플입니다. 자연스럽고 명확한 발음으로 한국어를 읽어드립니다.";
       const payload = {
         doc: { scenes: [{ text: sampleText }] },
@@ -208,12 +219,6 @@ export function useVoiceSettings(form) {
         const audioBlob = new Blob([Uint8Array.from(atob(res.data.parts[0].base64), (c) => c.charCodeAt(0))], { type: "audio/mpeg" });
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
-
-        // 현재 재생 중인 오디오를 중지
-        if (currentAudio) {
-          currentAudio.pause();
-          currentAudio.currentTime = 0;
-        }
 
         setCurrentAudio(audio);
         audio.onended = () => {
@@ -234,7 +239,7 @@ export function useVoiceSettings(form) {
       console.error("목소리 미리듣기 실패:", error);
       console.error("목소리 미리듣기에 실패했습니다.");
     }
-  }, [form.ttsEngine, form.speed, api, currentAudio]);
+  }, [form.ttsEngine, form.speed, api]);
 
   const stopVoice = useCallback(() => {
     if (currentAudio) {

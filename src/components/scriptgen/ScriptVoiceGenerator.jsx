@@ -32,7 +32,7 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
   const [form, setForm] = useState(makeDefaultForm());
   const [globalSettings, setGlobalSettings] = useState({});
   const [selectedMode, setSelectedMode] = useState("script_mode");
-  const [showResultsSidebar, setShowResultsSidebar] = useState(true);
+  const [showResultsSidebar, setShowResultsSidebar] = useState(false);
 
   // 전체 영상 생성 상태
   const [fullVideoState, setFullVideoState] = useState({

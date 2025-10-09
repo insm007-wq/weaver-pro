@@ -256,11 +256,7 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
         {/* 레퍼런스 대본 (선택) - 전체 너비 */}
         <div style={styles.referenceContainer}>
           <div style={styles.switchContainer}>
-            <Switch
-              checked={safeForm.showReferenceScript}
-              onChange={(_, data) => onChange("showReferenceScript", data.checked)}
-              disabled={disabled}
-            />
+            <Switch checked={safeForm.showReferenceScript} onChange={(_, data) => onChange("showReferenceScript", data.checked)} disabled={disabled} />
             <Text
               size={300}
               weight="semibold"
@@ -298,8 +294,7 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
                 disabled={disabled}
                 style={{
                   ...styles.textareaContainer,
-                  borderColor:
-                    validationErrors.referenceScript?.length > 0 ? tokens.colorPaletteRedBorder2 : styles.textareaContainer.borderColor,
+                  borderColor: validationErrors.referenceScript?.length > 0 ? tokens.colorPaletteRedBorder2 : styles.textareaContainer.borderColor,
                 }}
                 aria-invalid={validationErrors.referenceScript?.length > 0}
               />
@@ -323,8 +318,7 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
                   <Text
                     size={200}
                     style={{
-                      color:
-                        safeForm.referenceScript.trim().length > 500 ? tokens.colorPaletteGreenForeground2 : tokens.colorNeutralForeground3,
+                      color: safeForm.referenceScript.trim().length > 500 ? tokens.colorPaletteGreenForeground2 : tokens.colorNeutralForeground3,
                       fontWeight: safeForm.referenceScript.trim().length > 500 ? 600 : 400,
                     }}
                   >

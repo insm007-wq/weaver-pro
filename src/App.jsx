@@ -164,6 +164,19 @@ function App() {
     };
   }, []);
 
+  // 미디어 준비 페이지로 이동하는 커스텀 이벤트 리스너
+  useEffect(() => {
+    const handleNavigateToAssemble = () => {
+      setCurrentPage('assemble');
+    };
+
+    window.addEventListener('navigate-to-assemble', handleNavigateToAssemble);
+
+    return () => {
+      window.removeEventListener('navigate-to-assemble', handleNavigateToAssemble);
+    };
+  }, []);
+
   return (
     <div className={mergeClasses(styles.root, fontStyles.globalFont)}>
       <Suspense fallback={<MemoizedLoadingFallback label="헤더 로딩 중..." />}>

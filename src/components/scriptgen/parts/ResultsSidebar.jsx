@@ -498,6 +498,10 @@ const CompactScriptViewer = memo(({ fullVideoState, doc, isLoading, form, global
   const generatingNow = isLoading || (fullVideoState?.isGenerating && fullVideoState?.currentStep === "script");
   const completedNow = !!doc;
 
+  const handleNavigateToAssemble = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('navigate-to-assemble'));
+  }, []);
+
   if (!generatingNow && !completedNow) {
     return (
       <Text size={200} style={{ color: tokens.colorNeutralForeground3, fontStyle: "italic" }}>
@@ -588,6 +592,25 @@ const CompactScriptViewer = memo(({ fullVideoState, doc, isLoading, form, global
               </Button>
             )}
           </div>
+
+          {/* 다음 단계 버튼 */}
+          <Divider style={{ margin: "12px 0" }} />
+          <Button
+            appearance="primary"
+            size="large"
+            onClick={handleNavigateToAssemble}
+            style={{
+              width: "100%",
+              background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+              borderRadius: 8,
+              fontSize: "14px",
+              fontWeight: 600,
+              minHeight: "44px",
+              border: "none",
+            }}
+          >
+            ➡️ 다음 단계: 미디어 준비
+          </Button>
         </div>
       ) : (
         // 생성 중 표시
