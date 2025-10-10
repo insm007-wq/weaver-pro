@@ -140,7 +140,7 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
 
   const stats = getProjectStats();
 
-  // 전체 프로젝트 내보내기
+  // 전체 영상 내보내기
   const handleExportProject = async () => {
     if (!scenes || scenes.length === 0) {
       showError("내보낼 씬이 없습니다.");
@@ -215,10 +215,10 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
         </Text>
       </div>
 
-      {/* 프로젝트 내보내기 (항상 표시) */}
+      {/* 영상 내보내기 (항상 표시) */}
       <div>
         <Text size={400} weight="medium" style={{ marginBottom: 12, fontSize: "15px" }}>
-          프로젝트 내보내기
+          영상 내보내기
         </Text>
 
         {/* 프로젝트 정보 */}
@@ -395,7 +395,7 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
             disabled={!scenes || scenes.length === 0}
             style={{ width: "100%" }}
           >
-            프로젝트 내보내기
+            영상 내보내기
           </Button>
         )}
 

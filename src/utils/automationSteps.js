@@ -559,12 +559,25 @@ async function createSrtFromCues(cues) {
     return `${h}:${m}:${s},${ms3}`;
   };
 
+  // 전역 자막 설정 로드 (maxLines 확인)
+  const subtitleSettings = await window.api.getSetting("subtitleSettings");
+  const maxLines = subtitleSettings?.maxLines || 2;
+
+  // splitBalancedLines 동적 import
+  const { splitBalancedLines } = await import("../components/refine/utils/metrics.js");
+
   let idx = 1;
   const parts = [];
   for (const cue of cues || []) {
     parts.push(String(idx++));
     parts.push(`${msToSrt(cue.start)} --> ${msToSrt(cue.end)}`);
-    parts.push((cue.text || "").replace(/\r?\n/g, "\n"));
+
+    // 텍스트를 maxLines에 맞게 분할
+    const text = cue.text || "";
+    const lines = splitBalancedLines(text, maxLines);
+    const formattedText = lines.join("\n");
+
+    parts.push(formattedText);
     parts.push("");
   }
   return parts.join("\n");

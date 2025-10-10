@@ -271,6 +271,10 @@ function SubtitleTab() {
       });
 
       setOriginalSettings(subtitleSettings);
+
+      // 설정 변경 이벤트 발생
+      window.dispatchEvent(new CustomEvent("settingsChanged"));
+
       showGlobalToast({
         type: "success",
         text: "자막 설정이 성공적으로 저장되었습니다! 🎉",
@@ -302,6 +306,10 @@ function SubtitleTab() {
         value: defaultSettings,
       });
       setOriginalSettings(defaultSettings);
+
+      // 설정 변경 이벤트 발생
+      window.dispatchEvent(new CustomEvent("settingsChanged"));
+
       showGlobalToast({
         type: "success",
         text: "자막 설정이 기본값으로 초기화되고 저장되었습니다! 🎉",

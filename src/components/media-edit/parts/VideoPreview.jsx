@@ -5,6 +5,7 @@ import {
   PauseRegular,
   CheckmarkCircleRegular,
 } from "@fluentui/react-icons";
+import { splitBalancedLines } from "../../refine/utils/metrics";
 
 const VideoPreview = memo(function VideoPreview({
   selectedScene,
@@ -27,12 +28,99 @@ const VideoPreview = memo(function VideoPreview({
   const [audioDuration, setAudioDuration] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
 
+  // 전역 자막 설정 관리
+  const [subtitleSettings, setSubtitleSettings] = useState(null);
+
   // 시간 포맷 헬퍼
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
+
+  // 전역 자막 설정 로드
+  useEffect(() => {
+    const loadSubtitleSettings = async () => {
+      try {
+        const settings = await window.api.getSetting("subtitleSettings");
+        console.log("🎬 영상 완성 - 로드된 자막 설정:", settings);
+
+        if (settings) {
+          setSubtitleSettings(settings);
+        } else {
+          // 기본값 (SubtitleTab의 defaultSettings와 동일)
+          const defaultSettings = {
+            fontFamily: "noto-sans",
+            fontSize: 24,
+            fontWeight: 600,
+            lineHeight: 1.4,
+            letterSpacing: 0,
+            textColor: "#FFFFFF",
+            backgroundColor: "#000000",
+            backgroundOpacity: 80,
+            outlineColor: "#000000",
+            outlineWidth: 2,
+            shadowColor: "#000000",
+            shadowOffset: 2,
+            shadowBlur: 4,
+            position: "bottom",
+            horizontalAlign: "center",
+            verticalPadding: 40,
+            horizontalPadding: 20,
+            maxWidth: 80,
+            useBackground: true,
+            backgroundRadius: 8,
+            useOutline: true,
+            useShadow: true,
+            maxLines: 2,
+          };
+          console.log("📝 기본값 사용:", defaultSettings);
+          setSubtitleSettings(defaultSettings);
+        }
+      } catch (error) {
+        console.error("자막 설정 로드 실패:", error);
+        setSubtitleSettings({
+          fontFamily: "noto-sans",
+          fontSize: 24,
+          fontWeight: 600,
+          lineHeight: 1.4,
+          letterSpacing: 0,
+          textColor: "#FFFFFF",
+          backgroundColor: "#000000",
+          backgroundOpacity: 80,
+          outlineColor: "#000000",
+          outlineWidth: 2,
+          shadowColor: "#000000",
+          shadowOffset: 2,
+          shadowBlur: 4,
+          position: "bottom",
+          horizontalAlign: "center",
+          verticalPadding: 40,
+          horizontalPadding: 20,
+          maxWidth: 80,
+          useBackground: true,
+          backgroundRadius: 8,
+          useOutline: true,
+          useShadow: true,
+          maxLines: 2,
+        });
+      }
+    };
+
+    loadSubtitleSettings();
+
+    // 설정 변경 이벤트 리스너
+    const handleSettingsChanged = () => {
+      console.log("🔄 설정 변경 이벤트 수신 - 자막 설정 재로드");
+      loadSubtitleSettings();
+    };
+
+    window.addEventListener("settingsChanged", handleSettingsChanged);
+
+    return () => {
+      window.removeEventListener("settingsChanged", handleSettingsChanged);
+    };
+  }, []);
 
   // 비디오와 TTS 오디오 동시 재생/일시정지 토글
   const handleVideoToggle = useCallback(() => {
@@ -624,6 +712,142 @@ const VideoPreview = memo(function VideoPreview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSceneIndex]); // videoRef는 ref이므로 의존성에서 제외
 
+  // 자막 오버레이 렌더링 헬퍼 함수
+  const renderSubtitleOverlay = () => {
+    if (!selectedScene?.text || !subtitleSettings) return null;
+
+    // 전역 설정 값 추출
+    const {
+      fontSize = 24,
+      position = "bottom",
+      horizontalAlign = "center",
+      useOutline = true,
+      outlineWidth = 2,
+      useShadow = false,
+      verticalPadding = 40,
+      maxLines = 2,
+      fontFamily = "noto-sans",
+      fontWeight = 600,
+      lineHeight = 1.4,
+      letterSpacing = 0,
+      textColor = "#FFFFFF",
+      backgroundColor = "#000000",
+      backgroundOpacity = 80,
+      outlineColor = "#000000",
+      shadowColor = "#000000",
+      shadowOffset = 2,
+      shadowBlur = 4,
+      useBackground = true,
+      backgroundRadius = 8,
+      maxWidth = 80,
+    } = subtitleSettings;
+
+    // 프리뷰 크기 비율 계산 (1920x1080 기준 -> 프리뷰 크기로 스케일링)
+    // 프리뷰 컨테이너의 실제 크기를 알 수 없으므로 상대적인 비율 사용
+    // 일반적으로 프리뷰는 실제 크기의 40-50% 정도
+    const SCALE_FACTOR = 0.5; // 프리뷰 화면 비율 (실제 1920x1080의 50%)
+
+    const scaledFontSize = fontSize * SCALE_FACTOR;
+    const scaledOutlineWidth = outlineWidth * SCALE_FACTOR;
+    const scaledShadowOffset = shadowOffset * SCALE_FACTOR;
+    const scaledShadowBlur = shadowBlur * SCALE_FACTOR;
+    const scaledVerticalPadding = verticalPadding * SCALE_FACTOR;
+    const scaledBackgroundRadius = backgroundRadius * SCALE_FACTOR;
+    const scaledLetterSpacing = letterSpacing * SCALE_FACTOR;
+
+    // 폰트 패밀리 매핑
+    const fontFamilyMap = {
+      "noto-sans": "'Noto Sans KR', sans-serif",
+      "malgun-gothic": "'Malgun Gothic', sans-serif",
+      "apple-sd-gothic": "'Apple SD Gothic Neo', sans-serif",
+      "nanumgothic": "'Nanum Gothic', sans-serif",
+      "arial": "Arial, sans-serif",
+      "helvetica": "Helvetica, sans-serif",
+      "roboto": "'Roboto', sans-serif"
+    };
+    const fontFamilyStyle = fontFamilyMap[fontFamily] || "'Noto Sans KR', sans-serif";
+
+    // 외곽선 스타일 (사용자 설정 색상 적용 + 스케일링)
+    const textShadowParts = [];
+    if (useOutline && scaledOutlineWidth > 0) {
+      // 8방향 외곽선 효과
+      for (let angle = 0; angle < 360; angle += 45) {
+        const x = Math.cos((angle * Math.PI) / 180) * scaledOutlineWidth;
+        const y = Math.sin((angle * Math.PI) / 180) * scaledOutlineWidth;
+        textShadowParts.push(`${x}px ${y}px 0 ${outlineColor}`);
+      }
+    }
+    if (useShadow) {
+      textShadowParts.push(`${scaledShadowOffset}px ${scaledShadowOffset}px ${scaledShadowBlur}px ${shadowColor}`);
+    }
+    const textShadow = textShadowParts.length > 0 ? textShadowParts.join(", ") : "none";
+
+    // 배경색 스타일 (투명도 적용)
+    const bgOpacity = backgroundOpacity / 100;
+    const bgColorRgb = backgroundColor.match(/\w\w/g)?.map(x => parseInt(x, 16)) || [0, 0, 0];
+    const backgroundColorStyle = useBackground
+      ? `rgba(${bgColorRgb[0]}, ${bgColorRgb[1]}, ${bgColorRgb[2]}, ${bgOpacity})`
+      : "transparent";
+
+    // 위치 계산 (스케일링 적용)
+    const positionStyle = {};
+    if (position === "bottom") {
+      positionStyle.bottom = `${scaledVerticalPadding}px`;
+    } else if (position === "top") {
+      positionStyle.top = `${scaledVerticalPadding}px`;
+    } else {
+      positionStyle.top = "50%";
+      positionStyle.transform = horizontalAlign === "center" ? "translate(-50%, -50%)" : "translateY(-50%)";
+    }
+
+    // 정렬 스타일
+    const textAlignStyle = horizontalAlign === "left" ? "left" : horizontalAlign === "right" ? "right" : "center";
+    const leftStyle = horizontalAlign === "center" ? "50%" : horizontalAlign === "right" ? "auto" : "0";
+    const rightStyle = horizontalAlign === "right" ? "0" : "auto";
+    const transformStyle = horizontalAlign === "center" ? "translateX(-50%)" : "";
+
+    return (
+      <div
+        style={{
+          position: "absolute",
+          ...positionStyle,
+          left: leftStyle,
+          right: rightStyle,
+          transform: transformStyle,
+          pointerEvents: "none",
+          display: "flex",
+          justifyContent: textAlignStyle,
+          maxWidth: `${maxWidth}%`,
+        }}
+      >
+        <div
+          style={{
+            color: textColor,
+            fontFamily: fontFamilyStyle,
+            fontSize: `${scaledFontSize}px`,
+            fontWeight,
+            textAlign: textAlignStyle,
+            textShadow,
+            lineHeight,
+            letterSpacing: `${scaledLetterSpacing}px`,
+            wordBreak: "keep-all",
+            whiteSpace: maxLines > 1 ? "pre-wrap" : "nowrap",
+            backgroundColor: backgroundColorStyle,
+            padding: useBackground ? `${8 * SCALE_FACTOR}px ${12 * SCALE_FACTOR}px` : "0",
+            borderRadius: useBackground ? `${scaledBackgroundRadius}px` : "0",
+            backdropFilter: useBackground ? "blur(8px)" : "none",
+            boxShadow: useBackground ? "0 4px 16px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)" : "none",
+            border: useBackground ? "1px solid rgba(255, 255, 255, 0.1)" : "none",
+          }}
+        >
+          {splitBalancedLines(selectedScene.text, maxLines).map((line, i) => (
+            <div key={i}>{line}</div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Card
       style={{
@@ -679,31 +903,7 @@ const VideoPreview = memo(function VideoPreview({
                   }}
                 />
                 {/* 자막 오버레이 */}
-                {selectedScene.text && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      bottom: "24px",
-                      left: "50%",
-                      transform: "translateX(-50%)",
-                      background: "linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(20, 20, 20, 0.9) 100%)",
-                      backdropFilter: "blur(8px)",
-                      color: "white",
-                      padding: "16px 24px",
-                      borderRadius: "12px",
-                      fontSize: "16px",
-                      fontWeight: "500",
-                      lineHeight: "1.5",
-                      maxWidth: "85%",
-                      textAlign: "center",
-                      pointerEvents: "none",
-                      boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)",
-                      border: "1px solid rgba(255, 255, 255, 0.1)",
-                    }}
-                  >
-                    {selectedScene.text}
-                  </div>
-                )}
+                {renderSubtitleOverlay()}
                 {/* 재생/일시정지 아이콘 오버레이 */}
                 {!isPlaying && (
                   <div
@@ -751,31 +951,7 @@ const VideoPreview = memo(function VideoPreview({
                   alt={selectedScene.asset.filename || "Scene image"}
                 />
                 {/* 자막 오버레이 */}
-                {selectedScene.text && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      bottom: "24px",
-                      left: "50%",
-                      transform: "translateX(-50%)",
-                      background: "linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(20, 20, 20, 0.9) 100%)",
-                      backdropFilter: "blur(8px)",
-                      color: "white",
-                      padding: "16px 24px",
-                      borderRadius: "12px",
-                      fontSize: "16px",
-                      fontWeight: "500",
-                      lineHeight: "1.5",
-                      maxWidth: "85%",
-                      textAlign: "center",
-                      pointerEvents: "none",
-                      boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)",
-                      border: "1px solid rgba(255, 255, 255, 0.1)",
-                    }}
-                  >
-                    {selectedScene.text}
-                  </div>
-                )}
+                {renderSubtitleOverlay()}
               </div>
             ) : null
           ) : (

@@ -34,24 +34,199 @@ async function loadMusicMetadata() {
   }
 }
 
-// HEX 색상을 ASS ABGR 형식으로 변환하는 헬퍼 함수
-// 예: #FF0000 (빨강) -> &H000000FF
-function hexToAssColor(hex, alpha = 0) {
-  // # 제거
+// HEX 색상을 FFmpeg RGB 형식으로 변환하는 헬퍼 함수
+// 예: #FF0000 (빨강) -> 0xFF0000
+function hexToFFmpegColor(hex) {
   hex = hex.replace('#', '');
+  return `0x${hex}`;
+}
 
-  // RGB 추출
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
+// HEX 색상을 투명도와 함께 FFmpeg RGBA 형식으로 변환
+// 예: #000000, 0.8 -> 0x000000@0.8
+function hexToFFmpegColorWithAlpha(hex, alpha) {
+  hex = hex.replace('#', '');
+  return `0x${hex}@${alpha}`;
+}
 
-  // ABGR 형식으로 변환 (alpha는 00=불투명, FF=완전투명)
-  const alphaHex = Math.max(0, Math.min(255, alpha)).toString(16).padStart(2, '0').toUpperCase();
-  const rHex = r.toString(16).padStart(2, '0').toUpperCase();
-  const gHex = g.toString(16).padStart(2, '0').toUpperCase();
-  const bHex = b.toString(16).padStart(2, '0').toUpperCase();
+// SRT 타임스탬프를 초 단위로 변환하는 함수
+// 예: "00:00:01,500" -> 1.5
+function srtTimestampToSeconds(timestamp) {
+  const match = timestamp.match(/(\d{2}):(\d{2}):(\d{2}),(\d{3})/);
+  if (!match) return 0;
+  const hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const seconds = parseInt(match[3], 10);
+  const milliseconds = parseInt(match[4], 10);
+  return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000;
+}
 
-  return `&H${alphaHex}${bHex}${gHex}${rHex}`;
+// SRT 파일 파싱 함수
+function parseSRT(srtContent) {
+  const subtitles = [];
+  const blocks = srtContent.trim().split(/\n\s*\n/);
+
+  for (const block of blocks) {
+    const lines = block.trim().split('\n');
+    if (lines.length < 3) continue;
+
+    // 첫 줄: 인덱스 (무시)
+    // 둘째 줄: 타임스탬프
+    const timingMatch = lines[1].match(/(\S+)\s+-->\s+(\S+)/);
+    if (!timingMatch) continue;
+
+    const startTime = srtTimestampToSeconds(timingMatch[1]);
+    const endTime = srtTimestampToSeconds(timingMatch[2]);
+
+    // 나머지 줄: 텍스트 (줄바꿈 유지)
+    const text = lines.slice(2).join('\n');
+
+    subtitles.push({ startTime, endTime, text });
+  }
+
+  return subtitles;
+}
+
+// drawtext 필터 생성 함수 (CSS 스타일을 FFmpeg drawtext로 변환)
+function createDrawtextFilter(subtitle, subtitleSettings, videoWidth = 1920, videoHeight = 1080) {
+  const {
+    fontFamily = "malgun-gothic",
+    fontSize = 24,
+    fontWeight = 600,
+    textColor = "#FFFFFF",
+    backgroundColor = "#000000",
+    backgroundOpacity = 80,
+    outlineColor = "#000000",
+    outlineWidth = 2,
+    shadowColor = "#000000",
+    shadowOffset = 2,
+    shadowBlur = 4,
+    position = "bottom",
+    horizontalAlign = "center",
+    verticalPadding = 40,
+    horizontalPadding = 20,
+    finePositionOffset = 0,
+    useBackground = true,
+    backgroundRadius = 8,
+    useOutline = true,
+    useShadow = true,
+    letterSpacing = 0,
+    maxLines = 2,
+    maxWidth = 80,
+  } = subtitleSettings;
+
+  // 텍스트를 maxLines와 maxWidth에 맞게 분할
+  let displayText = subtitle.text;
+
+  // 줄바꿈이 없으면 자동으로 분할
+  if (!displayText.includes('\n')) {
+    // 간단한 줄바꿈 로직: 문자 수 기준으로 분할
+    const maxCharsPerLine = Math.floor(maxWidth * 0.5); // maxWidth 80% ≈ 40자
+    const words = displayText.split(' ');
+    const lines = [];
+    let currentLine = '';
+
+    for (const word of words) {
+      if ((currentLine + word).length > maxCharsPerLine && currentLine.length > 0) {
+        lines.push(currentLine.trim());
+        currentLine = word + ' ';
+      } else {
+        currentLine += word + ' ';
+      }
+    }
+    if (currentLine.trim()) {
+      lines.push(currentLine.trim());
+    }
+
+    displayText = lines.slice(0, maxLines).join('\n');
+  } else {
+    // 이미 줄바꿈이 있으면 maxLines만 적용
+    const lines = displayText.split('\n');
+    if (lines.length > maxLines) {
+      displayText = lines.slice(0, maxLines).join('\n');
+    }
+  }
+
+  // FFmpeg drawtext용 텍스트 이스케이프
+  // 1. 작은따옴표는 \' 로 이스케이프
+  // 2. 콜론은 \: 로 이스케이프
+  // 3. 줄바꿈은 \n (백슬래시 하나 + n) 으로 변환
+  displayText = displayText
+    .replace(/'/g, "\\'")
+    .replace(/:/g, "\\:")
+    .replace(/\n/g, "\\n");
+
+  // 폰트 파일 매핑 (시스템 폰트 사용)
+  const fontMap = {
+    "noto-sans": "NotoSansKR-Regular.otf",
+    "malgun-gothic": "malgun.ttf",
+    "apple-sd-gothic": "AppleSDGothicNeo.ttc",
+    "nanumgothic": "NanumGothic.ttf",
+    "arial": "arial.ttf",
+    "helvetica": "Helvetica.ttf",
+    "roboto": "Roboto-Regular.ttf",
+  };
+  const fontFile = fontMap[fontFamily] || "malgun.ttf";
+
+  // 텍스트 색상
+  const textColorHex = hexToFFmpegColor(textColor);
+
+  // X 위치 계산
+  let xPos;
+  if (horizontalAlign === "center") {
+    xPos = "(w-text_w)/2";
+  } else if (horizontalAlign === "left") {
+    xPos = `${horizontalPadding}`;
+  } else { // right
+    xPos = `w-text_w-${horizontalPadding}`;
+  }
+
+  // Y 위치 계산 (프리뷰 CSS와 동일한 로직)
+  let yPos;
+  if (position === "bottom") {
+    yPos = `h-${verticalPadding}-text_h+${finePositionOffset}`;
+  } else if (position === "top") {
+    yPos = `${verticalPadding}-${finePositionOffset}`;
+  } else { // center
+    yPos = `(h-text_h)/2+${finePositionOffset}`;
+  }
+
+  // drawtext 옵션 배열
+  const options = [
+    `text='${displayText}'`,
+    `fontfile='${fontFile}'`,
+    `fontsize=${fontSize}`,
+    `fontcolor=${textColorHex}`,
+    `x=${xPos}`,
+    `y=${yPos}`,
+    `enable='between(t,${subtitle.startTime},${subtitle.endTime})'`,
+  ];
+
+  console.log(`[drawtext 설정] fontSize: ${fontSize}, maxLines: ${maxLines}, 텍스트 미리보기: "${displayText.substring(0, 50)}..."`);
+
+  // 외곽선 (borderw, bordercolor)
+  if (useOutline && outlineWidth > 0) {
+    options.push(`borderw=${outlineWidth}`);
+    options.push(`bordercolor=${hexToFFmpegColor(outlineColor)}`);
+  }
+
+  // 그림자 (shadowx, shadowy, shadowcolor)
+  if (useShadow && shadowOffset > 0) {
+    options.push(`shadowx=${shadowOffset}`);
+    options.push(`shadowy=${shadowOffset}`);
+    options.push(`shadowcolor=${hexToFFmpegColor(shadowColor)}`);
+  }
+
+  // 배경 (box, boxcolor, boxborderw)
+  if (useBackground) {
+    const bgAlpha = backgroundOpacity / 100;
+    options.push(`box=1`);
+    options.push(`boxcolor=${hexToFFmpegColorWithAlpha(backgroundColor, bgAlpha)}`);
+    options.push(`boxborderw=${Math.round(fontSize * 0.2)}`); // 패딩: 폰트 크기의 20%
+  }
+
+  // 글자 간격은 FFmpeg drawtext에서 직접 지원하지 않음 (무시)
+
+  return `drawtext=${options.join(':')}`;
 }
 
 // 음성 파일의 duration을 가져오는 함수 (FFmpeg 사용)
@@ -695,11 +870,10 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
   let filterInputs = videoClips.map((_, i) => `[${i}:v]`).join("");
   let filterComplex = `${filterInputs}concat=n=${videoClips.length}:v=1:a=0[outv]`;
 
-  // 자막 필터 통합
+  // 자막 필터 통합 (drawtext 사용)
   let finalVideoLabel = "[outv]";
   if (subtitlePath && fs.existsSync(subtitlePath)) {
     console.log(`✅ 자막 파일 확인: ${subtitlePath}`);
-    const srt = subtitlePath.replace(/\\/g, "/").replace(/:/g, "\\:");
 
     // 전역 자막 설정 로드
     const subtitleSettings = store.get("subtitleSettings", {
@@ -714,66 +888,39 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
       maxLines: 2,
     });
 
-    // 폰트 이름 매핑
-    const fontMap = {
-      "noto-sans": "Noto Sans KR",
-      "malgun-gothic": "Malgun Gothic",
-      "apple-sd-gothic": "AppleSDGothicNeo",
-      nanumgothic: "NanumGothic",
-      arial: "Arial",
-      helvetica: "Helvetica",
-      roboto: "Roboto",
-    };
-    const fontName = fontMap[subtitleSettings.fontFamily] || "Malgun Gothic";
+    console.log(`[자막 설정 전체] ${JSON.stringify(subtitleSettings, null, 2)}`);
 
-    // ASS 스타일 생성
-    let alignment = 2;
-    if (subtitleSettings.position === "bottom") {
-      alignment = subtitleSettings.horizontalAlign === "left" ? 1 : subtitleSettings.horizontalAlign === "right" ? 3 : 2;
-    } else if (subtitleSettings.position === "center") {
-      alignment = subtitleSettings.horizontalAlign === "left" ? 4 : subtitleSettings.horizontalAlign === "right" ? 6 : 5;
-    } else if (subtitleSettings.position === "top") {
-      alignment = subtitleSettings.horizontalAlign === "left" ? 7 : subtitleSettings.horizontalAlign === "right" ? 9 : 8;
-    }
+    // SRT 파일 읽기 및 파싱
+    const srtContent = fs.readFileSync(subtitlePath, 'utf-8');
+    const subtitles = parseSRT(srtContent);
 
-    const marginV = Math.round(subtitleSettings.verticalPadding || 40);
-    const fontSize = subtitleSettings.fontSize || 24;
+    console.log(`📝 파싱된 자막 수: ${subtitles.length}개`);
 
-    // 텍스트 색상
-    const primaryColour = hexToAssColor(subtitleSettings.textColor || '#FFFFFF', 0);
+    if (subtitles.length > 0) {
+      // drawtext 필터 체인 생성
+      let currentLabel = "[outv]";
+      const videoWidth = 1920;
+      const videoHeight = 1080;
 
-    // 폰트 굵기
-    const bold = (subtitleSettings.fontWeight || 600) >= 600 ? 1 : 0;
+      subtitles.forEach((subtitle, index) => {
+        const drawtextFilter = createDrawtextFilter(subtitle, subtitleSettings, videoWidth, videoHeight);
+        const nextLabel = index === subtitles.length - 1 ? "[v]" : `[dt${index}]`;
 
-    // 글자 간격
-    const spacing = subtitleSettings.letterSpacing || 0;
+        filterComplex += `;${currentLabel}${drawtextFilter}${nextLabel}`;
+        currentLabel = nextLabel;
 
-    // 배경 사용 여부에 따라 BorderStyle과 색상 설정이 달라짐
-    let borderStyle, outlineColour, backColour, outline, shadow;
+        if (index === 0) {
+          console.log(`[첫 자막 필터] ${drawtextFilter}`);
+        }
+      });
 
-    if (subtitleSettings.useBackground) {
-      // BorderStyle=3: 불투명 박스 모드
-      // OutlineColour = 박스(배경) 색상, BackColour = 그림자 색상
-      borderStyle = 3;
-      const backgroundAlpha = Math.round((100 - (subtitleSettings.backgroundOpacity || 80)) * 2.55);
-      outlineColour = hexToAssColor(subtitleSettings.backgroundColor || '#000000', backgroundAlpha);
-      backColour = hexToAssColor('#000000', 0); // 그림자 색상
-      outline = 0; // BorderStyle=3에서는 outline 두께 무시됨
-      shadow = 0;
+      filterComplex += `;[v]format=yuv420p[vf]`;
+      finalVideoLabel = "[vf]";
     } else {
-      // BorderStyle=1: 아웃라인 + 그림자 모드 (일반 모드)
-      borderStyle = 1;
-      outlineColour = hexToAssColor(subtitleSettings.outlineColor || '#000000', 0);
-      backColour = hexToAssColor('#000000', 0);
-      outline = subtitleSettings.useOutline ? (subtitleSettings.outlineWidth || 2) : 0;
-      shadow = subtitleSettings.useShadow ? 1 : 0;
+      console.warn("⚠️ 자막이 비어있습니다");
+      filterComplex += `;[outv]format=yuv420p[v]`;
+      finalVideoLabel = "[v]";
     }
-
-    const style = `FontName=${fontName},Fontsize=${fontSize},PrimaryColour=${primaryColour},OutlineColour=${outlineColour},BackColour=${backColour},Bold=${bold},Spacing=${spacing},Alignment=${alignment},MarginV=${marginV},Outline=${outline},BorderStyle=${borderStyle},Shadow=${shadow}`;
-
-    // 자막과 포맷 필터 체인
-    filterComplex += `;[outv]subtitles='${srt}':charenc=UTF-8:force_style='${style}',format=yuv420p[v]`;
-    finalVideoLabel = "[v]";
   } else {
     // 자막 없으면 포맷만 적용
     filterComplex += `;[outv]format=yuv420p[v]`;
@@ -1233,10 +1380,10 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
     hasAudioFilter = true;
   }
 
-  // 자막 필터 통합
+  // 자막 필터 통합 (drawtext 사용)
   let finalVideoLabel = "[outv]";
   if (srtPath && fs.existsSync(srtPath)) {
-    const srt = srtPath.replace(/\\/g, "/").replace(/:/g, "\\:");
+    console.log(`✅ 자막 파일 확인: ${srtPath}`);
 
     // 전역 자막 설정 로드
     const subtitleSettings = store.get("subtitleSettings", {
@@ -1251,66 +1398,39 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
       maxLines: 2,
     });
 
-    // 폰트 이름 매핑
-    const fontMap = {
-      "noto-sans": "Noto Sans KR",
-      "malgun-gothic": "Malgun Gothic",
-      "apple-sd-gothic": "AppleSDGothicNeo",
-      nanumgothic: "NanumGothic",
-      arial: "Arial",
-      helvetica: "Helvetica",
-      roboto: "Roboto",
-    };
-    const fontName = fontMap[subtitleSettings.fontFamily] || "Malgun Gothic";
+    console.log(`[자막 설정 전체] ${JSON.stringify(subtitleSettings, null, 2)}`);
 
-    // ASS 스타일 생성
-    let alignment = 2;
-    if (subtitleSettings.position === "bottom") {
-      alignment = subtitleSettings.horizontalAlign === "left" ? 1 : subtitleSettings.horizontalAlign === "right" ? 3 : 2;
-    } else if (subtitleSettings.position === "center") {
-      alignment = subtitleSettings.horizontalAlign === "left" ? 4 : subtitleSettings.horizontalAlign === "right" ? 6 : 5;
-    } else if (subtitleSettings.position === "top") {
-      alignment = subtitleSettings.horizontalAlign === "left" ? 7 : subtitleSettings.horizontalAlign === "right" ? 9 : 8;
-    }
+    // SRT 파일 읽기 및 파싱
+    const srtContent = fs.readFileSync(srtPath, 'utf-8');
+    const subtitles = parseSRT(srtContent);
 
-    const marginV = Math.round(subtitleSettings.verticalPadding || 40);
-    const fontSize = subtitleSettings.fontSize || 24;
+    console.log(`📝 파싱된 자막 수: ${subtitles.length}개`);
 
-    // 텍스트 색상
-    const primaryColour = hexToAssColor(subtitleSettings.textColor || '#FFFFFF', 0);
+    if (subtitles.length > 0) {
+      // drawtext 필터 체인 생성
+      let currentLabel = "[outv]";
+      const videoWidth = 1920;
+      const videoHeight = 1080;
 
-    // 폰트 굵기
-    const bold = (subtitleSettings.fontWeight || 600) >= 600 ? 1 : 0;
+      subtitles.forEach((subtitle, index) => {
+        const drawtextFilter = createDrawtextFilter(subtitle, subtitleSettings, videoWidth, videoHeight);
+        const nextLabel = index === subtitles.length - 1 ? "[v]" : `[dt${index}]`;
 
-    // 글자 간격
-    const spacing = subtitleSettings.letterSpacing || 0;
+        filterComplex += `;${currentLabel}${drawtextFilter}${nextLabel}`;
+        currentLabel = nextLabel;
 
-    // 배경 사용 여부에 따라 BorderStyle과 색상 설정이 달라짐
-    let borderStyle, outlineColour, backColour, outline, shadow;
+        if (index === 0) {
+          console.log(`[첫 자막 필터] ${drawtextFilter}`);
+        }
+      });
 
-    if (subtitleSettings.useBackground) {
-      // BorderStyle=3: 불투명 박스 모드
-      // OutlineColour = 박스(배경) 색상, BackColour = 그림자 색상
-      borderStyle = 3;
-      const backgroundAlpha = Math.round((100 - (subtitleSettings.backgroundOpacity || 80)) * 2.55);
-      outlineColour = hexToAssColor(subtitleSettings.backgroundColor || '#000000', backgroundAlpha);
-      backColour = hexToAssColor('#000000', 0); // 그림자 색상
-      outline = 0; // BorderStyle=3에서는 outline 두께 무시됨
-      shadow = 0;
+      filterComplex += `;[v]format=yuv420p[vf]`;
+      finalVideoLabel = "[vf]";
     } else {
-      // BorderStyle=1: 아웃라인 + 그림자 모드 (일반 모드)
-      borderStyle = 1;
-      outlineColour = hexToAssColor(subtitleSettings.outlineColor || '#000000', 0);
-      backColour = hexToAssColor('#000000', 0);
-      outline = subtitleSettings.useOutline ? (subtitleSettings.outlineWidth || 2) : 0;
-      shadow = subtitleSettings.useShadow ? 1 : 0;
+      console.warn("⚠️ 자막이 비어있습니다");
+      filterComplex += `;[outv]format=yuv420p[v]`;
+      finalVideoLabel = "[v]";
     }
-
-    const style = `FontName=${fontName},Fontsize=${fontSize},PrimaryColour=${primaryColour},OutlineColour=${outlineColour},BackColour=${backColour},Bold=${bold},Spacing=${spacing},Alignment=${alignment},MarginV=${marginV},Outline=${outline},BorderStyle=${borderStyle},Shadow=${shadow}`;
-
-    // 자막과 포맷 필터 체인
-    filterComplex += `;[outv]subtitles='${srt}':charenc=UTF-8:force_style='${style}',format=yuv420p[v]`;
-    finalVideoLabel = "[v]";
   } else {
     // 자막 없으면 포맷만 적용
     filterComplex += `;[outv]format=yuv420p[v]`;
