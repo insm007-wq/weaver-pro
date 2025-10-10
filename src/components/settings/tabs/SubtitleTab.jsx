@@ -68,10 +68,11 @@ import { handleError } from "@utils";
  *
  * @preview_system
  * 실시간 미리보기 기능:
- * - 16:9 비율 (640x360px) 대형 미리보기
+ * - 실제 영상 크기 (1920x1080px) 미리보기
  * - 그라디언트 배경으로 다양한 색상 대비 테스트
- * - 실제 영상과 동일한 비율로 자막 표시
+ * - 사용자 설정값이 그대로 적용되어 실제 영상과 동일하게 표시
  * - 모든 설정 변경사항 즉시 반영
+ * - 스크롤로 전체 영역 확인 가능
  *
  * @author Weaver Pro Team
  * @version 2.0.0
@@ -111,6 +112,14 @@ const ANIMATIONS = [
   { key: "scale", text: "크기 변화" },
   { key: "typewriter", text: "타이핑 효과" },
 ];
+
+// 화면 비율 설정 (16:9 고정 - 유튜브 전용)
+const PREVIEW_RATIO = {
+  actualWidth: 1920,
+  actualHeight: 1080,
+  previewWidth: 800,
+  previewHeight: 450,
+};
 
 function SubtitleTab() {
   const containerStyles = useContainerStyles();
@@ -314,19 +323,23 @@ function SubtitleTab() {
     );
   }
 
+  // 미리보기 크기 및 스케일 계산 (16:9 고정)
+  const previewWidth = PREVIEW_RATIO.previewWidth;
+  const previewHeight = PREVIEW_RATIO.previewHeight;
+  const scale = PREVIEW_RATIO.previewWidth / PREVIEW_RATIO.actualWidth; // 축소 비율
+  const centerTopPosition = previewHeight / 2; // 중앙 위치는 높이의 50%
+
   return (
     <div className={containerStyles.container}>
       {/* 대형 미리보기 화면 */}
       <Card style={{ marginBottom: "32px" }}>
-        <CardHeader header={<Title2>🎬 실제 영상 미리보기</Title2>} description="실제 영상에서 자막이 어떻게 표시되는지 확인하세요" />
-
         {/* 메인 미리보기 (16:9 비율) */}
-        <div style={{ padding: "20px" }}>
+        <div style={{ padding: "20px", display: "flex", justifyContent: "center" }}>
           <div
             ref={previewRef}
             style={{
-              width: "100%",
-              height: "360px", // 훨씬 큰 미리보기 화면
+              width: `${previewWidth}px`,
+              height: `${previewHeight}px`,
               background: "linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #667eea 100%)",
               borderRadius: "8px",
               position: "relative",
@@ -341,38 +354,41 @@ function SubtitleTab() {
             {/* 자막 */}
             <div
               style={{
-                ...generatePreviewStyle(),
+                fontFamily: getFontFamily(subtitleSettings.fontFamily),
+                fontWeight: subtitleSettings.fontWeight,
+                color: subtitleSettings.textColor,
+                backgroundColor: subtitleSettings.useBackground
+                  ? `${subtitleSettings.backgroundColor}${Math.round(subtitleSettings.backgroundOpacity * 2.55)
+                      .toString(16)
+                      .padStart(2, "0")}`
+                  : "transparent",
+                textAlign: subtitleSettings.horizontalAlign,
+                maxWidth: `${subtitleSettings.maxWidth}%`,
+                wordBreak: subtitleSettings.wordBreak === "break-all" ? "break-all" : "normal",
+                whiteSpace: subtitleSettings.autoWrap ? "normal" : "nowrap",
                 position: "absolute",
                 bottom:
                   subtitleSettings.position === "bottom"
-                    ? `${
-                        Math.round(subtitleSettings.verticalPadding * 0.25) - Math.round((subtitleSettings.finePositionOffset || 0) * 0.25)
-                      }px`
+                    ? `${(subtitleSettings.verticalPadding - (subtitleSettings.finePositionOffset || 0)) * scale}px`
                     : "auto",
                 top:
                   subtitleSettings.position === "top"
-                    ? `${
-                        Math.round(subtitleSettings.verticalPadding * 0.25) + Math.round((subtitleSettings.finePositionOffset || 0) * 0.25)
-                      }px`
+                    ? `${(subtitleSettings.verticalPadding + (subtitleSettings.finePositionOffset || 0)) * scale}px`
                     : subtitleSettings.position === "center"
-                    ? `${180 + Math.round((subtitleSettings.finePositionOffset || 0) * 0.25)}px`
+                    ? `${centerTopPosition + (subtitleSettings.finePositionOffset || 0) * scale}px`
                     : "auto",
                 left: "50%",
                 transform: subtitleSettings.position === "center" ? "translate(-50%, -50%)" : "translateX(-50%)",
-                fontSize: `${Math.round(subtitleSettings.fontSize * 0.38)}px`, // 실제 비례에 맞는 크기
+                fontSize: `${subtitleSettings.fontSize * scale}px`,
                 lineHeight: subtitleSettings.lineHeight,
-                maxWidth: `${subtitleSettings.maxWidth}%`,
-                padding: `${Math.round(subtitleSettings.verticalPadding * 0.12)}px ${Math.round(
-                  subtitleSettings.horizontalPadding * 0.25
-                )}px`,
-                borderRadius: `${Math.round(subtitleSettings.backgroundRadius * 0.25)}px`,
+                letterSpacing: `${subtitleSettings.letterSpacing * scale}px`,
+                padding: `${subtitleSettings.verticalPadding * scale}px ${subtitleSettings.horizontalPadding * scale}px`,
+                borderRadius: `${subtitleSettings.backgroundRadius * scale}px`,
                 border: subtitleSettings.useOutline
-                  ? `${Math.max(1, Math.round(subtitleSettings.outlineWidth * 0.25))}px solid ${subtitleSettings.outlineColor}`
+                  ? `${subtitleSettings.outlineWidth * scale}px solid ${subtitleSettings.outlineColor}`
                   : "none",
                 textShadow: subtitleSettings.useShadow
-                  ? `${Math.round(subtitleSettings.shadowOffset * 0.25)}px ${Math.round(
-                      subtitleSettings.shadowOffset * 0.25
-                    )}px ${Math.round(subtitleSettings.shadowBlur * 0.25)}px ${subtitleSettings.shadowColor}`
+                  ? `${subtitleSettings.shadowOffset * scale}px ${subtitleSettings.shadowOffset * scale}px ${subtitleSettings.shadowBlur * scale}px ${subtitleSettings.shadowColor}`
                   : "none",
               }}
             >
