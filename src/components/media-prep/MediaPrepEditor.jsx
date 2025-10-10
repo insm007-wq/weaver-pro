@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect } from "react";
-import { tokens, useId } from "@fluentui/react-components";
+import { tokens, useId, Text } from "@fluentui/react-components";
 import { Target24Regular } from "@fluentui/react-icons";
 
 // Hooks
@@ -13,7 +13,7 @@ import { PageErrorBoundary } from "../common/ErrorBoundary";
 import StepProgress from "./parts/StepProgress";
 import Step1FileUpload from "./parts/Step1FileUpload";
 import Step2KeywordExtraction from "./parts/Step2KeywordExtraction";
-import MediaPrepProgressBar from "./parts/MediaPrepProgressBar";
+import BottomFixedBar from "../common/BottomFixedBar";
 
 /**
  * MediaPrepEditor (위저드 스타일로 전면 개편)
@@ -158,7 +158,68 @@ function MediaPrepEditor() {
       </div>
 
       {/* 하단 고정 진행바 */}
-      <MediaPrepProgressBar assets={keywordExtraction.assets} />
+      {(keywordExtraction.isExtracting || (keywordExtraction.assets && keywordExtraction.assets.length > 0)) && (
+        <BottomFixedBar
+          isComplete={!keywordExtraction.isExtracting && keywordExtraction.assets && keywordExtraction.assets.length > 0}
+          isLoading={keywordExtraction.isExtracting}
+          statusText={
+            keywordExtraction.isExtracting
+              ? "🤖 키워드 추출 중..."
+              : `✅ 키워드 추출 완료 (${keywordExtraction.assets?.length || 0}개)`
+          }
+          nextStepButton={
+            !keywordExtraction.isExtracting && keywordExtraction.assets && keywordExtraction.assets.length > 0
+              ? {
+                  text: "➡️ 다음 단계: 미디어 다운로드",
+                  eventName: "navigate-to-download",
+                }
+              : undefined
+          }
+          expandedContent={
+            keywordExtraction.assets && keywordExtraction.assets.length > 0 ? (
+              <div>
+                <Text size={300} weight="semibold" style={{ marginBottom: 12, display: "block" }}>
+                  📝 추출된 키워드 ({keywordExtraction.assets.length}개)
+                </Text>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+                    gap: 8,
+                    maxHeight: 400,
+                    overflowY: "auto",
+                  }}
+                >
+                  {keywordExtraction.assets.map((asset, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        padding: "8px 12px",
+                        background: tokens.colorNeutralBackground1,
+                        borderRadius: 6,
+                        border: `1px solid ${tokens.colorNeutralStroke1}`,
+                      }}
+                    >
+                      <Text size={200} style={{ color: tokens.colorNeutralForeground2 }}>
+                        {asset.keyword || asset}
+                      </Text>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : keywordExtraction.isExtracting ? (
+              <div style={{ textAlign: "center", padding: "20px 0" }}>
+                <Text size={300} weight="semibold" style={{ marginBottom: 8, display: "block" }}>
+                  🤖 AI가 키워드를 추출하고 있습니다...
+                </Text>
+                <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                  잠시만 기다려주세요
+                </Text>
+              </div>
+            ) : null
+          }
+        />
+      )}
     </div>
   );
 }

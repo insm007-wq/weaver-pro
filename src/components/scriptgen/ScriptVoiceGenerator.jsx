@@ -10,7 +10,7 @@ import ActionCard from "./parts/ActionCard";
 import BasicSettingsCard from "./parts/BasicSettingsCard";
 import VoiceSettingsCard from "./parts/VoiceSettingsCard";
 import ResultsSidebar from "./parts/ResultsSidebar";
-import FixedProgressBar from "./parts/FixedProgressBar";
+import BottomFixedBar from "../common/BottomFixedBar";
 
 // 훅 imports
 import { useScriptGeneration } from "../../hooks/useScriptGeneration";
@@ -202,14 +202,74 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
       </div>
 
       {/* 하단 고정 미니 진행바 */}
-      <FixedProgressBar
-        fullVideoState={fullVideoState}
-        doc={doc}
-        isLoading={isLoading}
-        onClose={() => {
-          resetFullVideoState(true);
-        }}
-      />
+      {(fullVideoState?.isGenerating || isLoading || doc) && (
+        <BottomFixedBar
+          isComplete={["complete", "completed"].includes(fullVideoState?.currentStep)}
+          isLoading={fullVideoState?.isGenerating || isLoading}
+          statusText={
+            ["complete", "completed"].includes(fullVideoState?.currentStep)
+              ? "✅ 대본 생성 완료"
+              : `🎬 ${
+                  {
+                    script: "대본 생성",
+                    audio: "음성 합성",
+                    subtitle: "자막 생성",
+                    idle: "대기",
+                  }[fullVideoState?.currentStep || "idle"] || fullVideoState?.currentStep
+                }`
+          }
+          progress={Math.round(
+            ["script", "audio", "subtitle"].reduce(
+              (acc, k) => acc + (fullVideoState?.progress?.[k] || 0),
+              0
+            ) / 3
+          )}
+          nextStepButton={{
+            text: "➡️ 다음 단계: 미디어 준비",
+            eventName: "navigate-to-assemble",
+          }}
+          expandedContent={
+            doc && (
+              <div>
+                <Text size={300} weight="semibold" style={{ marginBottom: 12, display: "block" }}>
+                  📖 생성된 대본 ({doc.scenes?.length}개 장면)
+                </Text>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                    maxHeight: 400,
+                    overflowY: "auto",
+                  }}
+                >
+                  {doc.scenes?.map((scene, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        padding: 12,
+                        background: tokens.colorNeutralBackground1,
+                        borderRadius: 8,
+                        border: `1px solid ${tokens.colorNeutralStroke1}`,
+                      }}
+                    >
+                      <Text size={250} weight="semibold" style={{ color: "#667eea", marginBottom: 4, display: "block" }}>
+                        장면 {index + 1}
+                      </Text>
+                      <Text size={200} style={{ color: tokens.colorNeutralForeground2, lineHeight: 1.5 }}>
+                        {scene.text}
+                      </Text>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          }
+          onClose={() => {
+            resetFullVideoState(true);
+          }}
+        />
+      )}
     </div>
   );
 }

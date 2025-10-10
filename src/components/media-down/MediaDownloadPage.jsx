@@ -15,6 +15,8 @@ import {
 } from "@fluentui/react-icons";
 import { PageErrorBoundary } from "../common/ErrorBoundary";
 import { showError, showSuccess } from "../common/GlobalToast";
+import BottomFixedBar from "../common/BottomFixedBar";
+import { tokens } from "@fluentui/react-components";
 
 /** URL/로컬 경로 모두 img에 표시 가능하게 */
 function toImgSrc(src) {
@@ -95,15 +97,34 @@ function MediaDownloadPage() {
 
   // ===== 초기화 이벤트 리스너
   useEffect(() => {
-    const handleResetMediaDownload = () => {
+    const handleResetMediaDownload = async () => {
       console.log("🔄 미디어 다운로드 페이지 초기화");
+
+      // 미디어 다운로드 상태 초기화
       setKeywords([]);
       setSelectedKeywords(new Set());
       setDownloadedVideos([]);
       setDownloadProgress({});
-      setKeywordsLoaded(true); // true로 설정하여 로딩 메시지 숨김
+      setKeywordsLoaded(true);
       setIsDownloading(false);
       setCompletedVideosCount(0);
+
+      // 미디어 준비 데이터도 함께 초기화
+      try {
+        if (window.api?.setSetting) {
+          await window.api.setSetting({ key: "extractedKeywords", value: [] });
+          console.log("✅ 미디어 준비 키워드 데이터 초기화 완료");
+        }
+
+        // 미디어 준비 페이지도 초기화하도록 이벤트 발생
+        window.dispatchEvent(new CustomEvent("reset-keyword-extraction"));
+        console.log("🔄 미디어 준비 초기화 이벤트 발생");
+
+        showSuccess("미디어 다운로드 및 준비 데이터 초기화 완료");
+      } catch (error) {
+        console.error("미디어 준비 데이터 초기화 실패:", error);
+        showSuccess("미디어 다운로드 데이터 초기화 완료");
+      }
     };
 
     window.addEventListener("reset-media-download", handleResetMediaDownload);
@@ -113,15 +134,22 @@ function MediaDownloadPage() {
     };
   }, []);
 
-  const loadKeywordsFromJSON = async () => {
+  const loadKeywordsFromJSON = async (showToast = false) => {
     try {
+      setKeywordsLoaded(false); // 로딩 상태 표시
       const extractedKeywords = await window.api.getSetting("extractedKeywords");
       setKeywords(Array.isArray(extractedKeywords) ? extractedKeywords : []);
       setKeywordsLoaded(true);
+      if (showToast) {
+        showSuccess(`✅ 키워드 ${Array.isArray(extractedKeywords) ? extractedKeywords.length : 0}개 새로고침 완료`);
+      }
     } catch (e) {
       console.error(e);
       setKeywords([]);
       setKeywordsLoaded(true);
+      if (showToast) {
+        showError("키워드 새로고침 실패");
+      }
     }
   };
   const loadDownloadHistory = async () => {
@@ -478,11 +506,20 @@ function MediaDownloadPage() {
               </Badge>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <Button appearance="subtle" size="small" onClick={loadKeywordsFromJSON}>
+              <Button appearance="subtle" size="small" onClick={() => loadKeywordsFromJSON(true)}>
                 <ArrowClockwiseRegular style={{ fontSize: 16 }} />
               </Button>
               <Button appearance="subtle" size="small" onClick={selectAllKeywords}>
                 {selectedKeywords.size === keywords.length ? "전체 해제" : "전체 선택"}
+              </Button>
+              <Button
+                appearance="subtle"
+                size="small"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent("reset-media-download"));
+                }}
+              >
+                초기화
               </Button>
             </div>
           </div>
@@ -746,215 +783,197 @@ function MediaDownloadPage() {
             </div>
 
           </div>
-
-          {/* 영상 완성 이동 버튼 */}
-          <div style={{ marginTop: "auto" }}>
-            <Divider style={{ margin: "16px 0" }} />
-            <Button
-              appearance="primary"
-              size="large"
-              icon={<VideoClip24Regular />}
-              disabled={isDownloading || downloadedVideos.length === 0}
-              onClick={() => {
-                const event = new CustomEvent("navigate-to-refine");
-                window.dispatchEvent(event);
-              }}
-              style={{ width: "100%" }}
-            >
-              영상 완성으로 이동
-            </Button>
-          </div>
         </Card>
 
-        {/* 하단: 진행/결과 (기존 유지) */}
-        <Card style={{ padding: 20, gridArea: "bottom" }}>
-          {isDownloading && (
-            <div style={{ marginBottom: downloadedVideos.length > 0 ? 16 : 0 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <Spinner size="small" />
-                  <Text size={400} weight="semibold">
-                    다운로드 진행상황
-                  </Text>
-                  <Badge appearance="filled" color="informative" size="small">
-                    {completedVideosCount}/{totalVideosRef.current}
-                  </Badge>
-                </div>
-                {estimatedTimeRemaining !== null && (
-                  <Text size={200} style={{ color: "#666" }}>
-                    {estimatedTimeRemaining <= 0
-                      ? "거의 완료 중..."
-                      : estimatedTimeRemaining >= 3600
-                      ? `남은 시간: 약 ${Math.floor(estimatedTimeRemaining / 3600)}시간 ${Math.floor((estimatedTimeRemaining % 3600) / 60)}분`
-                      : `남은 시간: 약 ${Math.floor(estimatedTimeRemaining / 60)}분 ${Math.floor(estimatedTimeRemaining % 60)}초`}
-                  </Text>
-                )}
-              </div>
-              {totalVideosRef.current > 0 && (
-                <div style={{ marginBottom: 16 }}>
-                  <ProgressBar
-                    value={completedVideosCount}
-                    max={totalVideosRef.current}
-                    thickness="medium"
-                  />
-                  <Text size={200} style={{ color: "#666", marginTop: 4, textAlign: "center", display: "block" }}>
-                    전체 진행률: {Math.round((completedVideosCount / totalVideosRef.current) * 100)}%
-                  </Text>
-                </div>
-              )}
-              <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 300, overflowY: "auto" }}>
-                {Array.from(selectedKeywords).map((k) => {
-                  const progress = downloadProgress[k];
-                  return (
-                    <div key={k} style={{ padding: 12, border: "1px solid #e5e5e5", borderRadius: 8 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                        <div>
-                          <Text size={300}>{k}</Text>
-                          {progress?.totalVideos > 1 && (
-                            <Text size={200} style={{ color: "#666", marginTop: 2 }}>
-                              {progress.currentVideo} ({progress.videoIndex || 1}/{progress.totalVideos})
-                            </Text>
-                          )}
-                        </div>
-                        <Text size={200} style={{ color: "#666" }}>
-                          {progress?.status === "completed" ? "완료" : progress?.status === "failed" ? "실패" : `${progress?.progress || 0}%`}
-                        </Text>
-                      </div>
-                      <ProgressBar value={progress?.progress || 0} max={100} />
-                      {progress?.error && (
-                        <Text size={200} style={{ color: "#d13438", marginTop: 4 }}>
-                          오류: {progress.error}
-                        </Text>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+      </div>
 
-          {downloadedVideos.length > 0 && (
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-                <CheckmarkCircleRegular style={{ fontSize: 18, color: "#107c10" }} />
-                <Text size={400} weight="semibold">
-                  다운로드 완료
+      {/* 하단 고정 바 - 다운로드 진행 중 또는 완료 시 표시 */}
+      {(isDownloading || downloadedVideos.length > 0) && (
+        <BottomFixedBar
+          isComplete={!isDownloading && downloadedVideos.length > 0}
+          isLoading={isDownloading}
+          statusText={
+            isDownloading
+              ? `📥 미디어 다운로드 중... (${completedVideosCount}/${selectedKeywords.size * downloadOptions.videosPerKeyword})`
+              : `✅ 다운로드 완료 (${downloadedVideos.length}개)`
+          }
+          progress={
+            isDownloading
+              ? Math.round((completedVideosCount / (selectedKeywords.size * downloadOptions.videosPerKeyword)) * 100)
+              : 100
+          }
+          nextStepButton={
+            !isDownloading && downloadedVideos.length > 0
+              ? {
+                  text: "➡️ 다음 단계: 영상 완성",
+                  eventName: "navigate-to-refine",
+                }
+              : undefined
+          }
+          expandedContent={
+            isDownloading ? (
+              // 다운로드 진행 중: 키워드별 상세 진행 상황
+              <div>
+                <Text size={300} weight="semibold" style={{ marginBottom: 12, display: "block" }}>
+                  📥 다운로드 진행 상황
                 </Text>
-                <Badge appearance="filled" color="success" size="small">
-                  {downloadedVideos.length}개
-                </Badge>
-              </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 300, overflowY: "auto" }}>
-                {downloadedVideos.map((video, i) => {
-                  const imgSrc = toImgSrc(video.thumbnail);
-                  return (
-                    <div
-                      key={video.uniqueKey || i}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 12,
-                        padding: 12,
-                        border: "1px solid #e5e5e5",
-                        borderRadius: 8,
-                        backgroundColor: "#f9f9f9",
-                      }}
-                    >
-                      {video.success && imgSrc ? (
-                        <img
-                          src={imgSrc}
-                          alt={video.keyword}
-                          style={{ width: 60, height: 34, borderRadius: 4, objectFit: "cover", border: "1px solid #e5e5e5" }}
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                            e.currentTarget.nextElementSibling.style.display = "flex";
-                          }}
-                        />
-                      ) : null}
+                {/* 키워드별 진행 상황 */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 400, overflowY: "auto" }}>
+                  {Array.from(selectedKeywords).map((k) => {
+                    const progress = downloadProgress[k];
+                    return (
                       <div
+                        key={k}
                         style={{
-                          width: 60,
-                          height: 34,
-                          borderRadius: 4,
-                          backgroundColor: video.success ? "#6366f1" : "#dc2626",
-                          display: video.success && imgSrc ? "none" : "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "white",
-                          fontSize: 12,
-                          fontWeight: "bold",
+                          padding: 12,
+                          background: tokens.colorNeutralBackground1,
+                          border: `1px solid ${tokens.colorNeutralStroke1}`,
+                          borderRadius: 8,
                         }}
                       >
-                        {video.success ? "VIDEO" : "ERROR"}
-                      </div>
-
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: video.error ? 4 : 0 }}>
-                          <Text size={200} weight="medium" style={{ minWidth: 80 }}>
-                            {video.keyword}
-                          </Text>
-                          <Text size={100} style={{ color: "#666", minWidth: 60 }}>
-                            {video.provider}
-                          </Text>
-                          <Text size={100} style={{ color: "#666" }}>
-                            {video.width && video.height ? `${video.width}×${video.height}` : "해상도불명"}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                          <div>
+                            <Text size={300}>{k}</Text>
+                            {progress?.totalVideos > 1 && (
+                              <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 2, display: "block" }}>
+                                {progress.currentVideo} ({progress.videoIndex || 1}/{progress.totalVideos})
+                              </Text>
+                            )}
+                          </div>
+                          <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                            {progress?.status === "completed" ? "완료" : progress?.status === "failed" ? "실패" : `${progress?.progress || 0}%`}
                           </Text>
                         </div>
-                        {video.error && (
-                          <Text size={100} style={{ color: "#d13438" }}>
-                            오류: {video.error}
+                        <ProgressBar value={progress?.progress || 0} max={100} />
+                        {progress?.error && (
+                          <Text size={200} style={{ color: tokens.colorPaletteRedForeground1, marginTop: 4, display: "block" }}>
+                            오류: {progress.error}
                           </Text>
                         )}
                       </div>
-
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        {video.success ? (
-                          <CheckmarkCircleRegular style={{ fontSize: 16, color: "#107c10" }} />
-                        ) : (
-                          <Badge appearance="filled" color="danger" size="small">
-                            실패
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
+            ) : (
+              // 다운로드 완료: 다운로드된 미디어 상세 목록
+              downloadedVideos.length > 0 && (
+                <div>
+                  <Text size={300} weight="semibold" style={{ marginBottom: 12, display: "block" }}>
+                    📦 다운로드된 미디어
+                  </Text>
 
-              <Divider style={{ margin: "12px 0" }} />
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 400, overflowY: "auto" }}>
+                    {downloadedVideos.map((video, i) => {
+                      const imgSrc = toImgSrc(video.thumbnail);
+                      return (
+                        <div
+                          key={video.uniqueKey || i}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
+                            padding: 12,
+                            background: tokens.colorNeutralBackground1,
+                            border: `1px solid ${tokens.colorNeutralStroke1}`,
+                            borderRadius: 8,
+                          }}
+                        >
+                          {video.success && imgSrc ? (
+                            <img
+                              src={imgSrc}
+                              alt={video.keyword}
+                              style={{
+                                width: 60,
+                                height: 34,
+                                borderRadius: 4,
+                                objectFit: "cover",
+                                border: `1px solid ${tokens.colorNeutralStroke1}`,
+                              }}
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                                e.currentTarget.nextElementSibling.style.display = "flex";
+                              }}
+                            />
+                          ) : null}
+                          <div
+                            style={{
+                              width: 60,
+                              height: 34,
+                              borderRadius: 4,
+                              backgroundColor: video.success ? "#6366f1" : "#dc2626",
+                              display: video.success && imgSrc ? "none" : "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "white",
+                              fontSize: 12,
+                              fontWeight: "bold",
+                            }}
+                          >
+                            {video.success ? "VIDEO" : "ERROR"}
+                          </div>
 
-              <div style={{ display: "flex", justifyContent: "center" }}>
-                <Button
-                  appearance="primary"
-                  size="medium"
-                  onClick={async () => {
-                    try {
-                      const videoSaveFolder = await window.api.getSetting("videoSaveFolder");
-                      if (videoSaveFolder) await window.electron.shell.openPath(`${videoSaveFolder}/video`);
-                    } catch (e) {
-                      console.error("폴더 열기 실패:", e);
-                    }
-                  }}
-                >
-                  다운로드 폴더 열기
-                </Button>
-              </div>
-            </div>
-          )}
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: video.error ? 4 : 0 }}>
+                              <Text size={200} weight="medium" style={{ minWidth: 80 }}>
+                                {video.keyword}
+                              </Text>
+                              <Text size={100} style={{ color: tokens.colorNeutralForeground3, minWidth: 60 }}>
+                                {video.provider}
+                              </Text>
+                              <Text size={100} style={{ color: tokens.colorNeutralForeground3 }}>
+                                {video.width && video.height ? `${video.width}×${video.height}` : "해상도불명"}
+                              </Text>
+                            </div>
+                            {video.error && (
+                              <Text size={100} style={{ color: tokens.colorPaletteRedForeground1 }}>
+                                오류: {video.error}
+                              </Text>
+                            )}
+                          </div>
 
-          {!isDownloading && downloadedVideos.length === 0 && (
-            <div style={{ textAlign: "center", padding: 20, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-              <Text size={300} weight="medium" style={{ marginBottom: 4, display: "block" }}>
-                키워드를 선택하고 다운로드를 시작하세요
-              </Text>
-              <Text size={200} style={{ color: "#666", display: "block", marginTop: 4 }}>
-                Pixabay에서 관련 영상을 자동으로 다운로드합니다
-              </Text>
-            </div>
-          )}
-        </Card>
-      </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            {video.success ? (
+                              <CheckmarkCircleRegular style={{ fontSize: 16, color: tokens.colorPaletteGreenForeground1 }} />
+                            ) : (
+                              <Badge appearance="filled" color="danger" size="small">
+                                실패
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <Divider style={{ margin: "12px 0" }} />
+
+                  <div style={{ display: "flex", justifyContent: "center" }}>
+                    <Button
+                      appearance="primary"
+                      size="medium"
+                      onClick={async () => {
+                        try {
+                          const videoSaveFolder = await window.api.getSetting("videoSaveFolder");
+                          if (videoSaveFolder) await window.electron.shell.openPath(`${videoSaveFolder}/video`);
+                        } catch (e) {
+                          console.error("폴더 열기 실패:", e);
+                        }
+                      }}
+                    >
+                      다운로드 폴더 열기
+                    </Button>
+                  </div>
+                </div>
+              )
+            )
+          }
+          onClose={() => {
+            setDownloadedVideos([]);
+          }}
+        />
+      )}
     </div>
   );
 }
