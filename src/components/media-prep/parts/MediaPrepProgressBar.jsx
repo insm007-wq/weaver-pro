@@ -1,6 +1,6 @@
 import { memo, useState, useCallback } from "react";
 import { Text, Button, tokens } from "@fluentui/react-components";
-import { ChevronUpRegular, ChevronDownRegular } from "@fluentui/react-icons";
+import { ChevronUpRegular, ChevronDownRegular, DismissRegular } from "@fluentui/react-icons";
 
 /**
  * 미디어 준비 하단 고정 진행바
@@ -8,13 +8,18 @@ import { ChevronUpRegular, ChevronDownRegular } from "@fluentui/react-icons";
  */
 const MediaPrepProgressBar = memo(({ assets, onClose }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isClosed, setIsClosed] = useState(false);
 
   const toggleExpand = useCallback(() => {
     setIsExpanded((prev) => !prev);
   }, []);
 
-  // 키워드가 없으면 숨김
-  if (!assets || assets.length === 0) {
+  const handleClose = useCallback(() => {
+    setIsClosed(true);
+  }, []);
+
+  // 키워드가 없거나 닫힌 상태면 숨김
+  if (!assets || assets.length === 0 || isClosed) {
     return null;
   }
 
@@ -84,6 +89,18 @@ const MediaPrepProgressBar = memo(({ assets, onClose }) => {
 
             <Button appearance="subtle" size="small" icon={isExpanded ? <ChevronDownRegular /> : <ChevronUpRegular />}>
               {isExpanded ? "접기" : "상세보기"}
+            </Button>
+
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<DismissRegular />}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClose();
+              }}
+            >
+              닫기
             </Button>
           </div>
         </div>

@@ -54,6 +54,69 @@ ipcMain.handle("tts:synthesize", async (event, { scenes, ttsEngine, voiceId, spe
     // Google TTS만 사용
     const speakingRate = parseFloat(speed) || 1.0;
 
+    // parts 폴더 경로 먼저 확인하고 기존 파일 삭제
+    const store = require('../services/store');
+    const path = require('path');
+    const fs = require('fs').promises;
+
+    // 현재 프로젝트 시스템을 사용하여 audio/parts 경로 생성
+    const { getProjectManager } = require('../services/projectManager');
+    const currentProjectId = store.getCurrentProjectId();
+
+    let audioPartsDir;
+    if (currentProjectId) {
+      // 현재 프로젝트 기반 경로 사용
+      const projectManager = getProjectManager();
+      let currentProject = store.getCurrentProject();
+
+      if (!currentProject) {
+        currentProject = await projectManager.findProjectById(currentProjectId);
+        if (currentProject) {
+          projectManager.setCurrentProject(currentProject);
+        }
+      }
+
+      if (currentProject && currentProject.paths && currentProject.paths.audio) {
+        audioPartsDir = path.join(currentProject.paths.audio, 'parts');
+      } else {
+        throw new Error(`현재 프로젝트 경로를 찾을 수 없습니다: ${currentProjectId}`);
+      }
+    } else {
+      // 폴백: 기본 경로 사용
+      const projectRoot = store.get('projectRootFolder') || getDefaultProjectRoot();
+      const defaultProjectName = store.get('defaultProjectName') || 'default';
+      audioPartsDir = path.join(projectRoot, defaultProjectName, 'audio', 'parts');
+    }
+
+    // 디렉토리 생성 (없는 경우)
+    await fs.mkdir(audioPartsDir, { recursive: true });
+
+    // parts 폴더 안의 기존 파일들 모두 삭제 (TTS 생성 전에 실행)
+    try {
+      const existingFiles = await fs.readdir(audioPartsDir);
+      console.log(`🗑️ parts 폴더 정리 중... (${existingFiles.length}개 파일)`);
+
+      for (const file of existingFiles) {
+        const filePath = path.join(audioPartsDir, file);
+        try {
+          const stat = await fs.stat(filePath);
+          if (stat.isFile()) {
+            await fs.unlink(filePath);
+            console.log(`  ✓ 삭제: ${file}`);
+          }
+        } catch (err) {
+          console.warn(`  ✗ 파일 삭제 실패: ${file}`, err);
+        }
+      }
+
+      if (existingFiles.length > 0) {
+        console.log(`✅ ${existingFiles.length}개의 기존 파일 삭제 완료`);
+      }
+    } catch (cleanupError) {
+      console.warn('parts 폴더 정리 중 오류:', cleanupError);
+      // 정리 실패해도 계속 진행
+    }
+
     // 진행률 콜백 함수
     const progressCallback = (current, total) => {
       const progress = Math.round((current / total) * 100);
@@ -64,42 +127,6 @@ ipcMain.handle("tts:synthesize", async (event, { scenes, ttsEngine, voiceId, spe
 
     // 파일 저장 처리
     if (result.ok && result.parts) {
-      const store = require('../services/store');
-      const path = require('path');
-      const fs = require('fs').promises;
-
-      // 현재 프로젝트 시스템을 사용하여 audio/parts 경로 생성
-      const { getProjectManager } = require('../services/projectManager');
-      const currentProjectId = store.getCurrentProjectId();
-
-      let audioPartsDir;
-      if (currentProjectId) {
-        // 현재 프로젝트 기반 경로 사용
-        const projectManager = getProjectManager();
-        let currentProject = store.getCurrentProject();
-
-        if (!currentProject) {
-          currentProject = await projectManager.findProjectById(currentProjectId);
-          if (currentProject) {
-            projectManager.setCurrentProject(currentProject);
-          }
-        }
-
-        if (currentProject && currentProject.paths && currentProject.paths.audio) {
-          audioPartsDir = path.join(currentProject.paths.audio, 'parts');
-        } else {
-          throw new Error(`현재 프로젝트 경로를 찾을 수 없습니다: ${currentProjectId}`);
-        }
-      } else {
-        // 폴백: 기본 경로 사용
-        const projectRoot = store.get('projectRootFolder') || getDefaultProjectRoot();
-        const defaultProjectName = store.get('defaultProjectName') || 'default';
-        audioPartsDir = path.join(projectRoot, defaultProjectName, 'audio', 'parts');
-      }
-
-      // 디렉토리 생성 (없는 경우)
-      await fs.mkdir(audioPartsDir, { recursive: true });
-
       const audioFiles = [];
 
       for (let i = 0; i < result.parts.length; i++) {
