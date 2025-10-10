@@ -13,11 +13,11 @@ import { PageErrorBoundary } from "../common/ErrorBoundary";
 import StepProgress from "./parts/StepProgress";
 import Step1FileUpload from "./parts/Step1FileUpload";
 import Step2KeywordExtraction from "./parts/Step2KeywordExtraction";
-import Step3Complete from "./parts/Step3Complete";
+import MediaPrepProgressBar from "./parts/MediaPrepProgressBar";
 
 /**
  * MediaPrepEditor (위저드 스타일로 전면 개편)
- * - 3단계 진행 방식 (파일 업로드 → 키워드 추출 → 완료)
+ * - 2단계 진행 방식 (파일 업로드 → 키워드 추출)
  * - 진행률 표시 및 단계별 UI 전환
  * - 직관적이고 세련된 사용자 경험
  */
@@ -30,7 +30,7 @@ function MediaPrepEditor() {
   const fileManagement = useFileManagement();
   const keywordExtraction = useKeywordExtraction();
   const wizardStep = useWizardStep({
-    totalSteps: 3,
+    totalSteps: 2,
     initialStep: 1,
   });
 
@@ -53,17 +53,27 @@ function MediaPrepEditor() {
     if (wizardStep.currentStep === 2 && keywordExtraction.assets.length > 0) {
       wizardStep.completeStep(2);
     }
-
-    // 3단계: 자동으로 완료로 표시
-    if (wizardStep.currentStep === 3) {
-      wizardStep.completeStep(3);
-    }
   }, [
     wizardStep.currentStep,
     fileManagement.srtConnected,
     fileManagement.scenes.length,
     keywordExtraction.assets.length,
   ]);
+
+  // 키워드 추출 초기화 이벤트 리스너
+  useEffect(() => {
+    const handleResetKeywordExtraction = () => {
+      console.log("🔄 키워드 추출 초기화 이벤트 수신");
+      keywordExtraction.clearAssets();
+      wizardStep.reset(); // 위저드 완전 초기화 (체크 상태 포함)
+    };
+
+    window.addEventListener("reset-keyword-extraction", handleResetKeywordExtraction);
+
+    return () => {
+      window.removeEventListener("reset-keyword-extraction", handleResetKeywordExtraction);
+    };
+  }, [keywordExtraction, wizardStep]);
 
   // 단계별 렌더링
   const renderCurrentStep = () => {
@@ -101,29 +111,8 @@ function MediaPrepEditor() {
             currentLlmModel={keywordExtraction.currentLlmModel}
             getLlmDisplayName={keywordExtraction.getLlmDisplayName}
             // Navigation
-            onNext={wizardStep.nextStep}
             onPrev={wizardStep.prevStep}
             canProceed={wizardStep.isCurrentStepCompleted}
-          />
-        );
-
-      case 3:
-        return (
-          <Step3Complete
-            // Summary data
-            srtConnected={fileManagement.srtConnected}
-            srtFilePath={fileManagement.srtFilePath}
-            scenesCount={fileManagement.scenes.length}
-            totalDuration={totalDur}
-            keywordsCount={keywordExtraction.assets.length}
-            getFileInfo={fileManagement.getFileInfo}
-            // Navigation
-            onPrev={wizardStep.prevStep}
-            onReset={() => {
-              wizardStep.reset();
-              fileManagement.handleReset();
-              keywordExtraction.clearAssets();
-            }}
           />
         );
 
@@ -151,9 +140,10 @@ function MediaPrepEditor() {
         {/* 진행률 표시 */}
         <StepProgress
           currentStep={wizardStep.currentStep}
-          totalSteps={3}
+          totalSteps={2}
           completedSteps={wizardStep.completedSteps}
-          stepLabels={["파일 업로드", "키워드 추출", "완료"]}
+          stepLabels={["파일 업로드", "키워드 추출"]}
+          onStepClick={wizardStep.goToStep}
         />
 
         {/* 현재 단계 렌더링 */}
@@ -166,6 +156,9 @@ function MediaPrepEditor() {
           {renderCurrentStep()}
         </div>
       </div>
+
+      {/* 하단 고정 진행바 */}
+      <MediaPrepProgressBar assets={keywordExtraction.assets} />
     </div>
   );
 }

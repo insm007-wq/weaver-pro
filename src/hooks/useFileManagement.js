@@ -218,7 +218,7 @@ export const useFileManagement = () => {
   }, []);
 
   // 전체 초기화
-  const handleReset = useCallback(() => {
+  const handleReset = useCallback(async () => {
     setScenes([]);
     setSrtConnected(false);
     setMp3Connected(false);
@@ -228,6 +228,28 @@ export const useFileManagement = () => {
 
     // 파일 입력 필드 초기화
     if (srtInputRef.current) srtInputRef.current.value = "";
+
+    // 설정에 저장된 키워드도 삭제
+    try {
+      await window.api.setSetting("extractedKeywords", []);
+      console.log("✅ 저장된 키워드 설정 삭제 완료");
+
+      // 설정 변경 이벤트 강제 트리거 (캐시 문제 방지)
+      window.dispatchEvent(new CustomEvent("settingsChanged", {
+        detail: { key: "extractedKeywords", value: [] }
+      }));
+    } catch (error) {
+      console.error("키워드 설정 삭제 실패:", error);
+    }
+
+    // 대본 생성 페이지도 초기화
+    window.dispatchEvent(new CustomEvent("reset-script-generation"));
+
+    // 키워드 추출 상태도 초기화
+    window.dispatchEvent(new CustomEvent("reset-keyword-extraction"));
+
+    // 미디어 다운로드 페이지도 초기화
+    window.dispatchEvent(new CustomEvent("reset-media-download"));
 
     showSuccess("모든 파일이 초기화되었습니다.");
   }, []);

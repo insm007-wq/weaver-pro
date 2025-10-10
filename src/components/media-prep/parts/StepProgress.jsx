@@ -5,7 +5,7 @@ import { Checkmark24Filled } from "@fluentui/react-icons";
 /**
  * 위저드 스텝 진행률 표시 컴포넌트
  */
-const StepProgress = memo(({ currentStep, totalSteps, completedSteps = [], stepLabels = [] }) => {
+const StepProgress = memo(({ currentStep, totalSteps, completedSteps = [], stepLabels = [], onStepClick }) => {
   // 기본 스텝 레이블
   const defaultLabels = ["파일 업로드", "키워드 추출", "완료"];
   const labels = stepLabels.length > 0 ? stepLabels : defaultLabels;
@@ -15,6 +15,7 @@ const StepProgress = memo(({ currentStep, totalSteps, completedSteps = [], stepL
     const isActive = currentStep === stepNumber;
     const isCompleted = completedSteps.includes(stepNumber);
     const isPast = stepNumber < currentStep;
+    const isClickable = (isCompleted || isActive) && onStepClick;
 
     return (
       <div
@@ -45,6 +46,7 @@ const StepProgress = memo(({ currentStep, totalSteps, completedSteps = [], stepL
 
         {/* 스텝 원 */}
         <div
+          onClick={isClickable ? () => onStepClick(stepNumber) : undefined}
           style={{
             width: "36px",
             height: "36px",
@@ -69,6 +71,7 @@ const StepProgress = memo(({ currentStep, totalSteps, completedSteps = [], stepL
               : "none",
             position: "relative",
             zIndex: isActive ? 2 : 1,
+            cursor: isClickable ? "pointer" : "default",
           }}
         >
           {isCompleted ? (

@@ -36,7 +36,6 @@ const Step1FileUpload = memo(
           flexDirection: "column",
           gap: tokens.spacingVerticalM,
           animation: "fadeIn 400ms ease-out",
-          minHeight: "500px",
           justifyContent: "space-between",
         }}
       >

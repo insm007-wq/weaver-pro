@@ -143,7 +143,7 @@ const DropZone = memo(({ icon, label, caption, connected, onClick, inputRef, acc
           justifyContent: "center",
           flex: 1,
           padding: `${tokens.spacingVerticalXL} ${tokens.spacingHorizontalL}`,
-          minHeight: "200px",
+          minHeight: "180px",
         }}
       >
         <input
@@ -292,7 +292,6 @@ const FileSelection = memo(
           padding: "12px 16px",
           borderRadius: "16px",
           border: `1px solid ${tokens.colorNeutralStroke2}`,
-          minHeight: "400px",
           display: "flex",
           flexDirection: "column",
         }}

@@ -10,6 +10,7 @@ import ActionCard from "./parts/ActionCard";
 import BasicSettingsCard from "./parts/BasicSettingsCard";
 import VoiceSettingsCard from "./parts/VoiceSettingsCard";
 import ResultsSidebar from "./parts/ResultsSidebar";
+import FixedProgressBar from "./parts/FixedProgressBar";
 
 // 훅 imports
 import { useScriptGeneration } from "../../hooks/useScriptGeneration";
@@ -32,7 +33,6 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
   const [form, setForm] = useState(makeDefaultForm());
   const [globalSettings, setGlobalSettings] = useState({});
   const [selectedMode, setSelectedMode] = useState("script_mode");
-  const [showResultsSidebar, setShowResultsSidebar] = useState(false);
 
   // 전체 영상 생성 상태
   const [fullVideoState, setFullVideoState] = useState({
@@ -118,6 +118,21 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
     }
   }, [fullVideoState.isGenerating, onGeneratingChange]);
 
+  // 미디어 준비 초기화 시 대본도 초기화
+  useEffect(() => {
+    const handleResetScriptGeneration = () => {
+      console.log("🔄 대본 생성 초기화 이벤트 수신");
+      resetFullVideoState(true);
+      setDoc(null);
+    };
+
+    window.addEventListener("reset-script-generation", handleResetScriptGeneration);
+
+    return () => {
+      window.removeEventListener("reset-script-generation", handleResetScriptGeneration);
+    };
+  }, [resetFullVideoState, setDoc]);
+
   return (
     <div className={containerStyles.container} style={{ overflowX: "hidden", maxWidth: "100vw" }}>
       {/* 헤더 */}
@@ -184,60 +199,17 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
           disabled={fullVideoState.isGenerating}
         />
 
-        {/* 4행: 실시간 결과 (전체 폭) */}
-        {showResultsSidebar && (
-          <ResultsSidebar
-            fullVideoState={fullVideoState}
-            doc={doc}
-            isLoading={isLoading}
-            form={form}
-            globalSettings={globalSettings}
-            resetFullVideoState={resetFullVideoState}
-            api={api}
-            onClose={() => setShowResultsSidebar(false)}
-            horizontal={true}
-          />
-        )}
-
-        {/* 결과 패널이 숨겨져 있을 때 보이기 카드 */}
-        {!showResultsSidebar && (fullVideoState.isGenerating || doc || isLoading) && (
-          <Card
-            onClick={() => setShowResultsSidebar(true)}
-            style={{
-              padding: "16px 20px",
-              borderRadius: 16,
-              border: `1px solid ${tokens.colorNeutralStroke2}`,
-              background: tokens.colorNeutralBackground1,
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              minHeight: "56px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <EyeRegular
-                style={{
-                  fontSize: 20,
-                  color: "#667eea",
-                }}
-              />
-              <div>
-                <Text size={300} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
-                  실시간 결과 보기
-                </Text>
-                <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 2 }}>
-                  진행 상황과 대본 결과를 확인하세요
-                </Text>
-              </div>
-            </div>
-            <Text size={200} style={{ color: "#667eea" }}>
-              클릭하여 열기
-            </Text>
-          </Card>
-        )}
       </div>
+
+      {/* 하단 고정 미니 진행바 */}
+      <FixedProgressBar
+        fullVideoState={fullVideoState}
+        doc={doc}
+        isLoading={isLoading}
+        onClose={() => {
+          resetFullVideoState(true);
+        }}
+      />
     </div>
   );
 }

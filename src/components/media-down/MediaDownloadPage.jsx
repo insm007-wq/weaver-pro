@@ -93,6 +93,26 @@ function MediaDownloadPage() {
     };
   }, []);
 
+  // ===== 초기화 이벤트 리스너
+  useEffect(() => {
+    const handleResetMediaDownload = () => {
+      console.log("🔄 미디어 다운로드 페이지 초기화");
+      setKeywords([]);
+      setSelectedKeywords(new Set());
+      setDownloadedVideos([]);
+      setDownloadProgress({});
+      setKeywordsLoaded(true); // true로 설정하여 로딩 메시지 숨김
+      setIsDownloading(false);
+      setCompletedVideosCount(0);
+    };
+
+    window.addEventListener("reset-media-download", handleResetMediaDownload);
+
+    return () => {
+      window.removeEventListener("reset-media-download", handleResetMediaDownload);
+    };
+  }, []);
+
   const loadKeywordsFromJSON = async () => {
     try {
       const extractedKeywords = await window.api.getSetting("extractedKeywords");

@@ -1,6 +1,6 @@
 import React, { memo, useMemo } from "react";
 import { tokens, Text, Card, Button, Spinner, Body2, Badge, Caption1 } from "@fluentui/react-components";
-import { ArrowRight24Regular, ArrowLeft24Regular, LightbulbFilament24Regular } from "@fluentui/react-icons";
+import { ArrowLeft24Regular, LightbulbFilament24Regular } from "@fluentui/react-icons";
 import { PrimaryButton } from "../../common";
 
 /**
@@ -85,7 +85,6 @@ const Step2KeywordExtraction = memo(
     currentLlmModel,
     getLlmDisplayName,
     // Step navigation
-    onNext,
     onPrev,
     canProceed,
   }) => {
@@ -114,11 +113,6 @@ const Step2KeywordExtraction = memo(
       [safeAssets.length, safeScenes.length]
     );
 
-    // 다음 단계 진행 가능 여부
-    const isReadyToNext = useMemo(() => {
-      return safeAssets.length > 0;
-    }, [safeAssets.length]);
-
     return (
       <div
         style={{
@@ -126,7 +120,6 @@ const Step2KeywordExtraction = memo(
           flexDirection: "column",
           gap: tokens.spacingVerticalM,
           animation: "fadeIn 400ms ease-out",
-          minHeight: "500px",
           justifyContent: "space-between",
         }}
       >
@@ -161,7 +154,6 @@ const Step2KeywordExtraction = memo(
             border: `1px solid ${tokens.colorNeutralStroke2}`,
             display: "flex",
             flexDirection: "column",
-            height: "350px",
           }}
         >
           <div style={{ marginBottom: tokens.spacingVerticalS }}>
@@ -196,8 +188,8 @@ const Step2KeywordExtraction = memo(
             {/* 결과 영역 */}
             <div
               style={{
-                minHeight: 220,
-                maxHeight: 220,
+                minHeight: 160,
+                maxHeight: 160,
                 border: `1px solid ${tokens.colorNeutralStroke2}`,
                 borderRadius: tokens.borderRadiusMedium,
                 padding: tokens.spacingVerticalM,
@@ -388,38 +380,6 @@ const Step2KeywordExtraction = memo(
           >
             이전 단계
           </Button>
-
-          {isReadyToNext ? (
-            <Button
-              appearance="primary"
-              size="medium"
-              icon={<ArrowRight24Regular />}
-              iconPosition="after"
-              onClick={onNext}
-              style={{
-                minWidth: "180px",
-                height: "40px",
-                fontSize: "14px",
-                fontWeight: 600,
-                boxShadow: `0 2px 8px ${tokens.colorBrandBackground}60`,
-              }}
-            >
-              다음 단계: 완료
-            </Button>
-          ) : (
-            <div
-              style={{
-                padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
-                backgroundColor: tokens.colorNeutralBackground3,
-                borderRadius: "8px",
-                border: `1px dashed ${tokens.colorNeutralStroke2}`,
-              }}
-            >
-              <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                💡 키워드를 추출하면 다음 단계로 진행할 수 있습니다
-              </Text>
-            </div>
-          )}
         </div>
 
         <style>
