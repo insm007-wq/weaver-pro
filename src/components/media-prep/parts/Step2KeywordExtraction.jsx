@@ -6,7 +6,10 @@ import { PrimaryButton } from "../../common";
 /**
  * 키워드 배지 리스트 컴포넌트
  */
-const KeywordBadgeList = memo(({ assets, maxDisplay = 50 }) => {
+const KeywordBadgeList = memo(({ assets }) => {
+  const [showAll, setShowAll] = React.useState(false);
+  const maxDisplay = 50;
+
   const badgeStyle = useMemo(
     () => ({
       cursor: "default",
@@ -28,20 +31,22 @@ const KeywordBadgeList = memo(({ assets, maxDisplay = 50 }) => {
   );
 
   const displayItems = useMemo(() => {
-    const items = assets.slice(0, maxDisplay).map((asset, index) => (
+    const displayCount = showAll ? assets.length : maxDisplay;
+    const items = assets.slice(0, displayCount).map((asset, index) => (
       <Badge key={asset.id || `keyword-${index}`} appearance="tint" color="brand" size="small" style={badgeStyle}>
         {asset.keyword || `키워드 ${index + 1}`}
       </Badge>
     ));
 
-    if (assets.length > maxDisplay) {
+    if (assets.length > maxDisplay && !showAll) {
       items.push(
         <Badge
           key="more"
           appearance="outline"
           color="neutral"
           size="small"
-          style={{ ...badgeStyle, fontWeight: 500 }}
+          style={{ ...badgeStyle, fontWeight: 500, cursor: "pointer" }}
+          onClick={() => setShowAll(true)}
         >
           +{assets.length - maxDisplay}개 더
         </Badge>
@@ -49,7 +54,7 @@ const KeywordBadgeList = memo(({ assets, maxDisplay = 50 }) => {
     }
 
     return items;
-  }, [assets, maxDisplay, badgeStyle]);
+  }, [assets, maxDisplay, badgeStyle, showAll]);
 
   return (
     <div
@@ -154,6 +159,7 @@ const Step2KeywordExtraction = memo(
             border: `1px solid ${tokens.colorNeutralStroke2}`,
             display: "flex",
             flexDirection: "column",
+            height: "420px",
           }}
         >
           <div style={{ marginBottom: tokens.spacingVerticalS }}>
@@ -188,8 +194,8 @@ const Step2KeywordExtraction = memo(
             {/* 결과 영역 */}
             <div
               style={{
-                minHeight: 160,
-                maxHeight: 160,
+                minHeight: 280,
+                maxHeight: 280,
                 border: `1px solid ${tokens.colorNeutralStroke2}`,
                 borderRadius: tokens.borderRadiusMedium,
                 padding: tokens.spacingVerticalM,
@@ -198,7 +204,6 @@ const Step2KeywordExtraction = memo(
                 justifyContent: "center",
                 backgroundColor: tokens.colorNeutralBackground2,
                 boxShadow: "inset 0 1px 2px rgba(0,0,0,0.06)",
-                overflow: "hidden",
               }}
             >
               {safeAssets.length > 0 ? (
