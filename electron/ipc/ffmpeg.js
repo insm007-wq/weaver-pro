@@ -143,6 +143,77 @@ function srtTimestampToSeconds(timestamp) {
   return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000;
 }
 
+/**
+ * 텍스트를 균형있게 여러 줄로 분할 (프론트엔드와 동일한 로직)
+ * @param {string} text - 분할할 텍스트
+ * @param {number} maxLines - 최대 줄 수
+ * @returns {string[]} 분할된 줄 배열
+ */
+function splitBalancedLines(text = "", maxLines = 2) {
+  const clean = text.replace(/\s+/g, " ").trim();
+
+  // 이미 줄바꿈이 있으면 그대로 사용
+  if (text.includes("\n")) {
+    const lines = text.split("\n").map(line => line.trim()).filter(line => line);
+    return lines.slice(0, maxLines);
+  }
+
+  // maxLines가 1이면 분할하지 않음
+  if (maxLines === 1) {
+    return [clean];
+  }
+
+  // 텍스트가 너무 짧으면 1줄로 반환 (20자 이하)
+  if (clean.length <= 20) {
+    return [clean];
+  }
+
+  // maxLines만큼 균등 분할
+  const lines = [];
+  let remaining = clean;
+
+  for (let lineIndex = 0; lineIndex < maxLines && remaining.length > 0; lineIndex++) {
+    const isLastLine = lineIndex === maxLines - 1;
+
+    if (isLastLine) {
+      lines.push(remaining.trim());
+      break;
+    }
+
+    const remainingLines = maxLines - lineIndex;
+    const targetLength = Math.ceil(remaining.length / remainingLines);
+
+    let cut = Math.min(targetLength, remaining.length);
+    let foundBreak = false;
+
+    const searchRange = Math.floor(targetLength * 0.2);
+    for (let offset = 0; offset <= searchRange && cut + offset < remaining.length; offset++) {
+      if (offset > 0 && cut + offset < remaining.length && /[ \-–—·,.:;!?]/.test(remaining[cut + offset])) {
+        cut = cut + offset + 1;
+        foundBreak = true;
+        break;
+      }
+      if (offset > 0 && cut - offset > 0 && /[ \-–—·,.:;!?]/.test(remaining[cut - offset])) {
+        cut = cut - offset + 1;
+        foundBreak = true;
+        break;
+      }
+    }
+
+    if (!foundBreak && cut < remaining.length) {
+      cut = targetLength;
+    }
+
+    const line = remaining.slice(0, cut).trim();
+    if (line) {
+      lines.push(line);
+    }
+    remaining = remaining.slice(cut).trim();
+  }
+
+  return lines.filter(line => line);
+}
+
 // SRT 파일 파싱 함수
 /**
  * SRT 자막 파일 파싱
@@ -1298,43 +1369,12 @@ async function generateSrtFromScenes(scenes, srtPath) {
         ).padStart(3, "0")}`;
       };
 
-      // ✅ 텍스트를 maxLines에 맞게 처리
+      // ✅ 텍스트를 maxLines에 맞게 처리 (프론트엔드와 동일한 로직 사용)
       let text = scene.text || "";
-
-      // 이미 줄바꿈이 있으면 그대로 사용, 없으면 균형있게 분할
-      let lines = text.includes("\n") ? text.split("\n") : [text];
-
-      // maxLines가 2이고 줄바꿈이 없는 긴 텍스트면 균형있게 분할
-      if (lines.length === 1 && subtitleSettings.maxLines === 2 && text.length > 20) {
-        // 간단한 균형 분할 (중간 지점 근처의 공백에서 분할)
-        const midPoint = Math.floor(text.length / 2);
-        let splitPoint = midPoint;
-
-        // 중간점 앞뒤로 공백 찾기
-        for (let offset = 0; offset < text.length / 2; offset++) {
-          if (text[midPoint + offset] === " ") {
-            splitPoint = midPoint + offset;
-            break;
-          }
-          if (text[midPoint - offset] === " ") {
-            splitPoint = midPoint - offset;
-            break;
-          }
-        }
-
-        const line1 = text.slice(0, splitPoint).trim();
-        const line2 = text.slice(splitPoint).trim();
-        lines = line1 && line2 ? [line1, line2] : [text];
-        console.log(`📝 씬 ${i + 1}: 텍스트를 2줄로 균형 분할`);
-      }
-
-      // maxLines 설정 적용
-      if (lines.length > subtitleSettings.maxLines) {
-        lines = lines.slice(0, subtitleSettings.maxLines);
-        console.log(`⚠️ 씬 ${i + 1}: 자막이 ${text.split("\n").length}줄 → ${subtitleSettings.maxLines}줄로 축소됨`);
-      }
-
+      const lines = splitBalancedLines(text, subtitleSettings.maxLines);
       text = lines.join("\n");
+
+      console.log(`📝 씬 ${i + 1}: ${lines.length}줄로 분할 (maxLines: ${subtitleSettings.maxLines})`);
 
       srtContent += `${i + 1}\n`;
       srtContent += `${formatTime(startTime)} --> ${formatTime(endTime)}\n`;
