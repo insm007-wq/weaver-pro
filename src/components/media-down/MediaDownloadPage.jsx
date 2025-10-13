@@ -138,10 +138,19 @@ function MediaDownloadPage() {
     try {
       setKeywordsLoaded(false); // 로딩 상태 표시
       const extractedKeywords = await window.api.getSetting("extractedKeywords");
-      setKeywords(Array.isArray(extractedKeywords) ? extractedKeywords : []);
+      const keywordsArray = Array.isArray(extractedKeywords) ? extractedKeywords : [];
+
+      setKeywords(keywordsArray);
+
+      // ✅ 키워드 로드 후 자동으로 전체 선택
+      if (keywordsArray.length > 0) {
+        setSelectedKeywords(new Set(keywordsArray));
+        console.log(`[미디어 다운로드] 키워드 ${keywordsArray.length}개 자동 선택 완료`);
+      }
+
       setKeywordsLoaded(true);
       if (showToast) {
-        showSuccess(`✅ 키워드 ${Array.isArray(extractedKeywords) ? extractedKeywords.length : 0}개 새로고침 완료`);
+        showSuccess(`✅ 키워드 ${keywordsArray.length}개 새로고침 완료 (전체 선택됨)`);
       }
     } catch (e) {
       console.error(e);
@@ -177,6 +186,26 @@ function MediaDownloadPage() {
   const startDownload = async () => {
     if (selectedKeywords.size === 0) return showError("다운로드할 키워드를 선택해주세요.");
     if (keywords.length === 0) return showError("추출된 키워드가 없습니다. 먼저 미디어 준비에서 키워드를 추출해주세요.");
+
+    // ✅ 다운로드 시작 전 video 폴더 비우기
+    try {
+      const videoSaveFolder = await window.api.getSetting("videoSaveFolder");
+      if (videoSaveFolder) {
+        const videoPath = `${videoSaveFolder}/video`;
+        console.log("[미디어 다운로드] video 폴더 비우기 시작:", videoPath);
+
+        const clearResult = await window.api.invoke("files:clearDirectory", { dirPath: videoPath });
+
+        if (clearResult?.success) {
+          console.log(`[미디어 다운로드] video 폴더 비우기 완료: ${clearResult.deletedCount}개 파일 삭제`);
+        } else {
+          console.warn("[미디어 다운로드] video 폴더 비우기 실패:", clearResult?.message);
+        }
+      }
+    } catch (error) {
+      console.error("[미디어 다운로드] video 폴더 비우기 오류:", error);
+      // 오류가 발생해도 다운로드는 계속 진행
+    }
 
     setIsDownloading(true);
     setDownloadCancelled(false);

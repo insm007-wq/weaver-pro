@@ -547,3 +547,54 @@ ipcMain.handle("files/saveToProject", async (_evt, { category, fileName, buffer 
     return { ok: false, message: error.message };
   }
 });
+
+/** ✅ 디렉토리 내 모든 파일 삭제 (폴더는 유지) */
+ipcMain.handle("files:clearDirectory", async (_evt, { dirPath }) => {
+  try {
+    console.log("🗑️ files:clearDirectory 호출됨:", dirPath);
+
+    if (!dirPath || typeof dirPath !== "string") {
+      return { success: false, message: "dirPath_required" };
+    }
+
+    // 디렉토리 존재 확인
+    if (!fs.existsSync(dirPath)) {
+      console.log("⚠️ 디렉토리 없음, 새로 생성:", dirPath);
+      ensureDirSync(dirPath);
+      return { success: true, deletedCount: 0 };
+    }
+
+    const stats = await fs.promises.stat(dirPath);
+    if (!stats.isDirectory()) {
+      return { success: false, message: "path_is_not_directory" };
+    }
+
+    // 디렉토리 내 모든 파일/폴더 삭제
+    const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+    let deletedCount = 0;
+
+    for (const entry of entries) {
+      try {
+        const fullPath = path.join(dirPath, entry.name);
+
+        if (entry.isFile()) {
+          await fs.promises.unlink(fullPath);
+          deletedCount++;
+          console.log("🗑️ 파일 삭제:", entry.name);
+        } else if (entry.isDirectory()) {
+          await fs.promises.rm(fullPath, { recursive: true, force: true });
+          deletedCount++;
+          console.log("🗑️ 폴더 삭제:", entry.name);
+        }
+      } catch (err) {
+        console.warn("⚠️ 삭제 실패:", entry.name, err.message);
+      }
+    }
+
+    console.log(`✅ files:clearDirectory 완료: ${deletedCount}개 항목 삭제`);
+    return { success: true, deletedCount };
+  } catch (error) {
+    console.error("❌ files:clearDirectory 실패:", error);
+    return { success: false, message: error.message };
+  }
+});
