@@ -168,19 +168,27 @@ function splitBalancedLines(text = "", maxLines = 2) {
     return [clean];
   }
 
-  // maxLines만큼 균등 분할
+  // ✅ 자동 줄 수 조정: 텍스트가 너무 길면 줄 수 증가
+  let effectiveMaxLines = maxLines;
+  const avgCharsPerLine = clean.length / maxLines;
+  if (avgCharsPerLine > 40 && maxLines === 2) {
+    effectiveMaxLines = 3;
+    console.log(`✅ 긴 텍스트 감지 (${clean.length}자, 평균 ${Math.round(avgCharsPerLine)}자/줄) → 3줄로 자동 조정`);
+  }
+
+  // effectiveMaxLines만큼 균등 분할
   const lines = [];
   let remaining = clean;
 
-  for (let lineIndex = 0; lineIndex < maxLines && remaining.length > 0; lineIndex++) {
-    const isLastLine = lineIndex === maxLines - 1;
+  for (let lineIndex = 0; lineIndex < effectiveMaxLines && remaining.length > 0; lineIndex++) {
+    const isLastLine = lineIndex === effectiveMaxLines - 1;
 
     if (isLastLine) {
       lines.push(remaining.trim());
       break;
     }
 
-    const remainingLines = maxLines - lineIndex;
+    const remainingLines = effectiveMaxLines - lineIndex;
     const targetLength = Math.ceil(remaining.length / remainingLines);
 
     let cut = Math.min(targetLength, remaining.length);
