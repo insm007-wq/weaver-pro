@@ -115,15 +115,15 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
         missingAudioScenes.push(index);
       }
 
-      // 예상 길이 계산: 실제 오디오 파일 길이 사용
+      // 예상 길이 계산: 실제 오디오 파일 길이 사용 (소수점 한 자리로 반올림)
       if (scene.audioPath && audioDurations[scene.audioPath]) {
-        estimatedDuration += audioDurations[scene.audioPath];
+        estimatedDuration += parseFloat(audioDurations[scene.audioPath].toFixed(1));
       } else if (scene.start !== undefined && scene.end !== undefined && scene.end > scene.start) {
         // 오디오 길이를 못 가져온 경우 SRT 시간으로 fallback
-        estimatedDuration += (scene.end - scene.start);
+        estimatedDuration += parseFloat((scene.end - scene.start).toFixed(1));
       } else {
         // 둘 다 없으면 기본 3초
-        estimatedDuration += 3;
+        estimatedDuration += 3.0;
       }
     });
 
@@ -346,6 +346,30 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
             </div>
           </div>
         </div>
+
+        {/* 모든 씬이 완성되었을 때 알림 */}
+        {stats.completedScenes === stats.totalScenes && stats.totalScenes > 0 && !isExporting && (
+          <div style={{
+            padding: 12,
+            backgroundColor: "#f0fdf4",
+            borderRadius: 8,
+            border: "1px solid #86efac",
+            marginBottom: 12,
+            display: "flex",
+            alignItems: "center",
+            gap: 8
+          }}>
+            <CheckmarkCircle24Filled style={{ color: "#0f7b0f", fontSize: 20 }} />
+            <div>
+              <Text size={300} weight="semibold" style={{ display: "block", color: "#0f7b0f" }}>
+                준비 완료!
+              </Text>
+              <Text size={200} style={{ color: "#166534" }}>
+                모든 씬이 완성되었습니다. 영상 내보내기를 진행할 수 있습니다.
+              </Text>
+            </div>
+          </div>
+        )}
 
         {isExporting ? (
           <div style={{

@@ -341,15 +341,14 @@ export async function downloadVideoForKeyword(scene, sceneIndex, options = {}) {
       try {
         console.log(`[영상 다운로드] 씬 ${sceneIndex + 1}: "${keyword}" 검색 시도 (${i + 1}/${Math.min(10, uniqueKeywords.length)})`);
 
-        // window.api.downloadVideosByKeywords 호출
+        // window.api.downloadVideosByKeywords 호출 (조건 완화)
         const result = await window.api.downloadVideosByKeywords({
           keywords: [keyword],
           provider: provider,
           options: {
             videosPerKeyword: 1,
             maxFileSize: maxFileSize,
-            minResolution: minResolution,
-            aspectRatio: aspectRatio,
+            // minResolution과 aspectRatio 조건 완화 (빠른 다운로드)
           },
         });
 
@@ -400,9 +399,9 @@ export async function downloadVideoForKeyword(scene, sceneIndex, options = {}) {
         console.error(`[영상 다운로드] 씬 ${sceneIndex + 1}: "${keyword}" 다운로드 오류 -`, error.message);
       }
 
-      // 처음 10개 키워드만 시도 (너무 많이 시도하지 않도록)
-      if (i >= 9) {
-        console.log(`[영상 다운로드] 씬 ${sceneIndex + 1}: 10개 키워드 시도 완료, 중단`);
+      // 처음 3개 키워드만 시도 (속도 개선)
+      if (i >= 2) {
+        console.log(`[영상 다운로드] 씬 ${sceneIndex + 1}: 3개 키워드 시도 완료, 중단`);
         break;
       }
     }

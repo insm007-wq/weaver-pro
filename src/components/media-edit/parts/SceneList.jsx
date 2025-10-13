@@ -238,7 +238,7 @@ function SceneList({
         }
 
         setScenes(updatedScenes);
-        showSuccess(`씬 ${sceneIndex + 1} 음성이 재생성되었습니다. (${newDuration?.toFixed(1)}초)`);
+        showSuccess(`씬 ${sceneIndex + 1} 음성이 재생성되었습니다. (${newDuration ? newDuration.toFixed(1) : '0.0'}초)`);
 
         // 수정된 씬의 오디오 캐시만 제거
         if (window.api?.revokeVideoUrl && currentScene.audioPath) {
@@ -549,8 +549,13 @@ function SceneList({
       setScenes(assignedScenes);
 
       const totalAssigned = assignedScenes.filter(s => s.asset?.path).length;
+      const allComplete = assignedScenes.every(s => s.asset?.path && s.audioPath);
 
-      showSuccess(`미디어 자동 생성 완료! 영상 ${finalVideoCount}개, AI 이미지 ${finalImageCount}개 (총 ${totalAssigned}개)`);
+      if (allComplete) {
+        showSuccess(`미디어 자동 생성 완료! 영상 ${finalVideoCount}개, AI 이미지 ${finalImageCount}개 (총 ${totalAssigned}개) - ✨ 모든 씬이 완성되었습니다! 이제 영상 내보내기를 진행할 수 있습니다.`);
+      } else {
+        showSuccess(`미디어 자동 생성 완료! 영상 ${finalVideoCount}개, AI 이미지 ${finalImageCount}개 (총 ${totalAssigned}개)`);
+      }
 
       // 완료 후 3초 뒤 자동으로 닫기
       setTimeout(() => {
@@ -640,8 +645,13 @@ function SceneList({
       setScenes(assignedScenes);
 
       const totalAssigned = assignedScenes.filter(s => s.asset?.path).length;
+      const allComplete = assignedScenes.every(s => s.asset?.path && s.audioPath);
 
-      showSuccess(`영상 할당 완료! 로컬 ${finalAssignedCount}개, 다운로드 ${finalDownloadedCount}개 (총 ${totalAssigned}개)`);
+      if (allComplete) {
+        showSuccess(`영상 할당 완료! 로컬 ${finalAssignedCount}개, 다운로드 ${finalDownloadedCount}개 (총 ${totalAssigned}개) - ✨ 모든 씬이 완성되었습니다! 이제 영상 내보내기를 진행할 수 있습니다.`);
+      } else {
+        showSuccess(`영상 할당 완료! 로컬 ${finalAssignedCount}개, 다운로드 ${finalDownloadedCount}개 (총 ${totalAssigned}개)`);
+      }
 
       // 완료 후 3초 뒤 자동으로 닫기
       setTimeout(() => {
