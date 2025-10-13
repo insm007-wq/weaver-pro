@@ -126,38 +126,38 @@ function SubtitleTab() {
   const settingsStyles = useSettingsStyles();
   const previewRef = useRef(null);
 
-  // 기본 자막 설정
+  // 기본 자막 설정 (유튜브 표준 스타일)
   const defaultSettings = {
     // 기본 텍스트 설정
-    fontFamily: "noto-sans",
-    fontSize: 24,
-    fontWeight: 600,
-    lineHeight: 1.4,
+    fontFamily: "noto-sans", // 산세리프 굵은 폰트
+    fontSize: 52, // ✅ 유튜브 표준: 48~60px (1920x1080 기준)
+    fontWeight: 700, // ✅ 더 굵게 (유튜브 자막은 매우 굵음)
+    lineHeight: 1.3, // 줄 간격 약간 좁게
     letterSpacing: 0,
 
-    // 색상 설정
-    textColor: "#FFFFFF",
-    backgroundColor: "#000000",
-    backgroundOpacity: 80,
-    outlineColor: "#000000",
-    outlineWidth: 2,
+    // 색상 설정 (유튜브 표준)
+    textColor: "#FFFFFF", // ✅ 흰색 텍스트
+    backgroundColor: "#000000", // ✅ 검은색 배경
+    backgroundOpacity: 75, // ✅ 75% 불투명 (유튜브 기본값)
+    outlineColor: "#000000", // ✅ 검은색 외곽선
+    outlineWidth: 3, // ✅ 외곽선 3px (더 두껍게)
     shadowColor: "#000000",
-    shadowOffset: 2,
-    shadowBlur: 4,
+    shadowOffset: 0, // ✅ 그림자 없음 (유튜브는 외곽선만 사용)
+    shadowBlur: 0,
 
-    // 위치 및 정렬
-    position: "bottom",
-    horizontalAlign: "center",
-    verticalPadding: 40,
-    horizontalPadding: 20,
-    maxWidth: 80, // 화면 너비의 %
-    finePositionOffset: 0, // 세밀한 위치 조정 (-50 ~ +50)
+    // 위치 및 정렬 (유튜브 표준)
+    position: "bottom", // ✅ 하단
+    horizontalAlign: "center", // ✅ 중앙 정렬
+    verticalPadding: 60, // ✅ 하단 여백 60px
+    horizontalPadding: 24,
+    maxWidth: 90, // ✅ 화면 너비의 90% (더 넓게)
+    finePositionOffset: 0,
 
     // 배경 및 테두리
-    useBackground: true,
-    backgroundRadius: 8,
-    useOutline: true,
-    useShadow: true,
+    useBackground: true, // ✅ 배경 박스 사용
+    backgroundRadius: 4, // ✅ 모서리 둥글기 작게
+    useOutline: true, // ✅ 외곽선 사용 (두껍게)
+    useShadow: false, // ✅ 그림자 사용 안 함
 
     // 애니메이션
     animation: "fade",
@@ -166,7 +166,7 @@ function SubtitleTab() {
 
     // 고급 설정
     autoWrap: true,
-    maxLines: 2,
+    maxLines: 2, // ✅ 최대 2줄
     wordBreak: "keep-all",
     enableRichText: false,
   };

@@ -34,30 +34,30 @@ export default function PreviewPlayer({
         if (settings) {
           setSubtitleSettings(settings);
         } else {
-          // 기본값 (SubtitleTab의 defaultSettings와 동일)
+          // 기본값 (유튜브 표준 스타일 - SubtitleTab과 동일)
           const defaultSettings = {
             fontFamily: "noto-sans",
-            fontSize: 24,
-            fontWeight: 600,
-            lineHeight: 1.4,
+            fontSize: 52,
+            fontWeight: 700,
+            lineHeight: 1.3,
             letterSpacing: 0,
             textColor: "#FFFFFF",
             backgroundColor: "#000000",
-            backgroundOpacity: 80,
+            backgroundOpacity: 75,
             outlineColor: "#000000",
-            outlineWidth: 2,
+            outlineWidth: 3,
             shadowColor: "#000000",
-            shadowOffset: 2,
-            shadowBlur: 4,
+            shadowOffset: 0,
+            shadowBlur: 0,
             position: "bottom",
             horizontalAlign: "center",
-            verticalPadding: 40,
-            horizontalPadding: 20,
-            maxWidth: 80,
+            verticalPadding: 60,
+            horizontalPadding: 24,
+            maxWidth: 90,
             useBackground: true,
-            backgroundRadius: 8,
+            backgroundRadius: 4,
             useOutline: true,
-            useShadow: true,
+            useShadow: false,
             maxLines: 2,
           };
           console.log("📝 기본값 사용:", defaultSettings);
