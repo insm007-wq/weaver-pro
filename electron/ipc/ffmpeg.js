@@ -218,17 +218,49 @@ function createDrawtextFilterAdvanced(subtitle, settings, textFilePath, videoWid
     finePositionOffset = 0,
   } = settings;
 
-  // 폰트 파일 경로 매핑
+  // 폰트 파일 경로 매핑 (동적 경로 사용)
+  const os = require("os");
+  const windir = process.env.WINDIR || "C:\\Windows";
+  const fontDir = path.join(windir, "Fonts");
+
   const fontMap = {
-    "noto-sans": "C\\:/Windows/Fonts/NotoSansKR-Regular.ttf",
-    "malgun-gothic": "C\\:/Windows/Fonts/malgun.ttf",
-    "apple-sd-gothic": "C\\:/Windows/Fonts/AppleSDGothicNeo.ttf",
-    nanumgothic: "C\\:/Windows/Fonts/NanumGothic.ttf",
-    arial: "C\\:/Windows/Fonts/arial.ttf",
-    helvetica: "C\\:/Windows/Fonts/helvetica.ttf",
-    roboto: "C\\:/Windows/Fonts/Roboto-Regular.ttf",
+    "noto-sans": path.join(fontDir, "NotoSansKR-Regular.ttf"),
+    "malgun-gothic": path.join(fontDir, "malgun.ttf"),
+    "apple-sd-gothic": path.join(fontDir, "AppleSDGothicNeo.ttf"),
+    nanumgothic: path.join(fontDir, "NanumGothic.ttf"),
+    arial: path.join(fontDir, "arial.ttf"),
+    helvetica: path.join(fontDir, "helvetica.ttf"),
+    roboto: path.join(fontDir, "Roboto-Regular.ttf"),
   };
-  const fontFile = fontMap[fontFamily] || fontMap["malgun-gothic"];
+
+  let fontFile = fontMap[fontFamily] || fontMap["malgun-gothic"];
+
+  // 폰트 파일 존재 확인 및 fallback
+  if (!fs.existsSync(fontFile)) {
+    console.warn(`⚠️ 폰트 파일을 찾을 수 없음: ${fontFile}`);
+
+    // Fallback 1: malgun.ttf
+    fontFile = fontMap["malgun-gothic"];
+    if (!fs.existsSync(fontFile)) {
+      console.warn(`⚠️ Malgun Gothic 폰트를 찾을 수 없음: ${fontFile}`);
+
+      // Fallback 2: arial.ttf (대부분의 Windows 시스템에 존재)
+      fontFile = fontMap["arial"];
+      if (!fs.existsSync(fontFile)) {
+        console.error(`❌ 사용 가능한 폰트를 찾을 수 없습니다`);
+        throw new Error("시스템 폰트를 찾을 수 없습니다");
+      } else {
+        console.log(`✅ Fallback 폰트 사용: Arial`);
+      }
+    } else {
+      console.log(`✅ Fallback 폰트 사용: Malgun Gothic`);
+    }
+  } else {
+    console.log(`✅ 폰트 파일 확인: ${fontFile}`);
+  }
+
+  // FFmpeg용 경로 변환 (이스케이프 처리)
+  fontFile = fontFile.replace(/\\/g, "/").replace(/:/g, "\\:");
 
   // textFilePath가 전달된 경우 textfile 사용 (줄바꿈 자동 지원)
   const useTextFile = textFilePath !== null && textFilePath !== undefined;

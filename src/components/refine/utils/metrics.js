@@ -32,19 +32,77 @@ export function calcCPL(text = "") {
   return Math.max(...lines.map((l) => l.length), 0);
 }
 
-// 두 줄 균형 분할 (한국어 기준 간단 규칙)
-export function splitBalancedLines(text = "", maxLine = 16) {
+// 여러 줄 균형 분할 (한국어 기준 간단 규칙)
+// maxLines: 최대 줄 수 (기본값 2)
+export function splitBalancedLines(text = "", maxLines = 2) {
   const clean = text.replace(/\s+/g, " ").trim();
-  if (clean.length <= maxLine) return [clean, ""];
-  // 공백/구두점 기준으로 절단점 탐색
-  let cut = Math.min(maxLine, clean.length - 1);
-  for (let i = cut; i < clean.length; i++) {
-    if (/[ \-–—·,.:;!?]/.test(clean[i])) {
-      cut = i + 1;
+
+  // 이미 줄바꿈이 있으면 그대로 사용
+  if (text.includes("\n")) {
+    const lines = text.split("\n").map(line => line.trim()).filter(line => line);
+    // maxLines 제한 적용
+    return lines.slice(0, maxLines);
+  }
+
+  // maxLines가 1이면 분할하지 않음
+  if (maxLines === 1) {
+    return [clean];
+  }
+
+  // 텍스트가 너무 짧으면 1줄로 반환 (20자 이하)
+  if (clean.length <= 20) {
+    return [clean];
+  }
+
+  // maxLines만큼 균등 분할
+  const lines = [];
+  let remaining = clean;
+
+  for (let lineIndex = 0; lineIndex < maxLines && remaining.length > 0; lineIndex++) {
+    const isLastLine = lineIndex === maxLines - 1;
+
+    if (isLastLine) {
+      // 마지막 줄은 나머지 전부
+      lines.push(remaining.trim());
       break;
     }
+
+    // 목표 길이 계산 (남은 텍스트를 남은 줄 수로 나눔)
+    const remainingLines = maxLines - lineIndex;
+    const targetLength = Math.ceil(remaining.length / remainingLines);
+
+    // 목표 길이 근처에서 공백이나 구두점 찾기
+    let cut = Math.min(targetLength, remaining.length);
+    let foundBreak = false;
+
+    // 목표 위치부터 앞뒤로 공백/구두점 찾기 (범위: ±20%)
+    const searchRange = Math.floor(targetLength * 0.2);
+    for (let offset = 0; offset <= searchRange && cut + offset < remaining.length; offset++) {
+      // 먼저 목표 위치 뒤쪽 검색
+      if (offset > 0 && cut + offset < remaining.length && /[ \-–—·,.:;!?]/.test(remaining[cut + offset])) {
+        cut = cut + offset + 1;
+        foundBreak = true;
+        break;
+      }
+      // 목표 위치 앞쪽 검색
+      if (offset > 0 && cut - offset > 0 && /[ \-–—·,.:;!?]/.test(remaining[cut - offset])) {
+        cut = cut - offset + 1;
+        foundBreak = true;
+        break;
+      }
+    }
+
+    // 공백을 못 찾았으면 목표 길이에서 강제 분할
+    if (!foundBreak && cut < remaining.length) {
+      cut = targetLength;
+    }
+
+    const line = remaining.slice(0, cut).trim();
+    if (line) {
+      lines.push(line);
+    }
+    remaining = remaining.slice(cut).trim();
   }
-  const l1 = clean.slice(0, cut).trim();
-  const l2 = clean.slice(cut).trim();
-  return [l1, l2];
+
+  return lines.filter(line => line); // 빈 줄 제거
 }

@@ -745,7 +745,7 @@ const VideoPreview = memo(function VideoPreview({
     // 프리뷰 크기 비율 계산 (1920x1080 기준 -> 프리뷰 크기로 스케일링)
     // 프리뷰 컨테이너의 실제 크기를 알 수 없으므로 상대적인 비율 사용
     // 일반적으로 프리뷰는 실제 크기의 40-50% 정도
-    const SCALE_FACTOR = 0.5; // 프리뷰 화면 비율 (실제 1920x1080의 50%)
+    const SCALE_FACTOR = 0.3; // 프리뷰 화면 비율 (실제 1920x1080의 30%)
 
     const scaledFontSize = fontSize * SCALE_FACTOR;
     const scaledOutlineWidth = outlineWidth * SCALE_FACTOR;
@@ -830,8 +830,6 @@ const VideoPreview = memo(function VideoPreview({
             textShadow,
             lineHeight,
             letterSpacing: `${scaledLetterSpacing}px`,
-            wordBreak: "keep-all",
-            whiteSpace: maxLines > 1 ? "pre-wrap" : "nowrap",
             backgroundColor: backgroundColorStyle,
             padding: useBackground ? `${8 * SCALE_FACTOR}px ${12 * SCALE_FACTOR}px` : "0",
             borderRadius: useBackground ? `${scaledBackgroundRadius}px` : "0",
@@ -841,7 +839,10 @@ const VideoPreview = memo(function VideoPreview({
           }}
         >
           {splitBalancedLines(selectedScene.text, maxLines).map((line, i) => (
-            <div key={i}>{line}</div>
+            <div key={i} style={{
+              whiteSpace: "nowrap",
+              overflow: "visible"
+            }}>{line}</div>
           ))}
         </div>
       </div>

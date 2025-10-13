@@ -172,7 +172,7 @@ function CaptionOverlay({ text, subtitleSettings, aspectRatio = "16:9" }) {
 
   // 프리뷰 크기 비율 계산 (1920x1080 기준 -> 프리뷰 크기로 스케일링)
   // RefineEditor 프리뷰는 상대적으로 작으므로 더 작은 스케일 사용
-  const SCALE_FACTOR = 0.4; // 프리뷰 화면 비율 (실제 1920x1080의 40%)
+  const SCALE_FACTOR = 0.25; // 프리뷰 화면 비율 (실제 1920x1080의 25%)
 
   const scaledFontSize = fontSize * SCALE_FACTOR;
   const scaledOutlineWidth = outlineWidth * SCALE_FACTOR;
@@ -192,10 +192,6 @@ function CaptionOverlay({ text, subtitleSettings, aspectRatio = "16:9" }) {
     "roboto": "'Roboto', sans-serif"
   };
   const fontFamilyStyle = fontFamilyMap[fontFamily] || "'Malgun Gothic', sans-serif";
-
-  // 텍스트를 최대 줄 수에 맞게 분할
-  // splitBalancedLines를 사용하여 maxLines에 맞게 균형있게 분할
-  const lines = splitBalancedLines(text, maxLines);
 
   // 위치 계산 (FFmpeg MarginV와 동일하게)
   // 1080p 기준으로 verticalPadding을 픽셀로 계산
@@ -260,15 +256,16 @@ function CaptionOverlay({ text, subtitleSettings, aspectRatio = "16:9" }) {
           lineHeight,
           letterSpacing: `${scaledLetterSpacing}px`,
           maxWidth: `${maxWidth}%`,
-          wordBreak: "keep-all",
-          whiteSpace: maxLines > 1 ? "pre-wrap" : "nowrap",
           backgroundColor: backgroundColorStyle,
           padding: useBackground ? `${4 * SCALE_FACTOR}px ${8 * SCALE_FACTOR}px` : "0",
           borderRadius: useBackground ? `${scaledBackgroundRadius}px` : "0",
         }}
       >
-        {lines.map((line, i) => (
-          <div key={i}>{line}</div>
+        {splitBalancedLines(text, maxLines).map((line, i) => (
+          <div key={i} style={{
+            whiteSpace: "nowrap",
+            overflow: "visible"
+          }}>{line}</div>
         ))}
       </div>
     </div>
