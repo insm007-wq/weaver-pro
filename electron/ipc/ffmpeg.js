@@ -1167,7 +1167,15 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
     finalVideoLabel = "[v]";
   }
 
-  args.push("-filter_complex", filterComplex);
+  // ✅ filter_complex가 길면 파일로 저장
+  if (filterComplex.length > 3000) {
+    const filterScriptPath = path.join(tempDir, `filter_${Date.now()}.txt`);
+    await fsp.writeFile(filterScriptPath, filterComplex, "utf8");
+    console.log(`📝 filter_complex를 파일로 저장: ${filterScriptPath} (${filterComplex.length}자)`);
+    args.push("-filter_complex_script", filterScriptPath);
+  } else {
+    args.push("-filter_complex", filterComplex);
+  }
 
   // 맵핑
   args.push("-map", finalVideoLabel);
@@ -1204,11 +1212,224 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
 }
 
 // ----------------------------------------------------------------------------
-// FFmpeg 실행
+// FFmpeg 실행 (쉘 스크립트 사용 - 긴 명령줄 처리, 크로스 플랫폼)
 // ----------------------------------------------------------------------------
-function runFFmpeg(args, progressCallback = null, isCheck = false) {
-  return new Promise((resolve) => {
+function runFFmpegViaShellScript(args, progressCallback = null) {
+  return new Promise(async (resolve) => {
     // 취소 확인
+    if (isExportCancelled) {
+      console.log("✋ FFmpeg 실행 취소됨");
+      return resolve({ success: false, error: "사용자에 의해 취소되었습니다" });
+    }
+
+    const os = require("os");
+    const isWindows = process.platform === "win32";
+
+    console.log(`🔧 쉘 스크립트를 사용하여 FFmpeg 실행 (플랫폼: ${process.platform})`);
+
+    let tempDir;
+    try {
+      tempDir = path.join(app.getPath("userData"), "ffmpeg-temp");
+    } catch {
+      tempDir = path.join(os.tmpdir(), "weaver-pro-ffmpeg-temp");
+    }
+    await fsp.mkdir(tempDir, { recursive: true });
+
+    // 플랫폼별 스크립트 파일 생성
+    const scriptExt = isWindows ? "bat" : "sh";
+    const scriptPath = path.join(tempDir, `ffmpeg_${Date.now()}.${scriptExt}`);
+
+    let scriptContent;
+    let shellCommand;
+    let shellArgs;
+
+    if (isWindows) {
+      // Windows: .bat 파일
+      // 배치 파일에서 안전한 이스케이프
+      const escapedArgs = args.map(arg => {
+        // %를 %%로 변환 (배치 파일에서 변수로 해석되지 않도록)
+        let escaped = arg.replace(/%/g, "%%");
+        // 큰따옴표를 이스케이프
+        escaped = escaped.replace(/"/g, '""');
+
+        // 공백이나 특수문자가 있으면 큰따옴표로 감싸기
+        if (escaped.includes(" ") || escaped.includes("&") || escaped.includes("|") ||
+            escaped.includes("<") || escaped.includes(">") || escaped.includes("^") ||
+            escaped.includes("(") || escaped.includes(")")) {
+          return `"${escaped}"`;
+        }
+        return escaped;
+      });
+
+      // setlocal DisableDelayedExpansion으로 !도 안전하게 처리
+      // 각 인자를 별도 줄로 분리 (^ 사용하여 줄바꿈)
+      // 마지막 인자만 ^ 없이 종료
+      const argsLines = escapedArgs.map((arg, i) => {
+        if (i === escapedArgs.length - 1) {
+          return `  ${arg}`;
+        }
+        return `  ${arg} ^`;
+      }).join("\n");
+
+      scriptContent = `@echo off
+setlocal DisableDelayedExpansion
+chcp 65001 >nul 2>&1
+"${ffmpegPath}" ^
+${argsLines}
+endlocal
+exit /b %ERRORLEVEL%`;
+
+      shellCommand = "cmd.exe";
+      shellArgs = ["/c", scriptPath];
+    } else {
+      // Mac/Linux: .sh 파일
+      // 인자를 쉘 이스케이프
+      const escapeForShell = (arg) => {
+        return arg
+          .replace(/\\/g, "\\\\")
+          .replace(/"/g, '\\"')
+          .replace(/\$/g, "\\$")
+          .replace(/`/g, "\\`");
+      };
+
+      const escapedArgs = args.map(arg => {
+        const escaped = escapeForShell(arg);
+        return `"${escaped}"`;
+      });
+
+      // 각 인자를 별도 줄로 분리 (\ 사용하여 줄바꿈)
+      // 마지막 인자만 \ 없이 종료
+      const argsLines = escapedArgs.map((arg, i) => {
+        if (i === escapedArgs.length - 1) {
+          return `  ${arg}`;
+        }
+        return `  ${arg} \\`;
+      }).join("\n");
+
+      scriptContent = `#!/bin/sh
+"${ffmpegPath}" \\
+${argsLines}
+exit $?`;
+
+      shellCommand = "/bin/sh";
+      shellArgs = [scriptPath];
+    }
+
+    try {
+      // 스크립트 파일 작성
+      await fsp.writeFile(scriptPath, scriptContent, "utf8");
+
+      // Mac/Linux는 실행 권한 부여
+      if (!isWindows) {
+        await fsp.chmod(scriptPath, 0o755);
+      }
+
+      console.log(`📝 스크립트 파일 생성: ${scriptPath} (${scriptContent.length}바이트)`);
+
+      // 디버깅: 스크립트 내용 일부 출력 (처음 500자, 마지막 500자)
+      const contentPreview = scriptContent.length > 1000
+        ? `${scriptContent.substring(0, 500)}\n...\n${scriptContent.substring(scriptContent.length - 500)}`
+        : scriptContent;
+      console.log(`📄 스크립트 내용 미리보기:\n${contentPreview}`);
+    } catch (error) {
+      console.error("❌ 스크립트 파일 생성 실패:", error);
+      return resolve({ success: false, error: `스크립트 파일 생성 실패: ${error.message}` });
+    }
+
+    const timeoutMs = 15 * 60 * 1000;
+    const proc = spawn(shellCommand, shellArgs, { windowsHide: isWindows });
+
+    // 현재 프로세스 저장 (취소용)
+    currentFfmpegProcess = proc;
+
+    let out = "",
+      err = "",
+      completed = false;
+    const timer = setTimeout(() => {
+      if (!completed) {
+        try {
+          proc.kill("SIGKILL");
+        } catch {}
+        resolve({ success: false, error: `FFmpeg 타임아웃(${timeoutMs}ms)` });
+      }
+    }, timeoutMs);
+
+    proc.stdout.on("data", (d) => {
+      out += d.toString();
+      if (out.length > 10000) out = out.slice(-5000);
+    });
+
+    proc.stderr.on("data", (d) => {
+      const s = d.toString();
+      err += s;
+      if (err.length > 10000) err = err.slice(-5000);
+      if (progressCallback) {
+        const m = /time=(\d{2}):(\d{2}):(\d{2})/i.exec(s);
+        if (m) {
+          const h = parseInt(m[1], 10),
+            mi = parseInt(m[2], 10),
+            se = parseInt(m[3], 10);
+          const cur = h * 3600 + mi * 60 + se;
+          const est = Math.max(0, Math.min(100, Math.round((cur / 1000) * 100)));
+          progressCallback(est);
+        }
+      }
+    });
+
+    proc.on("close", async (code) => {
+      if (completed) return;
+      completed = true;
+      clearTimeout(timer);
+
+      // 현재 프로세스 초기화
+      if (currentFfmpegProcess === proc) {
+        currentFfmpegProcess = null;
+      }
+
+      // 스크립트 파일 삭제
+      try {
+        await fsp.unlink(scriptPath);
+        console.log(`🗑️ 스크립트 파일 삭제: ${scriptPath}`);
+      } catch (error) {
+        console.warn(`⚠️ 스크립트 파일 삭제 실패:`, error.message);
+      }
+
+      if (code === 0) {
+        resolve({ success: true, output: out || err, duration: extractDuration(err), size: 0 });
+      } else {
+        if (isExportCancelled) {
+          resolve({ success: false, error: "사용자에 의해 취소되었습니다" });
+        } else {
+          console.error(`❌ FFmpeg 실행 실패 (코드: ${code})`);
+          console.error(`stderr (전체 ${err.length}자):\n${err.slice(-3000)}`);
+          resolve({ success: false, error: err || `FFmpeg exited with code ${code}` });
+        }
+      }
+    });
+
+    proc.on("error", async (e) => {
+      if (completed) return;
+      completed = true;
+      clearTimeout(timer);
+
+      // 현재 프로세스 초기화
+      if (currentFfmpegProcess === proc) {
+        currentFfmpegProcess = null;
+      }
+
+      // 스크립트 파일 삭제
+      try {
+        await fsp.unlink(scriptPath);
+      } catch {}
+
+      resolve({ success: false, error: e.message });
+    });
+  });
+}
+
+// FFmpeg 직접 실행 (기존 로직 분리)
+function runFFmpegDirect(args, progressCallback, isCheck) {
+  return new Promise((resolve) => {
     if (isExportCancelled) {
       console.log("✋ FFmpeg 실행 취소됨");
       return resolve({ success: false, error: "사용자에 의해 취소되었습니다" });
@@ -1236,13 +1457,11 @@ function runFFmpeg(args, progressCallback = null, isCheck = false) {
 
     proc.stdout.on("data", (d) => {
       out += d.toString();
-      // 메모리 최적화
       if (out.length > 10000) out = out.slice(-5000);
     });
     proc.stderr.on("data", (d) => {
       const s = d.toString();
       err += s;
-      // 메모리 최적화
       if (err.length > 10000) err = err.slice(-5000);
       if (progressCallback && !isCheck) {
         const m = /time=(\d{2}):(\d{2}):(\d{2})/i.exec(s);
@@ -1262,7 +1481,6 @@ function runFFmpeg(args, progressCallback = null, isCheck = false) {
       completed = true;
       clearTimeout(timer);
 
-      // 현재 프로세스 초기화
       if (currentFfmpegProcess === proc) {
         currentFfmpegProcess = null;
       }
@@ -1270,11 +1488,9 @@ function runFFmpeg(args, progressCallback = null, isCheck = false) {
       if (code === 0 || isCheck) {
         resolve({ success: code === 0, output: out || err, duration: extractDuration(err), size: 0 });
       } else {
-        // 취소로 인한 종료인지 확인
         if (isExportCancelled) {
           resolve({ success: false, error: "사용자에 의해 취소되었습니다" });
         } else {
-          // ✅ stderr 로그 출력 (마지막 1000자)
           console.error(`❌ FFmpeg 실행 실패 (코드: ${code})`);
           console.error(`stderr:\n${err.slice(-1000)}`);
           resolve({ success: false, error: err || `FFmpeg exited with code ${code}` });
@@ -1287,7 +1503,6 @@ function runFFmpeg(args, progressCallback = null, isCheck = false) {
       completed = true;
       clearTimeout(timer);
 
-      // 현재 프로세스 초기화
       if (currentFfmpegProcess === proc) {
         currentFfmpegProcess = null;
       }
@@ -1295,6 +1510,26 @@ function runFFmpeg(args, progressCallback = null, isCheck = false) {
       resolve({ success: false, error: e.message });
     });
   });
+}
+
+// ----------------------------------------------------------------------------
+// FFmpeg 실행
+// ----------------------------------------------------------------------------
+function runFFmpeg(args, progressCallback = null, isCheck = false) {
+  // 명령줄 길이 계산
+  const argsString = args.join(" ");
+  const commandLength = ffmpegPath.length + argsString.length + args.length; // 공백 포함
+
+  // 긴 명령줄은 쉘 스크립트 사용 (크로스 플랫폼 지원)
+  // Windows: cmd.exe (8191자 제한) → .bat 파일 (제한 없음)
+  // Mac/Linux: /bin/sh (ARG_MAX 제한, 보통 256KB~2MB) → .sh 파일 (제한 없음)
+  if (commandLength > 6000 && !isCheck) {
+    console.log(`⚠️ 명령줄이 깁니다 (${commandLength}자). 쉘 스크립트 방식 사용`);
+    return runFFmpegViaShellScript(args, progressCallback);
+  }
+
+  // 짧은 명령줄은 직접 실행
+  return runFFmpegDirect(args, progressCallback, isCheck);
 }
 
 function extractDuration(output) {
@@ -1662,7 +1897,15 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
     finalVideoLabel = "[v]";
   }
 
-  finalArgs.push("-filter_complex", filterComplex);
+  // ✅ filter_complex가 길면 파일로 저장
+  if (filterComplex.length > 3000) {
+    const filterScriptPath = path.join(tempDir, `filter_${Date.now()}.txt`);
+    await fsp.writeFile(filterScriptPath, filterComplex, "utf8");
+    console.log(`📝 filter_complex를 파일로 저장: ${filterScriptPath} (${filterComplex.length}자)`);
+    finalArgs.push("-filter_complex_script", filterScriptPath);
+  } else {
+    finalArgs.push("-filter_complex", filterComplex);
+  }
 
   // 맵핑
   finalArgs.push("-map", finalVideoLabel);

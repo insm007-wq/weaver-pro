@@ -12,9 +12,10 @@ import {
   SpeakerOffRegular,
 } from "@fluentui/react-icons";
 import { ensureSceneDefaults } from "../../../utils/scenes";
-import { assignVideosToScenes } from "../../../services/videoAssignment";
+import { assignVideosToScenes, assignMediaToScenes, assignVideosWithDownload } from "../../../services/videoAssignment";
 import { showError, showSuccess } from "../../common/GlobalToast";
 import { isVideoFile, isImageFile } from "../../../utils/fileHelpers";
+import BottomFixedBar from "../../common/BottomFixedBar";
 
 function SceneList({
   scenes,
@@ -28,6 +29,30 @@ function SceneList({
   const [editingStartTime, setEditingStartTime] = useState("");
   const [editingEndTime, setEditingEndTime] = useState("");
   const [isAssigning, setIsAssigning] = useState(false);
+
+  // 미디어 자동 생성 상태
+  const [mediaGenerationState, setMediaGenerationState] = useState({
+    isActive: false,
+    phase: "idle", // "idle" | "video" | "image" | "completed" | "error"
+    current: 0,
+    total: 0,
+    message: "",
+    videoCount: 0,
+    imageCount: 0,
+    currentScene: null,
+  });
+
+  // 영상 자동 할당 상태 (다운로드 포함)
+  const [videoAssignState, setVideoAssignState] = useState({
+    isActive: false,
+    phase: "idle", // "idle" | "local" | "download" | "completed" | "error"
+    current: 0,
+    total: 0,
+    message: "",
+    assignedCount: 0,
+    downloadedCount: 0,
+    currentScene: null,
+  });
 
   // 컨텍스트 메뉴 상태
   const [contextMenuSceneIndex, setContextMenuSceneIndex] = useState(-1);
@@ -468,6 +493,182 @@ function SceneList({
     }
   }, [scenes, setScenes]);
 
+  // 미디어 자동 생성 핸들러 (영상 + AI 이미지)
+  const handleAutoGenerateMedia = useCallback(async () => {
+    if (!scenes || scenes.length === 0) {
+      showError("생성할 씬이 없습니다.");
+      return;
+    }
+
+    const scenesWithText = scenes.filter(scene => scene.text && scene.text.trim().length > 0);
+    if (scenesWithText.length === 0) {
+      showError("텍스트가 있는 씬이 없습니다. 먼저 자막을 작성해주세요.");
+      return;
+    }
+
+    // 초기 상태 설정
+    setMediaGenerationState({
+      isActive: true,
+      phase: "video",
+      current: 0,
+      total: scenes.length,
+      message: "미디어 자동 생성 시작...",
+      videoCount: 0,
+      imageCount: 0,
+      currentScene: null,
+    });
+
+    let finalVideoCount = 0;
+    let finalImageCount = 0;
+
+    try {
+      const assignedScenes = await assignMediaToScenes(scenes, {
+        minScore: 0.1,
+        allowDuplicates: false,
+        onProgress: (progress) => {
+          // 진행 상황 업데이트
+          setMediaGenerationState(prev => ({
+            ...prev,
+            phase: progress.phase,
+            current: progress.current,
+            total: progress.total,
+            message: progress.message,
+            videoCount: progress.videoCount || prev.videoCount,
+            imageCount: progress.imageCount || prev.imageCount,
+            currentScene: progress.currentScene || null,
+          }));
+
+          // 최종 카운트 캡처
+          if (progress.phase === "completed") {
+            finalVideoCount = progress.videoCount || 0;
+            finalImageCount = progress.imageCount || 0;
+          }
+        },
+      });
+
+      setScenes(assignedScenes);
+
+      const totalAssigned = assignedScenes.filter(s => s.asset?.path).length;
+
+      showSuccess(`미디어 자동 생성 완료! 영상 ${finalVideoCount}개, AI 이미지 ${finalImageCount}개 (총 ${totalAssigned}개)`);
+
+      // 완료 후 3초 뒤 자동으로 닫기
+      setTimeout(() => {
+        setMediaGenerationState({
+          isActive: false,
+          phase: "idle",
+          current: 0,
+          total: 0,
+          message: "",
+          videoCount: 0,
+          imageCount: 0,
+          currentScene: null,
+        });
+      }, 3000);
+
+    } catch (error) {
+      console.error("[미디어 자동 생성] 오류:", error);
+      showError(`미디어 자동 생성 중 오류가 발생했습니다: ${error.message}`);
+
+      setMediaGenerationState(prev => ({
+        ...prev,
+        phase: "error",
+        message: `오류 발생: ${error.message}`,
+      }));
+    }
+  }, [scenes, setScenes]);
+
+  // 영상 자동 할당 핸들러 (다운로드 포함)
+  const handleAutoAssignVideosOnly = useCallback(async () => {
+    if (!scenes || scenes.length === 0) {
+      showError("할당할 씬이 없습니다.");
+      return;
+    }
+
+    const scenesWithText = scenes.filter(scene => scene.text && scene.text.trim().length > 0);
+    if (scenesWithText.length === 0) {
+      showError("텍스트가 있는 씬이 없습니다. 먼저 자막을 작성해주세요.");
+      return;
+    }
+
+    // 초기 상태 설정
+    setVideoAssignState({
+      isActive: true,
+      phase: "local",
+      current: 0,
+      total: scenes.length,
+      message: "영상 할당 시작...",
+      assignedCount: 0,
+      downloadedCount: 0,
+      currentScene: null,
+    });
+
+    let finalAssignedCount = 0;
+    let finalDownloadedCount = 0;
+
+    try {
+      const assignedScenes = await assignVideosWithDownload(scenes, {
+        minScore: 0.1,
+        allowDuplicates: false,
+        provider: 'pexels', // 기본값, 나중에 설정에서 가져올 수 있음
+        downloadOptions: {
+          minResolution: '1080p',
+          aspectRatio: '16:9',
+          maxFileSize: 20,
+        },
+        onProgress: (progress) => {
+          // 진행 상황 업데이트
+          setVideoAssignState(prev => ({
+            ...prev,
+            phase: progress.phase,
+            current: progress.current,
+            total: progress.total,
+            message: progress.message,
+            assignedCount: progress.assignedCount || prev.assignedCount,
+            downloadedCount: progress.downloadedCount || prev.downloadedCount,
+            currentScene: progress.currentScene || null,
+          }));
+
+          // 최종 카운트 캡처
+          if (progress.phase === "completed") {
+            finalAssignedCount = progress.assignedCount || 0;
+            finalDownloadedCount = progress.downloadedCount || 0;
+          }
+        },
+      });
+
+      setScenes(assignedScenes);
+
+      const totalAssigned = assignedScenes.filter(s => s.asset?.path).length;
+
+      showSuccess(`영상 할당 완료! 로컬 ${finalAssignedCount}개, 다운로드 ${finalDownloadedCount}개 (총 ${totalAssigned}개)`);
+
+      // 완료 후 3초 뒤 자동으로 닫기
+      setTimeout(() => {
+        setVideoAssignState({
+          isActive: false,
+          phase: "idle",
+          current: 0,
+          total: 0,
+          message: "",
+          assignedCount: 0,
+          downloadedCount: 0,
+          currentScene: null,
+        });
+      }, 3000);
+
+    } catch (error) {
+      console.error("[영상 할당] 오류:", error);
+      showError(`영상 할당 중 오류가 발생했습니다: ${error.message}`);
+
+      setVideoAssignState(prev => ({
+        ...prev,
+        phase: "error",
+        message: `오류 발생: ${error.message}`,
+      }));
+    }
+  }, [scenes, setScenes]);
+
   // 우클릭 컨텍스트 메뉴 핸들러
   const handleContextMenu = useCallback((event, index) => {
     event.preventDefault();
@@ -759,20 +960,20 @@ function SceneList({
           <Button
             appearance="primary"
             size="small"
-            icon={<AutoFitWidthRegular />}
-            onClick={handleAutoAssignVideos}
-            disabled={isAssigning || scenes.length === 0}
+            icon={<ArrowSyncRegular />}
+            onClick={handleAutoGenerateMedia}
+            disabled={mediaGenerationState.isActive || videoAssignState.isActive || scenes.length === 0}
           >
-            {isAssigning ? "할당 중..." : "자동 할당"}
+            {mediaGenerationState.isActive ? "할당 중..." : "영상+이미지 자동 할당"}
           </Button>
           <Button
             appearance="primary"
             size="small"
-            icon={<AutoFitWidthRegular />}
-            onClick={handleAutoAssignMissingOnly}
-            disabled={isAssigning || scenes.length === 0}
+            icon={<VideoRegular />}
+            onClick={handleAutoAssignVideosOnly}
+            disabled={videoAssignState.isActive || mediaGenerationState.isActive || scenes.length === 0}
           >
-            {isAssigning ? "할당 중..." : "미디어 없음"}
+            {videoAssignState.isActive ? "할당 중..." : "영상 할당"}
           </Button>
         </div>
       </div>
@@ -1074,6 +1275,78 @@ function SceneList({
           })
         )}
       </div>
+
+      {/* 미디어 자동 생성 진행 바 */}
+      {mediaGenerationState.isActive && (
+        <BottomFixedBar
+          isComplete={mediaGenerationState.phase === "completed"}
+          isLoading={mediaGenerationState.phase === "video" || mediaGenerationState.phase === "image"}
+          statusText={mediaGenerationState.message}
+          progress={mediaGenerationState.total > 0 ? (mediaGenerationState.current / mediaGenerationState.total) * 100 : 0}
+          borderColor={
+            mediaGenerationState.phase === "completed" ? "#10b981" :
+            mediaGenerationState.phase === "image" ? "#a855f7" :
+            mediaGenerationState.phase === "video" ? "#3b82f6" :
+            "#ef4444"
+          }
+          expandedContent={
+            mediaGenerationState.currentScene ? (
+              <div style={{ padding: "12px 16px", fontSize: "13px", color: "#666" }}>
+                <div><strong>현재 씬 {mediaGenerationState.currentScene.index + 1}</strong></div>
+                <div style={{ marginTop: 4 }}>{mediaGenerationState.currentScene.text}</div>
+              </div>
+            ) : null
+          }
+          onClose={() => {
+            setMediaGenerationState({
+              isActive: false,
+              phase: "idle",
+              current: 0,
+              total: 0,
+              message: "",
+              videoCount: 0,
+              imageCount: 0,
+              currentScene: null,
+            });
+          }}
+        />
+      )}
+
+      {/* 영상 자동 할당 진행 바 */}
+      {videoAssignState.isActive && (
+        <BottomFixedBar
+          isComplete={videoAssignState.phase === "completed"}
+          isLoading={videoAssignState.phase === "local" || videoAssignState.phase === "download"}
+          statusText={videoAssignState.message}
+          progress={videoAssignState.total > 0 ? (videoAssignState.current / videoAssignState.total) * 100 : 0}
+          borderColor={
+            videoAssignState.phase === "completed" ? "#10b981" :
+            videoAssignState.phase === "download" ? "#a855f7" :
+            videoAssignState.phase === "local" ? "#3b82f6" :
+            "#ef4444"
+          }
+          expandedContent={
+            videoAssignState.currentScene ? (
+              <div style={{ padding: "12px 16px", fontSize: "13px", color: "#666" }}>
+                <div><strong>현재 씬 {videoAssignState.currentScene.index + 1}</strong></div>
+                <div style={{ marginTop: 4 }}>{videoAssignState.currentScene.text}</div>
+              </div>
+            ) : null
+          }
+          onClose={() => {
+            setVideoAssignState({
+              isActive: false,
+              phase: "idle",
+              current: 0,
+              total: 0,
+              message: "",
+              assignedCount: 0,
+              downloadedCount: 0,
+              currentScene: null,
+            });
+          }}
+        />
+      )}
     </Card>
   );
 }
