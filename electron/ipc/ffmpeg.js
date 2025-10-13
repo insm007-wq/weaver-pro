@@ -1,6 +1,20 @@
 // electron/ipc/ffmpeg.js
 // ============================================================================
-// FFmpeg 영상 합성 IPC 핸들러 (실제 오디오 길이 기반 씬 타이밍, SRT 동기화)
+// FFmpeg 영상 합성 IPC 핸들러
+// ============================================================================
+//
+// 주요 기능:
+// 1. 여러 이미지/비디오 클립을 하나의 영상으로 합성
+// 2. TTS 오디오와 동기화
+// 3. drawtext 필터를 사용한 자막 렌더링 (배경 박스, 외곽선 지원)
+// 4. 사용자 정의 자막 스타일 적용
+//
+// 자막 렌더링 방식:
+// - drawtext 필터 사용 (ASS 대신)
+// - 여러 줄 텍스트는 개별 drawtext 필터로 분리
+// - 각 줄의 Y 좌표를 계산하여 정확한 위치 배치
+// - 배경 박스(box), 외곽선(borderw), 그림자(shadow) 지원
+//
 // ============================================================================
 
 const { ipcMain, app } = require("electron");
@@ -17,6 +31,75 @@ try {
 } catch (error) {
   console.warn("⚠️ store 로드 실패:", error.message);
   store = { get: (key, def) => def, set: () => {} };
+}
+
+// ============================================================================
+// 자막 설정 기본값 (YouTube 표준 스타일)
+// ============================================================================
+const DEFAULT_SUBTITLE_SETTINGS = {
+  // 기본 텍스트 설정
+  fontFamily: "noto-sans",
+  fontSize: 52, // YouTube 표준 (1920x1080 기준)
+  fontWeight: 700,
+  lineHeight: 1.3,
+  letterSpacing: 0,
+
+  // 색상 설정
+  textColor: "#FFFFFF",
+  backgroundColor: "#000000",
+  backgroundOpacity: 75,
+  outlineColor: "#000000",
+  outlineWidth: 3,
+  shadowColor: "#000000",
+  shadowOffset: 0,
+  shadowBlur: 0,
+
+  // 위치 및 정렬
+  position: "bottom",
+  horizontalAlign: "center",
+  verticalPadding: 60,
+  horizontalPadding: 24,
+  maxWidth: 90,
+  finePositionOffset: 0,
+
+  // 배경 및 테두리
+  useBackground: true,
+  backgroundRadius: 4,
+  useOutline: true,
+  useShadow: false,
+
+  // 고급 설정
+  autoWrap: true,
+  maxLines: 2,
+  wordBreak: "keep-all",
+};
+
+/**
+ * 자막 설정 로드 (검증 및 fallback 포함)
+ */
+function getSubtitleSettings() {
+  const userSettings = store.get("subtitleSettings", {});
+
+  // 사용자 설정과 기본값 병합
+  const settings = { ...DEFAULT_SUBTITLE_SETTINGS, ...userSettings };
+
+  // 필수 값 검증 및 경고
+  if (settings.fontSize < 20 || settings.fontSize > 200) {
+    console.warn(`⚠️ fontSize(${settings.fontSize})가 비정상적입니다. 기본값(52) 사용`);
+    settings.fontSize = DEFAULT_SUBTITLE_SETTINGS.fontSize;
+  }
+
+  if (settings.maxLines < 1 || settings.maxLines > 5) {
+    console.warn(`⚠️ maxLines(${settings.maxLines})가 비정상적입니다. 기본값(2) 사용`);
+    settings.maxLines = DEFAULT_SUBTITLE_SETTINGS.maxLines;
+  }
+
+  if (settings.lineHeight < 0.5 || settings.lineHeight > 3) {
+    console.warn(`⚠️ lineHeight(${settings.lineHeight})가 비정상적입니다. 기본값(1.3) 사용`);
+    settings.lineHeight = DEFAULT_SUBTITLE_SETTINGS.lineHeight;
+  }
+
+  return settings;
 }
 
 // music-metadata를 안전하게 로드 (ES 모듈 처리)
@@ -37,14 +120,14 @@ async function loadMusicMetadata() {
 // HEX 색상을 FFmpeg RGB 형식으로 변환하는 헬퍼 함수
 // 예: #FF0000 (빨강) -> 0xFF0000
 function hexToFFmpegColor(hex) {
-  hex = hex.replace('#', '');
+  hex = hex.replace("#", "");
   return `0x${hex}`;
 }
 
 // HEX 색상을 투명도와 함께 FFmpeg RGBA 형식으로 변환
 // 예: #000000, 0.8 -> 0x000000@0.8
 function hexToFFmpegColorWithAlpha(hex, alpha) {
-  hex = hex.replace('#', '');
+  hex = hex.replace("#", "");
   return `0x${hex}@${alpha}`;
 }
 
@@ -61,12 +144,17 @@ function srtTimestampToSeconds(timestamp) {
 }
 
 // SRT 파일 파싱 함수
+/**
+ * SRT 자막 파일 파싱
+ * @param {string} srtContent - SRT 파일 내용
+ * @returns {Array<{startTime: number, endTime: number, text: string}>} 자막 배열
+ */
 function parseSRT(srtContent) {
   const subtitles = [];
   const blocks = srtContent.trim().split(/\n\s*\n/);
 
   for (const block of blocks) {
-    const lines = block.trim().split('\n');
+    const lines = block.trim().split("\n");
     if (lines.length < 3) continue;
 
     // 첫 줄: 인덱스 (무시)
@@ -78,7 +166,7 @@ function parseSRT(srtContent) {
     const endTime = srtTimestampToSeconds(timingMatch[2]);
 
     // 나머지 줄: 텍스트 (줄바꿈 유지)
-    const text = lines.slice(2).join('\n');
+    const text = lines.slice(2).join("\n");
 
     subtitles.push({ startTime, endTime, text });
   }
@@ -87,13 +175,23 @@ function parseSRT(srtContent) {
 }
 
 /**
- * drawtext 필터 생성 (배경 박스 지원, 다중 라인)
- * @param {Object} subtitle - { startTime, endTime, text }
- * @param {Object} settings - subtitleSettings 객체
- * @param {string} textFilePath - 사용 안함 (null)
- * @param {number} videoWidth - 비디오 너비
- * @param {number} videoHeight - 비디오 높이
- * @returns {string} drawtext 필터 문자열들 (체인)
+ * FFmpeg drawtext 필터 생성 (여러 줄 자막 지원)
+ *
+ * 동작 방식:
+ * 1. textFilePath가 있으면 textfile 사용 (줄바꿈 자동 인식)
+ * 2. 없으면 텍스트를 줄로 분리하여 각 줄마다 별도 drawtext 필터 생성
+ * 3. 각 줄의 Y 좌표를 계산하여 정확한 위치에 배치
+ *
+ * @param {Object} subtitle - 자막 데이터 { startTime, endTime, text }
+ * @param {Object} settings - 자막 스타일 설정 (getSubtitleSettings 반환값)
+ * @param {string|null} textFilePath - 텍스트 파일 경로 (현재 미사용, null)
+ * @param {number} videoWidth - 비디오 너비 (1920)
+ * @param {number} videoHeight - 비디오 높이 (1080)
+ * @returns {string} drawtext 필터 문자열 (여러 개는 쉼표로 연결)
+ *
+ * @example
+ * // 2줄 자막의 경우 반환값:
+ * // "drawtext=text='첫째줄':...:y=950,drawtext=text='둘째줄':...:y=1000"
  */
 function createDrawtextFilterAdvanced(subtitle, settings, textFilePath, videoWidth, videoHeight) {
   const {
@@ -125,10 +223,10 @@ function createDrawtextFilterAdvanced(subtitle, settings, textFilePath, videoWid
     "noto-sans": "C\\:/Windows/Fonts/NotoSansKR-Regular.ttf",
     "malgun-gothic": "C\\:/Windows/Fonts/malgun.ttf",
     "apple-sd-gothic": "C\\:/Windows/Fonts/AppleSDGothicNeo.ttf",
-    "nanumgothic": "C\\:/Windows/Fonts/NanumGothic.ttf",
-    "arial": "C\\:/Windows/Fonts/arial.ttf",
-    "helvetica": "C\\:/Windows/Fonts/helvetica.ttf",
-    "roboto": "C\\:/Windows/Fonts/Roboto-Regular.ttf",
+    nanumgothic: "C\\:/Windows/Fonts/NanumGothic.ttf",
+    arial: "C\\:/Windows/Fonts/arial.ttf",
+    helvetica: "C\\:/Windows/Fonts/helvetica.ttf",
+    roboto: "C\\:/Windows/Fonts/Roboto-Regular.ttf",
   };
   const fontFile = fontMap[fontFamily] || fontMap["malgun-gothic"];
 
@@ -137,7 +235,7 @@ function createDrawtextFilterAdvanced(subtitle, settings, textFilePath, videoWid
 
   // 색상 변환 (HEX -> 0xRRGGBB)
   const hexToFFmpeg = (hex) => {
-    return `0x${hex.replace('#', '')}`;
+    return `0x${hex.replace("#", "")}`;
   };
 
   const textColorFFmpeg = hexToFFmpeg(textColor);
@@ -205,9 +303,10 @@ function createDrawtextFilterAdvanced(subtitle, settings, textFilePath, videoWid
 
   // textfile 사용 시 (줄바꿈 자동 지원)
   if (useTextFile) {
-    const escapedTextFile = textFilePath.replace(/\\/g, '/').replace(/:/g, '\\:');
+    const escapedTextFile = textFilePath.replace(/\\/g, "/").replace(/:/g, "\\:");
 
-    const filter = `drawtext=textfile='${escapedTextFile}'` +
+    const filter =
+      `drawtext=textfile='${escapedTextFile}'` +
       `:fontfile='${fontFile}'` +
       `:fontsize=${fontSize}` +
       `:fontcolor=${textColorFFmpeg}` +
@@ -228,16 +327,16 @@ function createDrawtextFilterAdvanced(subtitle, settings, textFilePath, videoWid
   }
 
   // text 사용 시 (여러 줄을 개별 필터로 분리)
-  const lines = subtitle.text.split('\n');
+  const lines = subtitle.text.split("\n");
   const escapeDrawtext = (text) => {
     return text
-      .replace(/\\/g, '\\\\\\\\')
-      .replace(/:/g, '\\:')
+      .replace(/\\/g, "\\\\\\\\")
+      .replace(/:/g, "\\:")
       .replace(/'/g, "'\\\\\\''")
-      .replace(/\[/g, '\\[')
-      .replace(/\]/g, '\\]')
-      .replace(/,/g, '\\,')
-      .replace(/;/g, '\\;');
+      .replace(/\[/g, "\\[")
+      .replace(/\]/g, "\\]")
+      .replace(/,/g, "\\,")
+      .replace(/;/g, "\\;");
   };
 
   const totalTextHeight = lines.length * Math.round(fontSize * lineHeight);
@@ -255,7 +354,8 @@ function createDrawtextFilterAdvanced(subtitle, settings, textFilePath, videoWid
       lineYExpr = `(h-${totalTextHeight})/2+${i * Math.round(fontSize * lineHeight)}`;
     }
 
-    const filter = `drawtext=text='${escapedLine}'` +
+    const filter =
+      `drawtext=text='${escapedLine}'` +
       `:fontfile='${fontFile}'` +
       `:fontsize=${fontSize}` +
       `:fontcolor=${textColorFFmpeg}` +
@@ -274,229 +374,7 @@ function createDrawtextFilterAdvanced(subtitle, settings, textFilePath, videoWid
     filters.push(filter);
   }
 
-  return filters.join(',');
-
-}
-
-// SRT를 ASS로 변환 (전역 설정 그대로 적용)
-async function convertSrtToAss(srtPath, subtitleSettings, videoWidth = 1920, videoHeight = 1080) {
-  const {
-    // 기본 텍스트 설정
-    fontFamily = "noto-sans",
-    fontSize = 24,
-    fontWeight = 600,
-
-    // 색상 설정
-    textColor = "#FFFFFF",
-    backgroundColor = "#000000",
-    backgroundOpacity = 80,
-    outlineColor = "#000000",
-    outlineWidth = 2,
-    shadowColor = "#000000",
-    shadowOffset = 2,
-
-    // 위치 및 정렬
-    position = "bottom",
-    horizontalAlign = "center",
-    verticalPadding = 40,
-
-    // 배경 및 테두리
-    useBackground = true,
-    useOutline = true,
-    useShadow = true,
-  } = subtitleSettings;
-
-  console.log(`[ASS 변환] 설정값:`, {
-    fontFamily, fontSize, fontWeight, textColor,
-    backgroundColor, backgroundOpacity, outlineColor, outlineWidth,
-    position, horizontalAlign, verticalPadding,
-    useBackground, useOutline, useShadow
-  });
-
-  // 폰트 이름 매핑 (시스템에 설치된 폰트명으로 정확히 매핑)
-  const fontMap = {
-    "noto-sans": "Noto Sans CJK KR",        // 또는 "Noto Sans KR"
-    "malgun-gothic": "맑은 고딕",           // Windows 기본 폰트
-    "apple-sd-gothic": "Apple SD Gothic Neo",
-    "nanumgothic": "NanumGothic",
-    "arial": "Arial",
-    "helvetica": "Helvetica",
-    "roboto": "Roboto",
-  };
-  const fontName = fontMap[fontFamily] || "맑은 고딕";
-
-  // ✅ 폰트 크기를 해상도에 맞게 조정
-  // 설정값은 1920x1080 기준이므로 그대로 사용
-  // 하지만 너무 작으면 경고
-  if (fontSize < 40) {
-    console.warn(`⚠️ 폰트 크기가 ${fontSize}px로 너무 작습니다. 1920x1080 해상도에서는 48~72px 권장`);
-  }
-
-  console.log(`[ASS 폰트] 선택된 폰트: ${fontFamily} → ${fontName}, 크기: ${fontSize}px`);
-
-  // 색상 변환 (HEX → ASS &HAABBGGRR 포맷)
-  const hexToAssBgr = (hex) => {
-    hex = hex.replace('#', '');
-    const r = hex.substring(0, 2);
-    const g = hex.substring(2, 4);
-    const b = hex.substring(4, 6);
-    return `&H00${b.toUpperCase()}${g.toUpperCase()}${r.toUpperCase()}`; // &H + 00(불투명) + BGR
-  };
-
-  const primaryColor = hexToAssBgr(textColor);
-  const outlineColorAss = hexToAssBgr(outlineColor);
-
-  // 배경색 (투명도 포함)
-  const bgHex = backgroundColor.replace('#', '');
-  const bgR = bgHex.substring(0, 2);
-  const bgG = bgHex.substring(2, 4);
-  const bgB = bgHex.substring(4, 6);
-  // ASS 투명도: 0=불투명, 255=투명 (사용자 설정의 반대)
-  const bgAlpha = Math.round((100 - backgroundOpacity) * 255 / 100);
-  const backColorWithAlpha = `&H${bgAlpha.toString(16).padStart(2, '0').toUpperCase()}${bgB.toUpperCase()}${bgG.toUpperCase()}${bgR.toUpperCase()}`;
-
-  // 🔥 테스트용 하드코딩: 빨간색 완전 불투명 배경 강제
-  const TEST_MODE = true;
-  const backColorHardcoded = '&H00FF0000'; // 파란색 완전 불투명 (00 = alpha, FF = blue)
-  const finalBackColor = TEST_MODE ? backColorHardcoded : backColorWithAlpha;
-
-  console.log(`[ASS 색상] 텍스트: ${primaryColor}, 외곽선: ${outlineColorAss}, 배경: ${finalBackColor}`);
-  console.log(`[배경 투명도 계산] backgroundOpacity: ${backgroundOpacity}% → ASS alpha: ${bgAlpha} (0x${bgAlpha.toString(16).toUpperCase()})`);
-  if (TEST_MODE) {
-    console.warn(`🔥 테스트 모드 활성화: 배경색을 파란색 완전 불투명으로 강제 설정 (${backColorHardcoded})`);
-  }
-
-  // 정렬 (ASS Alignment: 1=왼쪽하단, 2=중앙하단, 3=오른쪽하단, 4~6=중간, 7~9=상단)
-  let alignment = 2; // 기본: 중앙하단
-  if (position === "bottom") {
-    if (horizontalAlign === "left") alignment = 1;
-    else if (horizontalAlign === "center") alignment = 2;
-    else alignment = 3;
-  } else if (position === "center") {
-    if (horizontalAlign === "left") alignment = 4;
-    else if (horizontalAlign === "center") alignment = 5;
-    else alignment = 6;
-  } else { // top
-    if (horizontalAlign === "left") alignment = 7;
-    else if (horizontalAlign === "center") alignment = 8;
-    else alignment = 9;
-  }
-
-  // ✅ MarginV (수직 여백) + 세밀한 위치 조정 적용
-  const finePositionOffset = subtitleSettings.finePositionOffset || 0;
-  const marginV = verticalPadding + finePositionOffset;
-
-  console.log(`[위치 조정] verticalPadding: ${verticalPadding}, finePositionOffset: ${finePositionOffset}, 최종 marginV: ${marginV}`);
-
-  // ✅ BorderStyle: 배경 박스 표시 방식
-  // 1 = 외곽선 + 불투명 배경 박스 (가장 일반적)
-  // 3 = 외곽선만 (투명 배경)
-  // 4 = 배경 박스만 (외곽선 없음)
-  let borderStyle = 3; // 기본: 외곽선만
-  if (useBackground && useOutline) {
-    borderStyle = 1; // 외곽선 + 배경 박스
-  } else if (useBackground && !useOutline) {
-    borderStyle = 4; // 배경 박스만
-  } else {
-    borderStyle = 3; // 외곽선만
-  }
-
-  // Shadow: 그림자 거리 (useShadow가 꺼져있으면 0)
-  const shadow = useShadow ? shadowOffset : 0;
-
-  // ✅ Letter Spacing (글자 간격)
-  const letterSpacing = subtitleSettings.letterSpacing || 0;
-
-  // Outline: 외곽선 두께 (useOutline이 꺼져있으면 0)
-  const outline = useOutline ? outlineWidth : 0;
-
-  // Bold: 폰트 굵기 (-1=굵게, 0=보통)
-  const bold = fontWeight >= 600 ? -1 : 0;
-
-  // ✅ 배경색이 제대로 보이도록 SecondaryColour도 설정
-  const secondaryColor = TEST_MODE ? backColorHardcoded : backColorWithAlpha;
-  const finalBackColorForStyle = TEST_MODE ? backColorHardcoded : backColorWithAlpha;
-
-  // 🔥 테스트: BorderStyle 강제로 1 설정
-  const finalBorderStyle = TEST_MODE ? 1 : borderStyle;
-  const finalOutline = TEST_MODE ? 3 : outline;
-
-  console.log(`[ASS 설정 요약]`, {
-    폰트: `${fontName} ${fontSize}px`,
-    굵기: fontWeight,
-    외곽선: useOutline ? `${finalOutline}px (${outlineColorAss})` : '없음',
-    배경: TEST_MODE ? `🔥 하드코딩 (${finalBackColorForStyle})` : (useBackground ? `있음 (${backColorWithAlpha})` : '없음'),
-    그림자: useShadow ? `${shadow}px` : '없음',
-    BorderStyle: finalBorderStyle,
-    Alignment: alignment,
-  });
-
-  // ASS 스타일 생성 (V4+ Styles 형식)
-  // Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-  const assStyle = `Style: Default,${fontName},${fontSize},${primaryColor},${secondaryColor},${outlineColorAss},${finalBackColorForStyle},${bold},0,0,0,100,100,${letterSpacing},0,${finalBorderStyle},${finalOutline},${shadow},${alignment},10,10,${marginV},1`;
-
-  console.log(`[ASS 최종 스타일]`);
-  console.log(`  폰트: ${fontName} ${fontSize}px (굵기: ${bold === -1 ? '굵게' : '보통'})`);
-  console.log(`  외곽선: ${outline}px, 배경: ${useBackground ? '사용' : '사용안함'}, BorderStyle: ${borderStyle}`);
-  console.log(`  글자간격(Spacing): ${letterSpacing}px`);
-  console.log(`  전체: ${assStyle}`);
-
-  // SRT 읽기
-  const srtContent = fs.readFileSync(srtPath, 'utf-8');
-  const subtitles = parseSRT(srtContent);
-
-  // ASS 형식으로 변환
-  let assContent = `[Script Info]
-ScriptType: v4.00+
-PlayResX: ${videoWidth}
-PlayResY: ${videoHeight}
-WrapStyle: 0
-
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-${assStyle}
-
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-`;
-
-  for (const subtitle of subtitles) {
-    const startTime = formatAssTime(subtitle.startTime);
-    const endTime = formatAssTime(subtitle.endTime);
-
-    // ✅ 텍스트를 maxLines에 맞게 분할
-    let text = subtitle.text;
-    const lines = text.split('\n');
-
-    // maxLines 설정 적용 (사용자가 설정한 줄 수만큼만 표시)
-    const maxLines = subtitleSettings.maxLines || 2;
-    if (lines.length > maxLines) {
-      text = lines.slice(0, maxLines).join('\n');
-    }
-
-    // ASS 줄바꿈 형식으로 변환 (\n → \N)
-    text = text.replace(/\n/g, '\\N');
-
-    // ✅ 인라인 오버라이드 제거 - Style만 사용
-    assContent += `Dialogue: 0,${startTime},${endTime},Default,,0,0,0,,${text}\n`;
-  }
-
-  // ASS 파일 저장
-  const assPath = srtPath.replace('.srt', '.ass');
-  await fsp.writeFile(assPath, assContent, 'utf8');
-  console.log(`✅ ASS 자막 생성: ${assPath}`);
-  console.log(`\n[ASS 파일 내용 미리보기]\n${assContent.substring(0, 1000)}\n`);
-
-  return assPath;
-}
-
-// ASS 시간 포맷 (0:00:00.00)
-function formatAssTime(seconds) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  const cs = Math.floor((seconds % 1) * 100);
-  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
+  return filters.join(",");
 }
 
 // 음성 파일의 duration을 가져오는 함수 (FFmpeg 사용)
@@ -526,8 +404,8 @@ try {
   ffmpegPath = require("ffmpeg-static");
 
   // ASAR 패키징된 경우, app.asar를 app.asar.unpacked로 변경
-  if (ffmpegPath && ffmpegPath.includes('app.asar')) {
-    ffmpegPath = ffmpegPath.replace('app.asar', 'app.asar.unpacked');
+  if (ffmpegPath && ffmpegPath.includes("app.asar")) {
+    ffmpegPath = ffmpegPath.replace("app.asar", "app.asar.unpacked");
     console.log("[ffmpeg] ASAR unpacked path:", ffmpegPath);
   }
 
@@ -536,8 +414,8 @@ try {
   console.error("[ffmpeg] Failed to load ffmpeg-static:", err);
   // 폴백: 하드코딩된 경로 (unpacked 사용)
   const appPath = app.getAppPath();
-  if (appPath.includes('app.asar')) {
-    ffmpegPath = path.join(appPath.replace('app.asar', 'app.asar.unpacked'), 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
+  if (appPath.includes("app.asar")) {
+    ffmpegPath = path.join(appPath.replace("app.asar", "app.asar.unpacked"), "node_modules", "ffmpeg-static", "ffmpeg.exe");
   } else {
     ffmpegPath = path.join(__dirname, "..", "..", "node_modules", "ffmpeg-static", "ffmpeg.exe");
   }
@@ -569,61 +447,64 @@ function register() {
     ipcMain.removeHandler("video:cancelExport");
   } catch {}
 
-  ipcMain.handle("ffmpeg:compose", async (event, { audioFiles, imageFiles, outputPath, subtitlePath = null, sceneDurationsMs = null, options = {} }) => {
-    try {
-      console.log(`\n🎬 영상 합성 시작: ${imageFiles?.length || 0}개 씬`);
-      const videoQuality = store.get("videoQuality", "balanced");
-      const videoPreset = store.get("videoPreset", "fast");
-      const videoCrf = store.get("videoCrf", 23);
+  ipcMain.handle(
+    "ffmpeg:compose",
+    async (event, { audioFiles, imageFiles, outputPath, subtitlePath = null, sceneDurationsMs = null, options = {} }) => {
+      try {
+        console.log(`\n🎬 영상 합성 시작: ${imageFiles?.length || 0}개 씬`);
+        const videoQuality = store.get("videoQuality", "balanced");
+        const videoPreset = store.get("videoPreset", "fast");
+        const videoCrf = store.get("videoCrf", 23);
 
-      let qualitySettings = { crf: 23, preset: "veryfast" };
-      if (videoQuality === "high") qualitySettings = { crf: 18, preset: "fast" };
-      if (videoQuality === "medium") qualitySettings = { crf: 21, preset: "veryfast" };
-      if (videoQuality === "low") qualitySettings = { crf: 28, preset: "ultrafast" };
+        let qualitySettings = { crf: 23, preset: "veryfast" };
+        if (videoQuality === "high") qualitySettings = { crf: 18, preset: "fast" };
+        if (videoQuality === "medium") qualitySettings = { crf: 21, preset: "veryfast" };
+        if (videoQuality === "low") qualitySettings = { crf: 28, preset: "ultrafast" };
 
-      if (videoPreset) qualitySettings.preset = videoPreset;
-      if (videoCrf !== undefined) qualitySettings.crf = videoCrf;
+        if (videoPreset) qualitySettings.preset = videoPreset;
+        if (videoCrf !== undefined) qualitySettings.crf = videoCrf;
 
-      const finalOptions = {
-        fps: 24,
-        videoCodec: "libx264",
-        audioCodec: "aac",
-        format: "mp4",
-        ...qualitySettings,
-        ...options,
-      };
+        const finalOptions = {
+          fps: 24,
+          videoCodec: "libx264",
+          audioCodec: "aac",
+          format: "mp4",
+          ...qualitySettings,
+          ...options,
+        };
 
-      const ffmpegArgs = await buildFFmpegCommand({
-        audioFiles,
-        imageFiles,
-        outputPath,
-        subtitlePath,
-        sceneDurationsMs,
-        options: finalOptions,
-        onMakeClipProgress: (i, total) => {
-          const p = Math.round((i / total) * 30);
-          event.sender.send("ffmpeg:progress", p);
-        },
-      });
+        const ffmpegArgs = await buildFFmpegCommand({
+          audioFiles,
+          imageFiles,
+          outputPath,
+          subtitlePath,
+          sceneDurationsMs,
+          options: finalOptions,
+          onMakeClipProgress: (i, total) => {
+            const p = Math.round((i / total) * 30);
+            event.sender.send("ffmpeg:progress", p);
+          },
+        });
 
-      console.log("FFmpeg 명령어:", ffmpegArgs.join(" "));
+        console.log("FFmpeg 명령어:", ffmpegArgs.join(" "));
 
-      const result = await runFFmpeg(ffmpegArgs, (progress) => {
-        const mapped = 30 + Math.round((progress / 100) * 70);
-        event.sender.send("ffmpeg:progress", Math.min(99, mapped));
-      });
+        const result = await runFFmpeg(ffmpegArgs, (progress) => {
+          const mapped = 30 + Math.round((progress / 100) * 70);
+          event.sender.send("ffmpeg:progress", Math.min(99, mapped));
+        });
 
-      if (result.success) {
-        event.sender.send("ffmpeg:progress", 100);
-        return { success: true, videoPath: outputPath, duration: result.duration, size: result.size || 0 };
-      } else {
-        throw new Error(result.error || "FFmpeg compose failed");
+        if (result.success) {
+          event.sender.send("ffmpeg:progress", 100);
+          return { success: true, videoPath: outputPath, duration: result.duration, size: result.size || 0 };
+        } else {
+          throw new Error(result.error || "FFmpeg compose failed");
+        }
+      } catch (error) {
+        console.error("❌ FFmpeg 영상 합성 실패:", error);
+        return { success: false, message: error.message, error: error.toString() };
       }
-    } catch (error) {
-      console.error("❌ FFmpeg 영상 합성 실패:", error);
-      return { success: false, message: error.message, error: error.toString() };
     }
-  });
+  );
 
   ipcMain.handle("ffmpeg:check", async () => {
     try {
@@ -791,11 +672,14 @@ function register() {
           sceneDurationsMs[sceneDurationsMs.length - 1] += diff;
         }
 
-        console.log(`📊 씬 duration 조정: ${(sumOfIndividualDurationsMs / 1000).toFixed(1)}s → ${(targetDurationMs / 1000).toFixed(1)}s (비율: ${ratio.toFixed(3)})`);
+        console.log(
+          `📊 씬 duration 조정: ${(sumOfIndividualDurationsMs / 1000).toFixed(1)}s → ${(targetDurationMs / 1000).toFixed(
+            1
+          )}s (비율: ${ratio.toFixed(3)})`
+        );
       } else {
         sceneDurationsMs = individualSceneDurationsMs;
       }
-
 
       // FFmpeg로 영상 합성
       const result = await composeVideoFromScenes({
@@ -1145,49 +1029,12 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
   if (subtitlePath && fs.existsSync(subtitlePath)) {
     console.log(`✅ 자막 파일 확인: ${subtitlePath}`);
 
-    // ✅ 전역 자막 설정 로드 (사용자가 설정한 모든 값)
-    const subtitleSettings = store.get("subtitleSettings", {
-      // 기본 텍스트 설정
-      fontFamily: "noto-sans",
-      fontSize: 24,
-      fontWeight: 600,
-      lineHeight: 1.4,
-      letterSpacing: 0,
-
-      // 색상 설정
-      textColor: "#FFFFFF",
-      backgroundColor: "#000000",
-      backgroundOpacity: 80,
-      outlineColor: "#000000",
-      outlineWidth: 2,
-      shadowColor: "#000000",
-      shadowOffset: 2,
-      shadowBlur: 4,
-
-      // 위치 및 정렬
-      position: "bottom",
-      horizontalAlign: "center",
-      verticalPadding: 40,
-      horizontalPadding: 20,
-      maxWidth: 80,
-      finePositionOffset: 0,
-
-      // 배경 및 테두리
-      useBackground: true,
-      backgroundRadius: 8,
-      useOutline: true,
-      useShadow: true,
-
-      // 고급 설정
-      autoWrap: true,
-      maxLines: 2,
-      wordBreak: "keep-all",
-    });
-
-    console.log(`[자막 설정] 전역 설정값:`, subtitleSettings);
+    // ✅ 전역 자막 설정 로드 (검증 및 fallback 포함)
+    const subtitleSettings = getSubtitleSettings();
+    console.log(`[자막 설정] 로드 완료:`, subtitleSettings);
 
     // ✅ drawtext 필터로 자막 구현 (배경 박스 지원)
-    const srtContent = fs.readFileSync(subtitlePath, 'utf-8');
+    const srtContent = fs.readFileSync(subtitlePath, "utf-8");
     const subtitles = parseSRT(srtContent);
 
     console.log(`📝 drawtext로 ${subtitles.length}개 자막 렌더링`);
@@ -1197,11 +1044,7 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
       const subtitle = subtitles[i];
       const nextLabel = i === subtitles.length - 1 ? "[v]" : `[st${i}]`;
 
-      // 디버깅: 자막 텍스트와 줄 수 확인
-      const lineCount = subtitle.text.split('\n').length;
-      console.log(`자막 ${i + 1}: ${lineCount}줄 - "${subtitle.text.substring(0, 50)}..."`);
-
-      // 방법 3: 여러 drawtext 필터로 나누기 (각 줄마다 별도 렌더링)
+      // 여러 drawtext 필터로 나누기 (각 줄마다 별도 렌더링)
       const drawtextFilter = createDrawtextFilterAdvanced(subtitle, subtitleSettings, null, 1920, 1080);
       filterComplex += `;${currentLabel}${drawtextFilter}${nextLabel}`;
       currentLabel = nextLabel;
@@ -1381,7 +1224,6 @@ async function generateSrtFromScenes(scenes, srtPath) {
       }
     }
 
-
     let srtContent = "";
     let accumulatedTime = 0; // ms
 
@@ -1419,17 +1261,16 @@ async function generateSrtFromScenes(scenes, srtPath) {
         const minutes = Math.floor((totalSec % 3600) / 60);
         const seconds = totalSec % 60;
         const milliseconds = ms % 1000;
-        return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")},${String(milliseconds).padStart(
-          3,
-          "0"
-        )}`;
+        return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")},${String(
+          milliseconds
+        ).padStart(3, "0")}`;
       };
 
       // ✅ 텍스트를 maxLines에 맞게 처리
       let text = scene.text || "";
 
       // 이미 줄바꿈이 있으면 그대로 사용, 없으면 균형있게 분할
-      let lines = text.includes('\n') ? text.split('\n') : [text];
+      let lines = text.includes("\n") ? text.split("\n") : [text];
 
       // maxLines가 2이고 줄바꿈이 없는 긴 텍스트면 균형있게 분할
       if (lines.length === 1 && subtitleSettings.maxLines === 2 && text.length > 20) {
@@ -1439,11 +1280,11 @@ async function generateSrtFromScenes(scenes, srtPath) {
 
         // 중간점 앞뒤로 공백 찾기
         for (let offset = 0; offset < text.length / 2; offset++) {
-          if (text[midPoint + offset] === ' ') {
+          if (text[midPoint + offset] === " ") {
             splitPoint = midPoint + offset;
             break;
           }
-          if (text[midPoint - offset] === ' ') {
+          if (text[midPoint - offset] === " ") {
             splitPoint = midPoint - offset;
             break;
           }
@@ -1458,10 +1299,10 @@ async function generateSrtFromScenes(scenes, srtPath) {
       // maxLines 설정 적용
       if (lines.length > subtitleSettings.maxLines) {
         lines = lines.slice(0, subtitleSettings.maxLines);
-        console.log(`⚠️ 씬 ${i + 1}: 자막이 ${text.split('\n').length}줄 → ${subtitleSettings.maxLines}줄로 축소됨`);
+        console.log(`⚠️ 씬 ${i + 1}: 자막이 ${text.split("\n").length}줄 → ${subtitleSettings.maxLines}줄로 축소됨`);
       }
 
-      text = lines.join('\n');
+      text = lines.join("\n");
 
       srtContent += `${i + 1}\n`;
       srtContent += `${formatTime(startTime)} --> ${formatTime(endTime)}\n`;
@@ -1557,10 +1398,7 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
 
       const vfChain = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p`;
 
-      const videoArgs = [
-        "-y",
-        "-hide_banner",
-      ];
+      const videoArgs = ["-y", "-hide_banner"];
 
       // stream_loop 추가 (반복 필요한 경우만)
       if (loopCount === -1) {
@@ -1686,12 +1524,14 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
   let audioConcatPath = null;
   if (audioFiles && audioFiles.length > 0) {
     audioConcatPath = path.join(tempDir, `audio_concat_${Date.now()}.txt`);
-    const audioConcatContent = audioFiles.map(filePath => {
-      // Windows 경로를 슬래시로 변환하고 이스케이프
-      const escapedPath = filePath.replace(/\\/g, '/').replace(/'/g, "'\\''");
-      return `file '${escapedPath}'`;
-    }).join('\n');
-    await fsp.writeFile(audioConcatPath, audioConcatContent, 'utf8');
+    const audioConcatContent = audioFiles
+      .map((filePath) => {
+        // Windows 경로를 슬래시로 변환하고 이스케이프
+        const escapedPath = filePath.replace(/\\/g, "/").replace(/'/g, "'\\''");
+        return `file '${escapedPath}'`;
+      })
+      .join("\n");
+    await fsp.writeFile(audioConcatPath, audioConcatContent, "utf8");
     console.log(`📝 오디오 concat 파일 생성: ${audioFiles.length}개 파일`);
   }
 
@@ -1715,49 +1555,12 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
   if (srtPath && fs.existsSync(srtPath)) {
     console.log(`✅ 자막 파일 확인: ${srtPath}`);
 
-    // ✅ 전역 자막 설정 로드 (사용자가 설정한 모든 값)
-    const subtitleSettings = store.get("subtitleSettings", {
-      // 기본 텍스트 설정
-      fontFamily: "noto-sans",
-      fontSize: 24,
-      fontWeight: 600,
-      lineHeight: 1.4,
-      letterSpacing: 0,
-
-      // 색상 설정
-      textColor: "#FFFFFF",
-      backgroundColor: "#000000",
-      backgroundOpacity: 80,
-      outlineColor: "#000000",
-      outlineWidth: 2,
-      shadowColor: "#000000",
-      shadowOffset: 2,
-      shadowBlur: 4,
-
-      // 위치 및 정렬
-      position: "bottom",
-      horizontalAlign: "center",
-      verticalPadding: 40,
-      horizontalPadding: 20,
-      maxWidth: 80,
-      finePositionOffset: 0,
-
-      // 배경 및 테두리
-      useBackground: true,
-      backgroundRadius: 8,
-      useOutline: true,
-      useShadow: true,
-
-      // 고급 설정
-      autoWrap: true,
-      maxLines: 2,
-      wordBreak: "keep-all",
-    });
-
-    console.log(`[자막 설정] 전역 설정값:`, subtitleSettings);
+    // ✅ 전역 자막 설정 로드 (검증 및 fallback 포함)
+    const subtitleSettings = getSubtitleSettings();
+    console.log(`[자막 설정] 로드 완료:`, subtitleSettings);
 
     // ✅ drawtext 필터로 자막 구현 (배경 박스 지원)
-    const srtContent = fs.readFileSync(srtPath, 'utf-8');
+    const srtContent = fs.readFileSync(srtPath, "utf-8");
     const subtitles = parseSRT(srtContent);
 
     console.log(`📝 drawtext로 ${subtitles.length}개 자막 렌더링`);
@@ -1767,11 +1570,7 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
       const subtitle = subtitles[i];
       const nextLabel = i === subtitles.length - 1 ? "[v]" : `[st${i}]`;
 
-      // 디버깅: 자막 텍스트와 줄 수 확인
-      const lineCount = subtitle.text.split('\n').length;
-      console.log(`자막 ${i + 1}: ${lineCount}줄 - "${subtitle.text.substring(0, 50)}..."`);
-
-      // 방법 3: 여러 drawtext 필터로 나누기 (각 줄마다 별도 렌더링)
+      // 여러 drawtext 필터로 나누기 (각 줄마다 별도 렌더링)
       const drawtextFilter = createDrawtextFilterAdvanced(subtitle, subtitleSettings, null, 1920, 1080);
       filterComplex += `;${currentLabel}${drawtextFilter}${nextLabel}`;
       currentLabel = nextLabel;
