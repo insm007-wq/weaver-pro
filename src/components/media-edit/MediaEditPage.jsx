@@ -15,7 +15,16 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
   const containerStyles = useContainerStyles();
 
   // 파일 관리 훅 사용
-  const { scenes, setScenes, srtConnected, mp3Connected, handleInsertFromScript, isLoading } = useFileManagement();
+  const {
+    scenes,
+    setScenes,
+    srtConnected,
+    setSrtConnected,
+    mp3Connected,
+    setMp3Connected,
+    handleInsertFromScript,
+    isLoading
+  } = useFileManagement();
 
   // 최소 상태 관리
   const [selectedSceneIndex, setSelectedSceneIndex] = useState(0);
@@ -52,6 +61,31 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 편집 페이지 초기화 이벤트 리스너
+  useEffect(() => {
+    const handleResetMediaEdit = () => {
+      console.log("🔄 편집 페이지 초기화 이벤트 수신 - 불러오기 상태로 초기화");
+
+      // 씬 및 UI 상태 초기화
+      setScenes([]);
+      setSelectedSceneIndex(0);
+      setVideoUrl(null);
+
+      // 파일 연결 상태 초기화
+      setSrtConnected(false);
+      setMp3Connected(false);
+
+      // 파일 로드 시도 플래그 초기화 (다시 자동 로드 시도하지 않도록)
+      hasTriedLoadRef.current = false;
+    };
+
+    window.addEventListener("reset-media-edit", handleResetMediaEdit);
+
+    return () => {
+      window.removeEventListener("reset-media-edit", handleResetMediaEdit);
+    };
+  }, [setScenes, setSrtConnected, setMp3Connected]);
 
   // 선택된 씬의 미디어 URL 로드 (비디오 및 이미지 모두 지원)
   useEffect(() => {

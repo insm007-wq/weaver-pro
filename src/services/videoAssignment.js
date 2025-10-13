@@ -503,6 +503,16 @@ export async function assignVideosToScenes(scenes, options = {}) {
     const assignments = [];
     const usedVideos = new Set();
 
+    // ✅ 이미 할당된 영상들을 usedVideos에 추가 (중복 방지)
+    // 경로 정규화하여 비교 (Windows/Unix 경로 형식 통일)
+    for (const scene of scenes) {
+      if (scene.asset?.path && scene.asset.type === 'video') {
+        const normalizedPath = scene.asset.path.replace(/\\/g, '/').toLowerCase();
+        usedVideos.add(normalizedPath);
+        console.log(`[영상 할당] 이미 할당된 영상: ${normalizedPath}`);
+      }
+    }
+
     for (let i = 0; i < scenes.length; i++) {
       const scene = scenes[i];
 
@@ -603,6 +613,15 @@ export async function assignMediaToScenes(scenes, options = {}) {
     const usedVideos = new Set();
     let videoAssignedCount = 0;
 
+    // ✅ 이미 할당된 영상들을 usedVideos에 추가 (중복 방지)
+    // 경로 정규화하여 비교 (Windows/Unix 경로 형식 통일)
+    for (const scene of scenes) {
+      if (scene.asset?.path && scene.asset.type === 'video') {
+        const normalizedPath = scene.asset.path.replace(/\\/g, '/').toLowerCase();
+        usedVideos.add(normalizedPath);
+      }
+    }
+
     for (let i = 0; i < scenes.length; i++) {
       const scene = scenes[i];
 
@@ -617,7 +636,8 @@ export async function assignMediaToScenes(scenes, options = {}) {
 
       // 1차: 키워드 매칭 시도
       for (const video of availableVideos) {
-        if (!allowDuplicates && usedVideos.has(video.path)) {
+        const normalizedVideoPath = video.path.replace(/\\/g, '/').toLowerCase();
+        if (!allowDuplicates && usedVideos.has(normalizedVideoPath)) {
           continue;
         }
 
@@ -630,7 +650,10 @@ export async function assignMediaToScenes(scenes, options = {}) {
 
       // 2차: 매칭 실패 시 사용 가능한 영상 중 랜덤 선택
       if (!bestVideo && availableVideos.length > 0) {
-        const unusedVideos = availableVideos.filter(v => !usedVideos.has(v.path));
+        const unusedVideos = availableVideos.filter(v => {
+          const normalizedPath = v.path.replace(/\\/g, '/').toLowerCase();
+          return !usedVideos.has(normalizedPath);
+        });
         if (unusedVideos.length > 0) {
           bestVideo = unusedVideos[Math.floor(Math.random() * unusedVideos.length)];
           bestScore = 0;
@@ -641,7 +664,8 @@ export async function assignMediaToScenes(scenes, options = {}) {
       }
 
       if (bestVideo && !allowDuplicates) {
-        usedVideos.add(bestVideo.path);
+        const normalizedPath = bestVideo.path.replace(/\\/g, '/').toLowerCase();
+        usedVideos.add(normalizedPath);
         videoAssignedCount++;
       }
 
@@ -801,6 +825,15 @@ export async function assignVideosWithDownload(scenes, options = {}) {
     const usedVideos = new Set();
     let localAssignedCount = 0;
 
+    // ✅ 이미 할당된 영상들을 usedVideos에 추가 (중복 방지)
+    // 경로 정규화하여 비교 (Windows/Unix 경로 형식 통일)
+    for (const scene of scenes) {
+      if (scene.asset?.path && scene.asset.type === 'video') {
+        const normalizedPath = scene.asset.path.replace(/\\/g, '/').toLowerCase();
+        usedVideos.add(normalizedPath);
+      }
+    }
+
     for (let i = 0; i < scenes.length; i++) {
       const scene = scenes[i];
 
@@ -815,7 +848,8 @@ export async function assignVideosWithDownload(scenes, options = {}) {
 
       // 1차: 키워드 매칭 시도
       for (const video of availableVideos) {
-        if (!allowDuplicates && usedVideos.has(video.path)) {
+        const normalizedVideoPath = video.path.replace(/\\/g, '/').toLowerCase();
+        if (!allowDuplicates && usedVideos.has(normalizedVideoPath)) {
           continue;
         }
 
@@ -828,7 +862,10 @@ export async function assignVideosWithDownload(scenes, options = {}) {
 
       // 2차: 매칭 실패 시 사용 가능한 영상 중 랜덤 선택
       if (!bestVideo && availableVideos.length > 0) {
-        const unusedVideos = availableVideos.filter(v => !usedVideos.has(v.path));
+        const unusedVideos = availableVideos.filter(v => {
+          const normalizedPath = v.path.replace(/\\/g, '/').toLowerCase();
+          return !usedVideos.has(normalizedPath);
+        });
         if (unusedVideos.length > 0) {
           bestVideo = unusedVideos[Math.floor(Math.random() * unusedVideos.length)];
           bestScore = 0;
@@ -839,7 +876,8 @@ export async function assignVideosWithDownload(scenes, options = {}) {
       }
 
       if (bestVideo && !allowDuplicates) {
-        usedVideos.add(bestVideo.path);
+        const normalizedPath = bestVideo.path.replace(/\\/g, '/').toLowerCase();
+        usedVideos.add(normalizedPath);
         localAssignedCount++;
       }
 

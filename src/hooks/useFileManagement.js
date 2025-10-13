@@ -103,6 +103,7 @@ export const useFileManagement = () => {
   // 대본에서 가져오기 (ScriptVoiceGenerator에서 생성된 파일들 로드)
   const handleInsertFromScript = useCallback(async () => {
     setIsLoading(true);
+
     try {
       // videoSaveFolder 설정에서 기본 경로 가져오기
       const videoSaveFolder = await getSetting("videoSaveFolder");

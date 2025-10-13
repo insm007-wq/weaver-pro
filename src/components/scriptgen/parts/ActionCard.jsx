@@ -211,6 +211,12 @@ const ActionCard = memo(
           const scriptResult = await runGenerate(formData);
 
           if (scriptResult && scriptResult.scenes && Array.isArray(scriptResult.scenes) && scriptResult.scenes.length > 0) {
+            // ✅ 대본 생성 완료 시 미디어 관련 상태 초기화
+            console.log("🔄 대본 생성 완료 - 미디어 상태 초기화");
+            window.dispatchEvent(new CustomEvent("reset-keyword-extraction")); // 미디어 준비 초기화
+            window.dispatchEvent(new CustomEvent("reset-media-download")); // 미디어 다운로드 초기화
+            window.dispatchEvent(new CustomEvent("reset-media-edit")); // 편집 페이지 초기화
+
             setFullVideoState((prev) => ({
               ...prev,
               currentStep: "audio",

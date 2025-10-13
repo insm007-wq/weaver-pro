@@ -63,9 +63,18 @@ function MediaPrepEditor() {
   // 키워드 추출 초기화 이벤트 리스너
   useEffect(() => {
     const handleResetKeywordExtraction = () => {
-      console.log("🔄 키워드 추출 초기화 이벤트 수신");
+      console.log("🔄 미디어 준비 초기화 - SRT, 키워드 모두 초기화");
+
+      // 키워드 초기화
       keywordExtraction.clearAssets();
-      wizardStep.reset(); // 위저드 완전 초기화 (체크 상태 포함)
+
+      // SRT 파일 연결 상태 초기화
+      fileManagement.setScenes([]);
+      fileManagement.setSrtConnected(false);
+      fileManagement.setSrtFilePath("");
+
+      // 위저드를 1단계로 초기화
+      wizardStep.reset();
     };
 
     window.addEventListener("reset-keyword-extraction", handleResetKeywordExtraction);
@@ -73,7 +82,7 @@ function MediaPrepEditor() {
     return () => {
       window.removeEventListener("reset-keyword-extraction", handleResetKeywordExtraction);
     };
-  }, [keywordExtraction, wizardStep]);
+  }, [keywordExtraction, fileManagement, wizardStep]);
 
   // 단계별 렌더링
   const renderCurrentStep = () => {

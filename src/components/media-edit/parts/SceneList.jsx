@@ -647,11 +647,23 @@ function SceneList({
       const totalAssigned = assignedScenes.filter(s => s.asset?.path).length;
       const allComplete = assignedScenes.every(s => s.asset?.path && s.audioPath);
 
-      if (allComplete) {
-        showSuccess(`영상 할당 완료! 로컬 ${finalAssignedCount}개, 다운로드 ${finalDownloadedCount}개 (총 ${totalAssigned}개) - ✨ 모든 씬이 완성되었습니다! 이제 영상 내보내기를 진행할 수 있습니다.`);
+      // 새로 할당된 영상이 있는 경우와 없는 경우 메시지 구분
+      const newAssignments = finalAssignedCount + finalDownloadedCount;
+      let message = "";
+
+      if (newAssignments > 0) {
+        // 새로 할당된 영상이 있음
+        message = `영상 할당 완료! 새로 할당: ${finalAssignedCount}개(로컬) + ${finalDownloadedCount}개(다운) | 총 ${totalAssigned}/${scenes.length}개 할당됨`;
       } else {
-        showSuccess(`영상 할당 완료! 로컬 ${finalAssignedCount}개, 다운로드 ${finalDownloadedCount}개 (총 ${totalAssigned}개)`);
+        // 이미 모두 할당되어 있음
+        message = `영상 할당 완료! 이미 모든 씬에 영상이 할당되어 있습니다 (총 ${totalAssigned}개)`;
       }
+
+      if (allComplete) {
+        message += " - ✨ 모든 씬이 완성되었습니다! 이제 영상 내보내기를 진행할 수 있습니다.";
+      }
+
+      showSuccess(message);
 
       // 완료 후 3초 뒤 자동으로 닫기
       setTimeout(() => {
@@ -1292,7 +1304,7 @@ function SceneList({
           isComplete={mediaGenerationState.phase === "completed"}
           isLoading={mediaGenerationState.phase === "video" || mediaGenerationState.phase === "image"}
           statusText={mediaGenerationState.message}
-          progress={mediaGenerationState.total > 0 ? (mediaGenerationState.current / mediaGenerationState.total) * 100 : 0}
+          progress={mediaGenerationState.total > 0 ? Math.round((mediaGenerationState.current / mediaGenerationState.total) * 1000) / 10 : 0}
           borderColor={
             mediaGenerationState.phase === "completed" ? "#10b981" :
             mediaGenerationState.phase === "image" ? "#a855f7" :
@@ -1328,7 +1340,7 @@ function SceneList({
           isComplete={videoAssignState.phase === "completed"}
           isLoading={videoAssignState.phase === "local" || videoAssignState.phase === "download"}
           statusText={videoAssignState.message}
-          progress={videoAssignState.total > 0 ? (videoAssignState.current / videoAssignState.total) * 100 : 0}
+          progress={videoAssignState.total > 0 ? Math.round((videoAssignState.current / videoAssignState.total) * 1000) / 10 : 0}
           borderColor={
             videoAssignState.phase === "completed" ? "#10b981" :
             videoAssignState.phase === "download" ? "#a855f7" :
