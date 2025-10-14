@@ -55,7 +55,6 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
       hasTriedLoadRef.current = true;
       const timer = setTimeout(() => {
         if (!srtConnected && !mp3Connected && !isLoading) {
-          console.log("[MediaEditPage] 페이지 로드시 자동으로 프로젝트 파일 로드 시도");
           handleInsertFromScript();
         }
       }, 100);
@@ -81,7 +80,6 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
         const missingScenes = scenes.filter(scene => !scene.asset?.path && scene.text && scene.text.trim().length > 0);
 
         if (missingScenes.length > 0) {
-          console.log(`[자동 할당] ${missingScenes.length}개 씬에 영상 자동 할당 시작`);
           showInfo(`다운로드된 영상을 자동으로 할당하는 중... (${missingScenes.length}개 씬)`);
 
           try {
@@ -95,14 +93,11 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
             const assignedCount = assignedScenes.filter(s => s.asset?.path).length;
             const totalCount = assignedScenes.length;
 
-            console.log(`[자동 할당] 완료: ${assignedCount}/${totalCount}개 씬에 미디어 할당됨`);
             showSuccess(`자동 할당 완료! ${assignedCount}/${totalCount}개 씬에 영상이 할당되었습니다.`);
           } catch (error) {
             console.error("[자동 할당] 오류:", error);
             // 오류가 발생해도 조용히 넘어감 (사용자가 수동으로 할당 가능)
           }
-        } else {
-          console.log("[자동 할당] 미디어 없는 씬이 없음, 자동 할당 스킵");
         }
       }
     };
@@ -113,8 +108,6 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
   // 편집 페이지 초기화 이벤트 리스너
   useEffect(() => {
     const handleResetMediaEdit = () => {
-      console.log("🔄 편집 페이지 초기화 이벤트 수신 - 불러오기 상태로 초기화");
-
       // 씬 및 UI 상태 초기화
       setScenes([]);
       setSelectedSceneIndex(0);
@@ -141,9 +134,7 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
     const loadMediaUrl = async () => {
       if (selectedScene?.asset?.path) {
         try {
-          console.log("[미디어 로드] 시도:", selectedScene.asset.path, selectedScene.asset.type);
           const url = await window.api?.videoPathToUrl?.(selectedScene.asset.path);
-          console.log("[미디어 로드] 생성된 URL:", url);
           if (url) {
             setVideoUrl(url);
           } else {

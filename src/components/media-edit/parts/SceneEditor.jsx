@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Text, Button, Card, Spinner, ProgressBar, Dialog, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions } from "@fluentui/react-components";
+import { Text, Button, Card, Dialog, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions } from "@fluentui/react-components";
 import {
   SettingsRegular,
   ArrowExportRegular,
   CheckmarkCircle24Filled,
 } from "@fluentui/react-icons";
 import { showSuccess, showError, showInfo } from "../../common/GlobalToast";
+import BottomFixedBar from "../../common/BottomFixedBar";
 
 function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExporting }) {
   const [isExporting, setIsExporting] = useState(false);
@@ -371,47 +372,7 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
           </div>
         )}
 
-        {isExporting ? (
-          <div style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            padding: 16,
-            backgroundColor: "#f3f9ff",
-            borderRadius: 8,
-            border: "1px solid #b3d6fc"
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <Spinner size="small" />
-              <Text size={300} weight="medium">영상을 생성하는 중...</Text>
-            </div>
-            <ProgressBar value={exportProgress / 100} />
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Text size={200} style={{ color: "#666" }}>
-                {exportProgress.toFixed(1)}% 완료
-              </Text>
-              {estimatedTimeRemaining !== null && (
-                <Text size={200} style={{ color: "#666" }}>
-                  {estimatedTimeRemaining <= 0
-                    ? "거의 완료 중..."
-                    : `남은 시간: ${Math.floor(estimatedTimeRemaining / 60)}분 ${Math.floor(estimatedTimeRemaining % 60)}초`}
-                </Text>
-              )}
-            </div>
-            {estimatedTimeRemaining !== null && estimatedTimeRemaining > 30 && (
-              <Text size={200} style={{ color: "#999", fontStyle: "italic", textAlign: "center" }}>
-                💡 예상 시간은 대략적인 값이며 실제와 다를 수 있습니다
-              </Text>
-            )}
-            <Button
-              appearance="secondary"
-              onClick={handleCancelExport}
-              style={{ width: "100%", marginTop: 8 }}
-            >
-              취소
-            </Button>
-          </div>
-        ) : (
+        {!isExporting && (
           <Button
             appearance="primary"
             icon={<ArrowExportRegular />}
@@ -503,6 +464,67 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
           </DialogBody>
         </DialogSurface>
       </Dialog>
+
+      {/* 영상 내보내기 진행 바 */}
+      {isExporting && (
+        <BottomFixedBar
+          isComplete={false}
+          isLoading={true}
+          statusText={
+            estimatedTimeRemaining !== null && estimatedTimeRemaining > 0
+              ? `영상을 생성하는 중... (남은 시간: ${Math.floor(estimatedTimeRemaining / 60)}분 ${Math.floor(estimatedTimeRemaining % 60)}초)`
+              : exportProgress >= 99
+              ? "영상 생성 거의 완료..."
+              : "영상을 생성하는 중..."
+          }
+          progress={exportProgress}
+          borderColor="#3b82f6"
+          expandedContent={
+            <div style={{ padding: "12px 16px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text size={300} weight="medium">진행률</Text>
+                  <Text size={300} weight="semibold" style={{ color: "#3b82f6" }}>
+                    {exportProgress.toFixed(1)}%
+                  </Text>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text size={300} weight="medium">예상 영상 길이</Text>
+                  <Text size={300}>
+                    {Math.floor(stats.estimatedDuration / 60)}분 {Math.floor(stats.estimatedDuration % 60)}초
+                  </Text>
+                </div>
+                {estimatedTimeRemaining !== null && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Text size={300} weight="medium">예상 남은 시간</Text>
+                    <Text size={300}>
+                      {estimatedTimeRemaining <= 0
+                        ? "거의 완료..."
+                        : `${Math.floor(estimatedTimeRemaining / 60)}분 ${Math.floor(estimatedTimeRemaining % 60)}초`}
+                    </Text>
+                  </div>
+                )}
+                {estimatedTimeRemaining !== null && estimatedTimeRemaining > 30 && (
+                  <Text size={200} style={{ color: "#999", fontStyle: "italic", marginTop: 8 }}>
+                    💡 예상 시간은 대략적인 값이며 실제와 다를 수 있습니다
+                  </Text>
+                )}
+                <Button
+                  appearance="secondary"
+                  onClick={handleCancelExport}
+                  style={{ width: "100%", marginTop: 8 }}
+                >
+                  내보내기 취소
+                </Button>
+              </div>
+            </div>
+          }
+          onClose={() => {
+            // 닫기 버튼 클릭시 취소 처리
+            handleCancelExport();
+          }}
+        />
+      )}
     </Card>
   );
 }

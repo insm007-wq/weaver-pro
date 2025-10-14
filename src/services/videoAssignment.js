@@ -255,7 +255,6 @@ export async function discoverAvailableVideos() {
       });
     }
 
-    console.log(`[영상 발견] ${videos.length}개 영상 발견 (${videoPath})`);
     return videos;
 
   } catch (error) {
@@ -311,7 +310,6 @@ export async function downloadVideoForKeyword(scene, sceneIndex, options = {}) {
 
     // 1단계: 씬 텍스트에서 키워드 추출
     const sceneKeywords = extractKeywordsFromText(scene.text);
-    console.log(`[영상 다운로드] 씬 ${sceneIndex + 1}: 추출된 키워드 -`, sceneKeywords);
 
     // 2단계: 폴백 키워드 목록 구성
     const fallbackKeywords = [];
@@ -332,15 +330,12 @@ export async function downloadVideoForKeyword(scene, sceneIndex, options = {}) {
 
     // 중복 제거
     const uniqueKeywords = [...new Set(fallbackKeywords)];
-    console.log(`[영상 다운로드] 씬 ${sceneIndex + 1}: 폴백 키워드 목록 (${uniqueKeywords.length}개)`, uniqueKeywords.slice(0, 10));
 
     // 3단계: 키워드 순회하며 다운로드 시도
     for (let i = 0; i < uniqueKeywords.length; i++) {
       const keyword = uniqueKeywords[i];
 
       try {
-        console.log(`[영상 다운로드] 씬 ${sceneIndex + 1}: "${keyword}" 검색 시도 (${i + 1}/${Math.min(10, uniqueKeywords.length)})`);
-
         // window.api.downloadVideosByKeywords 호출 (조건 완화)
         const result = await window.api.downloadVideosByKeywords({
           keywords: [keyword],
@@ -354,7 +349,6 @@ export async function downloadVideoForKeyword(scene, sceneIndex, options = {}) {
 
         if (result.success && result.summary.success > 0) {
           // 다운로드 성공
-          console.log(`[영상 다운로드] 씬 ${sceneIndex + 1}: "${keyword}" 다운로드 성공`);
 
           // videoSaveFolder에서 다운로드된 파일 찾기
           const videoSaveFolderResult = await getSetting("videoSaveFolder");
@@ -389,10 +383,6 @@ export async function downloadVideoForKeyword(scene, sceneIndex, options = {}) {
               };
             }
           }
-
-          console.warn(`[영상 다운로드] 씬 ${sceneIndex + 1}: 다운로드 성공했으나 파일을 찾을 수 없음`);
-        } else {
-          console.log(`[영상 다운로드] 씬 ${sceneIndex + 1}: "${keyword}" 검색 결과 없음`);
         }
 
       } catch (error) {
@@ -401,7 +391,6 @@ export async function downloadVideoForKeyword(scene, sceneIndex, options = {}) {
 
       // 처음 3개 키워드만 시도 (속도 개선)
       if (i >= 2) {
-        console.log(`[영상 다운로드] 씬 ${sceneIndex + 1}: 3개 키워드 시도 완료, 중단`);
         break;
       }
     }
@@ -462,7 +451,6 @@ export async function generateImageForScene(scene, sceneIndex, options = {}) {
 
     // 상위 3개 키워드 선택
     const topKeywords = keywords.slice(0, 3).join(', ');
-    console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 추출된 키워드 - ${topKeywords}`);
 
     // 3. 씬용 프롬프트 확장 (Anthropic) - 속도 개선을 위해 스킵 가능
     const { skipPromptExpansion = false } = options;
@@ -471,18 +459,15 @@ export async function generateImageForScene(scene, sceneIndex, options = {}) {
     if (skipPromptExpansion) {
       // 🚀 빠른 모드: 프롬프트 확장 스킵, 폴백만 사용
       finalPrompt = `${topKeywords}, photorealistic scene illustration, natural lighting, cinematic composition, detailed background, 4K quality`;
-      console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: ⚡ 빠른 모드 - 기본 프롬프트 사용`);
     } else {
       // 일반 모드: AI 프롬프트 확장 사용 (씬 텍스트 전체를 영어로 변환)
       try {
         const expandResult = await window.api.expandScenePrompt(scene.text);
         if (expandResult?.ok && expandResult?.prompt) {
           finalPrompt = expandResult.prompt;
-          console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 씬 프롬프트 확장 완료 - ${finalPrompt}`);
         } else {
           // 폴백: 키워드 + 기본 스타일
           finalPrompt = `${topKeywords}, photorealistic scene illustration, natural lighting, cinematic composition, detailed background, 4K quality`;
-          console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 프롬프트 확장 폴백 사용`);
         }
       } catch (error) {
         console.warn(`[이미지 생성] 씬 ${sceneIndex + 1}: 프롬프트 확장 실패, 폴백 사용`);
@@ -502,7 +487,6 @@ export async function generateImageForScene(scene, sceneIndex, options = {}) {
     }
 
     const imageUrl = generateResult.images[0]; // URL 받기
-    console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 이미지 URL 생성 완료 - ${imageUrl}`);
 
     // 5. 이미지 URL을 images 폴더에 다운로드
     const sceneNumber = String(sceneIndex + 1).padStart(3, '0');
@@ -518,22 +502,18 @@ export async function generateImageForScene(scene, sceneIndex, options = {}) {
 
     try {
       // URL에서 Blob 가져오기
-      console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 이미지 다운로드 시작 - ${imageUrl}`);
       const response = await fetch(imageUrl);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const blob = await response.blob();
-      console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: Blob 생성 완료 (${blob.size} bytes, type: ${blob.type})`);
 
       const arrayBuffer = await blob.arrayBuffer();
       const buffer = new Uint8Array(arrayBuffer);
-      console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: ArrayBuffer 변환 완료 (${buffer.length} bytes)`);
 
       // 파일 저장 (Windows 경로 형식으로 변환)
       const windowsPath = fullImagePath.replace(/\//g, '\\');
-      console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 파일 저장 시작 - ${windowsPath}`);
 
       // Node.js Buffer 형식으로 변환
       const bufferData = {
@@ -546,14 +526,11 @@ export async function generateImageForScene(scene, sceneIndex, options = {}) {
         buffer: bufferData,
       });
 
-      console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: writeBuffer 결과 -`, saveResult);
-
       if (!saveResult?.success || !saveResult?.data?.ok) {
         throw new Error(saveResult?.message || saveResult?.data?.message || "파일 저장 실패");
       }
 
       const savedImagePath = saveResult.data.path;
-      console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 이미지 저장 완료 ✅ - ${savedImagePath}`);
 
       // 6. asset 객체 반환
       return {
@@ -605,7 +582,6 @@ export async function assignVideosToScenes(scenes, options = {}) {
       if (scene.asset?.path && scene.asset.type === 'video') {
         const normalizedPath = scene.asset.path.replace(/\\/g, '/').toLowerCase();
         usedVideos.add(normalizedPath);
-        console.log(`[영상 할당] 이미 할당된 영상: ${normalizedPath}`);
 
         // 파일 크기도 등록
         if (scene.asset.size) {
@@ -647,12 +623,6 @@ export async function assignVideosToScenes(scenes, options = {}) {
       }
 
       // 매칭 점수가 minScore 이상인 경우만 할당 (랜덤 할당 제거)
-      if (bestVideo) {
-        console.log(`[영상 할당] 씬 ${i + 1}: 키워드 매칭 성공 (점수: ${bestScore.toFixed(2)}) - ${bestVideo.filename}`);
-      } else {
-        console.log(`[영상 할당] 씬 ${i + 1}: 키워드 매칭 실패 (미디어 없음으로 유지)`);
-      }
-
       if (bestVideo && !allowDuplicates) {
         const normalizedPath = bestVideo.path.replace(/\\/g, '/').toLowerCase();
         usedVideos.add(normalizedPath);
@@ -680,9 +650,6 @@ export async function assignVideosToScenes(scenes, options = {}) {
         }
       };
     });
-
-    const assignedCount = assignments.filter(a => a.video).length;
-    console.log(`[영상 할당] 완료: ${assignedCount}/${scenes.length}개 씬에 할당`);
 
     return assignedScenes;
 
@@ -712,7 +679,6 @@ export async function assignMediaToScenes(scenes, options = {}) {
     }
 
     // ========== Phase 1: 영상 할당 ==========
-    console.log(`\n[미디어 할당] Phase 1 시작: 영상 할당`);
 
     const availableVideos = await discoverAvailableVideos();
     const assignments = [];
@@ -777,9 +743,6 @@ export async function assignMediaToScenes(scenes, options = {}) {
           }
         }
         videoAssignedCount++;
-        console.log(`[미디어 할당] 씬 ${i + 1}: 키워드 매칭 성공 (점수: ${bestScore.toFixed(2)}) - ${bestVideo.filename}`);
-      } else {
-        console.log(`[미디어 할당] 씬 ${i + 1}: 키워드 매칭 실패 (Phase 2에서 이미지 생성)`);
       }
 
       assignments.push({ scene, video: bestVideo, score: bestScore });
@@ -815,10 +778,7 @@ export async function assignMediaToScenes(scenes, options = {}) {
       };
     });
 
-    console.log(`[미디어 할당] Phase 1 완료: ${videoAssignedCount}개 영상 할당`);
-
     // ========== Phase 2: AI 이미지 생성 ==========
-    console.log(`\n[미디어 할당] Phase 2 시작: AI 이미지 생성`);
 
     // asset이 없는 씬 찾기
     const pendingScenes = assignedScenes
@@ -828,8 +788,6 @@ export async function assignMediaToScenes(scenes, options = {}) {
     let imageGeneratedCount = 0;
 
     if (pendingScenes.length > 0) {
-      console.log(`[미디어 할당] ${pendingScenes.length}개 씬에 이미지 생성 필요`);
-
       for (let i = 0; i < pendingScenes.length; i++) {
         const { scene, index: sceneIndex } = pendingScenes[i];
 
@@ -860,7 +818,6 @@ export async function assignMediaToScenes(scenes, options = {}) {
             asset: imageAsset,
           };
           imageGeneratedCount++;
-          console.log(`[미디어 할당] 씬 ${sceneIndex + 1}: 이미지 생성 완료`);
         } else {
           console.warn(`[미디어 할당] 씬 ${sceneIndex + 1}: 이미지 생성 실패`);
         }
@@ -877,11 +834,7 @@ export async function assignMediaToScenes(scenes, options = {}) {
           });
         }
       }
-    } else {
-      console.log(`[미디어 할당] Phase 2: 이미지 생성 불필요 (모든 씬에 영상 할당됨)`);
     }
-
-    console.log(`[미디어 할당] Phase 2 완료: ${imageGeneratedCount}개 이미지 생성`);
 
     // ========== 완료 ==========
     if (onProgress) {
@@ -895,7 +848,6 @@ export async function assignMediaToScenes(scenes, options = {}) {
       });
     }
 
-    console.log(`[미디어 할당] 전체 완료: 영상 ${videoAssignedCount}개, 이미지 ${imageGeneratedCount}개`);
     return assignedScenes;
 
   } catch (error) {
@@ -934,7 +886,6 @@ export async function assignVideosWithDownload(scenes, options = {}) {
     }
 
     // ========== Phase 1: 로컬 영상 할당 ==========
-    console.log(`\n[영상 할당] Phase 1 시작: 로컬 영상 할당`);
 
     const availableVideos = await discoverAvailableVideos();
     const assignments = [];
@@ -999,9 +950,6 @@ export async function assignVideosWithDownload(scenes, options = {}) {
           }
         }
         localAssignedCount++;
-        console.log(`[영상 할당] 씬 ${i + 1}: 로컬 키워드 매칭 성공 (점수: ${bestScore.toFixed(2)}) - ${bestVideo.filename}`);
-      } else {
-        console.log(`[영상 할당] 씬 ${i + 1}: 로컬 키워드 매칭 실패 (Phase 2에서 다운로드)`);
       }
 
       assignments.push({ scene, video: bestVideo, score: bestScore });
@@ -1037,10 +985,7 @@ export async function assignVideosWithDownload(scenes, options = {}) {
       };
     });
 
-    console.log(`[영상 할당] Phase 1 완료: ${localAssignedCount}개 로컬 영상 할당`);
-
     // ========== Phase 2: 영상 다운로드 ==========
-    console.log(`\n[영상 할당] Phase 2 시작: 영상 다운로드`);
 
     // asset이 없는 씬 찾기
     const pendingScenes = assignedScenes
@@ -1050,8 +995,6 @@ export async function assignVideosWithDownload(scenes, options = {}) {
     let downloadedCount = 0;
 
     if (pendingScenes.length > 0) {
-      console.log(`[영상 할당] ${pendingScenes.length}개 씬에 영상 다운로드 필요`);
-
       for (let i = 0; i < pendingScenes.length; i++) {
         const { scene, index: sceneIndex } = pendingScenes[i];
 
@@ -1083,7 +1026,6 @@ export async function assignVideosWithDownload(scenes, options = {}) {
             asset: videoAsset,
           };
           downloadedCount++;
-          console.log(`[영상 할당] 씬 ${sceneIndex + 1}: 영상 다운로드 완료`);
         } else {
           console.warn(`[영상 할당] 씬 ${sceneIndex + 1}: 영상 다운로드 실패`);
         }
@@ -1100,11 +1042,7 @@ export async function assignVideosWithDownload(scenes, options = {}) {
           });
         }
       }
-    } else {
-      console.log(`[영상 할당] Phase 2: 영상 다운로드 불필요 (모든 씬에 로컬 영상 할당됨)`);
     }
-
-    console.log(`[영상 할당] Phase 2 완료: ${downloadedCount}개 영상 다운로드`);
 
     // ========== 완료 ==========
     if (onProgress) {
@@ -1118,7 +1056,6 @@ export async function assignVideosWithDownload(scenes, options = {}) {
       });
     }
 
-    console.log(`[영상 할당] 전체 완료: 로컬 ${localAssignedCount}개, 다운로드 ${downloadedCount}개`);
     return assignedScenes;
 
   } catch (error) {
@@ -1191,11 +1128,8 @@ export async function assignImagesToMissingScenes(scenes, options = {}) {
       .filter(({ scene }) => !scene.asset?.path && scene.text && scene.text.trim().length > 0);
 
     if (missingScenes.length === 0) {
-      console.log("[이미지 할당] 미디어 없는 씬이 없음");
       return scenes;
     }
-
-    console.log(`[이미지 할당] ${missingScenes.length}개 씬에 이미지 생성 시작`);
 
     const assignedScenes = [...scenes];
     let imageGeneratedCount = 0;
@@ -1234,7 +1168,6 @@ export async function assignImagesToMissingScenes(scenes, options = {}) {
           asset: imageAsset,
         };
         imageGeneratedCount++;
-        console.log(`[이미지 할당] 씬 ${sceneIndex + 1}: 이미지 생성 완료 (키워드: ${sceneKeyword})`, imageAsset);
       } else {
         console.warn(`[이미지 할당] 씬 ${sceneIndex + 1}: 이미지 생성 실패`);
       }
@@ -1251,7 +1184,6 @@ export async function assignImagesToMissingScenes(scenes, options = {}) {
       });
     }
 
-    console.log(`[이미지 할당] 완료: ${imageGeneratedCount}개 이미지 생성`);
     return assignedScenes;
 
   } catch (error) {
@@ -1289,11 +1221,8 @@ export async function assignVideosToMissingScenes(scenes, options = {}) {
       .filter(({ scene }) => !scene.asset?.path && scene.text && scene.text.trim().length > 0);
 
     if (missingScenes.length === 0) {
-      console.log("[영상 할당] 미디어 없는 씬이 없음");
       return scenes;
     }
-
-    console.log(`[영상 할당] ${missingScenes.length}개 씬에 영상 할당 시작`);
 
     const availableVideos = await discoverAvailableVideos();
     if (availableVideos.length === 0) {
@@ -1311,12 +1240,10 @@ export async function assignVideosToMissingScenes(scenes, options = {}) {
       if (scene.asset?.path && scene.asset.type === 'video') {
         const normalizedPath = scene.asset.path.replace(/\\/g, '/').toLowerCase();
         usedVideos.add(normalizedPath);
-        console.log(`[중복 방지] 이미 할당된 영상 등록: ${normalizedPath}`);
 
         // 파일 크기도 등록 (같은 영상 다른 파일명 방지)
         if (scene.asset.size) {
           usedVideoSizes.add(scene.asset.size);
-          console.log(`[중복 방지] 파일 크기 등록: ${scene.asset.size} bytes`);
         }
       }
     }
@@ -1342,8 +1269,6 @@ export async function assignVideosToMissingScenes(scenes, options = {}) {
       let bestVideo = null;
       let bestScore = 0;
 
-      console.log(`\n[영상 매칭] 씬 ${sceneIndex + 1}: 매칭 시작 (현재 usedVideos: ${usedVideos.size}개, usedSizes: ${usedVideoSizes.size}개)`);
-
       // 키워드 매칭 시도 (minScore 이상만 할당)
       for (const video of availableVideos) {
         const normalizedVideoPath = video.path.replace(/\\/g, '/').toLowerCase();
@@ -1351,11 +1276,9 @@ export async function assignVideosToMissingScenes(scenes, options = {}) {
         // 중복 체크: 경로 또는 파일 크기가 같으면 스킵
         if (!allowDuplicates) {
           if (usedVideos.has(normalizedVideoPath)) {
-            console.log(`  [중복 스킵 - 경로] ${video.filename}`);
             continue;
           }
           if (video.size && usedVideoSizes.has(video.size)) {
-            console.log(`  [중복 스킵 - 크기] ${video.filename} (${video.size} bytes)`);
             continue;
           }
         }
@@ -1365,11 +1288,6 @@ export async function assignVideosToMissingScenes(scenes, options = {}) {
           bestVideo = video;
           bestScore = score;
         }
-      }
-
-      console.log(`[영상 매칭] 씬 ${sceneIndex + 1}: 최고 점수 ${bestScore.toFixed(3)} (minScore: ${minScore})`);
-      if (bestVideo) {
-        console.log(`[영상 매칭] 씬 ${sceneIndex + 1}: 선택된 영상 - ${bestVideo.filename}`);
       }
 
       // 매칭 점수가 minScore 이상인 경우만 할당 (랜덤 할당 완전 제거)
@@ -1395,21 +1313,14 @@ export async function assignVideosToMissingScenes(scenes, options = {}) {
         if (!allowDuplicates) {
           const normalizedPath = bestVideo.path.replace(/\\/g, '/').toLowerCase();
           usedVideos.add(normalizedPath);
-          console.log(`[중복 방지] 씬 ${sceneIndex + 1}: usedVideos에 추가 - ${normalizedPath}`);
 
           // 파일 크기도 등록
           if (bestVideo.size) {
             usedVideoSizes.add(bestVideo.size);
-            console.log(`[중복 방지] 씬 ${sceneIndex + 1}: usedVideoSizes에 추가 - ${bestVideo.size} bytes`);
           }
-
-          console.log(`[중복 방지] 현재 usedVideos: ${usedVideos.size}개, usedSizes: ${usedVideoSizes.size}개`);
         }
 
         videoAssignedCount++;
-        console.log(`[영상 할당] 씬 ${sceneIndex + 1}: 영상 할당 완료 (키워드: ${sceneKeyword}) - ${bestVideo.filename}`);
-      } else {
-        console.warn(`[영상 할당] 씬 ${sceneIndex + 1}: 할당 실패 (사용 가능한 영상 없음)`);
       }
     }
 
@@ -1423,46 +1334,6 @@ export async function assignVideosToMissingScenes(scenes, options = {}) {
         assignedCount: videoAssignedCount,
       });
     }
-
-    console.log(`[영상 할당] 완료: ${videoAssignedCount}개 영상 할당`);
-
-    // ========== 전체 씬 할당 결과 요약 로그 ==========
-    console.log(`\n${'='.repeat(80)}`);
-    console.log(`📊 전체 씬 할당 결과 요약 (총 ${assignedScenes.length}개 씬)`);
-    console.log(`${'='.repeat(80)}`);
-
-    let assignedVideoCount = 0;
-    let assignedImageCount = 0;
-    let unassignedCount = 0;
-
-    assignedScenes.forEach((scene, index) => {
-      const sceneNum = `씬 ${String(index + 1).padStart(2, '0')}`;
-      const sceneText = scene.text ? scene.text.substring(0, 30) + (scene.text.length > 30 ? '...' : '') : '(텍스트 없음)';
-
-      if (scene.asset?.path) {
-        if (scene.asset.type === 'video') {
-          assignedVideoCount++;
-          // MB와 정확한 바이트 크기 모두 표시
-          const sizeInfo = scene.asset.size
-            ? ` (${Math.round(scene.asset.size / 1024 / 1024)}MB = ${scene.asset.size.toLocaleString()} bytes)`
-            : '';
-          console.log(`✅ ${sceneNum}: [영상] ${scene.asset.filename}${sizeInfo}`);
-          console.log(`         키워드: ${scene.keyword || scene.asset.keyword || 'N/A'} | 텍스트: "${sceneText}"`);
-        } else if (scene.asset.type === 'image') {
-          assignedImageCount++;
-          console.log(`🖼️  ${sceneNum}: [이미지] ${scene.asset.filename || 'AI 생성'}`);
-          console.log(`         키워드: ${scene.keyword || scene.asset.keyword || 'N/A'} | 텍스트: "${sceneText}"`);
-        }
-      } else {
-        unassignedCount++;
-        console.log(`❌ ${sceneNum}: [미디어 없음]`);
-        console.log(`         키워드: ${scene.keyword || 'N/A'} | 텍스트: "${sceneText}"`);
-      }
-    });
-
-    console.log(`${'='.repeat(80)}`);
-    console.log(`📈 통계: 영상 ${assignedVideoCount}개 | 이미지 ${assignedImageCount}개 | 미할당 ${unassignedCount}개`);
-    console.log(`${'='.repeat(80)}\n`);
 
     return assignedScenes;
 

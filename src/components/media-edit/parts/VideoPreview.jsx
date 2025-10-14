@@ -43,7 +43,6 @@ const VideoPreview = memo(function VideoPreview({
     const loadSubtitleSettings = async () => {
       try {
         const settings = await window.api.getSetting("subtitleSettings");
-        console.log("🎬 영상 완성 - 로드된 자막 설정:", settings);
 
         if (settings) {
           setSubtitleSettings(settings);
@@ -74,7 +73,6 @@ const VideoPreview = memo(function VideoPreview({
             useShadow: true,
             maxLines: 2,
           };
-          console.log("📝 기본값 사용:", defaultSettings);
           setSubtitleSettings(defaultSettings);
         }
       } catch (error) {
@@ -111,7 +109,6 @@ const VideoPreview = memo(function VideoPreview({
 
     // 설정 변경 이벤트 리스너
     const handleSettingsChanged = () => {
-      console.log("🔄 설정 변경 이벤트 수신 - 자막 설정 재로드");
       loadSubtitleSettings();
     };
 
@@ -128,7 +125,6 @@ const VideoPreview = memo(function VideoPreview({
     const audio = audioRef?.current;
 
     if (!video && !audio) {
-      console.warn("[재생] 비디오와 오디오가 모두 없습니다");
       return;
     }
 
@@ -156,7 +152,6 @@ const VideoPreview = memo(function VideoPreview({
 
       Promise.allSettled(playPromises).then(() => {
         setIsPlaying(true);
-        console.log("[재생] 비디오/오디오 재생 시작");
       });
     } else {
       // 일시정지
@@ -164,7 +159,6 @@ const VideoPreview = memo(function VideoPreview({
         if (video) video.pause();
         if (audio) audio.pause();
         setIsPlaying(false);
-        console.log("[재생] 비디오/오디오 일시정지");
       } catch (error) {
         console.error("[재생] 일시정지 실패:", error);
       }
@@ -298,17 +292,18 @@ const VideoPreview = memo(function VideoPreview({
   }, [ttsAudioUrl]);
 
   // 오디오 duration이 로드되면 비디오 duration과 비교
-  useEffect(() => {
-    if (audioDuration > 0 && videoDuration > 0) {
-      if (videoDuration < audioDuration) {
-        console.log(`[비디오 루프] 비디오(${videoDuration.toFixed(2)}초)가 오디오(${audioDuration.toFixed(2)}초)보다 짧아 ${Math.ceil(audioDuration / videoDuration)}회 루프됩니다`);
-      } else if (videoDuration > audioDuration) {
-        console.log(`[비디오 재생] 비디오(${videoDuration.toFixed(2)}초)가 오디오(${audioDuration.toFixed(2)}초)보다 길어 ${(videoDuration - audioDuration).toFixed(2)}초에서 정지됩니다`);
-      } else {
-        console.log(`[비디오 재생] 비디오와 오디오 길이가 동일합니다 (${audioDuration.toFixed(2)}초)`);
-      }
-    }
-  }, [audioDuration, videoDuration]);
+  // 비디오와 오디오 duration 비교 (디버깅 시 필요하면 주석 해제)
+  // useEffect(() => {
+  //   if (audioDuration > 0 && videoDuration > 0) {
+  //     if (videoDuration < audioDuration) {
+  //       console.log(`[비디오 루프] 비디오(${videoDuration.toFixed(2)}초)가 오디오(${audioDuration.toFixed(2)}초)보다 짧아 ${Math.ceil(audioDuration / videoDuration)}회 루프됩니다`);
+  //     } else if (videoDuration > audioDuration) {
+  //       console.log(`[비디오 재생] 비디오(${videoDuration.toFixed(2)}초)가 오디오(${audioDuration.toFixed(2)}초)보다 길어 ${(videoDuration - audioDuration).toFixed(2)}초에서 정지됩니다`);
+  //     } else {
+  //       console.log(`[비디오 재생] 비디오와 오디오 길이가 동일합니다 (${audioDuration.toFixed(2)}초)`);
+  //     }
+  //   }
+  // }, [audioDuration, videoDuration]);
 
   // 비디오 URL이 변경되면 이벤트 리스너 설정
   useEffect(() => {
@@ -316,12 +311,9 @@ const VideoPreview = memo(function VideoPreview({
       const video = videoRef.current;
 
       const handleLoadedData = () => {
-        console.log("[비디오 재생] 비디오 로드 완료");
-
         // 비디오 duration 추적
         if (video.duration && isFinite(video.duration)) {
           setVideoDuration(video.duration);
-          console.log(`[비디오 재생] 비디오 duration: ${video.duration.toFixed(2)}초`);
         }
 
         // 비디오 시작 시간을 0으로 설정
@@ -332,7 +324,6 @@ const VideoPreview = memo(function VideoPreview({
         if (video.readyState >= 2) {
           video.play()
             .then(() => {
-              console.log("[비디오 재생] 비디오 재생 시작");
               setIsPlaying(true);
 
               // 오디오도 함께 재생 (이미 로드되어 있다면)
@@ -376,8 +367,6 @@ const VideoPreview = memo(function VideoPreview({
 
         // 오디오가 아직 재생 중이면 비디오를 처음부터 다시 재생
         if (audio && !audio.paused && !audio.ended) {
-          console.log("[비디오 루프] 오디오가 아직 재생 중이므로 비디오를 처음부터 다시 재생합니다");
-
           // requestAnimationFrame으로 다음 프레임에서 재생하여 충돌 방지
           requestAnimationFrame(() => {
             if (audio && !audio.paused && !audio.ended) {
@@ -392,7 +381,6 @@ const VideoPreview = memo(function VideoPreview({
           });
         } else {
           // 오디오가 끝났거나 없으면 재생 중지
-          console.log("[비디오 종료] 오디오가 끝났으므로 재생을 중지합니다");
           setIsPlaying(false);
         }
       };
@@ -456,7 +444,6 @@ const VideoPreview = memo(function VideoPreview({
         if (!isMounted) return; // 컴포넌트가 언마운트되었으면 중단
 
         if (!pathCheck?.exists || !pathCheck?.isFile) {
-          console.warn(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 파일 없음:`, selectedScene.audioPath);
           if (isMounted) {
             setTtsAudioUrl(null);
             setHasAudio(false);
@@ -478,8 +465,6 @@ const VideoPreview = memo(function VideoPreview({
         if (!isMounted) return; // 컴포넌트가 언마운트되었으면 중단
 
         if (!audioUrl || typeof audioUrl !== 'string' || !audioUrl.startsWith('blob:')) {
-          console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} URL 생성 실패, 재시도 중...`);
-
           // 재시도: 캐시 제거 후 다시 시도
           if (window.api?.revokeVideoUrl) {
             window.api.revokeVideoUrl(selectedScene.audioPath);
@@ -546,8 +531,6 @@ const VideoPreview = memo(function VideoPreview({
   useEffect(() => {
     if (ttsAudioUrl && audioRef.current) {
       const audio = audioRef.current;
-      console.log(`[TTS 오디오] URL 변경 감지, 강제 리로드:`, ttsAudioUrl);
-
       // 오디오 엘리먼트 강제 리로드
       audio.load();
     }
@@ -617,8 +600,6 @@ const VideoPreview = memo(function VideoPreview({
 
     // blob URL이 만료된 경우 자동으로 재생성 시도
     if (error && error.code === error.MEDIA_ERR_SRC_NOT_SUPPORTED && selectedScene?.audioPath) {
-      console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} blob URL 재생성 시도...`);
-
       try {
         // 캐시 제거
         if (window.api?.revokeVideoUrl) {
@@ -631,7 +612,6 @@ const VideoPreview = memo(function VideoPreview({
         if (newAudioUrl && newAudioUrl.startsWith('blob:')) {
           setTtsAudioUrl(newAudioUrl);
           setHasAudio(true);
-          console.log(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} blob URL 재생성 성공`);
           return; // 재생성 성공하면 초기화하지 않음
         }
       } catch (retryError) {
@@ -713,7 +693,6 @@ const VideoPreview = memo(function VideoPreview({
       if (playPromises.length > 0) {
         Promise.allSettled(playPromises).then(() => {
           setIsPlaying(true);
-          console.log(`[씬 선택] 씬 ${selectedSceneIndex + 1} 자동 재생 시작`);
         });
       }
     }, 300); // 300ms 딜레이

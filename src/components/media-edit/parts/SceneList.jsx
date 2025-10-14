@@ -10,6 +10,7 @@ import {
   ImageRegular,
   SpeakerMuteRegular,
   SpeakerOffRegular,
+  ArrowDownloadRegular,
 } from "@fluentui/react-icons";
 import { ensureSceneDefaults } from "../../../utils/scenes";
 import { assignVideosToScenes, assignMediaToScenes, assignVideosWithDownload, assignImagesToMissingScenes, assignVideosToMissingScenes } from "../../../services/videoAssignment";
@@ -308,9 +309,7 @@ function SceneList({
           const audioUrl = URL.createObjectURL(audioBlob);
           const audio = new Audio(audioUrl);
 
-          console.log("[TTS 미리듣기] 오디오 blob 생성 성공:", audioBlob.size, "bytes");
-
-        setCurrentPreviewAudio(audio);
+          setCurrentPreviewAudio(audio);
 
         audio.onended = () => {
           URL.revokeObjectURL(audioUrl);
@@ -373,12 +372,6 @@ function SceneList({
     setScenes(updatedScenes);
     handleCancelEdit();
 
-    console.log("[자막 편집] 씬 저장됨:", {
-      index: editingSceneIndex,
-      text: editingText,
-      textChanged: hasTextChanged
-    });
-
     // SRT 파일 업데이트 (텍스트나 시간이 변경된 경우)
     await updateSrtFile(updatedScenes);
 
@@ -403,6 +396,11 @@ function SceneList({
 
   // 자동 영상 할당 핸들러 (에러 핸들링 강화)
   const handleAutoAssignVideos = useCallback(async () => {
+    // 중복 실행 방지
+    if (isAssigning) {
+      return;
+    }
+
     // 입력 검증
     if (!scenes || scenes.length === 0) {
       showError("할당할 씬이 없습니다.");
@@ -443,6 +441,11 @@ function SceneList({
 
   // 미디어 없음 자동 할당 핸들러
   const handleAutoAssignMissingOnly = useCallback(async () => {
+    // 중복 실행 방지
+    if (isAssigning) {
+      return;
+    }
+
     if (!scenes || scenes.length === 0) {
       showError("할당할 씬이 없습니다.");
       return;
@@ -495,6 +498,11 @@ function SceneList({
 
   // 미디어 없는 씬에 이미지 자동 생성 핸들러
   const handleAutoAssignImagesOnly = useCallback(async () => {
+    // 중복 실행 방지
+    if (mediaGenerationState.isActive || videoAssignState.isActive) {
+      return;
+    }
+
     if (!scenes || scenes.length === 0) {
       showError("생성할 씬이 없습니다.");
       return;
@@ -580,8 +588,13 @@ function SceneList({
     }
   }, [scenes, setScenes]);
 
-  // 미디어 없는 씬에 영상 자동 할당 핸들러
+  // 미디어 없는 씬에 영상 다운로드 및 할당 핸들러
   const handleAutoAssignVideosOnly = useCallback(async () => {
+    // 중복 실행 방지
+    if (videoAssignState.isActive || mediaGenerationState.isActive) {
+      return;
+    }
+
     if (!scenes || scenes.length === 0) {
       showError("할당할 씬이 없습니다.");
       return;
@@ -598,21 +611,28 @@ function SceneList({
     // 초기 상태 설정
     setVideoAssignState({
       isActive: true,
-      phase: "video",
+      phase: "local",
       current: 0,
       total: missingScenes.length,
-      message: "영상 할당 시작...",
+      message: "로컬 영상 확인 중...",
       assignedCount: 0,
       downloadedCount: 0,
       currentScene: null,
     });
 
     let finalAssignedCount = 0;
+    let finalDownloadedCount = 0;
 
     try {
-      const assignedScenes = await assignVideosToMissingScenes(scenes, {
+      // assignVideosWithDownload: 로컬 영상 먼저 할당 → 없으면 새로 다운로드
+      const assignedScenes = await assignVideosWithDownload(scenes, {
         minScore: 0.1,
         allowDuplicates: false,
+        provider: 'pexels', // 다운로드 제공자
+        downloadOptions: {
+          videosPerKeyword: 1,
+          maxFileSize: 20, // MB
+        },
         onProgress: (progress) => {
           // 진행 상황 업데이트
           setVideoAssignState(prev => ({
@@ -622,12 +642,14 @@ function SceneList({
             total: progress.total,
             message: progress.message,
             assignedCount: progress.assignedCount || prev.assignedCount,
+            downloadedCount: progress.downloadedCount || prev.downloadedCount,
             currentScene: progress.currentScene || null,
           }));
 
           // 최종 카운트 캡처
           if (progress.phase === "completed") {
             finalAssignedCount = progress.assignedCount || 0;
+            finalDownloadedCount = progress.downloadedCount || 0;
           }
         },
       });
@@ -637,10 +659,15 @@ function SceneList({
       const totalAssigned = assignedScenes.filter(s => s.asset?.path).length;
       const allComplete = assignedScenes.every(s => s.asset?.path && s.audioPath);
 
-      let message = `영상 할당 완료! 미디어 없는 ${finalAssignedCount}/${missingScenes.length}개 씬에 영상 할당됨`;
+      let message = `영상 할당 완료! `;
+      if (finalDownloadedCount > 0) {
+        message += `새로 다운로드 ${finalDownloadedCount}개 + 로컬 ${finalAssignedCount - finalDownloadedCount}개`;
+      } else {
+        message += `로컬 영상 ${finalAssignedCount}개 할당`;
+      }
 
       if (allComplete) {
-        message += " - ✨ 모든 씬이 완성되었습니다! 이제 영상 내보내기를 진행할 수 있습니다.";
+        message += " - ✨ 모든 씬이 완성되었습니다!";
       }
 
       showSuccess(message);
@@ -660,7 +687,7 @@ function SceneList({
       }, 3000);
 
     } catch (error) {
-      console.error("[영상 할당] 오류:", error);
+      console.error("[영상 다운로드 및 할당] 오류:", error);
       showError(`영상 할당 중 오류가 발생했습니다: ${error.message}`);
 
       setVideoAssignState(prev => ({
@@ -869,8 +896,6 @@ function SceneList({
           window.api.invoke("settings:get", "pitch")
         ]);
 
-        console.log("[TTS 설정 로드] 원본 값:", { ttsEngine, voice, speed, pitch });
-
         const loadedSettings = {
           ttsEngine: ttsEngine || "google",
           voice: voice || "ko-KR-Standard-A",
@@ -878,7 +903,6 @@ function SceneList({
           pitch: pitch || "-1"
         };
 
-        console.log("[TTS 설정 로드] 최종 값:", loadedSettings);
         setTtsSettings(loadedSettings);
       } catch (error) {
         console.error("TTS 설정 로드 실패:", error);
@@ -1001,6 +1025,9 @@ function SceneList({
             const isEditing = index === editingSceneIndex;
             const sceneWithDefaults = ensureSceneDefaults(scene);
             const hasMedia = sceneWithDefaults.asset?.path;
+
+            // 키워드는 씬 레벨 또는 asset 레벨에 저장될 수 있음
+            const displayKeyword = scene.keyword || scene.asset?.keyword;
 
             const isDragOver = dragOverSceneIndex === index;
 
