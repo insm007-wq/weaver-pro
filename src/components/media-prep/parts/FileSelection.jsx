@@ -364,12 +364,12 @@ const FileSelection = memo(
           <div style={dropZoneStyle}>
             <DropZone
               icon={<TextDescriptionRegular />}
-              label="SRT 자막 파일"
+              label="SRT/TXT 자막 파일"
               caption={srtCaption}
               connected={srtConnected}
               onClick={openSrtPicker}
               inputRef={srtInputRef}
-              accept=".srt"
+              accept=".srt,.txt"
               onChange={handleSrtUpload}
               inputId={srtInputId}
             />

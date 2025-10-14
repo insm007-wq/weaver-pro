@@ -153,5 +153,48 @@ function scenesToSrt(scenes = []) {
   return parts.join("\n");
 }
 
+/**
+ * TXT 파일을 씬 배열로 변환
+ * - 각 라인을 하나의 씬으로 처리
+ * - 빈 라인은 스킵
+ * - 시간은 각 씬당 기본 8초로 설정
+ * @param {string} txtText - TXT 파일 내용
+ * @param {number} secondsPerScene - 각 씬당 초 (기본값: 8초)
+ * @returns {Array} 씬 배열 [{ id, start, end, text, assetId }]
+ */
+export function parseTxtToScenes(txtText, secondsPerScene = 8) {
+  if (!txtText || typeof txtText !== "string") return [];
+
+  // BOM 제거 + 개행 분리
+  const src = txtText.replace(/^\uFEFF/, "");
+  const lines = src.replace(/\r/g, "").split("\n");
+
+  const scenes = [];
+  let currentTime = 0;
+  let idx = 1;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // 빈 라인 스킵
+    if (trimmed.length === 0) continue;
+
+    const start = currentTime;
+    const end = currentTime + secondsPerScene;
+
+    scenes.push({
+      id: `sc${idx++}`,
+      start,
+      end,
+      text: trimmed,
+      assetId: null,
+    });
+
+    currentTime = end;
+  }
+
+  return scenes;
+}
+
 // 필요에 따라 default 임포트도 지원
 export default parseSrtToScenes;

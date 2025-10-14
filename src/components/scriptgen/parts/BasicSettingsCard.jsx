@@ -27,7 +27,7 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
   const handleSafeChange = useCallback(
     (field, value, options = {}) => {
       const result = validateAndSanitizeText(value, {
-        maxLength: field === "topic" ? 200 : field === "referenceScript" ? 100000 : 100,
+        maxLength: field === "topic" ? 80 : field === "referenceScript" ? 100000 : 100,
         allowEmpty: true,
         fieldName: field,
         ...options,
@@ -154,6 +154,7 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
               }
               size="medium"
               style={{ height: 36 }}
+              maxLength={80}
               aria-invalid={validationErrors.topic?.length > 0}
               disabled={disabled}
             />

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { parseSrtToScenes } from "../utils/parseSrt";
+import { parseSrtToScenes, parseTxtToScenes } from "../utils/parseSrt";
 import { getSetting, setSetting, readTextAny, getMp3DurationSafe } from "../utils/ipcSafe";
 import { showSuccess, showError } from "../components/common/GlobalToast";
 
@@ -45,18 +45,35 @@ export const useFileManagement = () => {
       if (!files || files.length === 0) return;
       file = files[0];
     }
-    if (!file.name.toLowerCase().endsWith(".srt")) {
-      showError("SRT 파일만 업로드 가능합니다.");
+    const fileName = file.name.toLowerCase();
+    if (!fileName.endsWith(".srt") && !fileName.endsWith(".txt")) {
+      showError("SRT 또는 TXT 파일만 업로드 가능합니다.");
       return;
     }
 
     setIsLoading(true);
     try {
       const content = await readTextAny(file.path);
-      const parsedScenes = parseSrtToScenes(content);
+
+      // 내용이 SRT 형식인지 먼저 확인 (타임코드 패턴 검사)
+      const hasSrtTimeCode = /\d{2}:\d{2}:\d{2}[,.]\d{1,3}\s*-->\s*\d{2}:\d{2}:\d{2}[,.]\d{1,3}/.test(content);
+
+      // SRT 형식이면 SRT로 파싱, 아니면 일반 텍스트로 파싱
+      let parsedScenes;
+      let parseType;
+
+      if (hasSrtTimeCode) {
+        parsedScenes = parseSrtToScenes(content);
+        parseType = "srt";
+      } else {
+        parsedScenes = parseTxtToScenes(content, 8);
+        parseType = "txt";
+      }
 
       if (parsedScenes.length === 0) {
-        showError("유효한 SRT 형식이 아닙니다.");
+        showError(parseType === "srt"
+          ? "유효한 SRT 형식이 아닙니다."
+          : "텍스트 파일이 비어있거나 읽을 수 없습니다.");
         return;
       }
 
@@ -84,10 +101,12 @@ export const useFileManagement = () => {
       // 설정 저장
       await setSetting({ key: "paths.srt", value: file.path });
 
-      showSuccess(`SRT 파일이 업로드되었습니다. (${parsedScenes.length}개 씬)`);
+      showSuccess(parseType === "txt"
+        ? `텍스트 파일이 업로드되었습니다. (${parsedScenes.length}개 씬, 각 8초)`
+        : `SRT 자막 파일이 업로드되었습니다. (${parsedScenes.length}개 씬)`);
     } catch (error) {
-      console.error("SRT 업로드 오류:", error);
-      showError("SRT 파일 업로드 중 오류가 발생했습니다.");
+      console.error("자막 파일 업로드 오류:", error);
+      showError("자막 파일 업로드 중 오류가 발생했습니다.");
     } finally {
       setIsLoading(false);
     }
