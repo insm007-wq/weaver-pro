@@ -186,7 +186,7 @@ function MediaPrepEditor() {
           }
           expandedContent={
             keywordExtraction.assets && keywordExtraction.assets.length > 0 ? (
-              <div>
+              <div style={{ padding: "12px 16px" }}>
                 <Text size={300} weight="semibold" style={{ marginBottom: 12, display: "block" }}>
                   📝 추출된 키워드 ({keywordExtraction.assets.length}개)
                 </Text>
@@ -195,8 +195,6 @@ function MediaPrepEditor() {
                     display: "grid",
                     gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
                     gap: 8,
-                    maxHeight: 400,
-                    overflowY: "auto",
                   }}
                 >
                   {keywordExtraction.assets.map((asset, index) => (
@@ -217,7 +215,7 @@ function MediaPrepEditor() {
                 </div>
               </div>
             ) : keywordExtraction.isExtracting ? (
-              <div style={{ textAlign: "center", padding: "20px 0" }}>
+              <div style={{ padding: "12px 16px", textAlign: "center" }}>
                 <Text size={300} weight="semibold" style={{ marginBottom: 8, display: "block" }}>
                   🤖 AI가 키워드를 추출하고 있습니다...
                 </Text>

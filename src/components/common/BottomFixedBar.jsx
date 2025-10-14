@@ -59,13 +59,14 @@ const BottomFixedBar = memo(({
           borderTop: `2px solid ${finalBorderColor}`,
           boxShadow: "0 -4px 12px rgba(0,0,0,0.1)",
           transition: "all 0.3s ease",
+          animation: "slideInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) both",
         }}
       >
         {/* 미니 바 (항상 표시) */}
         <div
           onClick={toggleExpand}
           style={{
-            padding: "12px 20px",
+            padding: "16px 24px",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
@@ -176,12 +177,11 @@ const BottomFixedBar = memo(({
         {isExpanded && expandedContent && (
           <div
             style={{
-              maxHeight: "60vh",
+              height: "380px",
               overflowY: "auto",
               borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
               background: tokens.colorNeutralBackground2,
-              padding: "16px 20px",
-              animation: "slideUp 0.3s ease",
+              animation: "slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
             }}
           >
             {expandedContent}
@@ -195,14 +195,24 @@ const BottomFixedBar = memo(({
           0%, 100% { opacity: 1; transform: scale(1); }
           50% { opacity: 0.7; transform: scale(1.2); }
         }
-        @keyframes slideUp {
+        @keyframes slideInUp {
           from {
             opacity: 0;
-            transform: translateY(20px);
+            transform: translateY(100%);
           }
           to {
             opacity: 1;
             transform: translateY(0);
+          }
+        }
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            height: 0;
+          }
+          to {
+            opacity: 1;
+            height: 380px;
           }
         }
       `}</style>

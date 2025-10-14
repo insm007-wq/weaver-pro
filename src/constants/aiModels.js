@@ -1,6 +1,6 @@
 // AI 모델 관련 상수들
 export const DEFAULT_SETTINGS = {
-  // videoSaveFolder는 electron에서 OS별로 자동 설정됨
+  videoSaveFolder: "C:\\WeaverPro\\default",
   defaultResolution: "1080p",
   imageModel: "sdxl",
   videoModel: "veo-3",

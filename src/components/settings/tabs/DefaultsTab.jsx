@@ -123,21 +123,33 @@ export default function DefaultsTab() {
 
     /**
      * 프로젝트 관리에서 저장한 경로를 로드하여 영상 저장 폴더 설정
-     * projectRootFolder + defaultProjectName 형태로 구성
+     * currentProjectId로 projects에서 해당 프로젝트의 paths.root를 가져옴
      */
     const loadProjectRootFolder = async () => {
       try {
-        const projectRootFolder = await window.api.getSetting("projectRootFolder");
-        const defaultProjectName = await window.api.getSetting("defaultProjectName");
+        // 현재 프로젝트 ID 가져오기
+        const currentProjectId = await window.api.getSetting("currentProjectId");
 
-        if (projectRootFolder && defaultProjectName) {
-          // 경로 정리 (이중 백슬래시 제거)
-          const cleanRootFolder = projectRootFolder.replace(/\\+/g, "\\").replace(/\\$/, "");
-          const folderPath = `${cleanRootFolder}\\${defaultProjectName}`;
+        if (!currentProjectId) {
+          setDisplayFolder("프로젝트 관리에서 경로를 설정해주세요");
+          return;
+        }
 
-          setDisplayFolder(folderPath);
-          // videoSaveFolder도 업데이트
-          setSettings((prev) => ({ ...prev, videoSaveFolder: folderPath }));
+        // projects 배열 가져오기
+        const projects = await window.api.getSetting("projects");
+
+        if (!projects || !Array.isArray(projects)) {
+          setDisplayFolder("프로젝트 관리에서 경로를 설정해주세요");
+          return;
+        }
+
+        // currentProjectId로 프로젝트 찾기
+        const currentProject = projects.find(p => p.id === currentProjectId);
+
+        if (currentProject && currentProject.paths && currentProject.paths.root) {
+          const rootPath = currentProject.paths.root;
+          setDisplayFolder(rootPath);
+          setSettings((prev) => ({ ...prev, videoSaveFolder: rootPath }));
         } else {
           setDisplayFolder("프로젝트 관리에서 경로를 설정해주세요");
         }
@@ -157,10 +169,31 @@ export default function DefaultsTab() {
       loadProjectRootFolder();
     };
 
+    /**
+     * 설정 변경 이벤트 리스너
+     * settings.json이 변경되면 자동으로 경로 업데이트
+     */
+    const handleSettingsChanged = () => {
+      loadProjectRootFolder();
+    };
+
+    /**
+     * 페이지 포커스 시 경로 새로고침
+     */
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadProjectRootFolder();
+      }
+    };
+
     window.addEventListener("projectSettings:updated", handleProjectSettingsUpdate);
+    window.addEventListener("settingsChanged", handleSettingsChanged);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.removeEventListener("projectSettings:updated", handleProjectSettingsUpdate);
+      window.removeEventListener("settingsChanged", handleSettingsChanged);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
@@ -307,6 +340,13 @@ export default function DefaultsTab() {
             console.warn(`설정 초기화 실패: ${key}`, error);
           }
         }
+      }
+
+      // displayFolder도 기본값으로 업데이트
+      if (DEFAULT_SETTINGS.videoSaveFolder) {
+        setDisplayFolder(DEFAULT_SETTINGS.videoSaveFolder);
+      } else {
+        setDisplayFolder("프로젝트 관리에서 경로를 설정해주세요");
       }
 
       showGlobalToast({

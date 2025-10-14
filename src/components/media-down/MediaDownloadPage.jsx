@@ -842,13 +842,9 @@ function MediaDownloadPage() {
           expandedContent={
             isDownloading ? (
               // 다운로드 진행 중: 키워드별 상세 진행 상황
-              <div>
-                <Text size={300} weight="semibold" style={{ marginBottom: 12, display: "block" }}>
-                  📥 다운로드 진행 상황
-                </Text>
-
+              <div style={{ padding: "12px 16px" }}>
                 {/* 키워드별 진행 상황 */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 400, overflowY: "auto" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   {Array.from(selectedKeywords).map((k) => {
                     const progress = downloadProgress[k];
                     return (
@@ -888,12 +884,8 @@ function MediaDownloadPage() {
             ) : (
               // 다운로드 완료: 다운로드된 미디어 상세 목록
               downloadedVideos.length > 0 && (
-                <div>
-                  <Text size={300} weight="semibold" style={{ marginBottom: 12, display: "block" }}>
-                    📦 다운로드된 미디어
-                  </Text>
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 400, overflowY: "auto" }}>
+                <div style={{ padding: "12px 16px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     {downloadedVideos.map((video, i) => {
                       const imgSrc = toImgSrc(video.thumbnail);
                       return (

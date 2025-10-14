@@ -230,7 +230,7 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
           }}
           expandedContent={
             doc && (
-              <div>
+              <div style={{ padding: "12px 16px" }}>
                 <Text size={300} weight="semibold" style={{ marginBottom: 12, display: "block" }}>
                   📖 생성된 대본 ({doc.scenes?.length}개 장면)
                 </Text>
@@ -239,8 +239,6 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
                     display: "flex",
                     flexDirection: "column",
                     gap: 8,
-                    maxHeight: 400,
-                    overflowY: "auto",
                   }}
                 >
                   {doc.scenes?.map((scene, index) => (
