@@ -4,6 +4,8 @@ import { useHeaderStyles, useContainerStyles } from "../../styles/commonStyles";
 import { VideoRegular } from "@fluentui/react-icons";
 import { PageErrorBoundary } from "../common/ErrorBoundary";
 import { useFileManagement } from "../../hooks/useFileManagement";
+import { assignVideosToMissingScenes } from "../../services/videoAssignment";
+import { showSuccess, showInfo } from "../common/GlobalToast";
 
 // 최적화된 컴포넌트들 import
 import SceneList from "./parts/SceneList";
@@ -33,6 +35,7 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
   // 비디오 ref
   const videoRef = useRef(null);
   const hasTriedLoadRef = useRef(false);
+  const hasAutoAssignedRef = useRef(false);
 
   // 선택된 씬 정보 (useMemo로 제대로 추적)
   const selectedScene = useMemo(() => {
@@ -62,6 +65,51 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 파일 로드 후 자동 영상 할당
+  useEffect(() => {
+    const autoAssignVideos = async () => {
+      // 조건 체크: 파일이 로드되고, 씬이 있고, 아직 자동 할당하지 않았고, 로딩 중이 아님
+      if (
+        srtConnected &&
+        scenes.length > 0 &&
+        !hasAutoAssignedRef.current &&
+        !isLoading
+      ) {
+        hasAutoAssignedRef.current = true;
+
+        // 미디어가 없는 씬이 있는지 확인
+        const missingScenes = scenes.filter(scene => !scene.asset?.path && scene.text && scene.text.trim().length > 0);
+
+        if (missingScenes.length > 0) {
+          console.log(`[자동 할당] ${missingScenes.length}개 씬에 영상 자동 할당 시작`);
+          showInfo(`다운로드된 영상을 자동으로 할당하는 중... (${missingScenes.length}개 씬)`);
+
+          try {
+            const assignedScenes = await assignVideosToMissingScenes(scenes, {
+              minScore: 0.1,
+              allowDuplicates: false,
+            });
+
+            setScenes(assignedScenes);
+
+            const assignedCount = assignedScenes.filter(s => s.asset?.path).length;
+            const totalCount = assignedScenes.length;
+
+            console.log(`[자동 할당] 완료: ${assignedCount}/${totalCount}개 씬에 미디어 할당됨`);
+            showSuccess(`자동 할당 완료! ${assignedCount}/${totalCount}개 씬에 영상이 할당되었습니다.`);
+          } catch (error) {
+            console.error("[자동 할당] 오류:", error);
+            // 오류가 발생해도 조용히 넘어감 (사용자가 수동으로 할당 가능)
+          }
+        } else {
+          console.log("[자동 할당] 미디어 없는 씬이 없음, 자동 할당 스킵");
+        }
+      }
+    };
+
+    autoAssignVideos();
+  }, [srtConnected, scenes, isLoading, setScenes]);
+
   // 편집 페이지 초기화 이벤트 리스너
   useEffect(() => {
     const handleResetMediaEdit = () => {
@@ -78,6 +126,7 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
 
       // 파일 로드 시도 플래그 초기화 (다시 자동 로드 시도하지 않도록)
       hasTriedLoadRef.current = false;
+      hasAutoAssignedRef.current = false;
     };
 
     window.addEventListener("reset-media-edit", handleResetMediaEdit);

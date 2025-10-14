@@ -419,16 +419,41 @@ export async function downloadVideoForKeyword(scene, sceneIndex, options = {}) {
  * AI 이미지 생성 (씬 텍스트 기반)
  * @param {Object} scene - 씬 객체
  * @param {number} sceneIndex - 씬 인덱스
+ * @param {Object} options - 옵션 { skipPromptExpansion: boolean }
  * @returns {Object|null} - 생성된 asset 객체 또는 null
  */
-export async function generateImageForScene(scene, sceneIndex) {
+export async function generateImageForScene(scene, sceneIndex, options = {}) {
   try {
     if (!scene?.text) {
       console.warn(`[이미지 생성] 씬 ${sceneIndex + 1}: 텍스트 없음`);
       return null;
     }
 
-    // 1. 씬 텍스트에서 키워드 추출
+    // 1. videoSaveFolder 가져오기
+    const videoSaveFolderResult = await getSetting("videoSaveFolder");
+    let videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
+
+    if (!videoSaveFolder) {
+      console.error(`[이미지 생성] 씬 ${sceneIndex + 1}: videoSaveFolder 설정 없음`);
+      return null;
+    }
+
+    // 경로 정규화
+    videoSaveFolder = videoSaveFolder.replace(/\\/g, '/');
+    const imagesFolder = `${videoSaveFolder}/images`;
+
+    // images 폴더 존재 확인 및 생성
+    try {
+      const folderExists = await window.api.checkPathExists(imagesFolder);
+      if (!folderExists?.exists) {
+        console.log(`[이미지 생성] images 폴더 생성: ${imagesFolder}`);
+        await window.api.invoke("fs:mkDirRecursive", { dirPath: imagesFolder });
+      }
+    } catch (error) {
+      console.warn(`[이미지 생성] images 폴더 생성 실패:`, error);
+    }
+
+    // 2. 씬 텍스트에서 키워드 추출 (원래 방식 복원)
     const keywords = extractKeywordsFromText(scene.text);
     if (keywords.length === 0) {
       console.warn(`[이미지 생성] 씬 ${sceneIndex + 1}: 키워드 없음`);
@@ -437,21 +462,35 @@ export async function generateImageForScene(scene, sceneIndex) {
 
     // 상위 3개 키워드 선택
     const topKeywords = keywords.slice(0, 3).join(', ');
-    console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 키워드 - ${topKeywords}`);
+    console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 추출된 키워드 - ${topKeywords}`);
 
-    // 2. 프롬프트 확장 (Anthropic)
+    // 3. 씬용 프롬프트 확장 (Anthropic) - 속도 개선을 위해 스킵 가능
+    const { skipPromptExpansion = false } = options;
     let finalPrompt = topKeywords;
-    try {
-      const expandResult = await window.api.expandThumbnailPrompt(topKeywords);
-      if (expandResult?.ok && expandResult?.prompt) {
-        finalPrompt = expandResult.prompt;
-        console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 프롬프트 확장 완료`);
+
+    if (skipPromptExpansion) {
+      // 🚀 빠른 모드: 프롬프트 확장 스킵, 폴백만 사용
+      finalPrompt = `${topKeywords}, photorealistic scene illustration, natural lighting, cinematic composition, detailed background, 4K quality`;
+      console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: ⚡ 빠른 모드 - 기본 프롬프트 사용`);
+    } else {
+      // 일반 모드: AI 프롬프트 확장 사용 (씬 텍스트 전체를 영어로 변환)
+      try {
+        const expandResult = await window.api.expandScenePrompt(scene.text);
+        if (expandResult?.ok && expandResult?.prompt) {
+          finalPrompt = expandResult.prompt;
+          console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 씬 프롬프트 확장 완료 - ${finalPrompt}`);
+        } else {
+          // 폴백: 키워드 + 기본 스타일
+          finalPrompt = `${topKeywords}, photorealistic scene illustration, natural lighting, cinematic composition, detailed background, 4K quality`;
+          console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 프롬프트 확장 폴백 사용`);
+        }
+      } catch (error) {
+        console.warn(`[이미지 생성] 씬 ${sceneIndex + 1}: 프롬프트 확장 실패, 폴백 사용`);
+        finalPrompt = `${topKeywords}, photorealistic scene illustration, natural lighting, cinematic composition, detailed background, 4K quality`;
       }
-    } catch (error) {
-      console.warn(`[이미지 생성] 씬 ${sceneIndex + 1}: 프롬프트 확장 실패, 원본 사용`);
     }
 
-    // 3. 이미지 생성 (Replicate Flux)
+    // 4. 이미지 생성 (Replicate Flux)
     const generateResult = await window.api.generateThumbnails({
       prompt: finalPrompt,
       count: 1,
@@ -462,20 +501,76 @@ export async function generateImageForScene(scene, sceneIndex) {
       return null;
     }
 
-    const imagePath = generateResult.images[0].path;
-    console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 생성 완료 - ${imagePath}`);
+    const imageUrl = generateResult.images[0]; // URL 받기
+    console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 이미지 URL 생성 완료 - ${imageUrl}`);
 
-    // 4. asset 객체 반환
-    return {
-      type: 'image',
-      path: imagePath,
-      keyword: topKeywords,
-      provider: 'ai-generated',
-      source: 'replicate-flux',
-    };
+    // 5. 이미지 URL을 images 폴더에 다운로드
+    const sceneNumber = String(sceneIndex + 1).padStart(3, '0');
+
+    // URL에서 확장자 추출 (webp, jpg, png 등)
+    const urlExtension = imageUrl.split('.').pop().split('?')[0]; // 쿼리 파라미터 제거
+    const fileExtension = ['webp', 'jpg', 'jpeg', 'png'].includes(urlExtension.toLowerCase())
+      ? urlExtension.toLowerCase()
+      : 'webp'; // 기본값
+
+    const suggestedFileName = `scene-${sceneNumber}.${fileExtension}`;
+    const fullImagePath = `${imagesFolder}/${suggestedFileName}`;
+
+    try {
+      // URL에서 Blob 가져오기
+      console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 이미지 다운로드 시작 - ${imageUrl}`);
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: Blob 생성 완료 (${blob.size} bytes, type: ${blob.type})`);
+
+      const arrayBuffer = await blob.arrayBuffer();
+      const buffer = new Uint8Array(arrayBuffer);
+      console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: ArrayBuffer 변환 완료 (${buffer.length} bytes)`);
+
+      // 파일 저장 (Windows 경로 형식으로 변환)
+      const windowsPath = fullImagePath.replace(/\//g, '\\');
+      console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 파일 저장 시작 - ${windowsPath}`);
+
+      // Node.js Buffer 형식으로 변환
+      const bufferData = {
+        type: "Buffer",
+        data: Array.from(buffer)
+      };
+
+      const saveResult = await window.api.invoke("files:writeBuffer", {
+        filePath: windowsPath,
+        buffer: bufferData,
+      });
+
+      console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: writeBuffer 결과 -`, saveResult);
+
+      if (!saveResult?.success || !saveResult?.data?.ok) {
+        throw new Error(saveResult?.message || saveResult?.data?.message || "파일 저장 실패");
+      }
+
+      const savedImagePath = saveResult.data.path;
+      console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 이미지 저장 완료 ✅ - ${savedImagePath}`);
+
+      // 6. asset 객체 반환
+      return {
+        type: 'image',
+        path: savedImagePath,
+        keyword: topKeywords, // 추출된 키워드 저장
+        provider: 'ai-generated',
+        source: 'replicate-flux',
+      };
+    } catch (saveError) {
+      console.error(`[이미지 생성] 씬 ${sceneIndex + 1}: 이미지 저장 실패 ❌ -`, saveError);
+      console.error(`[이미지 생성] 씬 ${sceneIndex + 1}: 에러 상세:`, saveError.message, saveError.stack);
+      return null;
+    }
 
   } catch (error) {
-    console.error(`[이미지 생성] 씨 ${sceneIndex + 1}: 오류 -`, error.message);
+    console.error(`[이미지 생성] 씬 ${sceneIndex + 1}: 오류 -`, error.message);
     return null;
   }
 }
@@ -502,6 +597,7 @@ export async function assignVideosToScenes(scenes, options = {}) {
 
     const assignments = [];
     const usedVideos = new Set();
+    const usedVideoSizes = new Set(); // 파일 크기 기반 중복 체크
 
     // ✅ 이미 할당된 영상들을 usedVideos에 추가 (중복 방지)
     // 경로 정규화하여 비교 (Windows/Unix 경로 형식 통일)
@@ -510,6 +606,11 @@ export async function assignVideosToScenes(scenes, options = {}) {
         const normalizedPath = scene.asset.path.replace(/\\/g, '/').toLowerCase();
         usedVideos.add(normalizedPath);
         console.log(`[영상 할당] 이미 할당된 영상: ${normalizedPath}`);
+
+        // 파일 크기도 등록
+        if (scene.asset.size) {
+          usedVideoSizes.add(scene.asset.size);
+        }
       }
     }
 
@@ -524,10 +625,18 @@ export async function assignVideosToScenes(scenes, options = {}) {
       let bestVideo = null;
       let bestScore = 0;
 
-      // 1차: 키워드 매칭 시도
+      // 키워드 매칭 시도 (minScore 이상만 할당)
       for (const video of availableVideos) {
-        if (!allowDuplicates && usedVideos.has(video.path)) {
-          continue;
+        const normalizedVideoPath = video.path.replace(/\\/g, '/').toLowerCase();
+
+        // 중복 체크: 경로 또는 파일 크기가 같으면 스킵
+        if (!allowDuplicates) {
+          if (usedVideos.has(normalizedVideoPath)) {
+            continue;
+          }
+          if (video.size && usedVideoSizes.has(video.size)) {
+            continue;
+          }
         }
 
         const score = calculateSceneVideoScore(scene, video);
@@ -537,23 +646,19 @@ export async function assignVideosToScenes(scenes, options = {}) {
         }
       }
 
-      // 2차: 매칭 실패 시 사용 가능한 영상 중 랜덤 선택
-      if (!bestVideo && availableVideos.length > 0) {
-        const unusedVideos = availableVideos.filter(v => !usedVideos.has(v.path));
-        if (unusedVideos.length > 0) {
-          bestVideo = unusedVideos[Math.floor(Math.random() * unusedVideos.length)];
-          bestScore = 0; // 랜덤 할당이므로 점수 0
-          console.log(`[영상 할당] 씬 ${i + 1}: 키워드 매칭 실패, 랜덤 할당 - ${bestVideo.filename}`);
-        } else if (allowDuplicates) {
-          // 중복 허용이면 전체에서 랜덤 선택
-          bestVideo = availableVideos[Math.floor(Math.random() * availableVideos.length)];
-          bestScore = 0;
-          console.log(`[영상 할당] 씬 ${i + 1}: 중복 허용 랜덤 할당 - ${bestVideo.filename}`);
-        }
+      // 매칭 점수가 minScore 이상인 경우만 할당 (랜덤 할당 제거)
+      if (bestVideo) {
+        console.log(`[영상 할당] 씬 ${i + 1}: 키워드 매칭 성공 (점수: ${bestScore.toFixed(2)}) - ${bestVideo.filename}`);
+      } else {
+        console.log(`[영상 할당] 씬 ${i + 1}: 키워드 매칭 실패 (미디어 없음으로 유지)`);
       }
 
       if (bestVideo && !allowDuplicates) {
-        usedVideos.add(bestVideo.path);
+        const normalizedPath = bestVideo.path.replace(/\\/g, '/').toLowerCase();
+        usedVideos.add(normalizedPath);
+        if (bestVideo.size) {
+          usedVideoSizes.add(bestVideo.size);
+        }
       }
 
       assignments.push({ scene, video: bestVideo, score: bestScore });
@@ -571,6 +676,7 @@ export async function assignVideosToScenes(scenes, options = {}) {
           filename: video.filename,
           resolution: video.resolution,
           provider: video.provider,
+          size: video.size, // 파일 크기 저장
         }
       };
     });
@@ -611,6 +717,7 @@ export async function assignMediaToScenes(scenes, options = {}) {
     const availableVideos = await discoverAvailableVideos();
     const assignments = [];
     const usedVideos = new Set();
+    const usedVideoSizes = new Set(); // 파일 크기 기반 중복 체크
     let videoAssignedCount = 0;
 
     // ✅ 이미 할당된 영상들을 usedVideos에 추가 (중복 방지)
@@ -619,6 +726,11 @@ export async function assignMediaToScenes(scenes, options = {}) {
       if (scene.asset?.path && scene.asset.type === 'video') {
         const normalizedPath = scene.asset.path.replace(/\\/g, '/').toLowerCase();
         usedVideos.add(normalizedPath);
+
+        // 파일 크기도 등록
+        if (scene.asset.size) {
+          usedVideoSizes.add(scene.asset.size);
+        }
       }
     }
 
@@ -634,11 +746,18 @@ export async function assignMediaToScenes(scenes, options = {}) {
       let bestVideo = null;
       let bestScore = 0;
 
-      // 1차: 키워드 매칭 시도
+      // 키워드 매칭 시도 (minScore 이상만 할당)
       for (const video of availableVideos) {
         const normalizedVideoPath = video.path.replace(/\\/g, '/').toLowerCase();
-        if (!allowDuplicates && usedVideos.has(normalizedVideoPath)) {
-          continue;
+
+        // 중복 체크: 경로 또는 파일 크기가 같으면 스킵
+        if (!allowDuplicates) {
+          if (usedVideos.has(normalizedVideoPath)) {
+            continue;
+          }
+          if (video.size && usedVideoSizes.has(video.size)) {
+            continue;
+          }
         }
 
         const score = calculateSceneVideoScore(scene, video);
@@ -648,25 +767,19 @@ export async function assignMediaToScenes(scenes, options = {}) {
         }
       }
 
-      // 2차: 매칭 실패 시 사용 가능한 영상 중 랜덤 선택
-      if (!bestVideo && availableVideos.length > 0) {
-        const unusedVideos = availableVideos.filter(v => {
-          const normalizedPath = v.path.replace(/\\/g, '/').toLowerCase();
-          return !usedVideos.has(normalizedPath);
-        });
-        if (unusedVideos.length > 0) {
-          bestVideo = unusedVideos[Math.floor(Math.random() * unusedVideos.length)];
-          bestScore = 0;
-        } else if (allowDuplicates) {
-          bestVideo = availableVideos[Math.floor(Math.random() * availableVideos.length)];
-          bestScore = 0;
-        }
-      }
-
-      if (bestVideo && !allowDuplicates) {
+      // 매칭 점수가 minScore 이상인 경우만 할당 (랜덤 할당 제거)
+      if (bestVideo) {
         const normalizedPath = bestVideo.path.replace(/\\/g, '/').toLowerCase();
-        usedVideos.add(normalizedPath);
+        if (!allowDuplicates) {
+          usedVideos.add(normalizedPath);
+          if (bestVideo.size) {
+            usedVideoSizes.add(bestVideo.size);
+          }
+        }
         videoAssignedCount++;
+        console.log(`[미디어 할당] 씬 ${i + 1}: 키워드 매칭 성공 (점수: ${bestScore.toFixed(2)}) - ${bestVideo.filename}`);
+      } else {
+        console.log(`[미디어 할당] 씬 ${i + 1}: 키워드 매칭 실패 (Phase 2에서 이미지 생성)`);
       }
 
       assignments.push({ scene, video: bestVideo, score: bestScore });
@@ -697,6 +810,7 @@ export async function assignMediaToScenes(scenes, options = {}) {
           filename: video.filename,
           resolution: video.resolution,
           provider: video.provider,
+          size: video.size, // 파일 크기 저장
         }
       };
     });
@@ -735,8 +849,10 @@ export async function assignMediaToScenes(scenes, options = {}) {
           });
         }
 
-        // AI 이미지 생성
-        const imageAsset = await generateImageForScene(scene, sceneIndex);
+        // AI 이미지 생성 (씬 텍스트 기반 프롬프트 확장)
+        const imageAsset = await generateImageForScene(scene, sceneIndex, {
+          skipPromptExpansion: false  // AI 프롬프트 확장 사용 (한국어 → 영어 변환)
+        });
 
         if (imageAsset) {
           assignedScenes[sceneIndex] = {
@@ -823,6 +939,7 @@ export async function assignVideosWithDownload(scenes, options = {}) {
     const availableVideos = await discoverAvailableVideos();
     const assignments = [];
     const usedVideos = new Set();
+    const usedVideoSizes = new Set(); // 파일 크기 기반 중복 체크
     let localAssignedCount = 0;
 
     // ✅ 이미 할당된 영상들을 usedVideos에 추가 (중복 방지)
@@ -831,6 +948,11 @@ export async function assignVideosWithDownload(scenes, options = {}) {
       if (scene.asset?.path && scene.asset.type === 'video') {
         const normalizedPath = scene.asset.path.replace(/\\/g, '/').toLowerCase();
         usedVideos.add(normalizedPath);
+
+        // 파일 크기도 등록
+        if (scene.asset.size) {
+          usedVideoSizes.add(scene.asset.size);
+        }
       }
     }
 
@@ -846,11 +968,18 @@ export async function assignVideosWithDownload(scenes, options = {}) {
       let bestVideo = null;
       let bestScore = 0;
 
-      // 1차: 키워드 매칭 시도
+      // 키워드 매칭 시도 (minScore 이상만 할당)
       for (const video of availableVideos) {
         const normalizedVideoPath = video.path.replace(/\\/g, '/').toLowerCase();
-        if (!allowDuplicates && usedVideos.has(normalizedVideoPath)) {
-          continue;
+
+        // 중복 체크: 경로 또는 파일 크기가 같으면 스킵
+        if (!allowDuplicates) {
+          if (usedVideos.has(normalizedVideoPath)) {
+            continue;
+          }
+          if (video.size && usedVideoSizes.has(video.size)) {
+            continue;
+          }
         }
 
         const score = calculateSceneVideoScore(scene, video);
@@ -860,25 +989,19 @@ export async function assignVideosWithDownload(scenes, options = {}) {
         }
       }
 
-      // 2차: 매칭 실패 시 사용 가능한 영상 중 랜덤 선택
-      if (!bestVideo && availableVideos.length > 0) {
-        const unusedVideos = availableVideos.filter(v => {
-          const normalizedPath = v.path.replace(/\\/g, '/').toLowerCase();
-          return !usedVideos.has(normalizedPath);
-        });
-        if (unusedVideos.length > 0) {
-          bestVideo = unusedVideos[Math.floor(Math.random() * unusedVideos.length)];
-          bestScore = 0;
-        } else if (allowDuplicates) {
-          bestVideo = availableVideos[Math.floor(Math.random() * availableVideos.length)];
-          bestScore = 0;
-        }
-      }
-
-      if (bestVideo && !allowDuplicates) {
+      // 매칭 점수가 minScore 이상인 경우만 할당 (랜덤 할당 제거)
+      if (bestVideo) {
         const normalizedPath = bestVideo.path.replace(/\\/g, '/').toLowerCase();
-        usedVideos.add(normalizedPath);
+        if (!allowDuplicates) {
+          usedVideos.add(normalizedPath);
+          if (bestVideo.size) {
+            usedVideoSizes.add(bestVideo.size);
+          }
+        }
         localAssignedCount++;
+        console.log(`[영상 할당] 씬 ${i + 1}: 로컬 키워드 매칭 성공 (점수: ${bestScore.toFixed(2)}) - ${bestVideo.filename}`);
+      } else {
+        console.log(`[영상 할당] 씬 ${i + 1}: 로컬 키워드 매칭 실패 (Phase 2에서 다운로드)`);
       }
 
       assignments.push({ scene, video: bestVideo, score: bestScore });
@@ -909,6 +1032,7 @@ export async function assignVideosWithDownload(scenes, options = {}) {
           filename: video.filename,
           resolution: video.resolution,
           provider: video.provider,
+          size: video.size, // 파일 크기 저장
         }
       };
     });
@@ -1046,10 +1170,322 @@ export function analyzeSceneKeywords(sceneText) {
   });
 }
 
+/**
+ * 미디어 없는 씬에만 AI 이미지 자동 생성
+ * @param {Array} scenes - 씬 배열
+ * @param {Object} options - 할당 옵션
+ * @param {Function} options.onProgress - 진행 상황 콜백
+ * @returns {Array} - 이미지가 할당된 씬 배열
+ */
+export async function assignImagesToMissingScenes(scenes, options = {}) {
+  try {
+    const { onProgress = null } = options;
+
+    if (!Array.isArray(scenes) || scenes.length === 0) {
+      return [];
+    }
+
+    // 미디어가 없는 씬만 필터링
+    const missingScenes = scenes
+      .map((scene, index) => ({ scene, index }))
+      .filter(({ scene }) => !scene.asset?.path && scene.text && scene.text.trim().length > 0);
+
+    if (missingScenes.length === 0) {
+      console.log("[이미지 할당] 미디어 없는 씬이 없음");
+      return scenes;
+    }
+
+    console.log(`[이미지 할당] ${missingScenes.length}개 씬에 이미지 생성 시작`);
+
+    const assignedScenes = [...scenes];
+    let imageGeneratedCount = 0;
+
+    for (let i = 0; i < missingScenes.length; i++) {
+      const { scene, index: sceneIndex } = missingScenes[i];
+
+      // 진행 상황 콜백
+      if (onProgress) {
+        onProgress({
+          phase: 'image',
+          current: i + 1,
+          total: missingScenes.length,
+          message: `AI 이미지 생성 중... (${i + 1}/${missingScenes.length})`,
+          imageCount: imageGeneratedCount,
+          currentScene: {
+            index: sceneIndex,
+            text: scene.text?.substring(0, 50) + (scene.text?.length > 50 ? '...' : ''),
+          }
+        });
+      }
+
+      // AI 이미지 생성 (씬 텍스트 기반 프롬프트 확장)
+      const imageAsset = await generateImageForScene(scene, sceneIndex, {
+        skipPromptExpansion: false  // AI 프롬프트 확장 사용 (한국어 → 영어 변환)
+      });
+
+      if (imageAsset) {
+        // 씬의 기존 키워드 확인 (미디어 제거 시 유지된 키워드)
+        const sceneKeyword = scene.keyword || imageAsset.keyword;
+
+        // 원래 씬의 모든 속성을 유지하면서 keyword와 asset 업데이트
+        assignedScenes[sceneIndex] = {
+          ...assignedScenes[sceneIndex],
+          keyword: sceneKeyword, // 씬 레벨에 키워드 저장 (미디어 제거 후에도 유지)
+          asset: imageAsset,
+        };
+        imageGeneratedCount++;
+        console.log(`[이미지 할당] 씬 ${sceneIndex + 1}: 이미지 생성 완료 (키워드: ${sceneKeyword})`, imageAsset);
+      } else {
+        console.warn(`[이미지 할당] 씬 ${sceneIndex + 1}: 이미지 생성 실패`);
+      }
+    }
+
+    // 완료 콜백
+    if (onProgress) {
+      onProgress({
+        phase: 'completed',
+        current: missingScenes.length,
+        total: missingScenes.length,
+        message: `완료! AI 이미지 ${imageGeneratedCount}개 생성`,
+        imageCount: imageGeneratedCount,
+      });
+    }
+
+    console.log(`[이미지 할당] 완료: ${imageGeneratedCount}개 이미지 생성`);
+    return assignedScenes;
+
+  } catch (error) {
+    console.error("[이미지 할당] 오류:", error.message);
+
+    if (options.onProgress) {
+      options.onProgress({
+        phase: 'error',
+        message: `오류 발생: ${error.message}`,
+      });
+    }
+
+    return scenes;
+  }
+}
+
+/**
+ * 미디어 없는 씬에만 영상 자동 할당
+ * @param {Array} scenes - 씬 배열
+ * @param {Object} options - 할당 옵션
+ * @param {Function} options.onProgress - 진행 상황 콜백
+ * @returns {Array} - 영상이 할당된 씬 배열
+ */
+export async function assignVideosToMissingScenes(scenes, options = {}) {
+  try {
+    const { minScore = 0.1, allowDuplicates = false, onProgress = null } = options;
+
+    if (!Array.isArray(scenes) || scenes.length === 0) {
+      return [];
+    }
+
+    // 미디어가 없는 씬만 필터링
+    const missingScenes = scenes
+      .map((scene, index) => ({ scene, index }))
+      .filter(({ scene }) => !scene.asset?.path && scene.text && scene.text.trim().length > 0);
+
+    if (missingScenes.length === 0) {
+      console.log("[영상 할당] 미디어 없는 씬이 없음");
+      return scenes;
+    }
+
+    console.log(`[영상 할당] ${missingScenes.length}개 씬에 영상 할당 시작`);
+
+    const availableVideos = await discoverAvailableVideos();
+    if (availableVideos.length === 0) {
+      console.warn("[영상 할당] 사용 가능한 영상이 없음");
+      return scenes;
+    }
+
+    const assignedScenes = [...scenes];
+    const usedVideos = new Set();
+    const usedVideoSizes = new Set(); // 파일 크기 기반 중복 체크
+    let videoAssignedCount = 0;
+
+    // 이미 할당된 영상들을 usedVideos에 추가 (중복 방지)
+    for (const scene of scenes) {
+      if (scene.asset?.path && scene.asset.type === 'video') {
+        const normalizedPath = scene.asset.path.replace(/\\/g, '/').toLowerCase();
+        usedVideos.add(normalizedPath);
+        console.log(`[중복 방지] 이미 할당된 영상 등록: ${normalizedPath}`);
+
+        // 파일 크기도 등록 (같은 영상 다른 파일명 방지)
+        if (scene.asset.size) {
+          usedVideoSizes.add(scene.asset.size);
+          console.log(`[중복 방지] 파일 크기 등록: ${scene.asset.size} bytes`);
+        }
+      }
+    }
+
+    for (let i = 0; i < missingScenes.length; i++) {
+      const { scene, index: sceneIndex } = missingScenes[i];
+
+      // 진행 상황 콜백
+      if (onProgress) {
+        onProgress({
+          phase: 'video',
+          current: i + 1,
+          total: missingScenes.length,
+          message: `영상 할당 중... (${i + 1}/${missingScenes.length})`,
+          assignedCount: videoAssignedCount,
+          currentScene: {
+            index: sceneIndex,
+            text: scene.text?.substring(0, 50) + (scene.text?.length > 50 ? '...' : ''),
+          }
+        });
+      }
+
+      let bestVideo = null;
+      let bestScore = 0;
+
+      console.log(`\n[영상 매칭] 씬 ${sceneIndex + 1}: 매칭 시작 (현재 usedVideos: ${usedVideos.size}개, usedSizes: ${usedVideoSizes.size}개)`);
+
+      // 키워드 매칭 시도 (minScore 이상만 할당)
+      for (const video of availableVideos) {
+        const normalizedVideoPath = video.path.replace(/\\/g, '/').toLowerCase();
+
+        // 중복 체크: 경로 또는 파일 크기가 같으면 스킵
+        if (!allowDuplicates) {
+          if (usedVideos.has(normalizedVideoPath)) {
+            console.log(`  [중복 스킵 - 경로] ${video.filename}`);
+            continue;
+          }
+          if (video.size && usedVideoSizes.has(video.size)) {
+            console.log(`  [중복 스킵 - 크기] ${video.filename} (${video.size} bytes)`);
+            continue;
+          }
+        }
+
+        const score = calculateSceneVideoScore(scene, video);
+        if (score > bestScore && score >= minScore) {
+          bestVideo = video;
+          bestScore = score;
+        }
+      }
+
+      console.log(`[영상 매칭] 씬 ${sceneIndex + 1}: 최고 점수 ${bestScore.toFixed(3)} (minScore: ${minScore})`);
+      if (bestVideo) {
+        console.log(`[영상 매칭] 씬 ${sceneIndex + 1}: 선택된 영상 - ${bestVideo.filename}`);
+      }
+
+      // 매칭 점수가 minScore 이상인 경우만 할당 (랜덤 할당 완전 제거)
+      if (bestVideo) {
+        // 씬의 기존 키워드 확인 (미디어 제거 시 유지된 키워드)
+        const sceneKeyword = scene.keyword || bestVideo.keyword;
+
+        // 원래 씬의 모든 속성을 유지하면서 keyword와 asset 업데이트
+        assignedScenes[sceneIndex] = {
+          ...assignedScenes[sceneIndex],
+          keyword: sceneKeyword, // 씬 레벨에 키워드 저장 (미디어 제거 후에도 유지)
+          asset: {
+            type: 'video',
+            path: bestVideo.path,
+            keyword: bestVideo.keyword, // asset 레벨에도 원본 비디오 키워드 유지 (참고용)
+            filename: bestVideo.filename,
+            resolution: bestVideo.resolution,
+            provider: bestVideo.provider,
+            size: bestVideo.size, // 파일 크기 저장 (중복 체크용)
+          }
+        };
+
+        if (!allowDuplicates) {
+          const normalizedPath = bestVideo.path.replace(/\\/g, '/').toLowerCase();
+          usedVideos.add(normalizedPath);
+          console.log(`[중복 방지] 씬 ${sceneIndex + 1}: usedVideos에 추가 - ${normalizedPath}`);
+
+          // 파일 크기도 등록
+          if (bestVideo.size) {
+            usedVideoSizes.add(bestVideo.size);
+            console.log(`[중복 방지] 씬 ${sceneIndex + 1}: usedVideoSizes에 추가 - ${bestVideo.size} bytes`);
+          }
+
+          console.log(`[중복 방지] 현재 usedVideos: ${usedVideos.size}개, usedSizes: ${usedVideoSizes.size}개`);
+        }
+
+        videoAssignedCount++;
+        console.log(`[영상 할당] 씬 ${sceneIndex + 1}: 영상 할당 완료 (키워드: ${sceneKeyword}) - ${bestVideo.filename}`);
+      } else {
+        console.warn(`[영상 할당] 씬 ${sceneIndex + 1}: 할당 실패 (사용 가능한 영상 없음)`);
+      }
+    }
+
+    // 완료 콜백
+    if (onProgress) {
+      onProgress({
+        phase: 'completed',
+        current: missingScenes.length,
+        total: missingScenes.length,
+        message: `완료! 영상 ${videoAssignedCount}개 할당`,
+        assignedCount: videoAssignedCount,
+      });
+    }
+
+    console.log(`[영상 할당] 완료: ${videoAssignedCount}개 영상 할당`);
+
+    // ========== 전체 씬 할당 결과 요약 로그 ==========
+    console.log(`\n${'='.repeat(80)}`);
+    console.log(`📊 전체 씬 할당 결과 요약 (총 ${assignedScenes.length}개 씬)`);
+    console.log(`${'='.repeat(80)}`);
+
+    let assignedVideoCount = 0;
+    let assignedImageCount = 0;
+    let unassignedCount = 0;
+
+    assignedScenes.forEach((scene, index) => {
+      const sceneNum = `씬 ${String(index + 1).padStart(2, '0')}`;
+      const sceneText = scene.text ? scene.text.substring(0, 30) + (scene.text.length > 30 ? '...' : '') : '(텍스트 없음)';
+
+      if (scene.asset?.path) {
+        if (scene.asset.type === 'video') {
+          assignedVideoCount++;
+          // MB와 정확한 바이트 크기 모두 표시
+          const sizeInfo = scene.asset.size
+            ? ` (${Math.round(scene.asset.size / 1024 / 1024)}MB = ${scene.asset.size.toLocaleString()} bytes)`
+            : '';
+          console.log(`✅ ${sceneNum}: [영상] ${scene.asset.filename}${sizeInfo}`);
+          console.log(`         키워드: ${scene.keyword || scene.asset.keyword || 'N/A'} | 텍스트: "${sceneText}"`);
+        } else if (scene.asset.type === 'image') {
+          assignedImageCount++;
+          console.log(`🖼️  ${sceneNum}: [이미지] ${scene.asset.filename || 'AI 생성'}`);
+          console.log(`         키워드: ${scene.keyword || scene.asset.keyword || 'N/A'} | 텍스트: "${sceneText}"`);
+        }
+      } else {
+        unassignedCount++;
+        console.log(`❌ ${sceneNum}: [미디어 없음]`);
+        console.log(`         키워드: ${scene.keyword || 'N/A'} | 텍스트: "${sceneText}"`);
+      }
+    });
+
+    console.log(`${'='.repeat(80)}`);
+    console.log(`📈 통계: 영상 ${assignedVideoCount}개 | 이미지 ${assignedImageCount}개 | 미할당 ${unassignedCount}개`);
+    console.log(`${'='.repeat(80)}\n`);
+
+    return assignedScenes;
+
+  } catch (error) {
+    console.error("[영상 할당] 오류:", error.message);
+
+    if (options.onProgress) {
+      options.onProgress({
+        phase: 'error',
+        message: `오류 발생: ${error.message}`,
+      });
+    }
+
+    return scenes;
+  }
+}
+
 export default {
   assignVideosToScenes,
   assignMediaToScenes,
   assignVideosWithDownload,
+  assignImagesToMissingScenes,
+  assignVideosToMissingScenes,
   downloadVideoForKeyword,
   generateImageForScene,
   getRecommendedVideosForScene,

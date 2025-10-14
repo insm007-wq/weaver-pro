@@ -325,6 +325,7 @@ contextBridge.exposeInMainWorld("api", {
   // ========================================================================
   generateThumbnails: (payload) => ipcRenderer.invoke("replicate:generate", payload),
   expandThumbnailPrompt: (userInput) => ipcRenderer.invoke("thumbnail:expand-prompt", userInput),
+  expandScenePrompt: (sceneText) => ipcRenderer.invoke("scene:expand-prompt", sceneText),
 
   // ========================================================================
   // 캐시 관리

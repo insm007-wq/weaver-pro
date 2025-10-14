@@ -3,7 +3,7 @@
  */
 
 const { ipcMain } = require("electron");
-const { callAnthropic, expandThumbnailPrompt } = require("./anthropic");
+const { callAnthropic, expandThumbnailPrompt, expandScenePrompt } = require("./anthropic");
 const { callReplicate } = require("./replicate");
 
 ipcMain.handle("llm/generateScript", async (event, payload) => {
@@ -47,4 +47,23 @@ ipcMain.handle("thumbnail:expand-prompt", async (event, userInput) => {
   }
 });
 
-console.log("🚀 LLM 라우터 초기화: Claude, Replicate Llama 3, 썸네일 프롬프트 확장");
+// 씬 이미지용 프롬프트 확장 핸들러
+ipcMain.handle("scene:expand-prompt", async (event, sceneText) => {
+  try {
+    if (!sceneText || !sceneText.trim()) {
+      throw new Error("씬 텍스트 입력이 필요합니다.");
+    }
+    const expandedPrompt = await expandScenePrompt(sceneText.trim());
+    return { ok: true, prompt: expandedPrompt };
+  } catch (error) {
+    console.error("[scene:expand-prompt] 오류:", error);
+    return {
+      ok: false,
+      message: error.message,
+      // 폴백: 원본 입력 + 기본 스타일
+      fallbackPrompt: `${sceneText}, photorealistic scene illustration, natural lighting, cinematic composition, detailed background, 4K quality`
+    };
+  }
+});
+
+console.log("🚀 LLM 라우터 초기화: Claude, Replicate Llama 3, 썸네일 프롬프트 확장, 씬 프롬프트 확장");

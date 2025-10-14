@@ -12,7 +12,7 @@ import {
   SpeakerOffRegular,
 } from "@fluentui/react-icons";
 import { ensureSceneDefaults } from "../../../utils/scenes";
-import { assignVideosToScenes, assignMediaToScenes, assignVideosWithDownload } from "../../../services/videoAssignment";
+import { assignVideosToScenes, assignMediaToScenes, assignVideosWithDownload, assignImagesToMissingScenes, assignVideosToMissingScenes } from "../../../services/videoAssignment";
 import { showError, showSuccess } from "../../common/GlobalToast";
 import { isVideoFile, isImageFile } from "../../../utils/fileHelpers";
 import BottomFixedBar from "../../common/BottomFixedBar";
@@ -493,38 +493,37 @@ function SceneList({
     }
   }, [scenes, setScenes]);
 
-  // 미디어 자동 생성 핸들러 (영상 + AI 이미지)
-  const handleAutoGenerateMedia = useCallback(async () => {
+  // 미디어 없는 씬에 이미지 자동 생성 핸들러
+  const handleAutoAssignImagesOnly = useCallback(async () => {
     if (!scenes || scenes.length === 0) {
       showError("생성할 씬이 없습니다.");
       return;
     }
 
-    const scenesWithText = scenes.filter(scene => scene.text && scene.text.trim().length > 0);
-    if (scenesWithText.length === 0) {
-      showError("텍스트가 있는 씬이 없습니다. 먼저 자막을 작성해주세요.");
+    // 미디어가 없는 씬만 필터링
+    const missingScenes = scenes.filter(scene => !scene.asset?.path && scene.text && scene.text.trim().length > 0);
+
+    if (missingScenes.length === 0) {
+      showError("미디어가 없는 씬이 없습니다.");
       return;
     }
 
     // 초기 상태 설정
     setMediaGenerationState({
       isActive: true,
-      phase: "video",
+      phase: "image",
       current: 0,
-      total: scenes.length,
-      message: "미디어 자동 생성 시작...",
+      total: missingScenes.length,
+      message: "AI 이미지 생성 시작...",
       videoCount: 0,
       imageCount: 0,
       currentScene: null,
     });
 
-    let finalVideoCount = 0;
     let finalImageCount = 0;
 
     try {
-      const assignedScenes = await assignMediaToScenes(scenes, {
-        minScore: 0.1,
-        allowDuplicates: false,
+      const assignedScenes = await assignImagesToMissingScenes(scenes, {
         onProgress: (progress) => {
           // 진행 상황 업데이트
           setMediaGenerationState(prev => ({
@@ -533,14 +532,12 @@ function SceneList({
             current: progress.current,
             total: progress.total,
             message: progress.message,
-            videoCount: progress.videoCount || prev.videoCount,
             imageCount: progress.imageCount || prev.imageCount,
             currentScene: progress.currentScene || null,
           }));
 
           // 최종 카운트 캡처
           if (progress.phase === "completed") {
-            finalVideoCount = progress.videoCount || 0;
             finalImageCount = progress.imageCount || 0;
           }
         },
@@ -552,9 +549,9 @@ function SceneList({
       const allComplete = assignedScenes.every(s => s.asset?.path && s.audioPath);
 
       if (allComplete) {
-        showSuccess(`미디어 자동 생성 완료! 영상 ${finalVideoCount}개, AI 이미지 ${finalImageCount}개 (총 ${totalAssigned}개) - ✨ 모든 씬이 완성되었습니다! 이제 영상 내보내기를 진행할 수 있습니다.`);
+        showSuccess(`이미지 자동 생성 완료! AI 이미지 ${finalImageCount}개 - ✨ 모든 씬이 완성되었습니다! 이제 영상 내보내기를 진행할 수 있습니다.`);
       } else {
-        showSuccess(`미디어 자동 생성 완료! 영상 ${finalVideoCount}개, AI 이미지 ${finalImageCount}개 (총 ${totalAssigned}개)`);
+        showSuccess(`이미지 자동 생성 완료! AI 이미지 ${finalImageCount}개`);
       }
 
       // 완료 후 3초 뒤 자동으로 닫기
@@ -572,8 +569,8 @@ function SceneList({
       }, 3000);
 
     } catch (error) {
-      console.error("[미디어 자동 생성] 오류:", error);
-      showError(`미디어 자동 생성 중 오류가 발생했습니다: ${error.message}`);
+      console.error("[이미지 자동 생성] 오류:", error);
+      showError(`이미지 자동 생성 중 오류가 발생했습니다: ${error.message}`);
 
       setMediaGenerationState(prev => ({
         ...prev,
@@ -583,25 +580,27 @@ function SceneList({
     }
   }, [scenes, setScenes]);
 
-  // 영상 자동 할당 핸들러 (다운로드 포함)
+  // 미디어 없는 씬에 영상 자동 할당 핸들러
   const handleAutoAssignVideosOnly = useCallback(async () => {
     if (!scenes || scenes.length === 0) {
       showError("할당할 씬이 없습니다.");
       return;
     }
 
-    const scenesWithText = scenes.filter(scene => scene.text && scene.text.trim().length > 0);
-    if (scenesWithText.length === 0) {
-      showError("텍스트가 있는 씬이 없습니다. 먼저 자막을 작성해주세요.");
+    // 미디어가 없는 씬만 필터링
+    const missingScenes = scenes.filter(scene => !scene.asset?.path && scene.text && scene.text.trim().length > 0);
+
+    if (missingScenes.length === 0) {
+      showError("미디어가 없는 씬이 없습니다.");
       return;
     }
 
     // 초기 상태 설정
     setVideoAssignState({
       isActive: true,
-      phase: "local",
+      phase: "video",
       current: 0,
-      total: scenes.length,
+      total: missingScenes.length,
       message: "영상 할당 시작...",
       assignedCount: 0,
       downloadedCount: 0,
@@ -609,18 +608,11 @@ function SceneList({
     });
 
     let finalAssignedCount = 0;
-    let finalDownloadedCount = 0;
 
     try {
-      const assignedScenes = await assignVideosWithDownload(scenes, {
+      const assignedScenes = await assignVideosToMissingScenes(scenes, {
         minScore: 0.1,
         allowDuplicates: false,
-        provider: 'pexels', // 기본값, 나중에 설정에서 가져올 수 있음
-        downloadOptions: {
-          minResolution: '1080p',
-          aspectRatio: '16:9',
-          maxFileSize: 20,
-        },
         onProgress: (progress) => {
           // 진행 상황 업데이트
           setVideoAssignState(prev => ({
@@ -630,14 +622,12 @@ function SceneList({
             total: progress.total,
             message: progress.message,
             assignedCount: progress.assignedCount || prev.assignedCount,
-            downloadedCount: progress.downloadedCount || prev.downloadedCount,
             currentScene: progress.currentScene || null,
           }));
 
           // 최종 카운트 캡처
           if (progress.phase === "completed") {
             finalAssignedCount = progress.assignedCount || 0;
-            finalDownloadedCount = progress.downloadedCount || 0;
           }
         },
       });
@@ -647,17 +637,7 @@ function SceneList({
       const totalAssigned = assignedScenes.filter(s => s.asset?.path).length;
       const allComplete = assignedScenes.every(s => s.asset?.path && s.audioPath);
 
-      // 새로 할당된 영상이 있는 경우와 없는 경우 메시지 구분
-      const newAssignments = finalAssignedCount + finalDownloadedCount;
-      let message = "";
-
-      if (newAssignments > 0) {
-        // 새로 할당된 영상이 있음
-        message = `영상 할당 완료! 새로 할당: ${finalAssignedCount}개(로컬) + ${finalDownloadedCount}개(다운) | 총 ${totalAssigned}/${scenes.length}개 할당됨`;
-      } else {
-        // 이미 모두 할당되어 있음
-        message = `영상 할당 완료! 이미 모든 씬에 영상이 할당되어 있습니다 (총 ${totalAssigned}개)`;
-      }
+      let message = `영상 할당 완료! 미디어 없는 ${finalAssignedCount}/${missingScenes.length}개 씬에 영상 할당됨`;
 
       if (allComplete) {
         message += " - ✨ 모든 씬이 완성되었습니다! 이제 영상 내보내기를 진행할 수 있습니다.";
@@ -767,6 +747,7 @@ function SceneList({
     if (contextMenuSceneIndex === -1) return;
 
     const updatedScenes = [...scenes];
+    // asset만 제거하고, scene.keyword는 유지됨 (다음 할당 시 재사용)
     updatedScenes[contextMenuSceneIndex].asset = null;
     setScenes(updatedScenes);
 
@@ -982,11 +963,11 @@ function SceneList({
           <Button
             appearance="primary"
             size="small"
-            icon={<ArrowSyncRegular />}
-            onClick={handleAutoGenerateMedia}
+            icon={<ImageRegular />}
+            onClick={handleAutoAssignImagesOnly}
             disabled={mediaGenerationState.isActive || videoAssignState.isActive || scenes.length === 0}
           >
-            {mediaGenerationState.isActive ? "할당 중..." : "영상+이미지 자동 할당"}
+            {mediaGenerationState.isActive ? "할당 중..." : "이미지 자동 할당"}
           </Button>
           <Button
             appearance="primary"
@@ -1199,11 +1180,20 @@ function SceneList({
                       <CheckmarkCircleRegular style={{ fontSize: 12, marginRight: 3 }} />
                       {sceneWithDefaults.asset.type === "image" ? "이미지" : "영상"} 연결됨
                     </Badge>
-                    {sceneWithDefaults.asset.keyword && (
+                    {sceneWithDefaults.keyword && (
                       <Badge appearance="outline" size="small" style={{ fontSize: "12px" }}>
-                        키워드: {sceneWithDefaults.asset.keyword}
+                        키워드: {sceneWithDefaults.keyword}
                       </Badge>
                     )}
+                  </div>
+                )}
+
+                {/* 미디어 없지만 키워드는 있을 때 표시 (미디어 제거 후 상태) */}
+                {!hasMedia && sceneWithDefaults.keyword && (
+                  <div style={{ marginTop: 6 }}>
+                    <Badge appearance="outline" size="small" style={{ fontSize: "12px", color: "#666" }}>
+                      키워드: {sceneWithDefaults.keyword}
+                    </Badge>
                   </div>
                 )}
 

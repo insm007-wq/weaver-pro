@@ -644,6 +644,19 @@ const VideoPreview = memo(function VideoPreview({
     setAudioDuration(0);
   }, [selectedSceneIndex, selectedScene]);
 
+  const handleAudioTimeUpdate = useCallback((e) => {
+    const audio = e.target;
+    const audioCurrentTime = audio.currentTime;
+
+    // 비디오가 있으면 비디오와 오디오 중 더 진행된 시간 사용
+    const video = videoRef?.current;
+    const videoCurrentTime = video && !video.paused ? video.currentTime : 0;
+    const maxTime = Math.max(videoCurrentTime, audioCurrentTime);
+
+    setCurrentTime(maxTime);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSceneIndex]); // videoRef는 ref이므로 의존성에서 제외
+
   const handleAudioEnded = useCallback(() => {
     // 오디오가 끝나면 비디오도 정지
     const video = videoRef?.current;
@@ -932,8 +945,11 @@ const VideoPreview = memo(function VideoPreview({
                 )}
               </div>
             ) : selectedScene.asset.type === "image" ? (
-              // 이미지 표시 (자막 오버레이 포함)
-              <div style={{ position: "relative", width: "100%", height: "100%" }}>
+              // 이미지 표시 (자막 오버레이 포함, 음성 재생/정지 가능)
+              <div
+                style={{ position: "relative", width: "100%", height: "100%", cursor: "pointer" }}
+                onClick={handleVideoToggle}
+              >
                 <img
                   src={videoUrl}
                   style={{
@@ -953,6 +969,31 @@ const VideoPreview = memo(function VideoPreview({
                 />
                 {/* 자막 오버레이 */}
                 {renderSubtitleOverlay()}
+                {/* 재생/일시정지 아이콘 오버레이 (음성 제어용) */}
+                {!isPlaying && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "50%",
+                      left: "50%",
+                      transform: "translate(-50%, -50%)",
+                      background: "linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(240, 240, 240, 0.95) 100%)",
+                      backdropFilter: "blur(12px)",
+                      borderRadius: "50%",
+                      width: "72px",
+                      height: "72px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      pointerEvents: "none",
+                      transition: "all 0.3s ease",
+                      boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.3)",
+                      border: "2px solid rgba(255, 255, 255, 0.4)",
+                    }}
+                  >
+                    <PlayRegular style={{ fontSize: 28, color: "#333", marginLeft: "4px" }} />
+                  </div>
+                )}
               </div>
             ) : null
           ) : (
@@ -1046,6 +1087,7 @@ const VideoPreview = memo(function VideoPreview({
           onLoadedMetadata={handleAudioLoadedMetadata}
           onCanPlay={handleAudioCanPlay}
           onError={handleAudioError}
+          onTimeUpdate={handleAudioTimeUpdate}
           onEnded={handleAudioEnded}
         />
       )}

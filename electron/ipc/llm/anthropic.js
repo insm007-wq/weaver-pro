@@ -525,4 +525,78 @@ async function expandThumbnailPrompt(userInput) {
   }
 }
 
-module.exports = { callAnthropic, expandThumbnailPrompt };
+// ============================================================
+// 씬 이미지용 프롬프트 확장
+// ============================================================
+async function expandScenePrompt(sceneText) {
+  console.log("[Anthropic] 씬 프롬프트 확장 시작:", sceneText);
+
+  const apiKey = await getSecret("anthropicKey");
+  if (!apiKey) {
+    throw new Error("Anthropic API Key가 설정되지 않았습니다.");
+  }
+
+  const systemPrompt = `You are a professional image generation prompt expert for video scene illustrations.
+Your goal is to create natural, photorealistic image prompts that match the scene narration perfectly.`;
+
+  const userPrompt = `Convert this Korean scene narration into a detailed English image generation prompt:
+
+"${sceneText.trim()}"
+
+Requirements:
+- Describe the visual scene in detail (setting, objects, people, actions, atmosphere)
+- Use photorealistic, cinematic style
+- Include lighting and mood description
+- NO clickbait, NO exaggeration, NO text overlays
+- Keep it natural and professional
+- Focus on what would be VISIBLE in the scene
+- Return ONLY the English prompt, no explanations or quotes
+
+Example:
+Korean: "아름다운 자연 풍경이 펼쳐집니다"
+English: beautiful nature landscape, scenic mountain view, lush green forest, clear blue sky with white clouds, golden hour lighting, photorealistic, cinematic composition, wide angle shot, 4K quality
+
+Now convert:`;
+
+  try {
+    const response = await fetch(ANTHROPIC_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: DEFAULT_MODEL,
+        max_tokens: 200,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+        temperature: 0.3, // 낮은 temperature로 일관성 유지
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      throw new Error(`Anthropic API Error ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    const expandedPrompt = data?.content?.[0]?.text?.trim();
+
+    if (expandedPrompt) {
+      console.log("[Anthropic] 씬 프롬프트 확장 완료:", expandedPrompt);
+      return expandedPrompt;
+    }
+
+    // 폴백: 원본 텍스트 + 기본 스타일
+    const fallback = `${sceneText}, photorealistic scene illustration, natural lighting, cinematic composition, detailed background, 4K quality`;
+    console.log("[Anthropic] 씬 프롬프트 확장 폴백 사용:", fallback);
+    return fallback;
+  } catch (error) {
+    console.error("[Anthropic] 씬 프롬프트 확장 실패:", error);
+    // 폴백: 원본 텍스트 + 기본 스타일
+    return `${sceneText}, photorealistic scene illustration, natural lighting, cinematic composition, detailed background, 4K quality`;
+  }
+}
+
+module.exports = { callAnthropic, expandThumbnailPrompt, expandScenePrompt };
