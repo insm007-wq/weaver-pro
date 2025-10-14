@@ -34,6 +34,7 @@ ehthumbs.db
 *.swo
 *.bak
 *.tmp
+nul
 
 # ========================
 # VSCode
