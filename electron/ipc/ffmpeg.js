@@ -997,11 +997,23 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
       console.log(`📹 클립 생성 중: ${i + 1}/${N}`);
     }
 
-    const vfChain = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p`;
+    // ✅ 이미지 패닝 효과: crop 필터로 아래에서 위로 부드럽게 이동
+    // 1. 이미지를 30% 크게 스케일 (1920*1.3=2496, 1080*1.3=1404) - 더 부드러운 패닝을 위해
+    // 2. crop 필터로 1920x1080 영역을 선택하되, y 위치를 프레임에 따라 변경
+    // n: 현재 프레임 번호 (0부터 시작)
+    // 아래(y=324)에서 시작하여 위(y=0)로 이동 - 이동 거리 3배 증가로 매우 부드럽고 역동적
+    const totalFrames = Math.floor(durSec * 24);
+    const panHeight = 324; // 1404 - 1080 (30% 오버스캔)
+    const panPerFrame = (panHeight / totalFrames).toFixed(6);
+    // crop의 y 파라미터를 표현식으로: max(0, 324 - (324/254)*n)
+    // max() 함수로 끝에서 멈추도록 (0 이하로 내려가지 않음)
+    const vfChain = `scale=2496:1404:force_original_aspect_ratio=decrease,pad=2496:1404:(ow-iw)/2:(oh-ih)/2,crop=1920:1080:288:'max(0,${panHeight}-${panPerFrame}*n)',setsar=1,format=yuv420p`;
 
     const clipArgs = [
       "-y",
       "-hide_banner",
+      "-framerate",
+      "24",
       "-loop",
       "1",
       "-i",
@@ -1773,13 +1785,26 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
       const realSec = await probeDurationSec(videoClipOut);
       totalVideoSec += realSec;
     } else if (scene.asset.type === "image") {
-      // 이미지: duration 동안 정지 화면
+      // 이미지: duration 동안 패닝 효과와 함께 표시
       const imageClipOut = path.join(tempDir, `scene_${String(i).padStart(3, "0")}_${Date.now()}.mp4`);
-      const vfChain = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p`;
+
+      // ✅ 이미지 패닝 효과: crop 필터로 아래에서 위로 부드럽게 이동
+      // 1. 이미지를 30% 크게 스케일 (1920*1.3=2496, 1080*1.3=1404) - 더 부드러운 패닝을 위해
+      // 2. crop 필터로 1920x1080 영역을 선택하되, y 위치를 프레임에 따라 변경
+      // n: 현재 프레임 번호 (0부터 시작)
+      // 아래(y=324)에서 시작하여 위(y=0)로 이동 - 이동 거리 3배 증가로 매우 부드럽고 역동적
+      const totalFrames = Math.floor(durSec * 24);
+      const panHeight = 324; // 1404 - 1080 (30% 오버스캔)
+      const panPerFrame = (panHeight / totalFrames).toFixed(6);
+      // crop의 y 파라미터를 표현식으로: max(0, 324 - (324/254)*n)
+      // max() 함수로 끝에서 멈추도록 (0 이하로 내려가지 않음)
+      const vfChain = `scale=2496:1404:force_original_aspect_ratio=decrease,pad=2496:1404:(ow-iw)/2:(oh-ih)/2,crop=1920:1080:288:'max(0,${panHeight}-${panPerFrame}*n)',setsar=1,format=yuv420p`;
 
       const imageArgs = [
         "-y",
         "-hide_banner",
+        "-framerate",
+        "24",
         "-loop",
         "1",
         "-i",
