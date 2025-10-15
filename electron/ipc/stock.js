@@ -176,6 +176,45 @@ async function searchPexels({ apiKey, query, perPage, targetRes, minBytes, maxBy
   return out;
 }
 
+async function searchPexelsPhotos({ apiKey, query, perPage, targetRes }) {
+  if (!apiKey) return [];
+  const url = "https://api.pexels.com/v1/search";
+  const params = { query, per_page: Math.min(perPage || 6, 80), locale: "ko-KR" };
+
+  const r = await withRateLimit("pexels", () => axios.get(url, { headers: { Authorization: apiKey }, params, timeout: 10000 }));
+  if (r?._rateLimited || !r?.data) return [];
+
+  const out = [];
+  for (const photo of r.data?.photos || []) {
+    // src 객체에서 다양한 해상도의 이미지 URL 추출
+    const variants = [];
+    const src = photo.src || {};
+
+    // Pexels는 original, large2x, large, medium, small 등 제공
+    if (src.original) variants.push({ url: src.original, width: photo.width || 0, height: photo.height || 0, label: "original" });
+    if (src.large2x) variants.push({ url: src.large2x, width: Math.round((photo.width || 0) * 1.5), height: Math.round((photo.height || 0) * 1.5), label: "large2x" });
+    if (src.large) variants.push({ url: src.large, width: Math.round((photo.width || 0) * 0.75), height: Math.round((photo.height || 0) * 0.75), label: "large" });
+    if (src.medium) variants.push({ url: src.medium, width: Math.round((photo.width || 0) * 0.5), height: Math.round((photo.height || 0) * 0.5), label: "medium" });
+
+    const best = closestRes(variants, targetRes) || variants[0];
+    if (best?.url) {
+      const id = photo.id;
+      out.push({
+        provider: "pexels",
+        url: best.url,
+        filename: `pexels-photo-${id}.jpg`,
+        width: best.width || photo.width || 0,
+        height: best.height || photo.height || 0,
+        size: 0, // 사진은 크기 정보 없음
+        quality: best.label || "original",
+        tags: [],
+        photographer: photo.photographer || "",
+      });
+    }
+  }
+  return out;
+}
+
 async function searchPixabay({ apiKey, query, perPage, targetRes, minBytes, maxBytes }) {
   if (!apiKey) return [];
   const url = "https://pixabay.com/api/videos/";
@@ -227,6 +266,52 @@ async function searchPixabay({ apiKey, query, perPage, targetRes, minBytes, maxB
   return out;
 }
 
+async function searchPixabayPhotos({ apiKey, query, perPage, targetRes }) {
+  if (!apiKey) return [];
+  const url = "https://pixabay.com/api/";
+  const params = {
+    key: apiKey,
+    q: query,
+    per_page: Math.min(perPage || 6, 200),
+    image_type: "photo",
+    safesearch: "true",
+  };
+
+  const r = await withRateLimit("pixabay", () => axios.get(url, { params, timeout: 10000 }));
+  if (r?._rateLimited || !r?.data) return [];
+
+  const out = [];
+  for (const hit of r.data?.hits || []) {
+    // Pixabay 사진 API는 largeImageURL, webformatURL, fullHDURL 등 제공
+    const variants = [];
+
+    if (hit.largeImageURL) variants.push({ url: hit.largeImageURL, width: hit.imageWidth || 1920, height: hit.imageHeight || 1080, label: "large" });
+    if (hit.fullHDURL) variants.push({ url: hit.fullHDURL, width: 1920, height: 1080, label: "fullHD" });
+    if (hit.webformatURL) variants.push({ url: hit.webformatURL, width: hit.webformatWidth || 640, height: hit.webformatHeight || 480, label: "webformat" });
+
+    const best = closestRes(variants, targetRes) || variants[0];
+    if (best?.url) {
+      const id = hit.id;
+      const tags = String(hit.tags || "")
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      out.push({
+        provider: "pixabay",
+        url: best.url,
+        filename: `pixabay-photo-${id}.jpg`,
+        width: best.width || hit.imageWidth || 0,
+        height: best.height || hit.imageHeight || 0,
+        size: 0, // 사진은 크기 정보 없음
+        quality: best.label || "large",
+        tags,
+        user: hit.user || "",
+      });
+    }
+  }
+  return out;
+}
+
 /* ── IPC 핸들러 ─────────────────────────────────────────────────────────── */
 function registerStockIPC() {
   ipcMain.removeHandler?.("stock:search");
@@ -247,7 +332,7 @@ function registerStockIPC() {
 
     const qTerms = normTerms(query, queries);
     if (!qTerms.length) return { ok: false, message: "query_required", items: [] };
-    if (type !== "videos") return { ok: false, message: "only_videos_supported", items: [] };
+    if (type !== "videos" && type !== "photos") return { ok: false, message: "unsupported_type", items: [] };
 
     const meta = {
       queries: qTerms.length,
@@ -255,6 +340,7 @@ function registerStockIPC() {
       providerErrors: 0,
       emptyResults: 0,
       usedProviders: providers.filter(Boolean),
+      type,
     };
 
     try {
@@ -263,13 +349,25 @@ function registerStockIPC() {
       for (const q of qTerms) {
         const tasks = [];
 
-        if (providers.includes("pexels") && pexelsKey) {
-          meta.providerCalls++;
-          tasks.push(searchPexels({ apiKey: pexelsKey, query: q, perPage, targetRes, minBytes, maxBytes }));
-        }
-        if (providers.includes("pixabay") && pixabayKey) {
-          meta.providerCalls++;
-          tasks.push(searchPixabay({ apiKey: pixabayKey, query: q, perPage, targetRes, minBytes, maxBytes }));
+        // 타입에 따라 적절한 검색 함수 호출
+        if (type === "videos") {
+          if (providers.includes("pexels") && pexelsKey) {
+            meta.providerCalls++;
+            tasks.push(searchPexels({ apiKey: pexelsKey, query: q, perPage, targetRes, minBytes, maxBytes }));
+          }
+          if (providers.includes("pixabay") && pixabayKey) {
+            meta.providerCalls++;
+            tasks.push(searchPixabay({ apiKey: pixabayKey, query: q, perPage, targetRes, minBytes, maxBytes }));
+          }
+        } else if (type === "photos") {
+          if (providers.includes("pexels") && pexelsKey) {
+            meta.providerCalls++;
+            tasks.push(searchPexelsPhotos({ apiKey: pexelsKey, query: q, perPage, targetRes }));
+          }
+          if (providers.includes("pixabay") && pixabayKey) {
+            meta.providerCalls++;
+            tasks.push(searchPixabayPhotos({ apiKey: pixabayKey, query: q, perPage, targetRes }));
+          }
         }
 
         if (!tasks.length) continue;
@@ -331,4 +429,4 @@ function registerStockIPC() {
   console.log("[ipc] stock.registerStockIPC: OK");
 }
 
-module.exports = { registerStockIPC, searchPexels, searchPixabay };
+module.exports = { registerStockIPC, searchPexels, searchPixabay, searchPexelsPhotos, searchPixabayPhotos };

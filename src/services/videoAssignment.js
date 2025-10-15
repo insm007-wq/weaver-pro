@@ -492,13 +492,15 @@ export async function generateImageForScene(scene, sceneIndex, options = {}) {
     const sceneNumber = String(sceneIndex + 1).padStart(3, '0');
 
     // URL에서 확장자 추출 (webp, jpg, png 등)
-    const urlExtension = imageUrl.split('.').pop().split('?')[0]; // 쿼리 파라미터 제거
-    const fileExtension = ['webp', 'jpg', 'jpeg', 'png'].includes(urlExtension.toLowerCase())
-      ? urlExtension.toLowerCase()
+    const urlExtension = imageUrl.split('.').pop().split('?')[0].toLowerCase(); // 쿼리 파라미터 제거
+    const fileExtension = ['webp', 'jpg', 'jpeg', 'png'].includes(urlExtension)
+      ? urlExtension
       : 'webp'; // 기본값
 
     const suggestedFileName = `scene-${sceneNumber}.${fileExtension}`;
     const fullImagePath = `${imagesFolder}/${suggestedFileName}`;
+
+    console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 파일 저장 - ${suggestedFileName}`);
 
     try {
       // URL에서 Blob 가져오기
@@ -509,6 +511,7 @@ export async function generateImageForScene(scene, sceneIndex, options = {}) {
 
       const blob = await response.blob();
 
+      // ✅ 원본 그대로 저장 (변환 없음)
       const arrayBuffer = await blob.arrayBuffer();
       const buffer = new Uint8Array(arrayBuffer);
 

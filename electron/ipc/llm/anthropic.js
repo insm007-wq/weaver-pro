@@ -526,6 +526,79 @@ async function expandThumbnailPrompt(userInput) {
 }
 
 // ============================================================
+// 키워드를 장면 이미지 프롬프트로 확장 (미디어 다운로드용)
+// ============================================================
+async function expandKeywordToScenePrompt(keyword) {
+  console.log("[Anthropic] 키워드 → 장면 프롬프트 확장 시작:", keyword);
+
+  const apiKey = await getSecret("anthropicKey");
+  if (!apiKey) {
+    throw new Error("Anthropic API Key가 설정되지 않았습니다.");
+  }
+
+  const systemPrompt = `You are a professional image generation prompt expert specializing in realistic scene illustrations for video content.`;
+
+  const userPrompt = `Convert this Korean keyword into a detailed English image generation prompt for a video scene:
+
+Keyword: "${keyword.trim()}"
+
+Requirements:
+- Create a photorealistic scene illustration prompt
+- Describe what would be VISIBLE in a video about this keyword
+- Use professional, cinematic style
+- Include lighting and composition details
+- NO clickbait, NO exaggeration, NO text overlays
+- Focus on realistic, natural scenes
+- Return ONLY the English prompt, no explanations
+
+Example:
+Korean keyword: "도시"
+English prompt: modern cityscape, urban skyline, tall buildings, busy streets, people walking, cars on road, photorealistic, cinematic composition, natural lighting, detailed architecture, 4K quality, professional photography
+
+Now convert:`;
+
+  try {
+    const response = await fetch(ANTHROPIC_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: DEFAULT_MODEL,
+        max_tokens: 200,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+        temperature: 0.5, // 중간 temperature로 자연스럽면서도 일관성 있게
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      throw new Error(`Anthropic API Error ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    const expandedPrompt = data?.content?.[0]?.text?.trim();
+
+    if (expandedPrompt) {
+      console.log("[Anthropic] 키워드 프롬프트 확장 완료:", expandedPrompt);
+      return expandedPrompt;
+    }
+
+    // 폴백: 키워드 + 기본 스타일
+    const fallback = `${keyword}, photorealistic scene illustration, cinematic composition, natural lighting, detailed background, 4K quality, professional photography`;
+    console.log("[Anthropic] 키워드 프롬프트 확장 폴백 사용:", fallback);
+    return fallback;
+  } catch (error) {
+    console.error("[Anthropic] 키워드 프롬프트 확장 실패:", error);
+    // 폴백: 키워드 + 기본 스타일
+    return `${keyword}, photorealistic scene illustration, cinematic composition, natural lighting, detailed background, 4K quality, professional photography`;
+  }
+}
+
+// ============================================================
 // 씬 이미지용 프롬프트 확장
 // ============================================================
 async function expandScenePrompt(sceneText) {
@@ -599,4 +672,4 @@ Now convert:`;
   }
 }
 
-module.exports = { callAnthropic, expandThumbnailPrompt, expandScenePrompt };
+module.exports = { callAnthropic, expandThumbnailPrompt, expandScenePrompt, expandKeywordToScenePrompt };

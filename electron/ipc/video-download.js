@@ -399,6 +399,299 @@ async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 2
 }
 
 // ---------------------------------------------------------------------------
+// 안전하고 최적화된 사진 다운로드
+// - videoSaveFolder/images 경로 사용
+// ---------------------------------------------------------------------------
+async function downloadPhotoOptimized(url, filename, onProgress) {
+  try {
+    console.log(`[사진 다운로드] 시작: ${filename}`);
+
+    const videoSaveFolder = assertVideoSaveFolder();
+    const imagesPath = path.join(videoSaveFolder, "images");
+    const filePath = path.join(imagesPath, filename);
+
+    // 디렉토리 생성
+    await fs.mkdir(imagesPath, { recursive: true });
+
+    // 캐시 체크
+    try {
+      const stats = await fs.stat(filePath);
+      if (stats.isFile()) {
+        console.log(`[사진 다운로드] 파일이 이미 존재: ${filename}`);
+        return {
+          success: true,
+          filePath,
+          filename,
+          size: stats.size,
+          cached: true,
+        };
+      }
+    } catch {
+      // 없으면 계속
+    }
+
+    // 취소 확인
+    if (isCancelled()) {
+      throw new Error("다운로드가 취소되었습니다");
+    }
+
+    // 다운로드
+    const { buffer, size } = await new Promise((resolve, reject) => {
+      const protocol = url.startsWith("https:") ? https : http;
+
+      const request = protocol.get(url, (response) => {
+        // 리다이렉트
+        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+          return downloadPhotoOptimized(response.headers.location, filename, onProgress).then(resolve).catch(reject);
+        }
+
+        if (response.statusCode !== 200) {
+          return reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`));
+        }
+
+        const totalSize = parseInt(response.headers["content-length"] || "0", 10);
+        let downloadedSize = 0;
+        const chunks = [];
+
+        response.on("data", (chunk) => {
+          // 취소 확인
+          if (isCancelled()) {
+            request.destroy();
+            reject(new Error("다운로드가 취소되었습니다"));
+            return;
+          }
+
+          downloadedSize += chunk.length;
+          chunks.push(chunk);
+
+          if (onProgress && totalSize > 0) {
+            const progress = Math.round((downloadedSize / totalSize) * 100);
+            onProgress(progress);
+          }
+        });
+
+        response.on("end", () => {
+          // 취소 확인
+          if (isCancelled()) {
+            reject(new Error("다운로드가 취소되었습니다"));
+            return;
+          }
+          resolve({ buffer: Buffer.concat(chunks), size: downloadedSize });
+        });
+
+        response.on("error", reject);
+      });
+
+      // 요청 추적
+      currentRequests.push(request);
+
+      request.on("error", reject);
+      request.on("close", () => {
+        // 완료된 요청 제거
+        const index = currentRequests.indexOf(request);
+        if (index > -1) {
+          currentRequests.splice(index, 1);
+        }
+      });
+
+      request.setTimeout(60000, () => {
+        request.destroy();
+        reject(new Error("다운로드 타임아웃 (60초)"));
+      });
+    });
+
+    // ✅ 원본 그대로 저장 (변환 없음)
+    await fs.writeFile(filePath, buffer);
+    console.log(`[사진 다운로드] 완료: ${filename} (${Math.round(size / 1024 / 1024)}MB)`);
+
+    return {
+      success: true,
+      filePath,
+      filename,
+      size,
+      cached: false,
+    };
+  } catch (error) {
+    console.error(`[사진 다운로드] 실패: ${filename}`, error.message);
+    return {
+      success: false,
+      filename,
+      error: error.message,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// AI 이미지 생성 및 다운로드 (Replicate Flux Schnell)
+// - videoSaveFolder/images 경로에 저장
+// ---------------------------------------------------------------------------
+const {
+  resolveLatestVersionId,
+  createReplicate
+} = require("../services/replicateClient");
+
+/**
+ * 텍스트 정규화 및 키워드 추출 (videoAssignment.js와 동일)
+ */
+function normalizeText(text) {
+  if (!text) return "";
+  return text.toLowerCase()
+    .replace(/[^\w\s가-힣]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractKeywordsFromText(text) {
+  const normalized = normalizeText(text);
+  if (!normalized) return [];
+
+  const words = normalized.split(' ')
+    .filter(word => word.length > 1)
+    .filter(Boolean);
+
+  return words;
+}
+
+async function generateAndDownloadAIImage(keyword, onProgress) {
+  try {
+    console.log(`[AI 이미지 생성] 시작: "${keyword}"`);
+
+    // Replicate API 키 가져오기
+    const replicateKey = await getSecret("replicateKey");
+    if (!replicateKey) {
+      throw new Error("Replicate API 키가 설정되지 않았습니다. 설정 > API 설정에서 Replicate API 키를 입력해주세요.");
+    }
+
+    onProgress?.(10); // 키 확인 완료
+
+    // ✅ 썸네일 생성기와 동일한 방식: AI를 사용해서 한글 키워드를 영어 장면 프롬프트로 변환
+    let finalPrompt = `${keyword}, photorealistic scene illustration, cinematic composition, natural lighting, detailed background, 4K quality`;
+
+    try {
+      const { expandKeywordToScenePrompt } = require("./llm/anthropic");
+      const expandedPrompt = await expandKeywordToScenePrompt(keyword);
+
+      if (expandedPrompt) {
+        finalPrompt = expandedPrompt;
+        console.log(`[AI 이미지 생성] 키워드 확장 성공: "${keyword}" → "${finalPrompt}"`);
+      } else {
+        console.log(`[AI 이미지 생성] 키워드 확장 실패, 폴백 사용`);
+      }
+    } catch (error) {
+      console.warn(`[AI 이미지 생성] 키워드 확장 오류, 폴백 사용:`, error);
+    }
+
+    console.log(`[AI 이미지 생성] 최종 프롬프트: ${finalPrompt}`);
+
+    // Flux Schnell 모델 버전 확인
+    const slug = "black-forest-labs/flux-schnell";
+    const versionId = await resolveLatestVersionId(slug, replicateKey);
+    if (!versionId) {
+      throw new Error("Flux Schnell 모델 버전을 확인할 수 없습니다.");
+    }
+
+    onProgress?.(20); // 모델 버전 확인 완료
+
+    // Replicate 클라이언트 생성
+    const replicate = createReplicate(replicateKey);
+
+    // 이미지 생성 요청
+    let prediction = await replicate.predictions.create({
+      version: versionId,
+      input: {
+        prompt: finalPrompt,
+        num_outputs: 1,
+        aspect_ratio: "16:9",
+      },
+    });
+
+    console.log(`[AI 이미지 생성] Prediction ID: ${prediction.id}`);
+    onProgress?.(30); // 생성 요청 완료
+
+    // 폴링 (최대 2분)
+    const maxTries = 120;
+    let tries = 0;
+
+    while (
+      ["starting", "processing", "queued"].includes(prediction.status) &&
+      tries < maxTries
+    ) {
+      if (tries % 5 === 0) {
+        const progressPercent = 30 + Math.min(50, Math.round((tries / maxTries) * 50));
+        onProgress?.(progressPercent);
+      }
+
+      await new Promise((r) => setTimeout(r, 1000));
+      prediction = await replicate.predictions.get(prediction.id);
+      tries++;
+
+      // 취소 확인
+      if (isCancelled()) {
+        throw new Error("AI 이미지 생성이 취소되었습니다");
+      }
+    }
+
+    if (tries >= maxTries) {
+      throw new Error("AI 이미지 생성 타임아웃 (2분 초과)");
+    }
+
+    if (prediction.status !== "succeeded") {
+      const errorMsg = prediction.error || "알 수 없는 오류";
+      throw new Error(`AI 이미지 생성 실패: ${errorMsg}`);
+    }
+
+    onProgress?.(80); // 생성 완료
+
+    // 생성된 이미지 URL 추출
+    const output = prediction.output;
+    const imageUrl = Array.isArray(output) ? output[0] : output;
+
+    if (!imageUrl || typeof imageUrl !== "string") {
+      throw new Error("생성된 이미지 URL을 찾을 수 없습니다.");
+    }
+
+    console.log(`[AI 이미지 생성] 이미지 URL: ${imageUrl}`);
+
+    // ✅ 이미지 자동 할당과 동일: 항상 webp로 저장
+    const fileExtension = 'webp';
+
+    // 이미지 다운로드
+    const safeKeyword = keyword.replace(/[^\w가-힣-]/g, "_");
+    const filename = `ai-${safeKeyword}-${Date.now()}.${fileExtension}`;
+
+    console.log(`[AI 이미지 생성] 파일 저장: ${filename}`);
+
+    const downloadResult = await downloadPhotoOptimized(imageUrl, filename, (progress) => {
+      const finalProgress = 80 + Math.round(progress * 0.2); // 80% ~ 100%
+      onProgress?.(finalProgress);
+    });
+
+    if (!downloadResult.success) {
+      throw new Error(`이미지 다운로드 실패: ${downloadResult.error}`);
+    }
+
+    console.log(`[AI 이미지 생성] 완료: ${filename}`);
+
+    return {
+      success: true,
+      filePath: downloadResult.filePath,
+      filename: downloadResult.filename,
+      size: downloadResult.size,
+      prompt: finalPrompt,
+      predictionId: prediction.id,
+      type: "ai-generated",
+    };
+  } catch (error) {
+    console.error(`[AI 이미지 생성] 실패: "${keyword}"`, error.message);
+    return {
+      success: false,
+      error: error.message,
+      type: "ai-generated",
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 지원되는 영상 검색 프로바이더 목록
 // ---------------------------------------------------------------------------
 const SUPPORTED_PROVIDERS = {
@@ -414,6 +707,164 @@ const SUPPORTED_PROVIDERS = {
   },
   // unsplash 등 추가 가능
 };
+
+// ---------------------------------------------------------------------------
+// Fallback 체인: 영상 → 사진 → AI 이미지
+// - 영상 다운로드 실패 시 사진으로 대체
+// - 사진도 실패 시 AI 이미지 생성
+// ---------------------------------------------------------------------------
+async function downloadMediaWithFallback(keyword, provider, options = {}, onProgress) {
+  const { searchPexelsPhotos, searchPixabayPhotos } = require("./stock");
+
+  // 1단계: 영상 다운로드 시도
+  try {
+    console.log(`[Fallback] 1단계: "${keyword}" 영상 검색 시도...`);
+    onProgress?.({ keyword, status: "searching", mediaType: "video", step: 1 });
+
+    const providerInfo = SUPPORTED_PROVIDERS[provider];
+    const apiKey = await getSecret(providerInfo.apiKeyName);
+
+    if (apiKey) {
+      const videos = await providerInfo.searchFunction(apiKey, keyword, 1, options);
+
+      if (videos && videos.length > 0) {
+        const video = videos[0];
+        const safeKeyword = keyword.replace(/[^\w가-힣-]/g, "_");
+        const resolution = `${video.width}x${video.height}`;
+        const filename = `${safeKeyword}_${video.provider}_${resolution}.mp4`;
+
+        onProgress?.({ keyword, status: "downloading", mediaType: "video", step: 1, filename });
+
+        const downloadResult = await downloadVideoOptimized(video.url, filename, (progress) => {
+          onProgress?.({ keyword, status: "downloading", mediaType: "video", step: 1, progress, filename });
+        }, options.maxFileSize || 20);
+
+        if (downloadResult.success) {
+          console.log(`[Fallback] ✅ 영상 다운로드 성공: ${filename}`);
+          return {
+            success: true,
+            mediaType: "video",
+            ...downloadResult,
+            provider: video.provider,
+            width: video.width,
+            height: video.height,
+            thumbnail: video.thumbnail, // 영상 썸네일 (API에서 제공)
+          };
+        } else if (downloadResult.skipped) {
+          console.log(`[Fallback] ⚠️ 영상 크기 초과로 스킵, 사진으로 대체 시도...`);
+        } else {
+          console.log(`[Fallback] ⚠️ 영상 다운로드 실패, 사진으로 대체 시도...`);
+        }
+      } else {
+        console.log(`[Fallback] ⚠️ 영상 검색 결과 없음, 사진으로 대체 시도...`);
+      }
+    }
+  } catch (error) {
+    console.log(`[Fallback] ⚠️ 영상 다운로드 오류: ${error.message}, 사진으로 대체 시도...`);
+  }
+
+  // 2단계: 사진 다운로드 시도
+  try {
+    console.log(`[Fallback] 2단계: "${keyword}" 사진 검색 시도...`);
+    onProgress?.({ keyword, status: "searching", mediaType: "photo", step: 2 });
+
+    const apiKey = await getSecret(SUPPORTED_PROVIDERS[provider].apiKeyName);
+
+    if (apiKey) {
+      // Pexels 사진 검색
+      let photos = [];
+      if (provider === "pexels") {
+        photos = await searchPexelsPhotos({
+          apiKey,
+          query: keyword,
+          perPage: 1,
+          targetRes: { w: 1920, h: 1080 }
+        });
+      } else if (provider === "pixabay") {
+        photos = await searchPixabayPhotos({
+          apiKey,
+          query: keyword,
+          perPage: 1,
+          targetRes: { w: 1920, h: 1080 }
+        });
+      }
+
+      if (photos && photos.length > 0) {
+        const photo = photos[0];
+        const safeKeyword = keyword.replace(/[^\w가-힣-]/g, "_");
+
+        // ✅ 원본 URL에서 확장자 추출
+        const urlExtension = photo.url.split('.').pop().split('?')[0].toLowerCase();
+        const fileExtension = ['webp', 'jpg', 'jpeg', 'png'].includes(urlExtension)
+          ? urlExtension
+          : 'jpg'; // 기본값
+
+        const filename = `${safeKeyword}_${photo.provider}_photo.${fileExtension}`;
+
+        onProgress?.({ keyword, status: "downloading", mediaType: "photo", step: 2, filename });
+
+        const downloadResult = await downloadPhotoOptimized(photo.url, filename, (progress) => {
+          onProgress?.({ keyword, status: "downloading", mediaType: "photo", step: 2, progress, filename });
+        });
+
+        if (downloadResult.success) {
+          console.log(`[Fallback] ✅ 사진 다운로드 성공: ${filename}`);
+          console.log(`[Fallback] 사진 썸네일 경로: ${downloadResult.filePath}`);
+          return {
+            success: true,
+            mediaType: "photo",
+            ...downloadResult,
+            provider: photo.provider,
+            width: photo.width,
+            height: photo.height,
+            thumbnail: downloadResult.filePath, // 사진 파일 자체가 썸네일
+          };
+        } else {
+          console.log(`[Fallback] ⚠️ 사진 다운로드 실패, AI 이미지 생성 시도...`);
+        }
+      } else {
+        console.log(`[Fallback] ⚠️ 사진 검색 결과 없음, AI 이미지 생성 시도...`);
+      }
+    }
+  } catch (error) {
+    console.log(`[Fallback] ⚠️ 사진 다운로드 오류: ${error.message}, AI 이미지 생성 시도...`);
+  }
+
+  // 3단계: AI 이미지 생성
+  try {
+    console.log(`[Fallback] 3단계: "${keyword}" AI 이미지 생성 시도...`);
+    onProgress?.({ keyword, status: "generating", mediaType: "ai", step: 3 });
+
+    const aiResult = await generateAndDownloadAIImage(keyword, (progress) => {
+      onProgress?.({ keyword, status: "generating", mediaType: "ai", step: 3, progress });
+    });
+
+    if (aiResult.success) {
+      console.log(`[Fallback] ✅ AI 이미지 생성 성공: ${aiResult.filename}`);
+      console.log(`[Fallback] AI 이미지 썸네일 경로: ${aiResult.filePath}`);
+      return {
+        success: true,
+        mediaType: "ai",
+        ...aiResult,
+        thumbnail: aiResult.filePath, // AI 이미지 파일 자체가 썸네일
+      };
+    } else {
+      console.log(`[Fallback] ❌ AI 이미지 생성 실패: ${aiResult.error}`);
+      return {
+        success: false,
+        mediaType: "none",
+        error: `모든 방법 실패 - 영상/사진 없음, AI 생성 실패: ${aiResult.error}`,
+      };
+    }
+  } catch (error) {
+    console.log(`[Fallback] ❌ AI 이미지 생성 오류: ${error.message}`);
+    return {
+      success: false,
+      mediaType: "none",
+      error: `모든 방법 실패: ${error.message}`,
+    };
+  }
+}
 
 // ---------------------------------------------------------------------------
 // 키워드별 영상 검색 및 다운로드
@@ -436,6 +887,7 @@ async function downloadVideosForKeywords(keywords, provider, options = {}, onPro
   }
 
   console.log(`[영상 다운로드] ${keywords.length}개 키워드로 ${provider} 검색 및 다운로드 시작`);
+  console.log(`[영상 다운로드] Fallback 모드: ${options.enableFallback !== false ? '활성화 (영상 → 사진 → AI)' : '비활성화 (영상만)'}`);
 
   const results = [];
   let successCount = 0;
@@ -455,6 +907,55 @@ async function downloadVideosForKeywords(keywords, provider, options = {}, onPro
     }
 
     try {
+      // Fallback 모드가 활성화되어 있으면 (기본값) fallback 체인 사용
+      if (options.enableFallback !== false) {
+        console.log(`[미디어 다운로드] ${i + 1}/${keywords.length}: "${keyword}" (Fallback 모드)`);
+
+        const fallbackResult = await downloadMediaWithFallback(keyword, provider, options, (progress) => {
+          onProgress?.({
+            ...progress,
+            totalKeywords: keywords.length,
+            currentIndex: i,
+          });
+        });
+
+        results.push({
+          keyword,
+          ...fallbackResult,
+        });
+
+        if (fallbackResult.success) {
+          successCount++;
+          const mediaTypeLabel = fallbackResult.mediaType === "video" ? "영상" : fallbackResult.mediaType === "photo" ? "사진" : "AI 이미지";
+          console.log(`[미디어 다운로드] "${keyword}" 완료 ✓ (${mediaTypeLabel})`);
+        } else {
+          failureCount++;
+          console.warn(`[미디어 다운로드] "${keyword}" 실패: ${fallbackResult.error}`);
+        }
+
+        onProgress?.({
+          keyword,
+          status: fallbackResult.success ? "completed" : "failed",
+          progress: 100,
+          totalKeywords: keywords.length,
+          currentIndex: i,
+          mediaType: fallbackResult.mediaType,
+          filename: fallbackResult.filename,
+          error: fallbackResult.success ? undefined : fallbackResult.error,
+          thumbnail: fallbackResult.thumbnail, // 썸네일 정보 전달
+          width: fallbackResult.width,
+          height: fallbackResult.height,
+          provider: fallbackResult.provider,
+        });
+
+        if (i < keywords.length - 1) {
+          await new Promise((r) => setTimeout(r, 500));
+        }
+
+        continue; // fallback 완료, 다음 키워드로
+      }
+
+      // 기존 영상 전용 모드 (enableFallback === false)
       onProgress?.({
         keyword,
         status: "searching",

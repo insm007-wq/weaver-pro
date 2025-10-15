@@ -223,6 +223,18 @@ ipcMain.handle("files/readBinary", async (_evt, payload = {}) => {
         ? "video/x-matroska"
         : ext === ".avi"
         ? "video/x-msvideo"
+        : ext === ".jpg" || ext === ".jpeg"
+        ? "image/jpeg"
+        : ext === ".png"
+        ? "image/png"
+        : ext === ".gif"
+        ? "image/gif"
+        : ext === ".webp"
+        ? "image/webp"
+        : ext === ".bmp"
+        ? "image/bmp"
+        : ext === ".svg"
+        ? "image/svg+xml"
         : "application/octet-stream";
 
     return { ok: true, data: buf.toString("base64"), mime };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Text, Button, Card, Spinner, ProgressBar, Badge, Avatar, Divider, Slider, Dropdown, Option } from "@fluentui/react-components";
 import { useHeaderStyles, useContainerStyles } from "../../styles/commonStyles";
 import {
@@ -10,7 +10,6 @@ import {
   SettingsRegular,
   InfoRegular,
   ArrowClockwiseRegular,
-  VideoClip24Regular,
   DismissCircle24Regular,
 } from "@fluentui/react-icons";
 import { PageErrorBoundary } from "../common/ErrorBoundary";
@@ -18,19 +17,121 @@ import { showError, showSuccess } from "../common/GlobalToast";
 import BottomFixedBar from "../common/BottomFixedBar";
 import { tokens } from "@fluentui/react-components";
 
-/** URL/로컬 경로 모두 img에 표시 가능하게 */
-function toImgSrc(src) {
-  if (!src || typeof src !== "string") return null;
-  if (/^https?:\/\//i.test(src)) return src;
-  const normalized = src.replace(/\\/g, "/");
-  return `file://${normalized.startsWith("/") ? "" : "/"}${normalized}`;
-}
+// 로컬 이미지 캐시
+const imageCache = new Map();
+
+// 썸네일 이미지 컴포넌트 (로컬 파일 → base64 변환)
+const ThumbnailImage = React.memo(({ src, alt, style, fallbackText = "IMAGE" }) => {
+  const [imgSrc, setImgSrc] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadImage() {
+      if (!src || typeof src !== "string") {
+        if (mounted) {
+          setLoading(false);
+          setFailed(true);
+        }
+        return;
+      }
+
+      // HTTP/HTTPS URL
+      if (/^https?:\/\//i.test(src)) {
+        if (mounted) {
+          setImgSrc(src);
+          setLoading(false);
+        }
+        return;
+      }
+
+      // data: URL
+      if (/^data:/i.test(src)) {
+        if (mounted) {
+          setImgSrc(src);
+          setLoading(false);
+        }
+        return;
+      }
+
+      // 캐시 확인
+      if (imageCache.has(src)) {
+        if (mounted) {
+          setImgSrc(imageCache.get(src));
+          setLoading(false);
+        }
+        return;
+      }
+
+      // 로컬 파일 → base64
+      try {
+        const result = await window.api.readBinary(src);
+        if (result?.ok && result?.data && mounted) {
+          const dataUrl = `data:${result.mime || 'image/jpeg'};base64,${result.data}`;
+          imageCache.set(src, dataUrl);
+          setImgSrc(dataUrl);
+        } else {
+          if (mounted) setFailed(true);
+        }
+      } catch (error) {
+        console.error("[ThumbnailImage] 이미지 로드 실패:", error);
+        if (mounted) setFailed(true);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    loadImage();
+
+    return () => {
+      mounted = false;
+    };
+  }, [src]);
+
+  if (loading) {
+    return (
+      <div style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0f0f0' }}>
+        <Spinner size="tiny" />
+      </div>
+    );
+  }
+
+  if (failed || !imgSrc) {
+    return (
+      <div
+        style={{
+          ...style,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#6366f1',
+          color: 'white',
+          fontSize: 10,
+          fontWeight: 'bold',
+        }}
+      >
+        {fallbackText}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imgSrc}
+      alt={alt}
+      style={style}
+      onError={() => setFailed(true)}
+    />
+  );
+});
 
 function MediaDownloadPage() {
   const headerStyles = useHeaderStyles();
   const containerStyles = useContainerStyles();
 
-  // ===== 상태 (기존 유지)
+  // 상태
   const [keywords, setKeywords] = useState([]);
   const [selectedKeywords, setSelectedKeywords] = useState(new Set());
   const [selectedProvider, setSelectedProvider] = useState("pexels");
@@ -44,86 +145,125 @@ function MediaDownloadPage() {
     aspectRatio: "16:9",
   });
   const [keywordsLoaded, setKeywordsLoaded] = useState(false);
-  const [downloadCancelled, setDownloadCancelled] = useState(false);
   const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState(null);
   const [completedVideosCount, setCompletedVideosCount] = useState(0);
+
+  // Refs
   const cancelledRef = useRef(false);
   const progressListenerRef = useRef(null);
   const downloadStartTimeRef = useRef(null);
   const totalVideosRef = useRef(0);
   const countdownIntervalRef = useRef(null);
-  const isTimeEstimatedRef = useRef(false); // 시간 예측 완료 여부
+  const isTimeEstimatedRef = useRef(false);
 
-  // ===== 초기 로드 및 설정 변경 감지
+  // 타이머 정리 헬퍼
+  const clearCountdownTimer = useCallback(() => {
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+  }, []);
+
+  // 다운로드 상태 초기화
+  const resetDownloadState = useCallback(() => {
+    setIsDownloading(false);
+    downloadStartTimeRef.current = null;
+    totalVideosRef.current = 0;
+    isTimeEstimatedRef.current = false;
+    setEstimatedTimeRemaining(null);
+    setCompletedVideosCount(0);
+    clearCountdownTimer();
+  }, [clearCountdownTimer]);
+
+  // 키워드 로드
+  const loadKeywordsFromJSON = useCallback(async (showToast = false) => {
+    try {
+      setKeywordsLoaded(false);
+      const extractedKeywords = await window.api.getSetting("extractedKeywords");
+      const keywordsArray = Array.isArray(extractedKeywords) ? extractedKeywords : [];
+
+      setKeywords(keywordsArray);
+
+      // 전체 선택
+      if (keywordsArray.length > 0) {
+        setSelectedKeywords(new Set(keywordsArray));
+      }
+
+      setKeywordsLoaded(true);
+      if (showToast) {
+        showSuccess(`키워드 ${keywordsArray.length}개 새로고침 완료`);
+      }
+    } catch (e) {
+      console.error("키워드 로드 실패:", e);
+      setKeywords([]);
+      setKeywordsLoaded(true);
+      if (showToast) {
+        showError("키워드 새로고침 실패");
+      }
+    }
+  }, []);
+
+  // 다운로드 히스토리 로드
+  const loadDownloadHistory = useCallback(async () => {
+    try {
+      if (window?.api?.loadDownloadHistory) {
+        await window.api.loadDownloadHistory();
+      }
+    } catch (e) {
+      console.error("다운로드 히스토리 로드 실패:", e);
+    }
+  }, []);
+
+  // 초기 로드
   useEffect(() => {
     loadKeywordsFromJSON();
     loadDownloadHistory();
 
-    // 설정 변경 이벤트 리스너 추가
     const handleSettingsChanged = (payload) => {
       if (payload?.key === "extractedKeywords") {
-        console.log("[미디어 다운로드] 키워드 설정 변경 감지, 새로고침 중...");
         loadKeywordsFromJSON();
       }
     };
 
-    // 설정 변경 이벤트 구독
+    const handleFocus = () => {
+      loadKeywordsFromJSON();
+    };
+
     if (window.api?.on) {
       window.api.on("settings:changed", handleSettingsChanged);
     }
 
-    // 페이지 포커스 시 키워드 새로고침
-    const handleFocus = () => {
-      console.log("[미디어 다운로드] 페이지 포커스, 키워드 새로고침");
-      loadKeywordsFromJSON();
-    };
-
     window.addEventListener("focus", handleFocus);
 
-    // 클린업
     return () => {
       if (window.api?.off) {
         window.api.off("settings:changed", handleSettingsChanged);
       }
       window.removeEventListener("focus", handleFocus);
-
-      // 카운트다운 타이머 정리
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-        countdownIntervalRef.current = null;
-      }
+      clearCountdownTimer();
     };
-  }, []);
+  }, [loadKeywordsFromJSON, loadDownloadHistory, clearCountdownTimer]);
 
-  // ===== 초기화 이벤트 리스너
+  // 초기화 이벤트
   useEffect(() => {
     const handleResetMediaDownload = async () => {
-      console.log("🔄 미디어 다운로드 페이지 초기화");
-
-      // 미디어 다운로드 상태 초기화
       setKeywords([]);
       setSelectedKeywords(new Set());
       setDownloadedVideos([]);
       setDownloadProgress({});
       setKeywordsLoaded(true);
-      setIsDownloading(false);
       setCompletedVideosCount(0);
+      resetDownloadState();
 
-      // 미디어 준비 데이터도 함께 초기화
       try {
         if (window.api?.setSetting) {
           await window.api.setSetting({ key: "extractedKeywords", value: [] });
-          console.log("✅ 미디어 준비 키워드 데이터 초기화 완료");
         }
-
-        // 미디어 준비 페이지도 초기화하도록 이벤트 발생
         window.dispatchEvent(new CustomEvent("reset-keyword-extraction"));
-        console.log("🔄 미디어 준비 초기화 이벤트 발생");
-
-        showSuccess("미디어 다운로드 및 준비 데이터 초기화 완료");
+        showSuccess("초기화 완료");
       } catch (error) {
-        console.error("미디어 준비 데이터 초기화 실패:", error);
-        showSuccess("미디어 다운로드 데이터 초기화 완료");
+        console.error("초기화 실패:", error);
+        showError("초기화 중 오류 발생");
       }
     };
 
@@ -132,83 +272,44 @@ function MediaDownloadPage() {
     return () => {
       window.removeEventListener("reset-media-download", handleResetMediaDownload);
     };
+  }, [resetDownloadState]);
+
+  // 키워드 토글
+  const toggleKeyword = useCallback((k) => {
+    setSelectedKeywords(prev => {
+      const next = new Set(prev);
+      next.has(k) ? next.delete(k) : next.add(k);
+      return next;
+    });
   }, []);
 
-  const loadKeywordsFromJSON = async (showToast = false) => {
-    try {
-      setKeywordsLoaded(false); // 로딩 상태 표시
-      const extractedKeywords = await window.api.getSetting("extractedKeywords");
-      const keywordsArray = Array.isArray(extractedKeywords) ? extractedKeywords : [];
+  // 전체 선택/해제
+  const selectAllKeywords = useCallback(() => {
+    setSelectedKeywords(prev =>
+      prev.size === keywords.length ? new Set() : new Set(keywords)
+    );
+  }, [keywords]);
 
-      setKeywords(keywordsArray);
-
-      // ✅ 키워드 로드 후 자동으로 전체 선택
-      if (keywordsArray.length > 0) {
-        setSelectedKeywords(new Set(keywordsArray));
-        console.log(`[미디어 다운로드] 키워드 ${keywordsArray.length}개 자동 선택 완료`);
-      }
-
-      setKeywordsLoaded(true);
-      if (showToast) {
-        showSuccess(`✅ 키워드 ${keywordsArray.length}개 새로고침 완료 (전체 선택됨)`);
-      }
-    } catch (e) {
-      console.error(e);
-      setKeywords([]);
-      setKeywordsLoaded(true);
-      if (showToast) {
-        showError("키워드 새로고침 실패");
-      }
+  // 다운로드 시작
+  const startDownload = useCallback(async () => {
+    if (selectedKeywords.size === 0) {
+      return showError("다운로드할 키워드를 선택해주세요.");
     }
-  };
-  const loadDownloadHistory = async () => {
-    try {
-      if (window?.api?.loadDownloadHistory) {
-        await window.api.loadDownloadHistory();
-      }
-    } catch (e) {
-      console.error(e);
+    if (keywords.length === 0) {
+      return showError("추출된 키워드가 없습니다.");
     }
-  };
 
-  // ===== 선택/토글 (기존 유지)
-  const toggleKeyword = (k) => {
-    const next = new Set(selectedKeywords);
-    next.has(k) ? next.delete(k) : next.add(k);
-    setSelectedKeywords(next);
-  };
-  const selectAllKeywords = () => {
-    if (selectedKeywords.size === keywords.length) setSelectedKeywords(new Set());
-    else setSelectedKeywords(new Set(keywords));
-  };
-
-  // ===== 다운로드 (기존 유지)
-  const startDownload = async () => {
-    if (selectedKeywords.size === 0) return showError("다운로드할 키워드를 선택해주세요.");
-    if (keywords.length === 0) return showError("추출된 키워드가 없습니다. 먼저 미디어 준비에서 키워드를 추출해주세요.");
-
-    // ✅ 다운로드 시작 전 video 폴더 비우기
+    // video 폴더 비우기
     try {
       const videoSaveFolder = await window.api.getSetting("videoSaveFolder");
       if (videoSaveFolder) {
-        const videoPath = `${videoSaveFolder}/video`;
-        console.log("[미디어 다운로드] video 폴더 비우기 시작:", videoPath);
-
-        const clearResult = await window.api.invoke("files:clearDirectory", { dirPath: videoPath });
-
-        if (clearResult?.success) {
-          console.log(`[미디어 다운로드] video 폴더 비우기 완료: ${clearResult.deletedCount}개 파일 삭제`);
-        } else {
-          console.warn("[미디어 다운로드] video 폴더 비우기 실패:", clearResult?.message);
-        }
+        await window.api.invoke("files:clearDirectory", { dirPath: `${videoSaveFolder}/video` });
       }
     } catch (error) {
-      console.error("[미디어 다운로드] video 폴더 비우기 오류:", error);
-      // 오류가 발생해도 다운로드는 계속 진행
+      console.error("폴더 비우기 실패:", error);
     }
 
     setIsDownloading(true);
-    setDownloadCancelled(false);
     cancelledRef.current = false;
     setDownloadProgress({});
     setDownloadedVideos([]);
@@ -216,60 +317,47 @@ function MediaDownloadPage() {
     setCompletedVideosCount(0);
     isTimeEstimatedRef.current = false;
 
-    // 기존 카운트다운 타이머 정리
-    if (countdownIntervalRef.current) {
-      clearInterval(countdownIntervalRef.current);
-      countdownIntervalRef.current = null;
-    }
+    clearCountdownTimer();
 
     const keywordArray = Array.from(selectedKeywords);
-    // 전체 다운로드할 비디오 개수 계산
     totalVideosRef.current = keywordArray.length * downloadOptions.videosPerKeyword;
 
-    // 초기 예상 시간 설정 (비디오당 평균 5초로 가정)
     const initialEstimate = totalVideosRef.current * 5;
     setEstimatedTimeRemaining(initialEstimate);
 
-    // 초기 카운트다운 시작
     countdownIntervalRef.current = setInterval(() => {
       setEstimatedTimeRemaining(prev => {
-        if (prev === null || prev <= 0) {
-          return 0;
-        }
+        if (prev === null || prev <= 0) return 0;
         return Math.max(0, prev - 1);
       });
     }, 1000);
 
     try {
       const onProgress = (p) => {
-        // 취소된 경우 프로그레스 업데이트 무시
         if (cancelledRef.current) return;
 
         const { keyword, status, progress, filename, error, videoIndex, totalVideos, videoSuffix } = p;
 
-        // 비디오 완료 시 카운트 증가
+        // 완료 시 카운트 증가 및 시간 예측
         if (status === "completed" && filename) {
           setCompletedVideosCount(prev => {
             const newCount = prev + 1;
 
-            // 처음 1개 비디오 완료 후 정확한 시간으로 업데이트 (한 번만)
             if (!isTimeEstimatedRef.current && newCount >= 1 && downloadStartTimeRef.current && totalVideosRef.current > 0) {
-              const elapsedTime = (Date.now() - downloadStartTimeRef.current) / 1000; // 초 단위
+              const elapsedTime = (Date.now() - downloadStartTimeRef.current) / 1000;
               const timePerVideo = elapsedTime / newCount;
               const remainingVideos = totalVideosRef.current - newCount;
               const estimatedRemaining = Math.max(0, remainingVideos * timePerVideo);
 
-              // 정확한 시간으로 업데이트
               setEstimatedTimeRemaining(estimatedRemaining);
               isTimeEstimatedRef.current = true;
-
-              console.log(`[시간 예측] 첫 ${newCount}개 완료, 비디오당 ${timePerVideo.toFixed(1)}초, 남은 시간: ${estimatedRemaining.toFixed(0)}초`);
             }
 
             return newCount;
           });
         }
 
+        // 진행 상황 업데이트
         setDownloadProgress((prev) => ({
           ...prev,
           [keyword]: {
@@ -280,27 +368,29 @@ function MediaDownloadPage() {
             videoIndex,
             totalVideos,
             currentVideo: videoSuffix ? `${keyword}${videoSuffix}` : keyword,
+            mediaType: p.mediaType,
+            step: p.step,
           },
         }));
 
+        // 완료된 비디오 추가
         if (status === "completed" && filename) {
           const uniqueKey = `${keyword}_${videoIndex || 1}`;
-          const thumbnailSrc = toImgSrc(p.thumbnail);
-
           setDownloadedVideos((prev) => [
             ...prev.filter((v) => v.uniqueKey !== uniqueKey),
             {
               keyword: videoSuffix ? `${keyword}${videoSuffix}` : keyword,
               uniqueKey,
-              provider: selectedProvider,
+              provider: p.provider || selectedProvider,
               filename,
-              thumbnail: thumbnailSrc || `https://via.placeholder.com/160x90/6366f1/white?text=${encodeURIComponent(keyword)}`,
+              thumbnail: p.thumbnail || `https://via.placeholder.com/160x90/6366f1/white?text=${encodeURIComponent(keyword)}`,
               success: true,
               width: p.width || 0,
               height: p.height || 0,
               size: p.size || 0,
               quality: p.quality || "",
               originalFilename: p.originalFilename || filename,
+              mediaType: p.mediaType,
             },
           ]);
         } else if (status === "failed") {
@@ -310,7 +400,7 @@ function MediaDownloadPage() {
             {
               keyword: videoSuffix ? `${keyword}${videoSuffix}` : keyword,
               uniqueKey,
-              provider: selectedProvider,
+              provider: p.provider || selectedProvider,
               filename: filename || `${keyword}_failed`,
               thumbnail: `https://via.placeholder.com/160x90/dc2626/white?text=Error`,
               success: false,
@@ -319,6 +409,7 @@ function MediaDownloadPage() {
               height: p.height || 0,
               size: p.size || 0,
               quality: p.quality || "",
+              mediaType: p.mediaType,
             },
           ]);
         }
@@ -336,117 +427,71 @@ function MediaDownloadPage() {
       if (off) off();
       progressListenerRef.current = null;
 
-      // 취소되지 않은 경우에만 성공/실패 메시지 표시
       if (!cancelledRef.current) {
-        if (result.success) showSuccess(`영상 다운로드 완료: ${result.summary.success}/${result.summary.total}개 성공`);
-        else showError(`영상 다운로드 실패: ${result.error}`);
+        if (result.success) {
+          showSuccess(`다운로드 완료: ${result.summary.success}/${result.summary.total}개 성공`);
+        } else {
+          showError(`다운로드 실패: ${result.error}`);
+        }
       }
     } catch (e) {
-      console.error(e);
-      showError(`영상 다운로드 중 오류가 발생했습니다: ${e.message}`);
+      console.error("다운로드 오류:", e);
+      showError(`다운로드 중 오류 발생: ${e.message}`);
     } finally {
-      setIsDownloading(false);
-      setDownloadCancelled(false);
-      downloadStartTimeRef.current = null;
-      totalVideosRef.current = 0;
-      isTimeEstimatedRef.current = false;
-      setEstimatedTimeRemaining(null);
-      setCompletedVideosCount(0);
-
-      // 카운트다운 타이머 정리
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-        countdownIntervalRef.current = null;
-      }
+      resetDownloadState();
     }
-  };
+  }, [selectedKeywords, keywords, downloadOptions, selectedProvider, clearCountdownTimer, resetDownloadState]);
 
-  // ===== 다운로드 취소
-  const cancelDownload = async () => {
+  // 다운로드 취소
+  const cancelDownload = useCallback(async () => {
     cancelledRef.current = true;
-    setDownloadCancelled(true);
-    setIsDownloading(false);
-    downloadStartTimeRef.current = null;
-    totalVideosRef.current = 0;
-    isTimeEstimatedRef.current = false;
-    setEstimatedTimeRemaining(null);
-    setCompletedVideosCount(0);
+    resetDownloadState();
 
-    // 카운트다운 타이머 정리
-    if (countdownIntervalRef.current) {
-      clearInterval(countdownIntervalRef.current);
-      countdownIntervalRef.current = null;
-    }
-
-    // 프로그레스 리스너 즉시 제거
     if (progressListenerRef.current) {
       progressListenerRef.current();
       progressListenerRef.current = null;
     }
 
-    // 백엔드에 취소 요청
     try {
       if (window.api?.cancelVideoDownload) {
         await window.api.cancelVideoDownload();
-        console.log("[취소] 백엔드에 취소 요청 완료");
       }
       showSuccess("다운로드가 취소되었습니다.");
     } catch (error) {
-      console.error("[취소] 실패:", error);
-      showError("다운로드 취소 중 오류가 발생했습니다.");
+      console.error("취소 실패:", error);
+      showError("취소 중 오류가 발생했습니다.");
     }
-  };
+  }, [resetDownloadState]);
 
-  // ===== 레이아웃 (5:5)
-  const grid = {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gridTemplateRows: "auto auto auto",
-    gridTemplateAreas: `
-      "source options"
-      "keywords options"
-      "bottom bottom"
-    `,
-    gap: 24,
-    maxWidth: "1200px",
-    width: "100%",
-  };
+  // 메모이제이션된 값
+  const resolutionText = useMemo(() => {
+    const map = {
+      "480p": "480p (SD)",
+      "720p": "720p (HD)",
+      "1080p": "1080p (FHD)",
+      "1440p": "1440p (QHD)",
+    };
+    return map[downloadOptions.minResolution] || "1080p (FHD)";
+  }, [downloadOptions.minResolution]);
 
-  // 옵션 카드 내부 그리드(라벨/컨트롤 2열)
-  // ▶ 오른쪽 칼럼에 minWidth:0 반드시! (슬라이더 트랙이 절반만 보이는 문제 해결)
-  const row = {
-    display: "grid",
-    gridTemplateColumns: "140px minmax(0,1fr)",
-    alignItems: "center",
-    columnGap: 12,
-    rowGap: 8,
-  };
-  const col = { minWidth: 0, width: "100%" }; // 슬라이더/드롭다운 래퍼
-  const smallHint = { fontSize: 12, color: "#666" };
+  const aspectRatioText = useMemo(() => {
+    const map = {
+      "any": "제한 없음",
+      "16:9": "16:9 (와이드)",
+      "4:3": "4:3 (일반)",
+      "1:1": "1:1 (정사각형)",
+      "9:16": "9:16 (세로)",
+    };
+    return map[downloadOptions.aspectRatio] || "제한 없음";
+  }, [downloadOptions.aspectRatio]);
 
-  // 드롭다운 표시 텍스트
-  const resText =
-    downloadOptions.minResolution === "480p"
-      ? "480p (SD)"
-      : downloadOptions.minResolution === "720p"
-      ? "720p (HD)"
-      : downloadOptions.minResolution === "1080p"
-      ? "1080p (FHD)"
-      : downloadOptions.minResolution === "1440p"
-      ? "1440p (QHD)"
-      : "1080p (FHD)";
-  const ratioText =
-    downloadOptions.aspectRatio === "any"
-      ? "제한 없음"
-      : downloadOptions.aspectRatio === "16:9"
-      ? "16:9 (와이드)"
-      : downloadOptions.aspectRatio === "4:3"
-      ? "4:3 (일반)"
-      : downloadOptions.aspectRatio === "1:1"
-      ? "1:1 (정사각형)"
-      : downloadOptions.aspectRatio === "9:16"
-      ? "9:16 (세로)"
-      : "제한 없음";
+  const totalVideosToDownload = useMemo(() =>
+    selectedKeywords.size * downloadOptions.videosPerKeyword
+  , [selectedKeywords.size, downloadOptions.videosPerKeyword]);
+
+  const downloadProgressPercent = useMemo(() =>
+    Math.round((completedVideosCount / totalVideosToDownload) * 100) || 0
+  , [completedVideosCount, totalVideosToDownload]);
 
   return (
     <div className={containerStyles.container}>
@@ -456,27 +501,28 @@ function MediaDownloadPage() {
           <RocketRegular />
           미디어 다운로드
         </div>
-        <div className={headerStyles.pageDescription}>추출된 키워드를 기반으로 Pexels, Pixabay에서 영상을 다운로드합니다</div>
+        <div className={headerStyles.pageDescription}>
+          추출된 키워드를 기반으로 Pexels, Pixabay에서 영상을 다운로드합니다
+        </div>
         <div className={headerStyles.divider} />
       </div>
 
-      <div style={grid}>
-        {/* 좌상: 소스 — 높이 고정 */}
-        <Card
-          style={{
-            padding: 20,
-            gridArea: "source",
-            minHeight: 180,
-            display: "flex",
-            flexDirection: "column",
-            gap: 16,
-          }}
-        >
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gridTemplateAreas: `
+          "source options"
+          "keywords options"
+        `,
+        gap: 24,
+        maxWidth: "1200px",
+        width: "100%",
+      }}>
+        {/* 소스 선택 */}
+        <Card style={{ padding: 20, gridArea: "source", minHeight: 180, display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <ImageRegular style={{ fontSize: 18 }} />
-            <Text size={400} weight="semibold">
-              다운로드 소스
-            </Text>
+            <Text size={400} weight="semibold">다운로드 소스</Text>
           </div>
           <div style={{ display: "flex", gap: 12 }}>
             <Button
@@ -499,15 +545,7 @@ function MediaDownloadPage() {
             </Button>
           </div>
 
-          {/* 소스 설명 */}
-          <div
-            style={{
-              padding: 12,
-              backgroundColor: "#f8fafc",
-              borderRadius: 8,
-              border: "1px solid #eef1f6",
-            }}
-          >
+          <div style={{ padding: 12, backgroundColor: "#f8fafc", borderRadius: 8, border: "1px solid #eef1f6" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
               <InfoRegular style={{ fontSize: 16, color: "#5e6ad2" }} />
               <Text size={300} weight="semibold">
@@ -522,14 +560,12 @@ function MediaDownloadPage() {
           </div>
         </Card>
 
-        {/* 좌중: 키워드 */}
+        {/* 키워드 선택 */}
         <Card style={{ padding: 20, gridArea: "keywords", display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <VideoRegular style={{ fontSize: 18 }} />
-              <Text size={400} weight="semibold">
-                키워드 선택
-              </Text>
+              <Text size={400} weight="semibold">키워드 선택</Text>
               <Badge appearance="filled" size="small">
                 {selectedKeywords.size}/{keywords.length}
               </Badge>
@@ -544,9 +580,7 @@ function MediaDownloadPage() {
               <Button
                 appearance="subtle"
                 size="small"
-                onClick={() => {
-                  window.dispatchEvent(new CustomEvent("reset-media-download"));
-                }}
+                onClick={() => window.dispatchEvent(new CustomEvent("reset-media-download"))}
               >
                 초기화
               </Button>
@@ -554,16 +588,14 @@ function MediaDownloadPage() {
           </div>
 
           <div style={{ flex: 1 }}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-                gap: 8,
-                maxHeight: 300,
-                overflowY: "auto",
-                paddingRight: 4,
-              }}
-            >
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+              gap: 8,
+              maxHeight: 300,
+              overflowY: "auto",
+              paddingRight: 4,
+            }}>
               {!keywordsLoaded ? (
                 <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: 20 }}>
                   <Spinner size="small" style={{ marginBottom: 8 }} />
@@ -616,12 +648,7 @@ function MediaDownloadPage() {
                 borderRadius: 8,
                 border: "1px solid #e0e0e0"
               }}>
-                <div style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 4
-                }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                   <Text size={300} weight="semibold">다운로드 진행 중</Text>
                   {estimatedTimeRemaining !== null && (
                     <Badge appearance="filled" color="informative" size="small">
@@ -633,12 +660,7 @@ function MediaDownloadPage() {
                     </Badge>
                   )}
                 </div>
-                <Button
-                  appearance="secondary"
-                  size="medium"
-                  onClick={cancelDownload}
-                  style={{ width: "100%" }}
-                >
+                <Button appearance="secondary" size="medium" onClick={cancelDownload} style={{ width: "100%" }}>
                   <DismissCircle24Regular style={{ marginRight: 8 }} />
                   다운로드 취소
                 </Button>
@@ -658,31 +680,27 @@ function MediaDownloadPage() {
           </div>
         </Card>
 
-        {/* 우상: 옵션 — 슬라이더/드롭다운 100% 폭 */}
+        {/* 다운로드 옵션 */}
         <Card style={{ padding: 20, gridArea: "options", display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
             <SettingsRegular style={{ fontSize: 18 }} />
-            <Text size={400} weight="semibold">
-              다운로드 옵션
-            </Text>
+            <Text size={400} weight="semibold">다운로드 옵션</Text>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
-            {/* 1) 영상 개수 */}
-            <div style={row}>
-              <Text size={300} weight="medium">
-                영상 개수
-              </Text>
-              <div style={col}>
+            {/* 영상 개수 */}
+            <div style={{ display: "grid", gridTemplateColumns: "140px minmax(0,1fr)", alignItems: "center", columnGap: 12 }}>
+              <Text size={300} weight="medium">영상 개수</Text>
+              <div style={{ minWidth: 0, width: "100%" }}>
                 <Slider
                   min={1}
                   max={5}
                   step={1}
                   value={downloadOptions.videosPerKeyword}
                   onChange={(_, d) => setDownloadOptions((p) => ({ ...p, videosPerKeyword: d.value }))}
-                  style={{ width: "100%" }} // ✅ 트랙 전체폭
+                  style={{ width: "100%" }}
                 />
-                <div style={{ display: "flex", justifyContent: "space-between", ...smallHint, marginTop: 4 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#666", marginTop: 4 }}>
                   <span>1개</span>
                   <span style={{ color: "#0078d4", fontSize: 13, fontWeight: 500 }}>현재: {downloadOptions.videosPerKeyword}개</span>
                   <span>5개</span>
@@ -690,21 +708,19 @@ function MediaDownloadPage() {
               </div>
             </div>
 
-            {/* 2) 최대 파일 크기 */}
-            <div style={row}>
-              <Text size={300} weight="medium">
-                최대 파일 크기
-              </Text>
-              <div style={col}>
+            {/* 최대 파일 크기 */}
+            <div style={{ display: "grid", gridTemplateColumns: "140px minmax(0,1fr)", alignItems: "center", columnGap: 12 }}>
+              <Text size={300} weight="medium">최대 파일 크기</Text>
+              <div style={{ minWidth: 0, width: "100%" }}>
                 <Slider
                   min={1}
                   max={20}
                   step={1}
                   value={downloadOptions.maxFileSize}
                   onChange={(_, d) => setDownloadOptions((p) => ({ ...p, maxFileSize: d.value }))}
-                  style={{ width: "100%" }} // ✅ 트랙 전체폭
+                  style={{ width: "100%" }}
                 />
-                <div style={{ display: "flex", justifyContent: "space-between", ...smallHint, marginTop: 4 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#666", marginTop: 4 }}>
                   <span>1MB</span>
                   <span style={{ color: "#0078d4", fontSize: 13, fontWeight: 500 }}>현재: {downloadOptions.maxFileSize}MB</span>
                   <span>20MB</span>
@@ -712,26 +728,14 @@ function MediaDownloadPage() {
               </div>
             </div>
 
-            {/* 3) 해상도 */}
-            <div style={row}>
-              <Text size={300} weight="medium">
-                해상도 선택
-              </Text>
-              <div style={col}>
+            {/* 해상도 */}
+            <div style={{ display: "grid", gridTemplateColumns: "140px minmax(0,1fr)", alignItems: "center", columnGap: 12 }}>
+              <Text size={300} weight="medium">해상도 선택</Text>
+              <div style={{ minWidth: 0, width: "100%" }}>
                 <Dropdown
-                  value={
-                    downloadOptions.minResolution === "480p"
-                      ? "480p (SD)"
-                      : downloadOptions.minResolution === "720p"
-                      ? "720p (HD)"
-                      : downloadOptions.minResolution === "1080p"
-                      ? "1080p (FHD)"
-                      : downloadOptions.minResolution === "1440p"
-                      ? "1440p (QHD)"
-                      : "1080p (FHD)"
-                  }
+                  value={resolutionText}
                   onOptionSelect={(_, data) => setDownloadOptions((p) => ({ ...p, minResolution: data.optionValue }))}
-                  style={{ width: "100%" }} // ✅ 100% 폭
+                  style={{ width: "100%" }}
                 >
                   <Option value="480p">480p (SD)</Option>
                   <Option value="720p">720p (HD)</Option>
@@ -741,28 +745,14 @@ function MediaDownloadPage() {
               </div>
             </div>
 
-            {/* 4) 화면 비율 */}
-            <div style={row}>
-              <Text size={300} weight="medium">
-                화면 비율
-              </Text>
-              <div style={col}>
+            {/* 화면 비율 */}
+            <div style={{ display: "grid", gridTemplateColumns: "140px minmax(0,1fr)", alignItems: "center", columnGap: 12 }}>
+              <Text size={300} weight="medium">화면 비율</Text>
+              <div style={{ minWidth: 0, width: "100%" }}>
                 <Dropdown
-                  value={
-                    downloadOptions.aspectRatio === "any"
-                      ? "제한 없음"
-                      : downloadOptions.aspectRatio === "16:9"
-                      ? "16:9 (와이드)"
-                      : downloadOptions.aspectRatio === "4:3"
-                      ? "4:3 (일반)"
-                      : downloadOptions.aspectRatio === "1:1"
-                      ? "1:1 (정사각형)"
-                      : downloadOptions.aspectRatio === "9:16"
-                      ? "9:16 (세로)"
-                      : "제한 없음"
-                  }
+                  value={aspectRatioText}
                   onOptionSelect={(_, data) => setDownloadOptions((p) => ({ ...p, aspectRatio: data.optionValue }))}
-                  style={{ width: "100%" }} // ✅ 100% 폭
+                  style={{ width: "100%" }}
                 >
                   <Option value="any">제한 없음</Option>
                   <Option value="16:9">16:9 (와이드)</Option>
@@ -773,19 +763,17 @@ function MediaDownloadPage() {
               </div>
             </div>
 
-            {/* 요약/가이드 (읽기 전용) */}
+            {/* 요약 */}
             <Divider style={{ margin: "8px 0" }} />
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr",
-                gap: 10,
-                padding: 12,
-                border: "1px solid #eef1f6",
-                background: "#f8fafc",
-                borderRadius: 8,
-              }}
-            >
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "1fr",
+              gap: 10,
+              padding: 12,
+              border: "1px solid #eef1f6",
+              background: "#f8fafc",
+              borderRadius: 8,
+            }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <InfoRegular style={{ fontSize: 16, color: "#5e6ad2" }} />
                 <Text size={200} weight="semibold">
@@ -793,57 +781,39 @@ function MediaDownloadPage() {
                 </Text>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                <Badge appearance="tint" color="brand">
-                  해상도 {resText}
-                </Badge>
-                <Badge appearance="tint" color="brand">
-                  비율 {ratioText}
-                </Badge>
-                <Badge appearance="tint" color="brand">
-                  개수 {downloadOptions.videosPerKeyword}개
-                </Badge>
-                <Badge appearance="tint" color="brand">
-                  최대 {downloadOptions.maxFileSize}MB
-                </Badge>
+                <Badge appearance="tint" color="brand">해상도 {resolutionText}</Badge>
+                <Badge appearance="tint" color="brand">비율 {aspectRatioText}</Badge>
+                <Badge appearance="tint" color="brand">개수 {downloadOptions.videosPerKeyword}개</Badge>
+                <Badge appearance="tint" color="brand">최대 {downloadOptions.maxFileSize}MB</Badge>
               </div>
               <Text size={100} style={{ color: "#7a869a" }}>
                 팁: 1080p + 16:9는 대부분의 가로형 콘텐츠에 적합하고, 용량은 10–20MB가 품질·속도 균형이 좋아요.
               </Text>
             </div>
-
           </div>
         </Card>
-
       </div>
 
-      {/* 하단 고정 바 - 다운로드 진행 중 또는 완료 시 표시 */}
+      {/* 하단 고정 바 */}
       {(isDownloading || downloadedVideos.length > 0) && (
         <BottomFixedBar
           isComplete={!isDownloading && downloadedVideos.length > 0}
           isLoading={isDownloading}
           statusText={
             isDownloading
-              ? `📥 미디어 다운로드 중... (${completedVideosCount}/${selectedKeywords.size * downloadOptions.videosPerKeyword})`
+              ? `📥 미디어 다운로드 중... (${completedVideosCount}/${totalVideosToDownload})`
               : `✅ 다운로드 완료 (${downloadedVideos.length}개)`
           }
-          progress={
-            isDownloading
-              ? Math.round((completedVideosCount / (selectedKeywords.size * downloadOptions.videosPerKeyword)) * 100)
-              : 100
-          }
+          progress={downloadProgressPercent}
           nextStepButton={
             !isDownloading && downloadedVideos.length > 0
-              ? {
-                  text: "➡️ 다음 단계: 영상 완성",
-                  eventName: "navigate-to-refine",
-                }
+              ? { text: "➡️ 다음 단계: 영상 완성", eventName: "navigate-to-refine" }
               : undefined
           }
           expandedContent={
             isDownloading ? (
-              // 다운로드 진행 중: 키워드별 상세 진행 상황
+              // 진행 중
               <div style={{ padding: "12px 16px" }}>
-                {/* 키워드별 진행 상황 */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   {Array.from(selectedKeywords).map((k) => {
                     const progress = downloadProgress[k];
@@ -859,10 +829,49 @@ function MediaDownloadPage() {
                       >
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                           <div>
-                            <Text size={300}>{k}</Text>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <Text size={300}>{k}</Text>
+                              {progress?.mediaType && progress?.step && (
+                                <Badge
+                                  appearance="tint"
+                                  size="small"
+                                  color={
+                                    progress.mediaType === "video" ? "brand" :
+                                    progress.mediaType === "photo" ? "success" :
+                                    progress.mediaType === "ai" ? "warning" :
+                                    "informative"
+                                  }
+                                >
+                                  {progress.mediaType === "video" ? "📹 영상" :
+                                   progress.mediaType === "photo" ? "📷 사진" :
+                                   progress.mediaType === "ai" ? "🎨 AI" :
+                                   progress.mediaType}
+                                </Badge>
+                              )}
+                            </div>
                             {progress?.totalVideos > 1 && (
                               <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 2, display: "block" }}>
                                 {progress.currentVideo} ({progress.videoIndex || 1}/{progress.totalVideos})
+                              </Text>
+                            )}
+                            {progress?.status === "searching" && progress?.mediaType && progress?.step && (
+                              <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 2, display: "block" }}>
+                                {progress.mediaType === "video" ? "영상 검색 중..." :
+                                 progress.mediaType === "photo" ? "사진 검색 중 (영상 실패)" :
+                                 progress.mediaType === "ai" ? "AI 이미지 생성 준비 중 (사진 실패)" :
+                                 "검색 중..."}
+                              </Text>
+                            )}
+                            {progress?.status === "downloading" && progress?.mediaType && (
+                              <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 2, display: "block" }}>
+                                {progress.mediaType === "video" ? "영상 다운로드 중..." :
+                                 progress.mediaType === "photo" ? "사진 다운로드 중..." :
+                                 "다운로드 중..."}
+                              </Text>
+                            )}
+                            {progress?.status === "generating" && progress?.mediaType === "ai" && (
+                              <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 2, display: "block" }}>
+                                AI 이미지 생성 중 (영상/사진 없음)
                               </Text>
                             )}
                           </div>
@@ -882,90 +891,80 @@ function MediaDownloadPage() {
                 </div>
               </div>
             ) : (
-              // 다운로드 완료: 다운로드된 미디어 상세 목록
+              // 완료
               downloadedVideos.length > 0 && (
                 <div style={{ padding: "12px 16px" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    {downloadedVideos.map((video, i) => {
-                      const imgSrc = toImgSrc(video.thumbnail);
-                      return (
-                        <div
-                          key={video.uniqueKey || i}
+                    {downloadedVideos.map((video, i) => (
+                      <div
+                        key={video.uniqueKey || i}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          padding: 12,
+                          background: tokens.colorNeutralBackground1,
+                          border: `1px solid ${tokens.colorNeutralStroke1}`,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <ThumbnailImage
+                          src={video.thumbnail}
+                          alt={video.keyword}
                           style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 12,
-                            padding: 12,
-                            background: tokens.colorNeutralBackground1,
+                            width: 60,
+                            height: 34,
+                            borderRadius: 4,
+                            objectFit: "cover",
                             border: `1px solid ${tokens.colorNeutralStroke1}`,
-                            borderRadius: 8,
                           }}
-                        >
-                          {video.success && imgSrc ? (
-                            <img
-                              src={imgSrc}
-                              alt={video.keyword}
-                              style={{
-                                width: 60,
-                                height: 34,
-                                borderRadius: 4,
-                                objectFit: "cover",
-                                border: `1px solid ${tokens.colorNeutralStroke1}`,
-                              }}
-                              onError={(e) => {
-                                e.currentTarget.style.display = "none";
-                                e.currentTarget.nextElementSibling.style.display = "flex";
-                              }}
-                            />
-                          ) : null}
-                          <div
-                            style={{
-                              width: 60,
-                              height: 34,
-                              borderRadius: 4,
-                              backgroundColor: video.success ? "#6366f1" : "#dc2626",
-                              display: video.success && imgSrc ? "none" : "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              color: "white",
-                              fontSize: 12,
-                              fontWeight: "bold",
-                            }}
-                          >
-                            {video.success ? "VIDEO" : "ERROR"}
-                          </div>
+                          fallbackText={video.success ? "IMAGE" : "ERROR"}
+                        />
 
-                          <div style={{ flex: 1 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: video.error ? 4 : 0 }}>
-                              <Text size={200} weight="medium" style={{ minWidth: 80 }}>
-                                {video.keyword}
-                              </Text>
-                              <Text size={100} style={{ color: tokens.colorNeutralForeground3, minWidth: 60 }}>
-                                {video.provider}
-                              </Text>
-                              <Text size={100} style={{ color: tokens.colorNeutralForeground3 }}>
-                                {video.width && video.height ? `${video.width}×${video.height}` : "해상도불명"}
-                              </Text>
-                            </div>
-                            {video.error && (
-                              <Text size={100} style={{ color: tokens.colorPaletteRedForeground1 }}>
-                                오류: {video.error}
-                              </Text>
-                            )}
-                          </div>
-
-                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            {video.success ? (
-                              <CheckmarkCircleRegular style={{ fontSize: 16, color: tokens.colorPaletteGreenForeground1 }} />
-                            ) : (
-                              <Badge appearance="filled" color="danger" size="small">
-                                실패
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: video.error ? 4 : 0, flexWrap: "wrap" }}>
+                            <Text size={200} weight="medium" style={{ minWidth: 80 }}>
+                              {video.keyword}
+                            </Text>
+                            {video.mediaType && (
+                              <Badge
+                                appearance="tint"
+                                size="small"
+                                color={
+                                  video.mediaType === "video" ? "brand" :
+                                  video.mediaType === "photo" ? "success" :
+                                  video.mediaType === "ai" ? "warning" :
+                                  "informative"
+                                }
+                              >
+                                {video.mediaType === "video" ? "📹 영상" :
+                                 video.mediaType === "photo" ? "📷 사진" :
+                                 video.mediaType === "ai" ? "🎨 AI" :
+                                 video.mediaType}
                               </Badge>
                             )}
+                            <Text size={100} style={{ color: tokens.colorNeutralForeground3 }}>
+                              {video.width && video.height ? `${video.width}×${video.height}` : "해상도불명"}
+                            </Text>
                           </div>
+                          {video.error && (
+                            <Text size={100} style={{ color: tokens.colorPaletteRedForeground1 }}>
+                              오류: {video.error}
+                            </Text>
+                          )}
                         </div>
-                      );
-                    })}
+
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          {video.success ? (
+                            <CheckmarkCircleRegular style={{ fontSize: 16, color: tokens.colorPaletteGreenForeground1 }} />
+                          ) : (
+                            <Badge appearance="filled" color="danger" size="small">
+                              실패
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
 
                   <Divider style={{ margin: "12px 0" }} />
@@ -977,7 +976,9 @@ function MediaDownloadPage() {
                       onClick={async () => {
                         try {
                           const videoSaveFolder = await window.api.getSetting("videoSaveFolder");
-                          if (videoSaveFolder) await window.electron.shell.openPath(`${videoSaveFolder}/video`);
+                          if (videoSaveFolder) {
+                            await window.electron.shell.openPath(`${videoSaveFolder}/video`);
+                          }
                         } catch (e) {
                           console.error("폴더 열기 실패:", e);
                         }
@@ -990,9 +991,7 @@ function MediaDownloadPage() {
               )
             )
           }
-          onClose={() => {
-            setDownloadedVideos([]);
-          }}
+          onClose={() => setDownloadedVideos([])}
         />
       )}
     </div>
