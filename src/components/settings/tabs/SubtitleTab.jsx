@@ -128,6 +128,9 @@ function SubtitleTab() {
 
   // 기본 자막 설정 (유튜브 표준 스타일)
   const defaultSettings = {
+    // 자막 사용 여부
+    enableSubtitles: true, // ✅ 자막 사용 (기본값)
+
     // 기본 텍스트 설정
     fontFamily: "noto-sans", // 산세리프 굵은 폰트
     fontSize: 52, // ✅ 유튜브 표준: 48~60px (1920x1080 기준)
@@ -359,50 +362,73 @@ function SubtitleTab() {
               boxShadow: "0 4px 16px rgba(0, 0, 0, 0.2)",
             }}
           >
-            {/* 자막 */}
-            <div
-              style={{
-                fontFamily: getFontFamily(subtitleSettings.fontFamily),
-                fontWeight: subtitleSettings.fontWeight,
-                color: subtitleSettings.textColor,
-                backgroundColor: subtitleSettings.useBackground
-                  ? `${subtitleSettings.backgroundColor}${Math.round(subtitleSettings.backgroundOpacity * 2.55)
-                      .toString(16)
-                      .padStart(2, "0")}`
-                  : "transparent",
-                textAlign: subtitleSettings.horizontalAlign,
-                maxWidth: `${subtitleSettings.maxWidth}%`,
-                wordBreak: subtitleSettings.wordBreak === "break-all" ? "break-all" : "normal",
-                whiteSpace: subtitleSettings.autoWrap ? "normal" : "nowrap",
-                position: "absolute",
-                bottom:
-                  subtitleSettings.position === "bottom"
-                    ? `${(subtitleSettings.verticalPadding - (subtitleSettings.finePositionOffset || 0)) * scale}px`
-                    : "auto",
-                top:
-                  subtitleSettings.position === "top"
-                    ? `${(subtitleSettings.verticalPadding + (subtitleSettings.finePositionOffset || 0)) * scale}px`
-                    : subtitleSettings.position === "center"
-                    ? `${centerTopPosition + (subtitleSettings.finePositionOffset || 0) * scale}px`
-                    : "auto",
-                left: "50%",
-                transform: subtitleSettings.position === "center" ? "translate(-50%, -50%)" : "translateX(-50%)",
-                fontSize: `${subtitleSettings.fontSize * scale}px`,
-                lineHeight: subtitleSettings.lineHeight,
-                letterSpacing: `${subtitleSettings.letterSpacing * scale}px`,
-                padding: `${subtitleSettings.verticalPadding * scale}px ${subtitleSettings.horizontalPadding * scale}px`,
-                borderRadius: `${subtitleSettings.backgroundRadius * scale}px`,
-                border: subtitleSettings.useOutline
-                  ? `${subtitleSettings.outlineWidth * scale}px solid ${subtitleSettings.outlineColor}`
-                  : "none",
-                textShadow: subtitleSettings.useShadow
-                  ? `${subtitleSettings.shadowOffset * scale}px ${subtitleSettings.shadowOffset * scale}px ${subtitleSettings.shadowBlur * scale}px ${subtitleSettings.shadowColor}`
-                  : "none",
-              }}
-            >
-              안녕하세요! 웨이버 프로입니다.
-              <br />이 영상에서는 AI로 콘텐츠를 제작하는 방법을 알아보겠습니다.
-            </div>
+            {/* 자막 - enableSubtitles가 true일 때만 표시 */}
+            {subtitleSettings.enableSubtitles && (
+              <div
+                style={{
+                  fontFamily: getFontFamily(subtitleSettings.fontFamily),
+                  fontWeight: subtitleSettings.fontWeight,
+                  color: subtitleSettings.textColor,
+                  backgroundColor: subtitleSettings.useBackground
+                    ? `${subtitleSettings.backgroundColor}${Math.round(subtitleSettings.backgroundOpacity * 2.55)
+                        .toString(16)
+                        .padStart(2, "0")}`
+                    : "transparent",
+                  textAlign: subtitleSettings.horizontalAlign,
+                  maxWidth: `${subtitleSettings.maxWidth}%`,
+                  wordBreak: subtitleSettings.wordBreak === "break-all" ? "break-all" : "normal",
+                  whiteSpace: subtitleSettings.autoWrap ? "normal" : "nowrap",
+                  position: "absolute",
+                  bottom:
+                    subtitleSettings.position === "bottom"
+                      ? `${(subtitleSettings.verticalPadding - (subtitleSettings.finePositionOffset || 0)) * scale}px`
+                      : "auto",
+                  top:
+                    subtitleSettings.position === "top"
+                      ? `${(subtitleSettings.verticalPadding + (subtitleSettings.finePositionOffset || 0)) * scale}px`
+                      : subtitleSettings.position === "center"
+                      ? `${centerTopPosition + (subtitleSettings.finePositionOffset || 0) * scale}px`
+                      : "auto",
+                  left: "50%",
+                  transform: subtitleSettings.position === "center" ? "translate(-50%, -50%)" : "translateX(-50%)",
+                  fontSize: `${subtitleSettings.fontSize * scale}px`,
+                  lineHeight: subtitleSettings.lineHeight,
+                  letterSpacing: `${subtitleSettings.letterSpacing * scale}px`,
+                  padding: `${subtitleSettings.verticalPadding * scale}px ${subtitleSettings.horizontalPadding * scale}px`,
+                  borderRadius: `${subtitleSettings.backgroundRadius * scale}px`,
+                  border: subtitleSettings.useOutline
+                    ? `${subtitleSettings.outlineWidth * scale}px solid ${subtitleSettings.outlineColor}`
+                    : "none",
+                  textShadow: subtitleSettings.useShadow
+                    ? `${subtitleSettings.shadowOffset * scale}px ${subtitleSettings.shadowOffset * scale}px ${subtitleSettings.shadowBlur * scale}px ${subtitleSettings.shadowColor}`
+                    : "none",
+                }}
+              >
+                안녕하세요! 웨이버 프로입니다.
+                <br />이 영상에서는 AI로 콘텐츠를 제작하는 방법을 알아보겠습니다.
+              </div>
+            )}
+
+            {/* 자막 꺼짐 안내 */}
+            {!subtitleSettings.enableSubtitles && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  color: "rgba(255, 255, 255, 0.7)",
+                  fontSize: "16px",
+                  fontWeight: 500,
+                  textAlign: "center",
+                  padding: "12px 24px",
+                  backgroundColor: "rgba(0, 0, 0, 0.5)",
+                  borderRadius: "8px",
+                }}
+              >
+                자막이 비활성화되었습니다
+              </div>
+            )}
           </div>
         </div>
       </Card>
@@ -410,11 +436,20 @@ function SubtitleTab() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
         {/* 위치 및 정렬 설정 */}
         <FormSection title="위치 및 정렬" icon={<PositionToFrontRegular />}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+            <Switch
+              checked={subtitleSettings.enableSubtitles}
+              onChange={(_, data) => updateSetting("enableSubtitles", data.checked)}
+              label="자막 사용"
+            />
+          </div>
+
           <Field label="수직 위치">
             <Dropdown
               value={POSITIONS.find((p) => p.key === subtitleSettings.position)?.text}
               selectedOptions={[subtitleSettings.position]}
               onOptionSelect={(_, data) => updateSetting("position", data.optionValue)}
+              disabled={!subtitleSettings.enableSubtitles}
             >
               {POSITIONS.map((pos) => (
                 <Option key={pos.key} value={pos.key}>
@@ -429,6 +464,7 @@ function SubtitleTab() {
               value={TEXT_ALIGNS.find((a) => a.key === subtitleSettings.horizontalAlign)?.text}
               selectedOptions={[subtitleSettings.horizontalAlign]}
               onOptionSelect={(_, data) => updateSetting("horizontalAlign", data.optionValue)}
+              disabled={!subtitleSettings.enableSubtitles}
             >
               {TEXT_ALIGNS.map((align) => (
                 <Option key={align.key} value={align.key} text={align.text}>
@@ -438,26 +474,6 @@ function SubtitleTab() {
             </Dropdown>
           </Field>
 
-          <Field label={`최대 너비: ${subtitleSettings.maxWidth}%`}>
-            <Slider
-              value={subtitleSettings.maxWidth}
-              onChange={(_, data) => updateSetting("maxWidth", data.value)}
-              min={30}
-              max={100}
-              step={5}
-            />
-          </Field>
-
-          <Field label={`세로 여백: ${subtitleSettings.verticalPadding}px`}>
-            <Slider
-              value={subtitleSettings.verticalPadding}
-              onChange={(_, data) => updateSetting("verticalPadding", data.value)}
-              min={10}
-              max={100}
-              step={5}
-            />
-          </Field>
-
           <Field label={`세밀한 위치 조정: ${subtitleSettings.finePositionOffset || 0}px`}>
             <Slider
               value={subtitleSettings.finePositionOffset || 0}
@@ -465,18 +481,9 @@ function SubtitleTab() {
               min={-50}
               max={50}
               step={2}
+              disabled={!subtitleSettings.enableSubtitles}
             />
             <div style={{ fontSize: "12px", color: "rgba(0,0,0,0.6)", marginTop: "4px" }}>음수 값: 더 위로, 양수 값: 더 아래로</div>
-          </Field>
-
-          <Field label={`가로 여백: ${subtitleSettings.horizontalPadding}px`}>
-            <Slider
-              value={subtitleSettings.horizontalPadding}
-              onChange={(_, data) => updateSetting("horizontalPadding", data.value)}
-              min={5}
-              max={50}
-              step={5}
-            />
           </Field>
         </FormSection>
 
@@ -487,6 +494,7 @@ function SubtitleTab() {
               value={FONT_FAMILIES.find((f) => f.key === subtitleSettings.fontFamily)?.text}
               selectedOptions={[subtitleSettings.fontFamily]}
               onOptionSelect={(_, data) => updateSetting("fontFamily", data.optionValue)}
+              disabled={!subtitleSettings.enableSubtitles}
             >
               {FONT_FAMILIES.map((font) => (
                 <Option key={font.key} value={font.key}>
@@ -503,6 +511,7 @@ function SubtitleTab() {
               min={12}
               max={72}
               step={2}
+              disabled={!subtitleSettings.enableSubtitles}
             />
           </Field>
 
@@ -513,6 +522,7 @@ function SubtitleTab() {
               min={100}
               max={900}
               step={100}
+              disabled={!subtitleSettings.enableSubtitles}
             />
           </Field>
 
@@ -523,6 +533,7 @@ function SubtitleTab() {
               min={1.0}
               max={2.0}
               step={0.1}
+              disabled={!subtitleSettings.enableSubtitles}
             />
           </Field>
 
@@ -533,6 +544,7 @@ function SubtitleTab() {
               min={-2}
               max={5}
               step={0.5}
+              disabled={!subtitleSettings.enableSubtitles}
             />
           </Field>
         </FormSection>
@@ -549,14 +561,16 @@ function SubtitleTab() {
                   border: "2px solid #ccc",
                   backgroundColor: subtitleSettings.textColor,
                   position: "relative",
-                  cursor: "pointer",
+                  cursor: subtitleSettings.enableSubtitles ? "pointer" : "not-allowed",
                   overflow: "hidden",
+                  opacity: subtitleSettings.enableSubtitles ? 1 : 0.5,
                 }}
               >
                 <input
                   type="color"
                   value={subtitleSettings.textColor}
                   onChange={(e) => updateSetting("textColor", e.target.value)}
+                  disabled={!subtitleSettings.enableSubtitles}
                   style={{
                     position: "absolute",
                     top: "0",
@@ -564,7 +578,7 @@ function SubtitleTab() {
                     width: "100%",
                     height: "100%",
                     opacity: "0",
-                    cursor: "pointer",
+                    cursor: subtitleSettings.enableSubtitles ? "pointer" : "not-allowed",
                     border: "none",
                     outline: "none",
                   }}
@@ -574,6 +588,7 @@ function SubtitleTab() {
                 value={subtitleSettings.textColor}
                 onChange={(_, data) => updateSetting("textColor", data.value)}
                 style={{ width: "100px" }}
+                disabled={!subtitleSettings.enableSubtitles}
               />
             </div>
           </Field>
@@ -583,6 +598,7 @@ function SubtitleTab() {
               checked={subtitleSettings.useBackground}
               onChange={(_, data) => updateSetting("useBackground", data.checked)}
               label="배경 사용"
+              disabled={!subtitleSettings.enableSubtitles}
             />
           </div>
 
@@ -598,14 +614,16 @@ function SubtitleTab() {
                       border: "2px solid #ccc",
                       backgroundColor: subtitleSettings.backgroundColor,
                       position: "relative",
-                      cursor: "pointer",
+                      cursor: subtitleSettings.enableSubtitles ? "pointer" : "not-allowed",
                       overflow: "hidden",
+                      opacity: subtitleSettings.enableSubtitles ? 1 : 0.5,
                     }}
                   >
                     <input
                       type="color"
                       value={subtitleSettings.backgroundColor}
                       onChange={(e) => updateSetting("backgroundColor", e.target.value)}
+                      disabled={!subtitleSettings.enableSubtitles}
                       style={{
                         position: "absolute",
                         top: "0",
@@ -613,7 +631,7 @@ function SubtitleTab() {
                         width: "100%",
                         height: "100%",
                         opacity: "0",
-                        cursor: "pointer",
+                        cursor: subtitleSettings.enableSubtitles ? "pointer" : "not-allowed",
                         border: "none",
                         outline: "none",
                       }}
@@ -623,6 +641,7 @@ function SubtitleTab() {
                     value={subtitleSettings.backgroundColor}
                     onChange={(_, data) => updateSetting("backgroundColor", data.value)}
                     style={{ width: "100px" }}
+                    disabled={!subtitleSettings.enableSubtitles}
                   />
                 </div>
               </Field>
@@ -634,6 +653,7 @@ function SubtitleTab() {
                   min={0}
                   max={100}
                   step={5}
+                  disabled={!subtitleSettings.enableSubtitles}
                 />
               </Field>
 
@@ -644,6 +664,7 @@ function SubtitleTab() {
                   min={0}
                   max={20}
                   step={1}
+                  disabled={!subtitleSettings.enableSubtitles}
                 />
               </Field>
             </>
@@ -654,6 +675,7 @@ function SubtitleTab() {
               checked={subtitleSettings.useOutline}
               onChange={(_, data) => updateSetting("useOutline", data.checked)}
               label="테두리 사용"
+              disabled={!subtitleSettings.enableSubtitles}
             />
           </div>
 
@@ -669,14 +691,16 @@ function SubtitleTab() {
                       border: "2px solid #ccc",
                       backgroundColor: subtitleSettings.outlineColor,
                       position: "relative",
-                      cursor: "pointer",
+                      cursor: subtitleSettings.enableSubtitles ? "pointer" : "not-allowed",
                       overflow: "hidden",
+                      opacity: subtitleSettings.enableSubtitles ? 1 : 0.5,
                     }}
                   >
                     <input
                       type="color"
                       value={subtitleSettings.outlineColor}
                       onChange={(e) => updateSetting("outlineColor", e.target.value)}
+                      disabled={!subtitleSettings.enableSubtitles}
                       style={{
                         position: "absolute",
                         top: "0",
@@ -684,7 +708,7 @@ function SubtitleTab() {
                         width: "100%",
                         height: "100%",
                         opacity: "0",
-                        cursor: "pointer",
+                        cursor: subtitleSettings.enableSubtitles ? "pointer" : "not-allowed",
                         border: "none",
                         outline: "none",
                       }}
@@ -694,6 +718,7 @@ function SubtitleTab() {
                     value={subtitleSettings.outlineColor}
                     onChange={(_, data) => updateSetting("outlineColor", data.value)}
                     style={{ width: "100px" }}
+                    disabled={!subtitleSettings.enableSubtitles}
                   />
                 </div>
               </Field>
@@ -705,6 +730,7 @@ function SubtitleTab() {
                   min={0}
                   max={5}
                   step={1}
+                  disabled={!subtitleSettings.enableSubtitles}
                 />
               </Field>
             </>
@@ -715,6 +741,7 @@ function SubtitleTab() {
               checked={subtitleSettings.useShadow}
               onChange={(_, data) => updateSetting("useShadow", data.checked)}
               label="그림자 사용"
+              disabled={!subtitleSettings.enableSubtitles}
             />
           </div>
 
@@ -727,6 +754,7 @@ function SubtitleTab() {
                   min={0}
                   max={10}
                   step={1}
+                  disabled={!subtitleSettings.enableSubtitles}
                 />
               </Field>
 
@@ -737,6 +765,7 @@ function SubtitleTab() {
                   min={0}
                   max={20}
                   step={1}
+                  disabled={!subtitleSettings.enableSubtitles}
                 />
               </Field>
             </>
@@ -750,6 +779,7 @@ function SubtitleTab() {
               value={ANIMATIONS.find((a) => a.key === subtitleSettings.animation)?.text}
               selectedOptions={[subtitleSettings.animation]}
               onOptionSelect={(_, data) => updateSetting("animation", data.optionValue)}
+              disabled={!subtitleSettings.enableSubtitles}
             >
               {ANIMATIONS.map((anim) => (
                 <Option key={anim.key} value={anim.key}>
@@ -766,6 +796,7 @@ function SubtitleTab() {
               min={0.1}
               max={2.0}
               step={0.1}
+              disabled={!subtitleSettings.enableSubtitles}
             />
           </Field>
 
@@ -776,6 +807,7 @@ function SubtitleTab() {
               min={1.0}
               max={10.0}
               step={0.5}
+              disabled={!subtitleSettings.enableSubtitles}
             />
           </Field>
 
@@ -784,6 +816,7 @@ function SubtitleTab() {
               checked={subtitleSettings.autoWrap}
               onChange={(_, data) => updateSetting("autoWrap", data.checked)}
               label="자동 줄바꿈"
+              disabled={!subtitleSettings.enableSubtitles}
             />
           </div>
 
@@ -794,6 +827,7 @@ function SubtitleTab() {
               min={1}
               max={5}
               step={1}
+              disabled={!subtitleSettings.enableSubtitles}
             />
           </Field>
         </FormSection>

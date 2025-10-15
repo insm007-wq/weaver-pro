@@ -58,22 +58,17 @@ export const useFileManagement = () => {
       // 내용이 SRT 형식인지 먼저 확인 (타임코드 패턴 검사)
       const hasSrtTimeCode = /\d{2}:\d{2}:\d{2}[,.]\d{1,3}\s*-->\s*\d{2}:\d{2}:\d{2}[,.]\d{1,3}/.test(content);
 
-      // SRT 형식이면 SRT로 파싱, 아니면 일반 텍스트로 파싱
-      let parsedScenes;
-      let parseType;
-
-      if (hasSrtTimeCode) {
-        parsedScenes = parseSrtToScenes(content);
-        parseType = "srt";
-      } else {
-        parsedScenes = parseTxtToScenes(content, 8);
-        parseType = "txt";
+      // 자막 형식(타임코드)이 없으면 거부
+      if (!hasSrtTimeCode) {
+        showError("자막 형식이 아닙니다. SRT 형식의 타임코드가 포함된 파일만 업로드할 수 있습니다.\n\n예시:\n1\n00:00:00,000 --> 00:00:05,000\n자막 텍스트");
+        return;
       }
 
+      // SRT 형식으로 파싱
+      const parsedScenes = parseSrtToScenes(content);
+
       if (parsedScenes.length === 0) {
-        showError(parseType === "srt"
-          ? "유효한 SRT 형식이 아닙니다."
-          : "텍스트 파일이 비어있거나 읽을 수 없습니다.");
+        showError("유효한 SRT 형식이 아닙니다. 자막 내용을 확인해주세요.");
         return;
       }
 
@@ -101,9 +96,7 @@ export const useFileManagement = () => {
       // 설정 저장
       await setSetting({ key: "paths.srt", value: file.path });
 
-      showSuccess(parseType === "txt"
-        ? `텍스트 파일이 업로드되었습니다. (${parsedScenes.length}개 씬, 각 8초)`
-        : `SRT 자막 파일이 업로드되었습니다. (${parsedScenes.length}개 씬)`);
+      showSuccess(`자막 파일이 업로드되었습니다. (${parsedScenes.length}개 씬)`);
     } catch (error) {
       console.error("자막 파일 업로드 오류:", error);
       showError("자막 파일 업로드 중 오류가 발생했습니다.");

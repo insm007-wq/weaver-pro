@@ -28,7 +28,6 @@ export default function PreviewPlayer({
     const loadSubtitleSettings = async () => {
       try {
         const settings = await window.api.getSetting("subtitleSettings");
-        console.log("🎬 편집 및 다듬기 - 로드된 자막 설정:", settings);
 
         // 전역 설정이 있으면 사용, 없으면 기본값 사용
         if (settings) {
@@ -36,6 +35,7 @@ export default function PreviewPlayer({
         } else {
           // 기본값 (유튜브 표준 스타일 - SubtitleTab과 동일)
           const defaultSettings = {
+            enableSubtitles: true, // ✅ 자막 사용 (기본값)
             fontFamily: "noto-sans",
             fontSize: 52,
             fontWeight: 700,
@@ -60,13 +60,13 @@ export default function PreviewPlayer({
             useShadow: false,
             maxLines: 2,
           };
-          console.log("📝 기본값 사용:", defaultSettings);
           setSubtitleSettings(defaultSettings);
         }
       } catch (error) {
         console.error("자막 설정 로드 실패:", error);
         // 에러 시에도 전체 기본값 사용
         setSubtitleSettings({
+          enableSubtitles: true, // ✅ 자막 사용 (기본값)
           fontFamily: "noto-sans",
           fontSize: 24,
           fontWeight: 600,
@@ -119,8 +119,8 @@ export default function PreviewPlayer({
         <div className="text-slate-500 text-sm">미리보기 ({aspectRatio})</div>
       </div>
 
-      {/* 자막 오버레이 - 전역 설정 적용 */}
-      {scene && subtitleSettings && (
+      {/* 자막 오버레이 - 전역 설정 적용 (enableSubtitles가 true일 때만 표시) */}
+      {scene && subtitleSettings && subtitleSettings.enableSubtitles === true && (
         <CaptionOverlay
           text={scene.text}
           subtitleSettings={subtitleSettings}
@@ -143,6 +143,11 @@ export default function PreviewPlayer({
 
 function CaptionOverlay({ text, subtitleSettings, aspectRatio = "16:9" }) {
   if (!text || !subtitleSettings) return null;
+
+  // enableSubtitles가 false면 아무것도 렌더링하지 않음
+  if (subtitleSettings.enableSubtitles === false) {
+    return null;
+  }
 
   // 전역 설정 값 추출
   const {

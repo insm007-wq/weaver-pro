@@ -49,6 +49,7 @@ const VideoPreview = memo(function VideoPreview({
         } else {
           // 기본값 (SubtitleTab의 defaultSettings와 동일)
           const defaultSettings = {
+            enableSubtitles: true, // ✅ 자막 사용 (기본값)
             fontFamily: "noto-sans",
             fontSize: 24,
             fontWeight: 600,
@@ -78,6 +79,7 @@ const VideoPreview = memo(function VideoPreview({
       } catch (error) {
         console.error("자막 설정 로드 실패:", error);
         setSubtitleSettings({
+          enableSubtitles: true, // ✅ 자막 사용 (기본값)
           fontFamily: "noto-sans",
           fontSize: 24,
           fontWeight: 600,
@@ -707,6 +709,11 @@ const VideoPreview = memo(function VideoPreview({
   // 자막 오버레이 렌더링 헬퍼 함수
   const renderSubtitleOverlay = () => {
     if (!selectedScene?.text || !subtitleSettings) return null;
+
+    // enableSubtitles가 false면 자막 렌더링하지 않음
+    if (subtitleSettings.enableSubtitles === false) {
+      return null;
+    }
 
     // 전역 설정 값 추출
     const {

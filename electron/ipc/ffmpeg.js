@@ -37,6 +37,9 @@ try {
 // 자막 설정 기본값 (YouTube 표준 스타일)
 // ============================================================================
 const DEFAULT_SUBTITLE_SETTINGS = {
+  // 자막 사용 여부
+  enableSubtitles: true, // ✅ 자막 사용 (기본값)
+
   // 기본 텍스트 설정
   fontFamily: "noto-sans",
   fontSize: 52, // YouTube 표준 (1920x1080 기준)
@@ -1137,11 +1140,13 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
 
   // ✅ ASS 자막 필터 (단순하고 안정적)
   let finalVideoLabel = "[outv]";
-  if (subtitlePath && fs.existsSync(subtitlePath)) {
-    console.log(`✅ 자막 파일 확인: ${subtitlePath}`);
 
-    // ✅ 전역 자막 설정 로드 (검증 및 fallback 포함)
-    const subtitleSettings = getSubtitleSettings();
+  // ✅ 전역 자막 설정 로드 (검증 및 fallback 포함)
+  const subtitleSettings = getSubtitleSettings();
+
+  // ✅ enableSubtitles가 true이고 자막 파일이 존재할 때만 자막 렌더링
+  if (subtitleSettings.enableSubtitles && subtitlePath && fs.existsSync(subtitlePath)) {
+    console.log(`✅ 자막 파일 확인: ${subtitlePath}`);
     console.log(`[자막 설정] 로드 완료:`, subtitleSettings);
 
     // ✅ drawtext 필터로 자막 구현 (배경 박스 지원)
@@ -1163,6 +1168,9 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
 
     finalVideoLabel = "[v]";
   } else {
+    if (!subtitleSettings.enableSubtitles) {
+      console.log(`⚠️ 자막이 비활성화되었습니다 (enableSubtitles: false)`);
+    }
     filterComplex += `;[outv]format=yuv420p[v]`;
     finalVideoLabel = "[v]";
   }
@@ -1867,11 +1875,13 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
 
   // ✅ ASS 자막 필터 (단순하고 안정적)
   let finalVideoLabel = "[outv]";
-  if (srtPath && fs.existsSync(srtPath)) {
-    console.log(`✅ 자막 파일 확인: ${srtPath}`);
 
-    // ✅ 전역 자막 설정 로드 (검증 및 fallback 포함)
-    const subtitleSettings = getSubtitleSettings();
+  // ✅ 전역 자막 설정 로드 (검증 및 fallback 포함)
+  const subtitleSettings = getSubtitleSettings();
+
+  // ✅ enableSubtitles가 true이고 자막 파일이 존재할 때만 자막 렌더링
+  if (subtitleSettings.enableSubtitles && srtPath && fs.existsSync(srtPath)) {
+    console.log(`✅ 자막 파일 확인: ${srtPath}`);
     console.log(`[자막 설정] 로드 완료:`, subtitleSettings);
 
     // ✅ drawtext 필터로 자막 구현 (배경 박스 지원)
@@ -1893,6 +1903,9 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
 
     finalVideoLabel = "[v]";
   } else {
+    if (!subtitleSettings.enableSubtitles) {
+      console.log(`⚠️ 자막이 비활성화되었습니다 (enableSubtitles: false)`);
+    }
     filterComplex += `;[outv]format=yuv420p[v]`;
     finalVideoLabel = "[v]";
   }
