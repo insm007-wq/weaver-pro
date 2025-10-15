@@ -495,7 +495,15 @@ function PromptTab() {
   }
 
   return (
-    <div className={containerStyles.container}>
+    <div
+      className={containerStyles.container}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        overflow: "hidden",
+      }}
+    >
       {/* ===== 상단 관리 바 (Dropdown과 액션 통합) ===== */}
       <Card
         className={cardStyles.settingsCard}
@@ -504,6 +512,7 @@ function PromptTab() {
           borderRadius: 12,
           padding: tokens.spacingHorizontalXL,
           marginBottom: tokens.spacingVerticalL,
+          flexShrink: 0,
         }}
       >
         <div style={{ display: "flex", alignItems: "flex-end", gap: tokens.spacingHorizontalM, flexWrap: "wrap" }}>
@@ -614,6 +623,7 @@ function PromptTab() {
           borderRadius: 12,
           padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalXL}`,
           marginBottom: tokens.spacingVerticalM,
+          flexShrink: 0,
         }}
       >
         <TabList selectedValue={selectedTab} onTabSelect={(_, data) => setSelectedTab(data.value)}>
@@ -638,13 +648,24 @@ function PromptTab() {
           borderRadius: 16,
           display: "flex",
           flexDirection: "column",
-          height: "calc(100vh - 400px)",
+          flex: 1,
+          minHeight: 0,
+          overflow: "hidden",
+          padding: 0,
         }}
       >
         {/* 대본 생성 탭 */}
         {selectedTab === "script" && (
-          <>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tokens.spacingVerticalM }}>
+          <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, padding: tokens.spacingVerticalL }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: tokens.spacingVerticalM,
+                flexShrink: 0,
+              }}
+            >
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <EditRegular style={{ color: tokens.colorPaletteBlueForeground1 }} />
                 <Text weight="semibold" size={500}>
@@ -655,37 +676,46 @@ function PromptTab() {
                 기본값
               </Button>
             </div>
-            <div style={{ flex: 1, overflowY: "auto" }}>
-              <Textarea
-                value={scriptPrompt}
-                onChange={(_, d) => setScriptPrompt(d.value)}
-                resize="none"
-                style={{
-                  height: "100%",
-                  width: "100%",
-                  fontSize: tokens.fontSizeBase300,
-                  fontFamily: "monospace",
-                  lineHeight: 1.6,
-                  border: "none",
-                  boxShadow: "none",
-                  background: "transparent",
-                  padding: 0,
-                }}
-              />
-            </div>
-            <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM }}>
+            <textarea
+              value={scriptPrompt}
+              onChange={(e) => setScriptPrompt(e.target.value)}
+              style={{
+                flex: 1,
+                minHeight: 0,
+                width: "100%",
+                fontSize: tokens.fontSizeBase300,
+                fontFamily: "monospace",
+                lineHeight: 1.6,
+                border: `1px solid ${tokens.colorNeutralStroke1}`,
+                borderRadius: tokens.borderRadiusMedium,
+                background: tokens.colorNeutralBackground1,
+                color: tokens.colorNeutralForeground1,
+                padding: tokens.spacingVerticalM,
+                resize: "none",
+                outline: "none",
+              }}
+            />
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM, flexShrink: 0 }}>
               {scriptCount.toLocaleString()} 글자 | 변수:{" "}
               {
                 "{topic}, {duration}, {style}, {totalSeconds}, {minSceneCount}, {maxSceneCount}, {targetSceneCount}, {minCharacters}, {maxCharacters}, {avgCharactersPerScene}"
               }
             </Text>
-          </>
+          </div>
         )}
 
         {/* 레퍼런스 분석 탭 */}
         {selectedTab === "reference" && (
-          <>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tokens.spacingVerticalM }}>
+          <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, padding: tokens.spacingVerticalL }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: tokens.spacingVerticalM,
+                flexShrink: 0,
+              }}
+            >
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <DocumentTextRegular style={{ color: tokens.colorPalettePurpleForeground1 }} />
                 <Text weight="semibold" size={500}>
@@ -696,35 +726,44 @@ function PromptTab() {
                 기본값
               </Button>
             </div>
-            <div style={{ flex: 1, overflowY: "auto" }}>
-              <Textarea
-                value={referencePrompt}
-                onChange={(_, d) => setReferencePrompt(d.value)}
-                resize="none"
-                style={{
-                  height: "100%",
-                  width: "100%",
-                  fontSize: tokens.fontSizeBase300,
-                  fontFamily: "monospace",
-                  lineHeight: 1.6,
-                  border: "none",
-                  boxShadow: "none",
-                  background: "transparent",
-                  padding: 0,
-                }}
-              />
-            </div>
-            <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM }}>
+            <textarea
+              value={referencePrompt}
+              onChange={(e) => setReferencePrompt(e.target.value)}
+              style={{
+                flex: 1,
+                minHeight: 0,
+                width: "100%",
+                fontSize: tokens.fontSizeBase300,
+                fontFamily: "monospace",
+                lineHeight: 1.6,
+                border: `1px solid ${tokens.colorNeutralStroke1}`,
+                borderRadius: tokens.borderRadiusMedium,
+                background: tokens.colorNeutralBackground1,
+                color: tokens.colorNeutralForeground1,
+                padding: tokens.spacingVerticalM,
+                resize: "none",
+                outline: "none",
+              }}
+            />
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM, flexShrink: 0 }}>
               {referenceCount.toLocaleString()} 글자 | 변수:{" "}
               {"{referenceText}, {topic}, {duration}, {totalSeconds}, {minSceneCount}, {maxSceneCount}"}
             </Text>
-          </>
+          </div>
         )}
 
         {/* 썸네일 생성 탭 */}
         {selectedTab === "thumbnail" && (
-          <>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: tokens.spacingVerticalM }}>
+          <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, padding: tokens.spacingVerticalL }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: tokens.spacingVerticalM,
+                flexShrink: 0,
+              }}
+            >
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <BrainCircuitRegular style={{ color: tokens.colorPaletteGreenForeground1 }} />
                 <Text weight="semibold" size={500}>
@@ -735,28 +774,29 @@ function PromptTab() {
                 기본값
               </Button>
             </div>
-            <div style={{ flex: 1, overflowY: "auto" }}>
-              <Textarea
-                value={thumbnailPrompt}
-                onChange={(_, d) => setThumbnailPrompt(d.value)}
-                resize="none"
-                style={{
-                  height: "100%",
-                  width: "100%",
-                  fontSize: tokens.fontSizeBase300,
-                  fontFamily: "monospace",
-                  lineHeight: 1.6,
-                  border: "none",
-                  boxShadow: "none",
-                  background: "transparent",
-                  padding: 0,
-                }}
-              />
-            </div>
-            <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM }}>
+            <textarea
+              value={thumbnailPrompt}
+              onChange={(e) => setThumbnailPrompt(e.target.value)}
+              style={{
+                flex: 1,
+                minHeight: 0,
+                width: "100%",
+                fontSize: tokens.fontSizeBase300,
+                fontFamily: "monospace",
+                lineHeight: 1.6,
+                border: `1px solid ${tokens.colorNeutralStroke1}`,
+                borderRadius: tokens.borderRadiusMedium,
+                background: tokens.colorNeutralBackground1,
+                color: tokens.colorNeutralForeground1,
+                padding: tokens.spacingVerticalM,
+                resize: "none",
+                outline: "none",
+              }}
+            />
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM, flexShrink: 0 }}>
               {thumbnailCount.toLocaleString()} 글자 | 변수: {"{content}, {referenceAnalysis}"}
             </Text>
-          </>
+          </div>
         )}
       </Card>
     </div>
