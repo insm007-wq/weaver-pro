@@ -1,4 +1,4 @@
-import { useState, Suspense, lazy, useRef, useLayoutEffect } from "react";
+import { useState, Suspense, lazy, useRef, useLayoutEffect, useEffect } from "react";
 import {
   makeStyles,
   shorthands,
@@ -22,6 +22,7 @@ import {
   SubtitlesRegular,
   ChevronLeftRegular,
 } from "@fluentui/react-icons";
+import AdminPasswordDialog from "./settings/parts/AdminPasswordDialog";
 
 // lazy tabs
 const DefaultsTab = lazy(() => import("./settings/tabs/DefaultsTab"));
@@ -94,17 +95,31 @@ const useStyles = makeStyles({
   },
 });
 
-const tabs = [
-  { key: "api", name: "API 설정", icon: <KeyRegular />, Comp: ApiTab, description: "외부 서비스 API 키 및 설정" },
-  { key: "defaults", name: "기본값", icon: <SettingsRegular />, Comp: DefaultsTab, description: "애플리케이션 기본 설정" },
-  { key: "prompt", name: "프롬프트", icon: <BrainCircuitRegular />, Comp: PromptTab, description: "AI 프롬프트 템플릿 관리" },
-  { key: "subtitle", name: "자막", icon: <SubtitlesRegular />, Comp: SubtitleTab, description: "자막 및 텍스트 설정" },
+// 전체 탭 정의 (관리자 전용 탭 포함)
+const allTabs = [
+  { key: "api", name: "API 설정", icon: <KeyRegular />, Comp: ApiTab, description: "외부 서비스 API 키 및 설정", adminOnly: true },
+  { key: "defaults", name: "기본값", icon: <SettingsRegular />, Comp: DefaultsTab, description: "애플리케이션 기본 설정", adminOnly: true },
+  { key: "prompt", name: "프롬프트", icon: <BrainCircuitRegular />, Comp: PromptTab, description: "AI 프롬프트 템플릿 관리", adminOnly: false },
+  { key: "subtitle", name: "자막", icon: <SubtitlesRegular />, Comp: SubtitleTab, description: "자막 및 텍스트 설정", adminOnly: false },
 ];
 
 export default function SettingsPage({ onBack }) {
   const styles = useStyles();
   const headerStyles = useHeaderStyles();
-  const [selectedTab, setSelectedTab] = useState("api");
+
+  // 관리자 모드 상태
+  const [isAdminMode, setIsAdminMode] = useState(() => {
+    // sessionStorage에서 관리자 모드 복원
+    return sessionStorage.getItem("adminMode") === "true";
+  });
+  const [clickCount, setClickCount] = useState(0);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const clickTimerRef = useRef(null);
+
+  // 관리자 모드에 따라 탭 필터링
+  const tabs = isAdminMode ? allTabs : allTabs.filter((t) => !t.adminOnly);
+
+  const [selectedTab, setSelectedTab] = useState(tabs[0]?.key || "prompt");
   const active = tabs.find((t) => t.key === selectedTab) ?? tabs[0];
 
   // 폭 고정 계산(스크롤바 점프 방지)
@@ -117,6 +132,43 @@ export default function SettingsPage({ onBack }) {
     }
   }, [fixedWidthPx]);
 
+  // 관리자 모드 변경 시 sessionStorage 저장
+  useEffect(() => {
+    sessionStorage.setItem("adminMode", isAdminMode.toString());
+  }, [isAdminMode]);
+
+  // 제목 클릭 핸들러 (12번 클릭 감지)
+  const handleTitleClick = () => {
+    // 모달이 이미 열려있으면 무시
+    if (showPasswordDialog) return;
+
+    const newCount = clickCount + 1;
+    setClickCount(newCount);
+
+    // 기존 타이머 제거
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+    }
+
+    // 12번 클릭 도달 시 모달 오픈
+    if (newCount >= 12) {
+      setShowPasswordDialog(true);
+      setClickCount(0);
+      return;
+    }
+
+    // 3초 후 카운터 리셋
+    clickTimerRef.current = setTimeout(() => {
+      setClickCount(0);
+    }, 3000);
+  };
+
+  // 인증 성공 핸들러
+  const handleAdminSuccess = () => {
+    setIsAdminMode(true);
+    setSelectedTab("api"); // API 탭으로 자동 전환
+  };
+
   return (
     <div ref={containerRef} className={styles.root} style={fixedWidthPx ? { width: `${fixedWidthPx}px` } : undefined}>
       {onBack && (
@@ -127,9 +179,35 @@ export default function SettingsPage({ onBack }) {
 
       {/* 페이지 헤더 */}
       <div className={headerStyles.pageHeader}>
-        <div className={headerStyles.pageTitleWithIcon}>
+        <div
+          className={headerStyles.pageTitleWithIcon}
+          onClick={handleTitleClick}
+          style={{
+            cursor: "pointer",
+            userSelect: "none",
+            position: "relative",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8
+          }}
+        >
           <SettingsRegular />
           전역 설정
+          {clickCount >= 10 && (
+            <span
+              style={{
+                fontSize: "12px",
+                color: tokens.colorBrandForeground1,
+                fontWeight: 600,
+                backgroundColor: tokens.colorBrandBackground2,
+                padding: "2px 8px",
+                borderRadius: "12px",
+                marginLeft: 8
+              }}
+            >
+              {clickCount}/12
+            </span>
+          )}
         </div>
         <div className={headerStyles.pageDescription}>애플리케이션 전반의 설정을 관리합니다.</div>
         <div className={styles.hairline} />
@@ -161,6 +239,13 @@ export default function SettingsPage({ onBack }) {
           </div>
         </div>
       </Card>
+
+      {/* 관리자 인증 다이얼로그 */}
+      <AdminPasswordDialog
+        open={showPasswordDialog}
+        onClose={() => setShowPasswordDialog(false)}
+        onSuccess={handleAdminSuccess}
+      />
     </div>
   );
 }
