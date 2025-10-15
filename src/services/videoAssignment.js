@@ -59,19 +59,35 @@ function extractKeywordFromFilename(filename) {
     // 파일명에서 확장자 제거
     const nameWithoutExt = filename.replace(/\.[^.]+$/, "");
 
-    // 패턴 1: keyword_provider_resolution 형태
-    let match = nameWithoutExt.match(/^([^_]+?)(\d+)?_([^_]+)_(\d+x\d+)$/);
+    // 패턴 1: 영상 - keyword1_1920x1080 또는 keyword_1920x1080 (숫자 접미사 제거 + 해상도 앞까지가 키워드)
+    let match = nameWithoutExt.match(/^(.+?)_(\d+x\d+)$/);
+    if (match && match[1]) {
+      // 숫자 접미사 제거: "목동공원1" → "목동공원"
+      const keywordWithNumber = match[1];
+      const keywordOnly = keywordWithNumber.replace(/\d+$/, ''); // 끝의 숫자 제거
+      return keywordOnly.toLowerCase().trim();
+    }
+
+    // 패턴 2: 사진 - keyword_photo (마지막 _photo 제거)
+    if (nameWithoutExt.endsWith('_photo')) {
+      const keyword = nameWithoutExt.replace(/_photo$/, '');
+      if (keyword) {
+        return keyword.toLowerCase().trim();
+      }
+    }
+
+    // 패턴 3: AI 이미지 - ai-keyword-timestamp (ai- 제거 후 마지막 -timestamp 제거)
+    match = nameWithoutExt.match(/^ai-(.+)-(\d+)$/);
     if (match && match[1]) {
       return match[1].toLowerCase().trim();
     }
 
-    // 패턴 2: keyword-provider-resolution 형태
-    match = nameWithoutExt.match(/^([^-]+?)(\d+)?-([^-]+)-(\d+x\d+)$/);
-    if (match && match[1]) {
-      return match[1].toLowerCase().trim();
+    // 패턴 4: 씬 생성 이미지 - scene-001 (scene 키워드 반환)
+    if (nameWithoutExt.match(/^scene-\d+$/)) {
+      return "scene";
     }
 
-    // 패턴 3: 첫 번째 구분자 전까지
+    // 패턴 5: 폴백 - 첫 번째 구분자 전까지
     const parts = nameWithoutExt.split(/[_\-\s]+/);
     if (parts[0] && parts[0].length > 0) {
       return parts[0].toLowerCase().trim();
@@ -1330,11 +1346,6 @@ export async function assignPrioritizedMediaToMissingScenes(scenes, options = {}
 
     const { photos, aiImages } = availableImagesResult;
 
-    console.log(`[우선순위 할당] 영상 ${availableVideos.length}개, 사진 ${photos.length}개, AI 이미지 ${aiImages.length}개`);
-    console.log(`[우선순위 할당] 영상 목록:`, availableVideos.map(v => ({ name: v.filename, keyword: v.keyword })));
-    console.log(`[우선순위 할당] 사진 목록:`, photos.map(p => ({ name: p.filename, keyword: p.keyword })));
-    console.log(`[우선순위 할당] AI 이미지 목록:`, aiImages.map(a => ({ name: a.filename, keyword: a.keyword })));
-
     // 2. 이미 사용된 미디어 추적
     const assignedScenes = [...scenes];
     const usedVideos = new Set();
@@ -1388,8 +1399,6 @@ export async function assignPrioritizedMediaToMissingScenes(scenes, options = {}
 
       let assigned = false;
 
-      console.log(`[우선순위 할당] 씬 ${sceneIndex + 1} "${scene.text?.substring(0, 30)}..." 할당 시작`);
-
       // 우선순위 1: 영상 할당 시도
       if (availableVideos.length > 0) {
         let bestVideo = null;
@@ -1437,7 +1446,6 @@ export async function assignPrioritizedMediaToMissingScenes(scenes, options = {}
         }
 
         if (bestVideo) {
-          console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: 영상 할당 "${bestVideo.filename}" (${exactMatch ? '완전 일치' : `점수: ${bestScore}`})`);
           const sceneKeyword = scene.keyword || bestVideo.keyword;
           assignedScenes[sceneIndex] = {
             ...assignedScenes[sceneIndex],
@@ -1460,14 +1468,11 @@ export async function assignPrioritizedMediaToMissingScenes(scenes, options = {}
 
           videoCount++;
           assigned = true;
-        } else {
-          console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: 영상 매칭 실패 (최고 점수: ${bestScore})`);
         }
       }
 
       // 우선순위 2: 사진 할당 시도 (영상 할당 실패 시)
       if (!assigned && photos.length > 0) {
-        console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: 사진 할당 시도...`);
         let bestPhoto = null;
         let bestScore = 0;
         let exactMatch = false;
@@ -1508,7 +1513,6 @@ export async function assignPrioritizedMediaToMissingScenes(scenes, options = {}
 
         // 3단계: 키워드 매칭 실패 시 순차 할당 (fallback)
         if (!bestPhoto) {
-          console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: 사진 키워드 매칭 실패, 순차 할당 시도...`);
           for (const photo of photos) {
             const normalizedPath = photo.path.replace(/\\/g, '/').toLowerCase();
             if (!allowDuplicates && usedPhotos.has(normalizedPath)) continue;
@@ -1520,7 +1524,6 @@ export async function assignPrioritizedMediaToMissingScenes(scenes, options = {}
         }
 
         if (bestPhoto) {
-          console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: 사진 할당 "${bestPhoto.filename}" (${exactMatch ? '완전 일치' : bestScore === -1 ? '순차 할당' : `점수: ${bestScore}`})`);
           const sceneKeyword = scene.keyword || bestPhoto.keyword;
           assignedScenes[sceneIndex] = {
             ...assignedScenes[sceneIndex],
@@ -1541,14 +1544,11 @@ export async function assignPrioritizedMediaToMissingScenes(scenes, options = {}
 
           photoCount++;
           assigned = true;
-        } else {
-          console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: 사진 할당 실패 (모두 사용됨)`);
         }
       }
 
       // 우선순위 3: AI 이미지 할당 시도 (영상, 사진 모두 실패 시)
       if (!assigned && aiImages.length > 0) {
-        console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: AI 이미지 할당 시도...`);
         let bestAiImage = null;
         let bestScore = 0;
         let exactMatch = false;
@@ -1589,7 +1589,6 @@ export async function assignPrioritizedMediaToMissingScenes(scenes, options = {}
 
         // 3단계: 키워드 매칭 실패 시 순차 할당 (fallback - 무조건)
         if (!bestAiImage) {
-          console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: AI 이미지 키워드 매칭 실패, 순차 할당 시도...`);
           for (const aiImage of aiImages) {
             const normalizedPath = aiImage.path.replace(/\\/g, '/').toLowerCase();
             if (!allowDuplicates && usedAiImages.has(normalizedPath)) continue;
@@ -1601,7 +1600,6 @@ export async function assignPrioritizedMediaToMissingScenes(scenes, options = {}
         }
 
         if (bestAiImage) {
-          console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: AI 이미지 할당 "${bestAiImage.filename}" (${exactMatch ? '완전 일치' : bestScore === -1 ? '순차 할당' : `점수: ${bestScore}`})`);
           const sceneKeyword = scene.keyword || bestAiImage.keyword;
           assignedScenes[sceneIndex] = {
             ...assignedScenes[sceneIndex],
@@ -1622,13 +1620,7 @@ export async function assignPrioritizedMediaToMissingScenes(scenes, options = {}
 
           aiImageCount++;
           assigned = true;
-        } else {
-          console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: AI 이미지 할당 실패 (모두 사용됨)`);
         }
-      }
-
-      if (!assigned) {
-        console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: 어떤 미디어도 할당되지 않음`);
       }
     }
 
@@ -1648,8 +1640,6 @@ export async function assignPrioritizedMediaToMissingScenes(scenes, options = {}
     return assignedScenes;
 
   } catch (error) {
-    console.error("[우선순위 할당] 오류:", error.message);
-
     if (options.onProgress) {
       options.onProgress({
         phase: 'error',

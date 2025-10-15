@@ -384,8 +384,15 @@ function SceneList({
   // 더블클릭으로 편집 모드 진입
   const handleSceneDoubleClick = useCallback((index, event) => {
     event.stopPropagation();
+
+    // 영상 생성/할당 중일 때는 편집 불가
+    if (isAssigning || mediaGenerationState.isActive || videoAssignState.isActive) {
+      showInfo("미디어 처리 중에는 씬을 편집할 수 없습니다.");
+      return;
+    }
+
     handleStartEditText(index);
-  }, [handleStartEditText]);
+  }, [handleStartEditText, isAssigning, mediaGenerationState.isActive, videoAssignState.isActive]);
 
   // 실시간 텍스트 변경 핸들러 (VREW 스타일)
   const handleTextChange = useCallback(async (newText) => {
@@ -588,7 +595,7 @@ function SceneList({
     }
   }, [scenes, setScenes]);
 
-  // 사진 할당 (Pexels → Pixabay)
+  // 사진 할당 (온라인 우선 → 로컬 폴백)
   const handleAssignPhotos = useCallback(async () => {
     if (isAssigning) {
       return;
@@ -608,8 +615,8 @@ function SceneList({
     }
 
     setIsAssigning(true);
-    let assignedCount = 0;
-    let notFoundCount = 0;
+    let onlineAssignedCount = 0;
+    let localAssignedCount = 0;
 
     try {
       const pexelsKey = await window.api.invoke("secrets:get", "pexelsApiKey");
@@ -621,8 +628,9 @@ function SceneList({
         return;
       }
 
-      const updatedScenes = [...scenes];
+      let updatedScenes = [...scenes];
 
+      // 1단계: 온라인 검색 및 다운로드 (Pexels → Pixabay)
       for (let i = 0; i < updatedScenes.length; i++) {
         const scene = updatedScenes[i];
 
@@ -632,7 +640,7 @@ function SceneList({
         const keyword = scene.keyword || scene.text?.substring(0, 20);
         if (!keyword) continue;
 
-        showInfo(`사진 검색 중... (${i + 1}/${missingScenes.length}): ${keyword}`);
+        showInfo(`온라인 사진 검색 중... (${i + 1}/${missingScenes.length}): ${keyword}`);
 
         try {
           // stock.js의 searchPexelsPhotos, searchPixabayPhotos 사용
@@ -677,26 +685,52 @@ function SceneList({
                   provider: photo.provider,
                 },
               };
-              assignedCount++;
-            } else {
-              notFoundCount++;
+              onlineAssignedCount++;
             }
-          } else {
-            notFoundCount++;
           }
         } catch (error) {
-          console.error(`사진 검색 실패 (${keyword}):`, error);
-          notFoundCount++;
+          console.error(`온라인 사진 검색 실패 (${keyword}):`, error);
         }
 
         // 약간의 딜레이
         await new Promise(r => setTimeout(r, 300));
       }
 
+      // 2단계: 온라인에서 못 찾은 씬들 → 로컬 폴백
+      const stillMissingScenes = updatedScenes.filter(scene => !scene.asset?.path && scene.text && scene.text.trim().length > 0);
+
+      if (stillMissingScenes.length > 0) {
+        showInfo(`로컬 이미지 검색 중... (${stillMissingScenes.length}개 씬)`);
+
+        try {
+          // assignPrioritizedMediaToMissingScenes로 로컬 영상/사진/AI 이미지 할당
+          const localAssignedScenes = await assignPrioritizedMediaToMissingScenes(updatedScenes, {
+            minScore: 0.1,
+            allowDuplicates: false,
+          });
+
+          // 로컬에서 할당된 개수 계산
+          const beforeLocalCount = updatedScenes.filter(s => s.asset?.path).length;
+          const afterLocalCount = localAssignedScenes.filter(s => s.asset?.path).length;
+          localAssignedCount = afterLocalCount - beforeLocalCount;
+
+          updatedScenes = localAssignedScenes;
+        } catch (error) {
+          console.error("로컬 이미지 할당 실패:", error);
+        }
+      }
+
       setScenes(updatedScenes);
 
-      if (assignedCount > 0) {
-        showSuccess(`사진 할당 완료! ${assignedCount}개 성공${notFoundCount > 0 ? `, ${notFoundCount}개 검색 결과 없음` : ""}`);
+      const totalAssigned = onlineAssignedCount + localAssignedCount;
+      const totalMissing = missingScenes.length;
+
+      if (totalAssigned > 0) {
+        const details = [];
+        if (onlineAssignedCount > 0) details.push(`온라인 ${onlineAssignedCount}개`);
+        if (localAssignedCount > 0) details.push(`로컬 ${localAssignedCount}개`);
+
+        showSuccess(`사진 할당 완료! ${details.join(', ')} (총 ${totalAssigned}/${totalMissing}개)`);
       } else {
         showError(`사진을 찾을 수 없습니다.`);
       }
@@ -708,7 +742,7 @@ function SceneList({
     }
   }, [scenes, setScenes, isAssigning]);
 
-  // 영상 할당 (Pexels → Pixabay)
+  // 영상 할당 (온라인 우선 → 로컬 폴백)
   const handleAssignVideos = useCallback(async () => {
     if (isAssigning) {
       return;
@@ -728,8 +762,8 @@ function SceneList({
     }
 
     setIsAssigning(true);
-    let assignedCount = 0;
-    let notFoundCount = 0;
+    let onlineAssignedCount = 0;
+    let localAssignedCount = 0;
 
     try {
       const pexelsKey = await window.api.invoke("secrets:get", "pexelsApiKey");
@@ -741,8 +775,9 @@ function SceneList({
         return;
       }
 
-      const updatedScenes = [...scenes];
+      let updatedScenes = [...scenes];
 
+      // 1단계: 온라인 검색 및 다운로드 (Pexels → Pixabay)
       for (let i = 0; i < updatedScenes.length; i++) {
         const scene = updatedScenes[i];
 
@@ -752,7 +787,7 @@ function SceneList({
         const keyword = scene.keyword || scene.text?.substring(0, 20);
         if (!keyword) continue;
 
-        showInfo(`영상 검색 중... (${i + 1}/${missingScenes.length}): ${keyword}`);
+        showInfo(`온라인 영상 검색 중... (${i + 1}/${missingScenes.length}): ${keyword}`);
 
         try {
           // stock.js의 searchPexels, searchPixabay 사용
@@ -798,26 +833,52 @@ function SceneList({
                   provider: video.provider,
                 },
               };
-              assignedCount++;
-            } else {
-              notFoundCount++;
+              onlineAssignedCount++;
             }
-          } else {
-            notFoundCount++;
           }
         } catch (error) {
-          console.error(`영상 검색 실패 (${keyword}):`, error);
-          notFoundCount++;
+          console.error(`온라인 영상 검색 실패 (${keyword}):`, error);
         }
 
         // 약간의 딜레이
         await new Promise(r => setTimeout(r, 300));
       }
 
+      // 2단계: 온라인에서 못 찾은 씬들 → 로컬 폴백
+      const stillMissingScenes = updatedScenes.filter(scene => !scene.asset?.path && scene.text && scene.text.trim().length > 0);
+
+      if (stillMissingScenes.length > 0) {
+        showInfo(`로컬 영상 검색 중... (${stillMissingScenes.length}개 씬)`);
+
+        try {
+          // assignPrioritizedMediaToMissingScenes로 로컬 영상/사진/AI 이미지 할당
+          const localAssignedScenes = await assignPrioritizedMediaToMissingScenes(updatedScenes, {
+            minScore: 0.1,
+            allowDuplicates: false,
+          });
+
+          // 로컬에서 할당된 개수 계산
+          const beforeLocalCount = updatedScenes.filter(s => s.asset?.path).length;
+          const afterLocalCount = localAssignedScenes.filter(s => s.asset?.path).length;
+          localAssignedCount = afterLocalCount - beforeLocalCount;
+
+          updatedScenes = localAssignedScenes;
+        } catch (error) {
+          console.error("로컬 영상 할당 실패:", error);
+        }
+      }
+
       setScenes(updatedScenes);
 
-      if (assignedCount > 0) {
-        showSuccess(`영상 할당 완료! ${assignedCount}개 성공${notFoundCount > 0 ? `, ${notFoundCount}개 검색 결과 없음` : ""}`);
+      const totalAssigned = onlineAssignedCount + localAssignedCount;
+      const totalMissing = missingScenes.length;
+
+      if (totalAssigned > 0) {
+        const details = [];
+        if (onlineAssignedCount > 0) details.push(`온라인 ${onlineAssignedCount}개`);
+        if (localAssignedCount > 0) details.push(`로컬 ${localAssignedCount}개`);
+
+        showSuccess(`영상 할당 완료! ${details.join(', ')} (총 ${totalAssigned}/${totalMissing}개)`);
       } else {
         showError(`영상을 찾을 수 없습니다.`);
       }
@@ -832,10 +893,17 @@ function SceneList({
   // 우클릭 컨텍스트 메뉴 핸들러
   const handleContextMenu = useCallback((event, index) => {
     event.preventDefault();
+
+    // 영상 생성/할당 중일 때는 컨텍스트 메뉴 불가
+    if (isAssigning || mediaGenerationState.isActive || videoAssignState.isActive) {
+      showInfo("미디어 처리 중에는 씬을 편집할 수 없습니다.");
+      return;
+    }
+
     setContextMenuSceneIndex(index);
     setContextMenuPosition({ x: event.clientX, y: event.clientY });
     setIsContextMenuOpen(true);
-  }, []);
+  }, [isAssigning, mediaGenerationState.isActive, videoAssignState.isActive]);
 
   // 미디어 교체 핸들러들
   const handleReplaceWithVideo = useCallback(async () => {

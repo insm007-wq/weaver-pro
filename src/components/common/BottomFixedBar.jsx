@@ -91,8 +91,14 @@ const BottomFixedBar = memo(({
               }}
             />
 
-            {/* 상태 텍스트 */}
-            <Text size={300} weight="semibold">
+            {/* 상태 텍스트 (로딩 중일 때 깜빡임) */}
+            <Text
+              size={300}
+              weight="semibold"
+              style={{
+                animation: isLoading && !isComplete ? "textBlink 2s ease-in-out infinite" : "none"
+              }}
+            >
               {statusText}
             </Text>
 
@@ -194,6 +200,10 @@ const BottomFixedBar = memo(({
         @keyframes pulse {
           0%, 100% { opacity: 1; transform: scale(1); }
           50% { opacity: 0.7; transform: scale(1.2); }
+        }
+        @keyframes textBlink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
         }
         @keyframes slideInUp {
           from {

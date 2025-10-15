@@ -106,18 +106,57 @@ async function withRateLimit(provider, doRequest) {
 }
 
 /* ── 공통 유틸 ──────────────────────────────────────────────────────────── */
-function closestRes(files, target) {
+/**
+ * 해상도 기반 최적 파일 선택 (개선 버전)
+ * @param {Array} files - 선택할 파일 목록
+ * @param {Object} target - 목표 해상도 { w, h }
+ * @param {Object} options - 필터링 옵션
+ *   - minWidth: 최소 너비 (미만은 필터링)
+ *   - minHeight: 최소 높이 (미만은 필터링)
+ *   - preferLarger: true면 target보다 큰 이미지에 가산점 (고품질 우선)
+ */
+function closestRes(files, target, { minWidth = 0, minHeight = 0, preferLarger = false } = {}) {
   if (!Array.isArray(files) || !files.length) return null;
   const { w: tw = 0, h: th = 0 } = target || {};
-  return (
-    files
-      .filter((f) => f && f.url && f.width && f.height)
-      .map((f) => ({
-        ...f,
-        _score: Math.abs((f.width || 0) - tw) + Math.abs((f.height || 0) - th),
-      }))
-      .sort((a, b) => a._score - b._score)[0] || null
-  );
+
+  // 최소 해상도 필터링
+  let filtered = files.filter((f) => {
+    if (!f || !f.url || !f.width || !f.height) return false;
+    if (minWidth && f.width < minWidth) return false;
+    if (minHeight && f.height < minHeight) return false;
+    return true;
+  });
+
+  if (!filtered.length) return null;
+
+  // 점수 계산
+  const scored = filtered.map((f) => {
+    const w = f.width || 0;
+    const h = f.height || 0;
+
+    // 1. 해상도 차이 (맨해튼 거리)
+    let resScore = Math.abs(w - tw) + Math.abs(h - th);
+
+    // 2. 품질 우선: target보다 큰 이미지는 점수 감소 (선호)
+    if (preferLarger && w >= tw && h >= th) {
+      resScore *= 0.5; // 큰 이미지에 가산점
+    }
+
+    // 3. 화면 비율 고려 (16:9 = 1.777...)
+    const targetRatio = tw && th ? tw / th : 16 / 9;
+    const fileRatio = w && h ? w / h : 1;
+    const ratioScore = Math.abs(fileRatio - targetRatio) * 500; // 비율 차이 페널티
+
+    return {
+      ...f,
+      _score: resScore + ratioScore,
+    };
+  });
+
+  // 점수가 낮을수록 좋음 (가장 적합)
+  scored.sort((a, b) => a._score - b._score);
+
+  return scored[0] || null;
 }
 function withinBytes(size, minB, maxB) {
   if (!size || size <= 0) return false;
@@ -186,17 +225,49 @@ async function searchPexelsPhotos({ apiKey, query, perPage, targetRes }) {
 
   const out = [];
   for (const photo of r.data?.photos || []) {
-    // src 객체에서 다양한 해상도의 이미지 URL 추출
-    const variants = [];
     const src = photo.src || {};
 
-    // Pexels는 original, large2x, large, medium, small 등 제공
-    if (src.original) variants.push({ url: src.original, width: photo.width || 0, height: photo.height || 0, label: "original" });
-    if (src.large2x) variants.push({ url: src.large2x, width: Math.round((photo.width || 0) * 1.5), height: Math.round((photo.height || 0) * 1.5), label: "large2x" });
-    if (src.large) variants.push({ url: src.large, width: Math.round((photo.width || 0) * 0.75), height: Math.round((photo.height || 0) * 0.75), label: "large" });
-    if (src.medium) variants.push({ url: src.medium, width: Math.round((photo.width || 0) * 0.5), height: Math.round((photo.height || 0) * 0.5), label: "medium" });
+    // Pexels 사진 API 실제 크기:
+    // - original: 원본 크기 (photo.width x photo.height)
+    // - large2x: ~940x650 고정
+    // - large: ~940x650 고정
+    // - medium: ~350x350 고정
 
-    const best = closestRes(variants, targetRes) || variants[0];
+    const variants = [];
+
+    // 1. original 우선 (원본 크기)
+    if (src.original) {
+      variants.push({
+        url: src.original,
+        width: photo.width || 1920,
+        height: photo.height || 1080,
+        label: "original"
+      });
+    }
+
+    // 2. large2x (940x650 추정)
+    if (src.large2x) {
+      variants.push({
+        url: src.large2x,
+        width: 940,
+        height: 650,
+        label: "large2x"
+      });
+    }
+
+    // 3. large (940x650 추정)
+    if (src.large) {
+      variants.push({
+        url: src.large,
+        width: 940,
+        height: 650,
+        label: "large"
+      });
+    }
+
+    // ✅ HD 품질 필터: 최소 1280x720 이상, 큰 이미지 우선
+    const best = closestRes(variants, targetRes, { minWidth: 1280, minHeight: 720, preferLarger: true });
+
     if (best?.url) {
       const id = photo.id;
       out.push({
@@ -205,7 +276,7 @@ async function searchPexelsPhotos({ apiKey, query, perPage, targetRes }) {
         filename: `pexels-photo-${id}.jpg`,
         width: best.width || photo.width || 0,
         height: best.height || photo.height || 0,
-        size: 0, // 사진은 크기 정보 없음
+        size: 0,
         quality: best.label || "original",
         tags: [],
         photographer: photo.photographer || "",
@@ -282,14 +353,35 @@ async function searchPixabayPhotos({ apiKey, query, perPage, targetRes }) {
 
   const out = [];
   for (const hit of r.data?.hits || []) {
-    // Pixabay 사진 API는 largeImageURL, webformatURL, fullHDURL 등 제공
+    // Pixabay 무료 API 제공 크기:
+    // - largeImageURL: 최대 1280px wide (무료)
+    // - webformatURL: 최대 640px wide (무료)
+
     const variants = [];
 
-    if (hit.largeImageURL) variants.push({ url: hit.largeImageURL, width: hit.imageWidth || 1920, height: hit.imageHeight || 1080, label: "large" });
-    if (hit.fullHDURL) variants.push({ url: hit.fullHDURL, width: 1920, height: 1080, label: "fullHD" });
-    if (hit.webformatURL) variants.push({ url: hit.webformatURL, width: hit.webformatWidth || 640, height: hit.webformatHeight || 480, label: "webformat" });
+    // 1. largeImageURL (최대 1280px, 무료)
+    if (hit.largeImageURL) {
+      variants.push({
+        url: hit.largeImageURL,
+        width: hit.imageWidth || 1280,
+        height: hit.imageHeight || 720,
+        label: "large"
+      });
+    }
 
-    const best = closestRes(variants, targetRes) || variants[0];
+    // 2. webformatURL (최대 640px, 무료)
+    if (hit.webformatURL) {
+      variants.push({
+        url: hit.webformatURL,
+        width: hit.webformatWidth || 640,
+        height: hit.webformatHeight || 480,
+        label: "webformat"
+      });
+    }
+
+    // ✅ HD 품질 필터: 최소 1280x720 이상, 큰 이미지 우선 (무료 범위 내)
+    const best = closestRes(variants, targetRes, { minWidth: 1280, minHeight: 720, preferLarger: true });
+
     if (best?.url) {
       const id = hit.id;
       const tags = String(hit.tags || "")
@@ -302,7 +394,7 @@ async function searchPixabayPhotos({ apiKey, query, perPage, targetRes }) {
         filename: `pixabay-photo-${id}.jpg`,
         width: best.width || hit.imageWidth || 0,
         height: best.height || hit.imageHeight || 0,
-        size: 0, // 사진은 크기 정보 없음
+        size: 0,
         quality: best.label || "large",
         tags,
         user: hit.user || "",

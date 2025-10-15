@@ -709,151 +709,231 @@ const SUPPORTED_PROVIDERS = {
 };
 
 // ---------------------------------------------------------------------------
-// Fallback 체인: 영상 → 사진 → AI 이미지
-// - 영상 다운로드 실패 시 사진으로 대체
-// - 사진도 실패 시 AI 이미지 생성
+// Fallback 체인: Pexels 영상 → Pixabay 영상 → Pexels 사진 → Pixabay 사진 → AI 이미지
+// - 각 단계에서 실패 시 다음 단계로 진행
+// - videosPerKeyword 옵션에 따라 영상 개수 조절
+// - 사진은 고품질 필터 적용 (1920x1080 이상, 16:9 비율 우선)
 // ---------------------------------------------------------------------------
 async function downloadMediaWithFallback(keyword, provider, options = {}, onProgress) {
   const { searchPexelsPhotos, searchPixabayPhotos } = require("./stock");
+  const videosPerKeyword = options.videosPerKeyword || 1;
+  const safeKeyword = keyword.replace(/[^\w가-힣-]/g, "_");
 
-  // 1단계: 영상 다운로드 시도
+  // 1단계: Pexels 영상 검색
   try {
-    console.log(`[Fallback] 1단계: "${keyword}" 영상 검색 시도...`);
-    onProgress?.({ keyword, status: "searching", mediaType: "video", step: 1 });
+    console.log(`[Fallback] 1단계: "${keyword}" Pexels 영상 검색 시도... (${videosPerKeyword}개)`);
+    onProgress?.({ keyword, status: "searching", mediaType: "video", step: 1, provider: "pexels" });
 
-    const providerInfo = SUPPORTED_PROVIDERS[provider];
-    const apiKey = await getSecret(providerInfo.apiKeyName);
-
-    if (apiKey) {
-      const videos = await providerInfo.searchFunction(apiKey, keyword, 1, options);
+    const pexelsKey = await getSecret("pexelsApiKey");
+    if (pexelsKey) {
+      const videos = await searchPexelsVideos(pexelsKey, keyword, videosPerKeyword, options);
 
       if (videos && videos.length > 0) {
-        const video = videos[0];
-        const safeKeyword = keyword.replace(/[^\w가-힣-]/g, "_");
-        const resolution = `${video.width}x${video.height}`;
-        const filename = `${safeKeyword}_${resolution}.mp4`;
+        // ✅ videosPerKeyword 개수만큼 모두 다운로드
+        const downloadedVideos = [];
 
-        onProgress?.({ keyword, status: "downloading", mediaType: "video", step: 1, filename });
+        for (let videoIndex = 0; videoIndex < videos.length; videoIndex++) {
+          const video = videos[videoIndex];
+          const resolution = `${video.width}x${video.height}`;
+          // 여러 영상 구분: keyword1, keyword2, ...
+          const keywordSuffix = videos.length > 1 ? `${videoIndex + 1}` : '';
+          const filename = `${safeKeyword}${keywordSuffix}_${resolution}.mp4`;
 
-        const downloadResult = await downloadVideoOptimized(video.url, filename, (progress) => {
-          onProgress?.({ keyword, status: "downloading", mediaType: "video", step: 1, progress, filename });
-        }, options.maxFileSize || 20);
+          onProgress?.({ keyword, status: "downloading", mediaType: "video", step: 1, filename, provider: "pexels", videoIndex: videoIndex + 1, totalVideos: videos.length });
 
-        if (downloadResult.success) {
-          console.log(`[Fallback] ✅ 영상 다운로드 성공: ${filename}`);
-          return {
-            success: true,
-            mediaType: "video",
-            ...downloadResult,
-            provider: video.provider,
-            width: video.width,
-            height: video.height,
-            thumbnail: video.thumbnail, // 영상 썸네일 (API에서 제공)
-          };
-        } else if (downloadResult.skipped) {
-          console.log(`[Fallback] ⚠️ 영상 크기 초과로 스킵, 사진으로 대체 시도...`);
-        } else {
-          console.log(`[Fallback] ⚠️ 영상 다운로드 실패, 사진으로 대체 시도...`);
+          const downloadResult = await downloadVideoOptimized(video.url, filename, (progress) => {
+            onProgress?.({ keyword, status: "downloading", mediaType: "video", step: 1, progress, filename, provider: "pexels", videoIndex: videoIndex + 1, totalVideos: videos.length });
+          }, options.maxFileSize || 20);
+
+          if (downloadResult.success) {
+            console.log(`[Fallback] ✅ Pexels 영상 다운로드 성공: ${filename}`);
+            downloadedVideos.push({
+              success: true,
+              mediaType: "video",
+              ...downloadResult,
+              provider: "pexels",
+              width: video.width,
+              height: video.height,
+              thumbnail: video.thumbnail,
+            });
+          }
         }
-      } else {
-        console.log(`[Fallback] ⚠️ 영상 검색 결과 없음, 사진으로 대체 시도...`);
+
+        // 최소 1개 이상 성공하면 성공으로 처리 (첫 번째 파일 정보 반환)
+        if (downloadedVideos.length > 0) {
+          return downloadedVideos[0];
+        }
       }
+      console.log(`[Fallback] ⚠️ Pexels 영상 실패, Pixabay 영상 시도...`);
     }
   } catch (error) {
-    console.log(`[Fallback] ⚠️ 영상 다운로드 오류: ${error.message}, 사진으로 대체 시도...`);
+    console.log(`[Fallback] ⚠️ Pexels 영상 오류: ${error.message}, Pixabay 영상 시도...`);
   }
 
-  // 2단계: 사진 다운로드 시도
+  // 2단계: Pixabay 영상 검색
   try {
-    console.log(`[Fallback] 2단계: "${keyword}" 사진 검색 시도...`);
-    onProgress?.({ keyword, status: "searching", mediaType: "photo", step: 2 });
+    console.log(`[Fallback] 2단계: "${keyword}" Pixabay 영상 검색 시도... (${videosPerKeyword}개)`);
+    onProgress?.({ keyword, status: "searching", mediaType: "video", step: 2, provider: "pixabay" });
 
-    const apiKey = await getSecret(SUPPORTED_PROVIDERS[provider].apiKeyName);
+    const pixabayKey = await getSecret("pixabayApiKey");
+    if (pixabayKey) {
+      const videos = await searchPixabayVideos(pixabayKey, keyword, videosPerKeyword, options);
 
-    if (apiKey) {
-      // Pexels 사진 검색
-      let photos = [];
-      if (provider === "pexels") {
-        photos = await searchPexelsPhotos({
-          apiKey,
-          query: keyword,
-          perPage: 1,
-          targetRes: { w: 1920, h: 1080 }
-        });
-      } else if (provider === "pixabay") {
-        photos = await searchPixabayPhotos({
-          apiKey,
-          query: keyword,
-          perPage: 1,
-          targetRes: { w: 1920, h: 1080 }
-        });
+      if (videos && videos.length > 0) {
+        // ✅ videosPerKeyword 개수만큼 모두 다운로드
+        const downloadedVideos = [];
+
+        for (let videoIndex = 0; videoIndex < videos.length; videoIndex++) {
+          const video = videos[videoIndex];
+          const resolution = `${video.width}x${video.height}`;
+          // 여러 영상 구분: keyword1, keyword2, ...
+          const keywordSuffix = videos.length > 1 ? `${videoIndex + 1}` : '';
+          const filename = `${safeKeyword}${keywordSuffix}_${resolution}.mp4`;
+
+          onProgress?.({ keyword, status: "downloading", mediaType: "video", step: 2, filename, provider: "pixabay", videoIndex: videoIndex + 1, totalVideos: videos.length });
+
+          const downloadResult = await downloadVideoOptimized(video.url, filename, (progress) => {
+            onProgress?.({ keyword, status: "downloading", mediaType: "video", step: 2, progress, filename, provider: "pixabay", videoIndex: videoIndex + 1, totalVideos: videos.length });
+          }, options.maxFileSize || 20);
+
+          if (downloadResult.success) {
+            console.log(`[Fallback] ✅ Pixabay 영상 다운로드 성공: ${filename}`);
+            downloadedVideos.push({
+              success: true,
+              mediaType: "video",
+              ...downloadResult,
+              provider: "pixabay",
+              width: video.width,
+              height: video.height,
+              thumbnail: video.thumbnail,
+            });
+          }
+        }
+
+        // 최소 1개 이상 성공하면 성공으로 처리 (첫 번째 파일 정보 반환)
+        if (downloadedVideos.length > 0) {
+          return downloadedVideos[0];
+        }
       }
+      console.log(`[Fallback] ⚠️ Pixabay 영상 실패, Pexels 사진 시도...`);
+    }
+  } catch (error) {
+    console.log(`[Fallback] ⚠️ Pixabay 영상 오류: ${error.message}, Pexels 사진 시도...`);
+  }
+
+  // 3단계: Pexels 사진 검색 (고품질 필터 적용)
+  try {
+    console.log(`[Fallback] 3단계: "${keyword}" Pexels 사진 검색 시도... (고품질 1920x1080+)`);
+    onProgress?.({ keyword, status: "searching", mediaType: "photo", step: 3, provider: "pexels" });
+
+    const pexelsKey = await getSecret("pexelsApiKey");
+    if (pexelsKey) {
+      const photos = await searchPexelsPhotos({
+        apiKey: pexelsKey,
+        query: keyword,
+        perPage: 1,
+        targetRes: { w: 1920, h: 1080 }
+      });
 
       if (photos && photos.length > 0) {
         const photo = photos[0];
-        const safeKeyword = keyword.replace(/[^\w가-힣-]/g, "_");
-
-        // ✅ 원본 URL에서 확장자 추출
         const urlExtension = photo.url.split('.').pop().split('?')[0].toLowerCase();
-        const fileExtension = ['webp', 'jpg', 'jpeg', 'png'].includes(urlExtension)
-          ? urlExtension
-          : 'jpg'; // 기본값
-
+        const fileExtension = ['webp', 'jpg', 'jpeg', 'png'].includes(urlExtension) ? urlExtension : 'jpg';
         const filename = `${safeKeyword}_photo.${fileExtension}`;
 
-        onProgress?.({ keyword, status: "downloading", mediaType: "photo", step: 2, filename });
+        onProgress?.({ keyword, status: "downloading", mediaType: "photo", step: 3, filename, provider: "pexels" });
 
         const downloadResult = await downloadPhotoOptimized(photo.url, filename, (progress) => {
-          onProgress?.({ keyword, status: "downloading", mediaType: "photo", step: 2, progress, filename });
+          onProgress?.({ keyword, status: "downloading", mediaType: "photo", step: 3, progress, filename, provider: "pexels" });
         });
 
         if (downloadResult.success) {
-          console.log(`[Fallback] ✅ 사진 다운로드 성공: ${filename}`);
-          console.log(`[Fallback] 사진 썸네일 경로: ${downloadResult.filePath}`);
+          console.log(`[Fallback] ✅ Pexels 사진 다운로드 성공: ${filename} (${photo.width}x${photo.height})`);
           return {
             success: true,
             mediaType: "photo",
             ...downloadResult,
-            provider: photo.provider,
+            provider: "pexels",
             width: photo.width,
             height: photo.height,
-            thumbnail: downloadResult.filePath, // 사진 파일 자체가 썸네일
+            thumbnail: downloadResult.filePath,
           };
-        } else {
-          console.log(`[Fallback] ⚠️ 사진 다운로드 실패, AI 이미지 생성 시도...`);
         }
-      } else {
-        console.log(`[Fallback] ⚠️ 사진 검색 결과 없음, AI 이미지 생성 시도...`);
       }
+      console.log(`[Fallback] ⚠️ Pexels 사진 실패 (고품질 조건 미충족), Pixabay 사진 시도...`);
     }
   } catch (error) {
-    console.log(`[Fallback] ⚠️ 사진 다운로드 오류: ${error.message}, AI 이미지 생성 시도...`);
+    console.log(`[Fallback] ⚠️ Pexels 사진 오류: ${error.message}, Pixabay 사진 시도...`);
   }
 
-  // 3단계: AI 이미지 생성
+  // 4단계: Pixabay 사진 검색 (고품질 필터 적용)
   try {
-    console.log(`[Fallback] 3단계: "${keyword}" AI 이미지 생성 시도...`);
-    onProgress?.({ keyword, status: "generating", mediaType: "ai", step: 3 });
+    console.log(`[Fallback] 4단계: "${keyword}" Pixabay 사진 검색 시도... (고품질 1920x1080+)`);
+    onProgress?.({ keyword, status: "searching", mediaType: "photo", step: 4, provider: "pixabay" });
+
+    const pixabayKey = await getSecret("pixabayApiKey");
+    if (pixabayKey) {
+      const photos = await searchPixabayPhotos({
+        apiKey: pixabayKey,
+        query: keyword,
+        perPage: 1,
+        targetRes: { w: 1920, h: 1080 }
+      });
+
+      if (photos && photos.length > 0) {
+        const photo = photos[0];
+        const urlExtension = photo.url.split('.').pop().split('?')[0].toLowerCase();
+        const fileExtension = ['webp', 'jpg', 'jpeg', 'png'].includes(urlExtension) ? urlExtension : 'jpg';
+        const filename = `${safeKeyword}_photo.${fileExtension}`;
+
+        onProgress?.({ keyword, status: "downloading", mediaType: "photo", step: 4, filename, provider: "pixabay" });
+
+        const downloadResult = await downloadPhotoOptimized(photo.url, filename, (progress) => {
+          onProgress?.({ keyword, status: "downloading", mediaType: "photo", step: 4, progress, filename, provider: "pixabay" });
+        });
+
+        if (downloadResult.success) {
+          console.log(`[Fallback] ✅ Pixabay 사진 다운로드 성공: ${filename} (${photo.width}x${photo.height})`);
+          return {
+            success: true,
+            mediaType: "photo",
+            ...downloadResult,
+            provider: "pixabay",
+            width: photo.width,
+            height: photo.height,
+            thumbnail: downloadResult.filePath,
+          };
+        }
+      }
+      console.log(`[Fallback] ⚠️ Pixabay 사진 실패 (고품질 조건 미충족), AI 이미지 생성 시도...`);
+    }
+  } catch (error) {
+    console.log(`[Fallback] ⚠️ Pixabay 사진 오류: ${error.message}, AI 이미지 생성 시도...`);
+  }
+
+  // 5단계: AI 이미지 생성 (최종 폴백)
+  try {
+    console.log(`[Fallback] 5단계: "${keyword}" AI 이미지 생성 시도...`);
+    onProgress?.({ keyword, status: "generating", mediaType: "ai", step: 5 });
 
     const aiResult = await generateAndDownloadAIImage(keyword, (progress) => {
-      onProgress?.({ keyword, status: "generating", mediaType: "ai", step: 3, progress });
+      onProgress?.({ keyword, status: "generating", mediaType: "ai", step: 5, progress });
     });
 
     if (aiResult.success) {
       console.log(`[Fallback] ✅ AI 이미지 생성 성공: ${aiResult.filename}`);
-      console.log(`[Fallback] AI 이미지 썸네일 경로: ${aiResult.filePath}`);
       return {
         success: true,
         mediaType: "ai",
         ...aiResult,
-        thumbnail: aiResult.filePath, // AI 이미지 파일 자체가 썸네일
+        thumbnail: aiResult.filePath,
       };
     } else {
       console.log(`[Fallback] ❌ AI 이미지 생성 실패: ${aiResult.error}`);
       return {
         success: false,
         mediaType: "none",
-        error: `모든 방법 실패 - 영상/사진 없음, AI 생성 실패: ${aiResult.error}`,
+        error: `모든 방법 실패 - Pexels/Pixabay 영상·사진 없음, AI 생성 실패: ${aiResult.error}`,
       };
     }
   } catch (error) {
