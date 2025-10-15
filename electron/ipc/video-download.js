@@ -173,7 +173,7 @@ async function searchPexelsVideos(apiKey, query, perPage = 3, options = {}) {
           provider: "pexels",
           id: video.id,
           url: file.link,
-          filename: `pexels-${video.id}-${file.width}x${file.height}.mp4`,
+          filename: `${video.id}-${file.width}x${file.height}.mp4`,
           width: file.width || 0,
           height: file.height || 0,
           size: file.file_size || 0,
@@ -223,7 +223,7 @@ async function searchPixabayVideos(apiKey, query, perPage = 3, options = {}) {
             provider: "pixabay",
             id: hit.id,
             url: videoFile.url,
-            filename: `pixabay-${hit.id}-${videoFile.width}x${videoFile.height}.mp4`,
+            filename: `${hit.id}-${videoFile.width}x${videoFile.height}.mp4`,
             width: videoFile.width || 0,
             height: videoFile.height || 0,
             size: videoFile.size || 0,
@@ -731,7 +731,7 @@ async function downloadMediaWithFallback(keyword, provider, options = {}, onProg
         const video = videos[0];
         const safeKeyword = keyword.replace(/[^\w가-힣-]/g, "_");
         const resolution = `${video.width}x${video.height}`;
-        const filename = `${safeKeyword}_${video.provider}_${resolution}.mp4`;
+        const filename = `${safeKeyword}_${resolution}.mp4`;
 
         onProgress?.({ keyword, status: "downloading", mediaType: "video", step: 1, filename });
 
@@ -799,7 +799,7 @@ async function downloadMediaWithFallback(keyword, provider, options = {}, onProg
           ? urlExtension
           : 'jpg'; // 기본값
 
-        const filename = `${safeKeyword}_${photo.provider}_photo.${fileExtension}`;
+        const filename = `${safeKeyword}_photo.${fileExtension}`;
 
         onProgress?.({ keyword, status: "downloading", mediaType: "photo", step: 2, filename });
 
@@ -1016,12 +1016,12 @@ async function downloadVideosForKeywords(keywords, provider, options = {}, onPro
           videoSuffix,
         });
 
-        // 새로운 파일명 구조: 키워드_프로바이더_해상도.mp4
+        // 새로운 파일명 구조: 키워드_해상도.mp4
         const safeKeyword = keyword.replace(/[^\w가-힣-]/g, "_");
         const keywordNumber = videoIndex + 1; // 1부터 시작
         const keywordName = videos.length > 1 ? `${safeKeyword}${keywordNumber}` : safeKeyword;
         const resolution = `${video.width}x${video.height}`;
-        const finalFilename = `${keywordName}_${video.provider}_${resolution}.mp4`;
+        const finalFilename = `${keywordName}_${resolution}.mp4`;
 
         const downloadResult = await downloadVideoOptimized(video.url, finalFilename, (progress) => {
           onProgress?.({

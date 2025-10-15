@@ -299,11 +299,14 @@ function MediaDownloadPage() {
       return showError("추출된 키워드가 없습니다.");
     }
 
-    // video 폴더 비우기
+    // video, images 폴더 비우기
     try {
       const videoSaveFolder = await window.api.getSetting("videoSaveFolder");
       if (videoSaveFolder) {
-        await window.api.invoke("files:clearDirectory", { dirPath: `${videoSaveFolder}/video` });
+        await Promise.all([
+          window.api.invoke("files:clearDirectory", { dirPath: `${videoSaveFolder}/video` }),
+          window.api.invoke("files:clearDirectory", { dirPath: `${videoSaveFolder}/images` })
+        ]);
       }
     } catch (error) {
       console.error("폴더 비우기 실패:", error);
@@ -511,55 +514,12 @@ function MediaDownloadPage() {
         display: "grid",
         gridTemplateColumns: "1fr 1fr",
         gridTemplateAreas: `
-          "source options"
           "keywords options"
         `,
         gap: 24,
         maxWidth: "1200px",
         width: "100%",
       }}>
-        {/* 소스 선택 */}
-        <Card style={{ padding: 20, gridArea: "source", minHeight: 180, display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <ImageRegular style={{ fontSize: 18 }} />
-            <Text size={400} weight="semibold">다운로드 소스</Text>
-          </div>
-          <div style={{ display: "flex", gap: 12 }}>
-            <Button
-              size="large"
-              appearance={selectedProvider === "pexels" ? "primary" : "secondary"}
-              onClick={() => setSelectedProvider("pexels")}
-              style={{ flex: 1, whiteSpace: "nowrap" }}
-            >
-              <Avatar name="Pexels" size={20} style={{ marginRight: 8, backgroundColor: "#05A081" }} />
-              Pexels
-            </Button>
-            <Button
-              size="large"
-              appearance={selectedProvider === "pixabay" ? "primary" : "secondary"}
-              onClick={() => setSelectedProvider("pixabay")}
-              style={{ flex: 1, whiteSpace: "nowrap" }}
-            >
-              <Avatar name="Pixabay" size={20} style={{ marginRight: 8, backgroundColor: "#02BE6E" }} />
-              Pixabay
-            </Button>
-          </div>
-
-          <div style={{ padding: 12, backgroundColor: "#f8fafc", borderRadius: 8, border: "1px solid #eef1f6" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <InfoRegular style={{ fontSize: 16, color: "#5e6ad2" }} />
-              <Text size={300} weight="semibold">
-                {selectedProvider === "pexels" ? "Pexels" : "Pixabay"} 특징
-              </Text>
-            </div>
-            <Text size={200} style={{ color: "#7a869a", lineHeight: 1.5 }}>
-              {selectedProvider === "pexels"
-                ? "• 고품질 프리미엄 영상 제공\n• 다양한 해상도 및 포맷 지원\n• 빠른 다운로드 속도"
-                : "• 방대한 무료 영상 라이브러리\n• 다국어 검색 지원\n• 다양한 카테고리 제공"}
-            </Text>
-          </div>
-        </Card>
-
         {/* 키워드 선택 */}
         <Card style={{ padding: 20, gridArea: "keywords", display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
