@@ -264,6 +264,101 @@ export async function discoverAvailableVideos() {
 }
 
 /**
+ * videoSaveFolder/images 디렉토리에서 이미지 스캔
+ * 사진(.jpeg, .jpg)과 AI 이미지(.webp)를 구분하여 반환
+ */
+export async function discoverAvailableImages() {
+  try {
+    // 설정에서 videoSaveFolder 가져오기
+    const videoSaveFolderResult = await getSetting("videoSaveFolder");
+    let videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
+
+    if (!videoSaveFolder || typeof videoSaveFolder !== 'string') {
+      console.error("[이미지 발견] videoSaveFolder 설정이 없음");
+      return { photos: [], aiImages: [] };
+    }
+
+    // Node.js/Electron 표준: 슬래시(/) 사용
+    videoSaveFolder = videoSaveFolder.replace(/\\/g, '/');
+    const imagesPath = `${videoSaveFolder}/images`;
+
+    // 디렉토리 존재 확인
+    if (!window?.api?.checkPathExists) {
+      console.error("[이미지 발견] API 없음");
+      return { photos: [], aiImages: [] };
+    }
+
+    const dirExists = await window.api.checkPathExists(imagesPath);
+    if (!dirExists?.exists) {
+      console.warn("[이미지 발견] 디렉토리 없음:", imagesPath);
+      return { photos: [], aiImages: [] };
+    }
+
+    if (dirExists?.isFile === true) {
+      console.error("[이미지 발견] 파일임 (디렉토리 아님):", imagesPath);
+      return { photos: [], aiImages: [] };
+    }
+
+    // 파일 목록 가져오기
+    if (!window?.api?.listDirectory) {
+      console.error("[이미지 발견] listDirectory API 없음");
+      return { photos: [], aiImages: [] };
+    }
+
+    const result = await window.api.listDirectory(imagesPath);
+    if (!result?.success || !Array.isArray(result.files)) {
+      console.error("[이미지 발견] 파일 목록 가져오기 실패");
+      return { photos: [], aiImages: [] };
+    }
+
+    if (result.files.length === 0) {
+      console.warn("[이미지 발견] 디렉토리 비어있음:", imagesPath);
+      return { photos: [], aiImages: [] };
+    }
+
+    const files = result.files;
+    const photos = [];
+    const aiImages = [];
+
+    for (const file of files) {
+      if (!file.isFile) {
+        continue;
+      }
+
+      const lowerName = file.name.toLowerCase();
+      const keyword = extractKeywordFromFilename(file.name);
+
+      if (lowerName.endsWith('.jpeg') || lowerName.endsWith('.jpg')) {
+        // 사진 (다운로드된 이미지)
+        photos.push({
+          filename: file.name,
+          path: `${imagesPath}/${file.name}`,
+          keyword: keyword || "photo",
+          size: file.size || 0,
+          type: 'photo',
+        });
+      } else if (lowerName.endsWith('.webp')) {
+        // AI 생성 이미지
+        aiImages.push({
+          filename: file.name,
+          path: `${imagesPath}/${file.name}`,
+          keyword: keyword || "ai-image",
+          size: file.size || 0,
+          type: 'ai-image',
+        });
+      }
+    }
+
+    console.log(`[이미지 발견] 사진 ${photos.length}개, AI 이미지 ${aiImages.length}개`);
+    return { photos, aiImages };
+
+  } catch (error) {
+    console.error("[이미지 발견] 오류:", error.message);
+    return { photos: [], aiImages: [] };
+  }
+}
+
+/**
  * 파일명에서 해상도 추출
  */
 function extractResolutionFromFilename(filename) {
@@ -1204,6 +1299,369 @@ export async function assignImagesToMissingScenes(scenes, options = {}) {
 }
 
 /**
+ * 우선순위 기반 미디어 자동 할당 (영상 → 사진 → AI 이미지)
+ * @param {Array} scenes - 씬 배열
+ * @param {Object} options - 할당 옵션
+ * @param {Function} options.onProgress - 진행 상황 콜백
+ * @returns {Array} - 미디어가 할당된 씬 배열
+ */
+export async function assignPrioritizedMediaToMissingScenes(scenes, options = {}) {
+  try {
+    const { minScore = 0.1, allowDuplicates = false, onProgress = null } = options;
+
+    if (!Array.isArray(scenes) || scenes.length === 0) {
+      return [];
+    }
+
+    // 미디어가 없는 씬만 필터링
+    const missingScenes = scenes
+      .map((scene, index) => ({ scene, index }))
+      .filter(({ scene }) => !scene.asset?.path && scene.text && scene.text.trim().length > 0);
+
+    if (missingScenes.length === 0) {
+      return scenes;
+    }
+
+    // 1. 사용 가능한 미디어 스캔
+    const [availableVideos, availableImagesResult] = await Promise.all([
+      discoverAvailableVideos(),
+      discoverAvailableImages()
+    ]);
+
+    const { photos, aiImages } = availableImagesResult;
+
+    console.log(`[우선순위 할당] 영상 ${availableVideos.length}개, 사진 ${photos.length}개, AI 이미지 ${aiImages.length}개`);
+    console.log(`[우선순위 할당] 영상 목록:`, availableVideos.map(v => ({ name: v.filename, keyword: v.keyword })));
+    console.log(`[우선순위 할당] 사진 목록:`, photos.map(p => ({ name: p.filename, keyword: p.keyword })));
+    console.log(`[우선순위 할당] AI 이미지 목록:`, aiImages.map(a => ({ name: a.filename, keyword: a.keyword })));
+
+    // 2. 이미 사용된 미디어 추적
+    const assignedScenes = [...scenes];
+    const usedVideos = new Set();
+    const usedVideoSizes = new Set();
+    const usedPhotos = new Set();
+    const usedAiImages = new Set();
+
+    let videoCount = 0;
+    let photoCount = 0;
+    let aiImageCount = 0;
+
+    // 이미 할당된 미디어들을 추적 (중복 방지)
+    for (const scene of scenes) {
+      if (scene.asset?.path) {
+        const normalizedPath = scene.asset.path.replace(/\\/g, '/').toLowerCase();
+
+        if (scene.asset.type === 'video') {
+          usedVideos.add(normalizedPath);
+          if (scene.asset.size) usedVideoSizes.add(scene.asset.size);
+        } else if (scene.asset.type === 'image') {
+          // 사진인지 AI 이미지인지 확인
+          if (normalizedPath.endsWith('.webp')) {
+            usedAiImages.add(normalizedPath);
+          } else {
+            usedPhotos.add(normalizedPath);
+          }
+        }
+      }
+    }
+
+    // 3. 각 씬에 대해 우선순위대로 할당
+    for (let i = 0; i < missingScenes.length; i++) {
+      const { scene, index: sceneIndex } = missingScenes[i];
+
+      // 진행 상황 콜백
+      if (onProgress) {
+        onProgress({
+          phase: 'assigning',
+          current: i + 1,
+          total: missingScenes.length,
+          message: `미디어 할당 중... (${i + 1}/${missingScenes.length})`,
+          videoCount,
+          photoCount,
+          aiImageCount,
+          currentScene: {
+            index: sceneIndex,
+            text: scene.text?.substring(0, 50) + (scene.text?.length > 50 ? '...' : ''),
+          }
+        });
+      }
+
+      let assigned = false;
+
+      console.log(`[우선순위 할당] 씬 ${sceneIndex + 1} "${scene.text?.substring(0, 30)}..." 할당 시작`);
+
+      // 우선순위 1: 영상 할당 시도
+      if (availableVideos.length > 0) {
+        let bestVideo = null;
+        let bestScore = 0;
+        let exactMatch = false;
+
+        // 1단계: 씬에 키워드가 있으면 완전 일치 우선 검색
+        if (scene.keyword) {
+          for (const video of availableVideos) {
+            const normalizedPath = video.path.replace(/\\/g, '/').toLowerCase();
+
+            // 중복 체크
+            if (!allowDuplicates) {
+              if (usedVideos.has(normalizedPath)) continue;
+              if (video.size && usedVideoSizes.has(video.size)) continue;
+            }
+
+            // 완전 일치 체크 (대소문자 구분 없음)
+            if (scene.keyword.toLowerCase() === video.keyword.toLowerCase()) {
+              bestVideo = video;
+              bestScore = 1.0; // 완전 일치 점수
+              exactMatch = true;
+              break; // 완전 일치 발견 시 즉시 중단
+            }
+          }
+        }
+
+        // 2단계: 완전 일치 없으면 유사도 검색
+        if (!exactMatch) {
+          for (const video of availableVideos) {
+            const normalizedPath = video.path.replace(/\\/g, '/').toLowerCase();
+
+            // 중복 체크
+            if (!allowDuplicates) {
+              if (usedVideos.has(normalizedPath)) continue;
+              if (video.size && usedVideoSizes.has(video.size)) continue;
+            }
+
+            const score = calculateSceneVideoScore(scene, video);
+            if (score > bestScore && score >= minScore) {
+              bestVideo = video;
+              bestScore = score;
+            }
+          }
+        }
+
+        if (bestVideo) {
+          console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: 영상 할당 "${bestVideo.filename}" (${exactMatch ? '완전 일치' : `점수: ${bestScore}`})`);
+          const sceneKeyword = scene.keyword || bestVideo.keyword;
+          assignedScenes[sceneIndex] = {
+            ...assignedScenes[sceneIndex],
+            keyword: sceneKeyword,
+            asset: {
+              type: 'video',
+              path: bestVideo.path,
+              keyword: bestVideo.keyword,
+              filename: bestVideo.filename,
+              resolution: bestVideo.resolution,
+              provider: bestVideo.provider,
+              size: bestVideo.size,
+            }
+          };
+
+          if (!allowDuplicates) {
+            usedVideos.add(bestVideo.path.replace(/\\/g, '/').toLowerCase());
+            if (bestVideo.size) usedVideoSizes.add(bestVideo.size);
+          }
+
+          videoCount++;
+          assigned = true;
+        } else {
+          console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: 영상 매칭 실패 (최고 점수: ${bestScore})`);
+        }
+      }
+
+      // 우선순위 2: 사진 할당 시도 (영상 할당 실패 시)
+      if (!assigned && photos.length > 0) {
+        console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: 사진 할당 시도...`);
+        let bestPhoto = null;
+        let bestScore = 0;
+        let exactMatch = false;
+
+        // 1단계: 씬에 키워드가 있으면 완전 일치 우선 검색
+        if (scene.keyword) {
+          for (const photo of photos) {
+            const normalizedPath = photo.path.replace(/\\/g, '/').toLowerCase();
+
+            // 중복 체크
+            if (!allowDuplicates && usedPhotos.has(normalizedPath)) continue;
+
+            // 완전 일치 체크 (대소문자 구분 없음)
+            if (scene.keyword.toLowerCase() === photo.keyword.toLowerCase()) {
+              bestPhoto = photo;
+              bestScore = 1.0; // 완전 일치 점수
+              exactMatch = true;
+              break; // 완전 일치 발견 시 즉시 중단
+            }
+          }
+        }
+
+        // 2단계: 완전 일치 없으면 유사도 검색
+        if (!exactMatch) {
+          for (const photo of photos) {
+            const normalizedPath = photo.path.replace(/\\/g, '/').toLowerCase();
+
+            // 중복 체크
+            if (!allowDuplicates && usedPhotos.has(normalizedPath)) continue;
+
+            const score = calculateSceneVideoScore(scene, photo);
+            if (score > bestScore && score >= minScore) {
+              bestPhoto = photo;
+              bestScore = score;
+            }
+          }
+        }
+
+        // 3단계: 키워드 매칭 실패 시 순차 할당 (fallback)
+        if (!bestPhoto) {
+          console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: 사진 키워드 매칭 실패, 순차 할당 시도...`);
+          for (const photo of photos) {
+            const normalizedPath = photo.path.replace(/\\/g, '/').toLowerCase();
+            if (!allowDuplicates && usedPhotos.has(normalizedPath)) continue;
+
+            bestPhoto = photo;
+            bestScore = -1; // fallback 표시
+            break;
+          }
+        }
+
+        if (bestPhoto) {
+          console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: 사진 할당 "${bestPhoto.filename}" (${exactMatch ? '완전 일치' : bestScore === -1 ? '순차 할당' : `점수: ${bestScore}`})`);
+          const sceneKeyword = scene.keyword || bestPhoto.keyword;
+          assignedScenes[sceneIndex] = {
+            ...assignedScenes[sceneIndex],
+            keyword: sceneKeyword,
+            asset: {
+              type: 'image',
+              path: bestPhoto.path,
+              keyword: bestPhoto.keyword,
+              filename: bestPhoto.filename,
+              provider: 'photo',
+              size: bestPhoto.size,
+            }
+          };
+
+          if (!allowDuplicates) {
+            usedPhotos.add(bestPhoto.path.replace(/\\/g, '/').toLowerCase());
+          }
+
+          photoCount++;
+          assigned = true;
+        } else {
+          console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: 사진 할당 실패 (모두 사용됨)`);
+        }
+      }
+
+      // 우선순위 3: AI 이미지 할당 시도 (영상, 사진 모두 실패 시)
+      if (!assigned && aiImages.length > 0) {
+        console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: AI 이미지 할당 시도...`);
+        let bestAiImage = null;
+        let bestScore = 0;
+        let exactMatch = false;
+
+        // 1단계: 씬에 키워드가 있으면 완전 일치 우선 검색
+        if (scene.keyword) {
+          for (const aiImage of aiImages) {
+            const normalizedPath = aiImage.path.replace(/\\/g, '/').toLowerCase();
+
+            // 중복 체크
+            if (!allowDuplicates && usedAiImages.has(normalizedPath)) continue;
+
+            // 완전 일치 체크 (대소문자 구분 없음)
+            if (scene.keyword.toLowerCase() === aiImage.keyword.toLowerCase()) {
+              bestAiImage = aiImage;
+              bestScore = 1.0; // 완전 일치 점수
+              exactMatch = true;
+              break; // 완전 일치 발견 시 즉시 중단
+            }
+          }
+        }
+
+        // 2단계: 완전 일치 없으면 유사도 검색
+        if (!exactMatch) {
+          for (const aiImage of aiImages) {
+            const normalizedPath = aiImage.path.replace(/\\/g, '/').toLowerCase();
+
+            // 중복 체크
+            if (!allowDuplicates && usedAiImages.has(normalizedPath)) continue;
+
+            const score = calculateSceneVideoScore(scene, aiImage);
+            if (score > bestScore && score >= minScore) {
+              bestAiImage = aiImage;
+              bestScore = score;
+            }
+          }
+        }
+
+        // 3단계: 키워드 매칭 실패 시 순차 할당 (fallback - 무조건)
+        if (!bestAiImage) {
+          console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: AI 이미지 키워드 매칭 실패, 순차 할당 시도...`);
+          for (const aiImage of aiImages) {
+            const normalizedPath = aiImage.path.replace(/\\/g, '/').toLowerCase();
+            if (!allowDuplicates && usedAiImages.has(normalizedPath)) continue;
+
+            bestAiImage = aiImage;
+            bestScore = -1; // fallback 표시
+            break;
+          }
+        }
+
+        if (bestAiImage) {
+          console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: AI 이미지 할당 "${bestAiImage.filename}" (${exactMatch ? '완전 일치' : bestScore === -1 ? '순차 할당' : `점수: ${bestScore}`})`);
+          const sceneKeyword = scene.keyword || bestAiImage.keyword;
+          assignedScenes[sceneIndex] = {
+            ...assignedScenes[sceneIndex],
+            keyword: sceneKeyword,
+            asset: {
+              type: 'image',
+              path: bestAiImage.path,
+              keyword: bestAiImage.keyword,
+              filename: bestAiImage.filename,
+              provider: 'ai-generated',
+              size: bestAiImage.size,
+            }
+          };
+
+          if (!allowDuplicates) {
+            usedAiImages.add(bestAiImage.path.replace(/\\/g, '/').toLowerCase());
+          }
+
+          aiImageCount++;
+          assigned = true;
+        } else {
+          console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: AI 이미지 할당 실패 (모두 사용됨)`);
+        }
+      }
+
+      if (!assigned) {
+        console.log(`[우선순위 할당] 씬 ${sceneIndex + 1}: 어떤 미디어도 할당되지 않음`);
+      }
+    }
+
+    // 완료 콜백
+    if (onProgress) {
+      onProgress({
+        phase: 'completed',
+        current: missingScenes.length,
+        total: missingScenes.length,
+        message: `완료! 영상 ${videoCount}개, 사진 ${photoCount}개, AI 이미지 ${aiImageCount}개`,
+        videoCount,
+        photoCount,
+        aiImageCount,
+      });
+    }
+
+    return assignedScenes;
+
+  } catch (error) {
+    console.error("[우선순위 할당] 오류:", error.message);
+
+    if (options.onProgress) {
+      options.onProgress({
+        phase: 'error',
+        message: `오류 발생: ${error.message}`,
+      });
+    }
+
+    return scenes;
+  }
+}
+
+/**
  * 미디어 없는 씬에만 영상 자동 할당
  * @param {Array} scenes - 씬 배열
  * @param {Object} options - 할당 옵션
@@ -1360,9 +1818,11 @@ export default {
   assignVideosWithDownload,
   assignImagesToMissingScenes,
   assignVideosToMissingScenes,
+  assignPrioritizedMediaToMissingScenes,
   downloadVideoForKeyword,
   generateImageForScene,
   getRecommendedVideosForScene,
   discoverAvailableVideos,
+  discoverAvailableImages,
   analyzeSceneKeywords
 };

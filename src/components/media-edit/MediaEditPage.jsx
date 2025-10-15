@@ -4,7 +4,7 @@ import { useHeaderStyles, useContainerStyles } from "../../styles/commonStyles";
 import { VideoRegular } from "@fluentui/react-icons";
 import { PageErrorBoundary } from "../common/ErrorBoundary";
 import { useFileManagement } from "../../hooks/useFileManagement";
-import { assignVideosToMissingScenes } from "../../services/videoAssignment";
+import { assignPrioritizedMediaToMissingScenes } from "../../services/videoAssignment";
 import { showSuccess, showInfo } from "../common/GlobalToast";
 
 // 최적화된 컴포넌트들 import
@@ -64,9 +64,9 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 파일 로드 후 자동 영상 할당
+  // 파일 로드 후 자동 미디어 할당 (영상 → 사진 → AI 이미지)
   useEffect(() => {
-    const autoAssignVideos = async () => {
+    const autoAssignMedia = async () => {
       // 조건 체크: 파일이 로드되고, 씬이 있고, 아직 자동 할당하지 않았고, 로딩 중이 아님
       if (
         srtConnected &&
@@ -80,10 +80,31 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
         const missingScenes = scenes.filter(scene => !scene.asset?.path && scene.text && scene.text.trim().length > 0);
 
         if (missingScenes.length > 0) {
-          showInfo(`다운로드된 영상을 자동으로 할당하는 중... (${missingScenes.length}개 씬)`);
+          showInfo(`미디어를 자동으로 할당하는 중... (${missingScenes.length}개 씬)`);
 
           try {
-            const assignedScenes = await assignVideosToMissingScenes(scenes, {
+            // 1. extractedKeywords 가져오기
+            const extractedKeywords = await window.api.getSetting("extractedKeywords");
+            const keywordsArray = Array.isArray(extractedKeywords) ? extractedKeywords : [];
+
+            // 2. 씬에 키워드 할당 (순서대로 1:1 매칭)
+            const scenesWithKeywords = scenes.map((scene, index) => {
+              // 이미 키워드가 있으면 유지, 없으면 extractedKeywords에서 순서대로 할당
+              if (scene.keyword) {
+                return scene;
+              }
+
+              const keyword = keywordsArray[index % keywordsArray.length]; // 순환 할당
+              return {
+                ...scene,
+                keyword: keyword || null,
+              };
+            });
+
+            setScenes(scenesWithKeywords);
+
+            // 3. 키워드가 할당된 씬으로 미디어 자동 할당
+            const assignedScenes = await assignPrioritizedMediaToMissingScenes(scenesWithKeywords, {
               minScore: 0.1,
               allowDuplicates: false,
             });
@@ -93,7 +114,7 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
             const assignedCount = assignedScenes.filter(s => s.asset?.path).length;
             const totalCount = assignedScenes.length;
 
-            showSuccess(`자동 할당 완료! ${assignedCount}/${totalCount}개 씬에 영상이 할당되었습니다.`);
+            showSuccess(`자동 할당 완료! ${assignedCount}/${totalCount}개 씬에 미디어가 할당되었습니다.`);
           } catch (error) {
             console.error("[자동 할당] 오류:", error);
             // 오류가 발생해도 조용히 넘어감 (사용자가 수동으로 할당 가능)
@@ -102,7 +123,7 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
       }
     };
 
-    autoAssignVideos();
+    autoAssignMedia();
   }, [srtConnected, scenes, isLoading, setScenes]);
 
   // 편집 페이지 초기화 이벤트 리스너

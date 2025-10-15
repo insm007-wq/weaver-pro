@@ -13,7 +13,7 @@ import {
   ArrowDownloadRegular,
 } from "@fluentui/react-icons";
 import { ensureSceneDefaults } from "../../../utils/scenes";
-import { assignVideosToScenes, assignMediaToScenes, assignVideosWithDownload, assignImagesToMissingScenes, assignVideosToMissingScenes } from "../../../services/videoAssignment";
+import { assignVideosToScenes, assignMediaToScenes, assignVideosWithDownload, assignImagesToMissingScenes, assignVideosToMissingScenes, assignPrioritizedMediaToMissingScenes } from "../../../services/videoAssignment";
 import { showError, showSuccess } from "../../common/GlobalToast";
 import { isVideoFile, isImageFile } from "../../../utils/fileHelpers";
 import BottomFixedBar from "../../common/BottomFixedBar";
