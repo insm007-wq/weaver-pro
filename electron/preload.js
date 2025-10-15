@@ -253,6 +253,7 @@ contextBridge.exposeInMainWorld("api", {
   selectMp3: () => ipcRenderer.invoke("files/select", { type: "mp3" }).catch(() => ipcRenderer.invoke("pickers:selectMp3")),
 
   saveUrlToFile: (payload) => ipcRenderer.invoke("file:save-url", payload),
+  saveThumbnailAsJpeg: (payload) => ipcRenderer.invoke("file:save-thumbnail-as-jpeg", payload),
   saveUrlToProject: (payload) => ipcRenderer.invoke("files/saveUrlToProject", payload),
   saveBufferToProject: ({ category, fileName, buffer }) => ipcRenderer.invoke("files/saveToProject", { category, fileName, buffer }),
 

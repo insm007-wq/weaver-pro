@@ -476,10 +476,31 @@ ipcMain.handle("file:save-url", async (_evt, { url, suggestedName }) => {
       return { ok: false, message: "url_required" };
     }
 
+    // URL에서 실제 파일 확장자 추출
+    let detectedExt = null;
+    try {
+      const urlPath = new URL(url).pathname;
+      const match = urlPath.match(/\.([a-z0-9]+)$/i);
+      if (match) {
+        detectedExt = match[1].toLowerCase();
+        console.log(`🔍 URL에서 추출한 확장자: .${detectedExt}`);
+      }
+    } catch (e) {
+      console.warn("⚠️ URL 파싱 실패, 기본 확장자 사용");
+    }
+
+    // suggestedName의 확장자를 실제 URL 확장자로 교체
+    let finalSuggestedName = suggestedName || "download.jpg";
+    if (detectedExt && suggestedName) {
+      const nameWithoutExt = suggestedName.replace(/\.[^.]+$/, '');
+      finalSuggestedName = `${nameWithoutExt}.${detectedExt}`;
+      console.log(`✏️ 파일명 수정: ${suggestedName} → ${finalSuggestedName}`);
+    }
+
     // 파일 저장 대화상자 표시
     const { canceled, filePath } = await dialog.showSaveDialog({
       title: "파일 저장",
-      defaultPath: suggestedName || "download.jpg",
+      defaultPath: finalSuggestedName,
       filters: [
         { name: "이미지 파일", extensions: ["jpg", "jpeg", "png", "gif", "webp"] },
         { name: "모든 파일", extensions: ["*"] }
@@ -500,6 +521,70 @@ ipcMain.handle("file:save-url", async (_evt, { url, suggestedName }) => {
     return { ok: true, path: filePath };
   } catch (error) {
     console.error("❌ file:save-url 실패:", error);
+    return { ok: false, message: error.message };
+  }
+});
+
+/** ✅ 썸네일 전용: URL 이미지를 JPEG로 변환하여 저장 (독립적 핸들러) */
+ipcMain.handle("file:save-thumbnail-as-jpeg", async (_evt, { url, suggestedName }) => {
+  try {
+    console.log("🖼️ file:save-thumbnail-as-jpeg 호출됨:", { url, suggestedName });
+
+    if (!url || typeof url !== "string") {
+      return { ok: false, message: "url_required" };
+    }
+
+    // Sharp 동적 로드 (ASAR unpacked 경로 처리)
+    let sharp;
+    try {
+      const sharpPath = require.resolve('sharp');
+      sharp = require(sharpPath);
+    } catch (err) {
+      console.error("❌ Sharp 로드 실패:", err);
+      return { ok: false, message: "sharp_not_available" };
+    }
+
+    // suggestedName을 .jpg로 변경
+    let finalSuggestedName = suggestedName || "thumbnail.jpg";
+    const nameWithoutExt = finalSuggestedName.replace(/\.[^.]+$/, '');
+    finalSuggestedName = `${nameWithoutExt}.jpg`;
+    console.log(`✏️ JPEG 파일명: ${finalSuggestedName}`);
+
+    // 파일 저장 대화상자 표시 (JPEG만)
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: "썸네일 저장",
+      defaultPath: finalSuggestedName,
+      filters: [
+        { name: "JPEG 이미지", extensions: ["jpg", "jpeg"] },
+        { name: "모든 파일", extensions: ["*"] }
+      ],
+      buttonLabel: "저장"
+    });
+
+    if (canceled || !filePath) {
+      console.log("❌ 사용자가 저장을 취소함");
+      return { ok: false, message: "canceled" };
+    }
+
+    // URL에서 이미지 다운로드 (메모리에)
+    console.log("🌐 이미지 다운로드 중:", url);
+    const imageBuffer = await downloadBuffer(url);
+    console.log(`✅ 다운로드 완료: ${imageBuffer.length} bytes`);
+
+    // Sharp로 JPEG 변환 (품질 90%)
+    console.log("🔄 JPEG 변환 중...");
+    const jpegBuffer = await sharp(imageBuffer)
+      .jpeg({ quality: 90 })
+      .toBuffer();
+    console.log(`✅ JPEG 변환 완료: ${jpegBuffer.length} bytes`);
+
+    // 파일 저장
+    await fs.promises.writeFile(filePath, jpegBuffer);
+    console.log("✅ file:save-thumbnail-as-jpeg 완료:", filePath);
+
+    return { ok: true, path: filePath };
+  } catch (error) {
+    console.error("❌ file:save-thumbnail-as-jpeg 실패:", error);
     return { ok: false, message: error.message };
   }
 });

@@ -39,12 +39,47 @@ import { DEFAULT_TEMPLATE as IMPORTED_DEFAULT_TEMPLATE } from "../../constants/p
 
 const useStyles = makeStyles({
   container: {
-    maxWidth: "1200px",
+    maxWidth: "1400px",
     ...shorthands.margin("0", "auto"),
     ...shorthands.padding(tokens.spacingVerticalXL, tokens.spacingHorizontalL),
     display: "flex",
     flexDirection: "column",
     ...shorthands.gap(tokens.spacingVerticalL),
+  },
+  mainGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gridTemplateAreas: `"input results"`,
+    gap: "24px",
+    maxWidth: "1400px",
+    width: "100%",
+  },
+  leftPanel: {
+    gridArea: "input",
+    padding: "20px",
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalL,
+    maxHeight: "calc(100vh - 200px)",
+    overflowY: "auto",
+  },
+  rightPanel: {
+    gridArea: "results",
+    padding: "20px",
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalM,
+    maxHeight: "calc(100vh - 200px)",
+    overflowY: "auto",
+  },
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "60px 20px",
+    textAlign: "center",
+    color: tokens.colorNeutralForeground3,
   },
   pageHeader: {
     ...shorthands.margin(0, 0, tokens.spacingVerticalL),
@@ -101,20 +136,24 @@ const useStyles = makeStyles({
   },
   previewContainer: {
     display: "flex",
+    flexDirection: "column",
     alignItems: "center",
-    gap: tokens.spacingHorizontalM,
+    gap: tokens.spacingVerticalM,
+    width: "100%",
   },
   previewImage: {
-    width: "300px",
-    height: "300px",
+    width: "100%",
+    maxWidth: "300px",
+    height: "auto",
+    aspectRatio: "1",
     objectFit: "cover",
     borderRadius: tokens.borderRadiusMedium,
     border: `2px solid ${tokens.colorNeutralStroke1}`,
     boxShadow: tokens.shadow8,
   },
   previewInfo: {
-    textAlign: "left",
-    flex: 1,
+    textAlign: "center",
+    width: "100%",
   },
   optionsGrid: {
     display: "grid",
@@ -127,8 +166,8 @@ const useStyles = makeStyles({
   },
   resultsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-    gap: tokens.spacingHorizontalL,
+    gridTemplateColumns: "1fr",
+    gap: tokens.spacingHorizontalM,
   },
   resultCard: {
     overflow: "hidden",
@@ -639,20 +678,8 @@ function ThumbnailGenerator() {
   };
 
   return (
-    <div
-      ref={containerRef}
-      className={styles.container}
-      style={
-        fixedWidthPx
-          ? {
-              width: `${fixedWidthPx}px`,
-              minWidth: `${fixedWidthPx}px`,
-              maxWidth: `${fixedWidthPx}px`,
-              flex: `0 0 ${fixedWidthPx}px`,
-            }
-          : {}
-      }
-    >
+    <div ref={containerRef} className={styles.container}>
+      {/* 헤더 */}
       <div className={headerStyles.pageHeader}>
         <div className={headerStyles.pageTitleWithIcon}>
           <SparkleRegular />
@@ -664,10 +691,14 @@ function ThumbnailGenerator() {
         <div className={headerStyles.divider} />
       </div>
 
-      {/* 장면 설명 — 둘 모드 모두에서 표시 */}
-      <Card className={styles.settingsCard}>
+      {/* 좌우 분할 레이아웃 */}
+      <div className={styles.mainGrid}>
+        {/* 왼쪽 패널: 입력 영역 */}
+        <Card className={styles.leftPanel}>
+          {/* 장면 설명 */}
+          <div>
         <Field>
-          <Label weight="semibold" size="large">
+          <Label weight="semibold" style={{ fontSize: tokens.fontSizeBase400, marginBottom: tokens.spacingVerticalXS }}>
             <SparkleRegular style={{ marginRight: tokens.spacingHorizontalXS }} />
             장면 설명
           </Label>
@@ -687,12 +718,12 @@ function ThumbnailGenerator() {
             💡 간단히 입력하면 AI가 자동으로 상세한 프롬프트로 확장합니다. 한글/영어 모두 지원!
           </Caption1>
         </Field>
-      </Card>
+          </div>
 
-      {/* 참고 이미지 업로드 (분석 보조) — 두 모드 공통 사용 가능 */}
-      <Card className={styles.settingsCard}>
+          {/* 참고 이미지 업로드 (분석 보조) */}
+          <div>
         <Field>
-          <Label weight="semibold" size="large">
+          <Label weight="semibold" style={{ fontSize: tokens.fontSizeBase400, marginBottom: tokens.spacingVerticalXS }}>
             <ImageRegular style={{ marginRight: tokens.spacingHorizontalXS }} />
             참고 이미지 (선택사항)
           </Label>
@@ -713,7 +744,7 @@ function ThumbnailGenerator() {
                 <div className={styles.previewInfo}>
                   <Body1 weight="semibold">{imageFile?.name}</Body1>
                   <Caption1>{(imageFile?.size / 1024 / 1024).toFixed(2)}MB</Caption1>
-                  <div style={{ display: "flex", gap: tokens.spacingHorizontalS, marginTop: tokens.spacingVerticalS }}>
+                  <div style={{ display: "flex", gap: tokens.spacingHorizontalS, marginTop: tokens.spacingVerticalS, justifyContent: "center" }}>
                     <Button
                       size="small"
                       appearance="outline"
@@ -863,14 +894,14 @@ function ThumbnailGenerator() {
             )}
           </div>
         )}
-      </Card>
+          </div>
 
-      {/* 옵션들 */}
-      <Card className={styles.settingsCard}>
-        <Title3 style={{ marginBottom: tokens.spacingVerticalM, display: "flex", alignItems: "center" }}>
+          {/* 생성 옵션 */}
+          <div>
+        <Label weight="semibold" style={{ fontSize: tokens.fontSizeBase400, marginBottom: tokens.spacingVerticalM, display: "flex", alignItems: "center" }}>
           <SettingsRegular style={{ marginRight: tokens.spacingHorizontalXS }} />
           생성 옵션
-        </Title3>
+        </Label>
         <div className={styles.optionsGrid}>
           {/* 공통: 생성 개수 */}
           <Field>
@@ -889,10 +920,10 @@ function ThumbnailGenerator() {
           </Field>
 
         </div>
-      </Card>
+          </div>
 
-      {/* 생성 버튼 */}
-      <Card className={styles.settingsCard}>
+          {/* 생성 버튼 */}
+          <div>
         <Button
           appearance="primary"
           size="large"
@@ -900,7 +931,7 @@ function ThumbnailGenerator() {
           disabled={loading}
           style={{
             width: "100%",
-            height: "56px",
+            height: "48px",
             fontSize: tokens.fontSizeBase400,
             fontWeight: tokens.fontWeightSemibold,
             overflow: "visible",
@@ -937,12 +968,15 @@ function ThumbnailGenerator() {
             </>
           )}
         </Button>
-      </Card>
+          </div>
+        </Card>
 
-      {/* 결과 */}
-      {results.length > 0 && (
-        <div style={{ marginTop: tokens.spacingVerticalXXL }}>
-          <div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS, marginBottom: tokens.spacingVerticalM }}>
+        {/* 오른쪽 패널: 결과 갤러리 */}
+        <Card className={styles.rightPanel}>
+          {results.length > 0 ? (
+            <>
+              {/* 결과 헤더 */}
+              <div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS, marginBottom: tokens.spacingVerticalM }}>
             <span>🎉</span>
             <Title3>생성 완료!</Title3>
             {tookMs != null && (
@@ -966,18 +1000,18 @@ function ThumbnailGenerator() {
                       appearance="outline"
                       icon={<ArrowDownloadRegular />}
                       onClick={async () => {
-                        const res = await window.api.saveUrlToFile({
+                        const res = await window.api.saveThumbnailAsJpeg({
                           url: r.url,
                           suggestedName: `thumbnail-${i + 1}.jpg`,
                         });
                         if (!res?.ok && res?.message !== "canceled") {
                           showGlobalToast({ type: "error", text: `저장 실패: ${res?.message || "알 수 없는 오류"}` });
                         } else if (res?.ok) {
-                          showGlobalToast({ type: "success", text: "썸네일이 성공적으로 저장되었습니다!" });
+                          showGlobalToast({ type: "success", text: "썸네일이 JPEG로 성공적으로 저장되었습니다!" });
                         }
                       }}
                     >
-                      다운로드
+                      다운로드 (JPEG)
                     </Button>
                   </div>
                 </div>
@@ -985,17 +1019,20 @@ function ThumbnailGenerator() {
             ))}
           </div>
 
-          {/* 프롬프트 표시 숨김 처리 */}
-          {false && (
-            <div style={{ marginTop: tokens.spacingVerticalL }}>
-              <Body1 weight="semibold" style={{ marginBottom: tokens.spacingVerticalS }}>
-                🧩 생성에 사용된 프롬프트
+            </>
+          ) : (
+            /* 빈 상태 */
+            <div className={styles.emptyState}>
+              <SparkleRegular style={{ fontSize: "48px", marginBottom: tokens.spacingVerticalM, opacity: 0.3 }} />
+              <Title3 style={{ marginBottom: tokens.spacingVerticalS }}>썸네일을 생성해보세요</Title3>
+              <Body1 style={{ color: tokens.colorNeutralForeground3 }}>
+                왼쪽 패널에서 장면 설명을 입력하고<br />
+                생성 버튼을 클릭하면 여기에 결과가 표시됩니다
               </Body1>
-              <div className={styles.promptDisplay}>{usedPrompt}</div>
             </div>
           )}
-        </div>
-      )}
+        </Card>
+      </div>
     </div>
   );
 }
