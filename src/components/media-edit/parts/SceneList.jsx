@@ -13,7 +13,7 @@ import {
   ArrowDownloadRegular,
 } from "@fluentui/react-icons";
 import { ensureSceneDefaults } from "../../../utils/scenes";
-import { assignVideosToScenes, assignMediaToScenes, assignVideosWithDownload, assignImagesToMissingScenes, assignVideosToMissingScenes, assignPrioritizedMediaToMissingScenes } from "../../../services/videoAssignment";
+import { assignVideosToScenes, assignMediaToScenes, assignVideosWithDownload, assignImagesToMissingScenes, assignVideosToMissingScenes, assignPhotosToMissingScenes, assignPrioritizedMediaToMissingScenes } from "../../../services/videoAssignment";
 import { showError, showSuccess, showInfo } from "../../common/GlobalToast";
 import { isVideoFile, isImageFile } from "../../../utils/fileHelpers";
 import BottomFixedBar from "../../common/BottomFixedBar";
@@ -703,8 +703,8 @@ function SceneList({
         showInfo(`로컬 이미지 검색 중... (${stillMissingScenes.length}개 씬)`);
 
         try {
-          // assignPrioritizedMediaToMissingScenes로 로컬 영상/사진/AI 이미지 할당
-          const localAssignedScenes = await assignPrioritizedMediaToMissingScenes(updatedScenes, {
+          // assignPhotosToMissingScenes로 로컬 사진만 할당 (영상 제외)
+          const localAssignedScenes = await assignPhotosToMissingScenes(updatedScenes, {
             minScore: 0.1,
             allowDuplicates: false,
           });

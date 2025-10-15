@@ -1315,6 +1315,174 @@ export async function assignImagesToMissingScenes(scenes, options = {}) {
 }
 
 /**
+ * 미디어 없는 씬에만 사진 자동 할당 (영상 제외, 사진만)
+ * @param {Array} scenes - 씬 배열
+ * @param {Object} options - 할당 옵션
+ * @param {Function} options.onProgress - 진행 상황 콜백
+ * @returns {Array} - 사진이 할당된 씬 배열
+ */
+export async function assignPhotosToMissingScenes(scenes, options = {}) {
+  try {
+    const { minScore = 0.1, allowDuplicates = false, onProgress = null } = options;
+
+    if (!Array.isArray(scenes) || scenes.length === 0) {
+      return [];
+    }
+
+    // 미디어가 없는 씬만 필터링
+    const missingScenes = scenes
+      .map((scene, index) => ({ scene, index }))
+      .filter(({ scene }) => !scene.asset?.path && scene.text && scene.text.trim().length > 0);
+
+    if (missingScenes.length === 0) {
+      return scenes;
+    }
+
+    // 1. 사용 가능한 사진 스캔
+    const availableImagesResult = await discoverAvailableImages();
+    const { photos } = availableImagesResult;
+
+    if (photos.length === 0) {
+      console.warn("[사진 할당] 사용 가능한 사진이 없음");
+      return scenes;
+    }
+
+    // 2. 이미 사용된 사진 추적
+    const assignedScenes = [...scenes];
+    const usedPhotos = new Set();
+    let photoCount = 0;
+
+    // 이미 할당된 사진들을 추적 (중복 방지)
+    for (const scene of scenes) {
+      if (scene.asset?.path && scene.asset.type === 'image') {
+        const normalizedPath = scene.asset.path.replace(/\\/g, '/').toLowerCase();
+        // .jpg, .jpeg 파일만 추적 (.webp는 AI 이미지이므로 제외)
+        if (normalizedPath.endsWith('.jpg') || normalizedPath.endsWith('.jpeg')) {
+          usedPhotos.add(normalizedPath);
+        }
+      }
+    }
+
+    // 3. 각 씬에 대해 사진 할당
+    for (let i = 0; i < missingScenes.length; i++) {
+      const { scene, index: sceneIndex } = missingScenes[i];
+
+      // 진행 상황 콜백
+      if (onProgress) {
+        onProgress({
+          phase: 'photo',
+          current: i + 1,
+          total: missingScenes.length,
+          message: `사진 할당 중... (${i + 1}/${missingScenes.length})`,
+          photoCount,
+          currentScene: {
+            index: sceneIndex,
+            text: scene.text?.substring(0, 50) + (scene.text?.length > 50 ? '...' : ''),
+          }
+        });
+      }
+
+      let bestPhoto = null;
+      let bestScore = 0;
+      let exactMatch = false;
+
+      // 1단계: 씬에 키워드가 있으면 완전 일치 우선 검색
+      if (scene.keyword) {
+        for (const photo of photos) {
+          const normalizedPath = photo.path.replace(/\\/g, '/').toLowerCase();
+
+          // 중복 체크
+          if (!allowDuplicates && usedPhotos.has(normalizedPath)) continue;
+
+          // 완전 일치 체크 (대소문자 구분 없음)
+          if (scene.keyword.toLowerCase() === photo.keyword.toLowerCase()) {
+            bestPhoto = photo;
+            bestScore = 1.0; // 완전 일치 점수
+            exactMatch = true;
+            break; // 완전 일치 발견 시 즉시 중단
+          }
+        }
+      }
+
+      // 2단계: 완전 일치 없으면 유사도 검색
+      if (!exactMatch) {
+        for (const photo of photos) {
+          const normalizedPath = photo.path.replace(/\\/g, '/').toLowerCase();
+
+          // 중복 체크
+          if (!allowDuplicates && usedPhotos.has(normalizedPath)) continue;
+
+          const score = calculateSceneVideoScore(scene, photo);
+          if (score > bestScore && score >= minScore) {
+            bestPhoto = photo;
+            bestScore = score;
+          }
+        }
+      }
+
+      // 3단계: 키워드 매칭 실패 시 순차 할당 (fallback)
+      if (!bestPhoto) {
+        for (const photo of photos) {
+          const normalizedPath = photo.path.replace(/\\/g, '/').toLowerCase();
+          if (!allowDuplicates && usedPhotos.has(normalizedPath)) continue;
+
+          bestPhoto = photo;
+          bestScore = -1; // fallback 표시
+          break;
+        }
+      }
+
+      if (bestPhoto) {
+        const sceneKeyword = scene.keyword || bestPhoto.keyword;
+        assignedScenes[sceneIndex] = {
+          ...assignedScenes[sceneIndex],
+          keyword: sceneKeyword,
+          asset: {
+            type: 'image',
+            path: bestPhoto.path,
+            keyword: bestPhoto.keyword,
+            filename: bestPhoto.filename,
+            provider: 'photo',
+            size: bestPhoto.size,
+          }
+        };
+
+        if (!allowDuplicates) {
+          usedPhotos.add(bestPhoto.path.replace(/\\/g, '/').toLowerCase());
+        }
+
+        photoCount++;
+      }
+    }
+
+    // 완료 콜백
+    if (onProgress) {
+      onProgress({
+        phase: 'completed',
+        current: missingScenes.length,
+        total: missingScenes.length,
+        message: `완료! 사진 ${photoCount}개 할당`,
+        photoCount,
+      });
+    }
+
+    return assignedScenes;
+
+  } catch (error) {
+    console.error("[사진 할당] 오류:", error.message);
+
+    if (options.onProgress) {
+      options.onProgress({
+        phase: 'error',
+        message: `오류 발생: ${error.message}`,
+      });
+    }
+
+    return scenes;
+  }
+}
+
+/**
  * 우선순위 기반 미디어 자동 할당 (영상 → 사진 → AI 이미지)
  * @param {Array} scenes - 씬 배열
  * @param {Object} options - 할당 옵션
@@ -1808,6 +1976,7 @@ export default {
   assignVideosWithDownload,
   assignImagesToMissingScenes,
   assignVideosToMissingScenes,
+  assignPhotosToMissingScenes,
   assignPrioritizedMediaToMissingScenes,
   downloadVideoForKeyword,
   generateImageForScene,

@@ -140,6 +140,7 @@ function MediaDownloadPage() {
   const [keywordsLoaded, setKeywordsLoaded] = useState(false);
   const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState(null);
   const [completedVideosCount, setCompletedVideosCount] = useState(0);
+  const [showButtonHint, setShowButtonHint] = useState(true);
 
   // Refs
   const cancelledRef = useRef(false);
@@ -623,16 +624,70 @@ function MediaDownloadPage() {
                 </Button>
               </div>
             ) : (
-              <Button
-                appearance="primary"
-                size="large"
-                disabled={selectedKeywords.size === 0}
-                onClick={startDownload}
-                style={{ width: "100%" }}
-              >
-                <ArrowDownloadRegular style={{ marginRight: 8 }} />
-                {`${selectedKeywords.size}개 키워드로 다운로드`}
-              </Button>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <style>
+                  {`
+                    @keyframes buttonPulse {
+                      0%, 100% {
+                        transform: scale(1);
+                        box-shadow: 0 2px 12px rgba(0, 120, 212, 0.3);
+                      }
+                      50% {
+                        transform: scale(1.03);
+                        box-shadow: 0 4px 16px rgba(0, 120, 212, 0.4);
+                      }
+                    }
+                    .download-button-pulse {
+                      animation: buttonPulse 2s ease-in-out 3;
+                      background: linear-gradient(120deg, #0078d4 0%, #4a90e2 100%) !important;
+                      border: none !important;
+                      box-shadow: 0 2px 12px rgba(0, 120, 212, 0.25);
+                      transition: all 0.3s ease;
+                    }
+                    .download-button-pulse:hover {
+                      transform: translateY(-1px);
+                      box-shadow: 0 4px 16px rgba(0, 120, 212, 0.35);
+                    }
+                  `}
+                </style>
+                <Button
+                  appearance="primary"
+                  size="large"
+                  disabled={selectedKeywords.size === 0}
+                  onClick={() => {
+                    setShowButtonHint(false);
+                    startDownload();
+                  }}
+                  className={selectedKeywords.size > 0 && showButtonHint ? "download-button-pulse" : ""}
+                  style={{
+                    width: "100%",
+                    ...(selectedKeywords.size > 0 && showButtonHint ? {
+                      background: "linear-gradient(120deg, #0078d4 0%, #4a90e2 100%)",
+                      border: "none",
+                      boxShadow: "0 2px 12px rgba(0, 120, 212, 0.25)"
+                    } : {})
+                  }}
+                >
+                  <ArrowDownloadRegular style={{ marginRight: 8 }} />
+                  {`${selectedKeywords.size}개 키워드로 다운로드`}
+                </Button>
+                {selectedKeywords.size > 0 && showButtonHint && (
+                  <Text
+                    size={200}
+                    style={{
+                      textAlign: "center",
+                      color: "#0078d4",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 4,
+                      fontWeight: 500,
+                    }}
+                  >
+                    👆 준비 완료! 클릭하여 다운로드를 시작하세요
+                  </Text>
+                )}
+              </div>
             )}
           </div>
         </Card>
