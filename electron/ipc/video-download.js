@@ -1189,6 +1189,68 @@ function registerVideoDownloadIPC() {
     }
   });
 
+  // 사진 다운로드 핸들러
+  ipcMain.removeHandler("media:downloadPhoto");
+  ipcMain.handle("media:downloadPhoto", async (event, payload) => {
+    try {
+      const { url, filename, imagesPath } = payload || {};
+
+      if (!url || !filename || !imagesPath) {
+        return {
+          success: false,
+          error: "필수 매개변수가 누락되었습니다 (url, filename, imagesPath)"
+        };
+      }
+
+      // imagesPath 디렉토리 생성
+      await fs.mkdir(imagesPath, { recursive: true });
+
+      const filePath = path.join(imagesPath, filename);
+
+      const result = await downloadPhotoOptimized(url, filename, (progress) => {
+        // 진행률 업데이트 (선택사항)
+      });
+
+      return result;
+    } catch (error) {
+      console.error("[사진 다운로드 IPC] 실패:", error.message);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  });
+
+  // 영상 다운로드 핸들러
+  ipcMain.removeHandler("media:downloadVideo");
+  ipcMain.handle("media:downloadVideo", async (event, payload) => {
+    try {
+      const { url, filename, videoPath, maxFileSize = 20 } = payload || {};
+
+      if (!url || !filename || !videoPath) {
+        return {
+          success: false,
+          error: "필수 매개변수가 누락되었습니다 (url, filename, videoPath)"
+        };
+      }
+
+      // videoPath 디렉토리 생성
+      await fs.mkdir(videoPath, { recursive: true });
+
+      const result = await downloadVideoOptimized(url, filename, (progress) => {
+        // 진행률 업데이트 (선택사항)
+      }, maxFileSize);
+
+      return result;
+    } catch (error) {
+      console.error("[영상 다운로드 IPC] 실패:", error.message);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  });
+
   console.log("[ipc] video-download: 최적화된 핸들러 등록 완료 ✓");
 }
 

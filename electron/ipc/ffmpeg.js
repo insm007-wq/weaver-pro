@@ -997,7 +997,7 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
       console.log(`📹 클립 생성 중: ${i + 1}/${N}`);
     }
 
-    const vfChain = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p`;
+    const vfChain = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p`;
 
     const clipArgs = [
       "-y",
@@ -1719,7 +1719,7 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
       // 디버그 로그는 필요시에만
       // console.log(`   비디오 ${i + 1}: 원본 ${originalDuration.toFixed(2)}s, 목표 ${durSec.toFixed(2)}s, loop=${loopCount}`);
 
-      const vfChain = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p`;
+      const vfChain = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p`;
 
       const videoArgs = ["-y", "-hide_banner"];
 
@@ -1775,7 +1775,7 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
     } else if (scene.asset.type === "image") {
       // 이미지: duration 동안 정지 화면
       const imageClipOut = path.join(tempDir, `scene_${String(i).padStart(3, "0")}_${Date.now()}.mp4`);
-      const vfChain = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,format=yuv420p`;
+      const vfChain = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p`;
 
       const imageArgs = [
         "-y",

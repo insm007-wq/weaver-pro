@@ -14,7 +14,7 @@ import {
 } from "@fluentui/react-icons";
 import { ensureSceneDefaults } from "../../../utils/scenes";
 import { assignVideosToScenes, assignMediaToScenes, assignVideosWithDownload, assignImagesToMissingScenes, assignVideosToMissingScenes, assignPrioritizedMediaToMissingScenes } from "../../../services/videoAssignment";
-import { showError, showSuccess } from "../../common/GlobalToast";
+import { showError, showSuccess, showInfo } from "../../common/GlobalToast";
 import { isVideoFile, isImageFile } from "../../../utils/fileHelpers";
 import BottomFixedBar from "../../common/BottomFixedBar";
 
@@ -588,10 +588,9 @@ function SceneList({
     }
   }, [scenes, setScenes]);
 
-  // 미디어 없는 씬에 영상 다운로드 및 할당 핸들러
-  const handleAutoAssignVideosOnly = useCallback(async () => {
-    // 중복 실행 방지
-    if (videoAssignState.isActive || mediaGenerationState.isActive) {
+  // 사진 할당 (Pexels → Pixabay)
+  const handleAssignPhotos = useCallback(async () => {
+    if (isAssigning) {
       return;
     }
 
@@ -608,95 +607,227 @@ function SceneList({
       return;
     }
 
-    // 초기 상태 설정
-    setVideoAssignState({
-      isActive: true,
-      phase: "local",
-      current: 0,
-      total: missingScenes.length,
-      message: "로컬 영상 확인 중...",
-      assignedCount: 0,
-      downloadedCount: 0,
-      currentScene: null,
-    });
-
-    let finalAssignedCount = 0;
-    let finalDownloadedCount = 0;
+    setIsAssigning(true);
+    let assignedCount = 0;
+    let notFoundCount = 0;
 
     try {
-      // assignVideosWithDownload: 로컬 영상 먼저 할당 → 없으면 새로 다운로드
-      const assignedScenes = await assignVideosWithDownload(scenes, {
-        minScore: 0.1,
-        allowDuplicates: false,
-        provider: 'pexels', // 다운로드 제공자
-        downloadOptions: {
-          videosPerKeyword: 1,
-          maxFileSize: 20, // MB
-        },
-        onProgress: (progress) => {
-          // 진행 상황 업데이트
-          setVideoAssignState(prev => ({
-            ...prev,
-            phase: progress.phase,
-            current: progress.current,
-            total: progress.total,
-            message: progress.message,
-            assignedCount: progress.assignedCount || prev.assignedCount,
-            downloadedCount: progress.downloadedCount || prev.downloadedCount,
-            currentScene: progress.currentScene || null,
-          }));
+      const pexelsKey = await window.api.invoke("secrets:get", "pexelsApiKey");
+      const pixabayKey = await window.api.invoke("secrets:get", "pixabayApiKey");
 
-          // 최종 카운트 캡처
-          if (progress.phase === "completed") {
-            finalAssignedCount = progress.assignedCount || 0;
-            finalDownloadedCount = progress.downloadedCount || 0;
+      if (!pexelsKey && !pixabayKey) {
+        showError("Pexels 또는 Pixabay API 키가 설정되지 않았습니다. 설정에서 API 키를 입력해주세요.");
+        setIsAssigning(false);
+        return;
+      }
+
+      const updatedScenes = [...scenes];
+
+      for (let i = 0; i < updatedScenes.length; i++) {
+        const scene = updatedScenes[i];
+
+        // 이미 미디어가 있으면 스킵
+        if (scene.asset?.path) continue;
+
+        const keyword = scene.keyword || scene.text?.substring(0, 20);
+        if (!keyword) continue;
+
+        showInfo(`사진 검색 중... (${i + 1}/${missingScenes.length}): ${keyword}`);
+
+        try {
+          // stock.js의 searchPexelsPhotos, searchPixabayPhotos 사용
+          const searchResult = await window.api.invoke("stock:search", {
+            query: keyword,
+            perPage: 1,
+            providers: pexelsKey && pixabayKey ? ["pexels", "pixabay"] : pexelsKey ? ["pexels"] : ["pixabay"],
+            pexelsKey,
+            pixabayKey,
+            targetRes: { w: 1920, h: 1080 },
+            type: "photos"
+          });
+
+          if (searchResult?.ok && searchResult?.items?.length > 0) {
+            const photo = searchResult.items[0];
+
+            // 사진 다운로드
+            const videoSaveFolder = await window.api.getSetting("videoSaveFolder");
+            const imagesPath = `${videoSaveFolder}/images`;
+
+            // URL에서 확장자 추출
+            const urlExtension = photo.url.split('.').pop().split('?')[0].toLowerCase();
+            const fileExtension = ['webp', 'jpg', 'jpeg', 'png'].includes(urlExtension) ? urlExtension : 'jpg';
+            const safeKeyword = keyword.replace(/[^\w가-힣-]/g, "_");
+            const filename = `${safeKeyword}_photo.${fileExtension}`;
+
+            const downloadResult = await window.api.invoke("media:downloadPhoto", {
+              url: photo.url,
+              filename,
+              imagesPath
+            });
+
+            if (downloadResult?.success) {
+              // 경로 정규화 (백슬래시를 슬래시로)
+              const normalizedPath = downloadResult.filePath.replace(/\\/g, '/');
+
+              updatedScenes[i] = {
+                ...updatedScenes[i],
+                asset: {
+                  path: normalizedPath,
+                  type: "image",
+                  provider: photo.provider,
+                },
+              };
+              assignedCount++;
+            } else {
+              notFoundCount++;
+            }
+          } else {
+            notFoundCount++;
           }
-        },
-      });
+        } catch (error) {
+          console.error(`사진 검색 실패 (${keyword}):`, error);
+          notFoundCount++;
+        }
 
-      setScenes(assignedScenes);
+        // 약간의 딜레이
+        await new Promise(r => setTimeout(r, 300));
+      }
 
-      const totalAssigned = assignedScenes.filter(s => s.asset?.path).length;
-      const allComplete = assignedScenes.every(s => s.asset?.path && s.audioPath);
+      setScenes(updatedScenes);
 
-      let message = `영상 할당 완료! `;
-      if (finalDownloadedCount > 0) {
-        message += `새로 다운로드 ${finalDownloadedCount}개 + 로컬 ${finalAssignedCount - finalDownloadedCount}개`;
+      if (assignedCount > 0) {
+        showSuccess(`사진 할당 완료! ${assignedCount}개 성공${notFoundCount > 0 ? `, ${notFoundCount}개 검색 결과 없음` : ""}`);
       } else {
-        message += `로컬 영상 ${finalAssignedCount}개 할당`;
+        showError(`사진을 찾을 수 없습니다.`);
       }
-
-      if (allComplete) {
-        message += " - ✨ 모든 씬이 완성되었습니다!";
-      }
-
-      showSuccess(message);
-
-      // 완료 후 3초 뒤 자동으로 닫기
-      setTimeout(() => {
-        setVideoAssignState({
-          isActive: false,
-          phase: "idle",
-          current: 0,
-          total: 0,
-          message: "",
-          assignedCount: 0,
-          downloadedCount: 0,
-          currentScene: null,
-        });
-      }, 3000);
-
     } catch (error) {
-      console.error("[영상 다운로드 및 할당] 오류:", error);
-      showError(`영상 할당 중 오류가 발생했습니다: ${error.message}`);
-
-      setVideoAssignState(prev => ({
-        ...prev,
-        phase: "error",
-        message: `오류 발생: ${error.message}`,
-      }));
+      console.error("사진 할당 오류:", error);
+      showError(`사진 할당 중 오류가 발생했습니다: ${error.message}`);
+    } finally {
+      setIsAssigning(false);
     }
-  }, [scenes, setScenes]);
+  }, [scenes, setScenes, isAssigning]);
+
+  // 영상 할당 (Pexels → Pixabay)
+  const handleAssignVideos = useCallback(async () => {
+    if (isAssigning) {
+      return;
+    }
+
+    if (!scenes || scenes.length === 0) {
+      showError("할당할 씬이 없습니다.");
+      return;
+    }
+
+    // 미디어가 없는 씬만 필터링
+    const missingScenes = scenes.filter(scene => !scene.asset?.path && scene.text && scene.text.trim().length > 0);
+
+    if (missingScenes.length === 0) {
+      showError("미디어가 없는 씬이 없습니다.");
+      return;
+    }
+
+    setIsAssigning(true);
+    let assignedCount = 0;
+    let notFoundCount = 0;
+
+    try {
+      const pexelsKey = await window.api.invoke("secrets:get", "pexelsApiKey");
+      const pixabayKey = await window.api.invoke("secrets:get", "pixabayApiKey");
+
+      if (!pexelsKey && !pixabayKey) {
+        showError("Pexels 또는 Pixabay API 키가 설정되지 않았습니다. 설정에서 API 키를 입력해주세요.");
+        setIsAssigning(false);
+        return;
+      }
+
+      const updatedScenes = [...scenes];
+
+      for (let i = 0; i < updatedScenes.length; i++) {
+        const scene = updatedScenes[i];
+
+        // 이미 미디어가 있으면 스킵
+        if (scene.asset?.path) continue;
+
+        const keyword = scene.keyword || scene.text?.substring(0, 20);
+        if (!keyword) continue;
+
+        showInfo(`영상 검색 중... (${i + 1}/${missingScenes.length}): ${keyword}`);
+
+        try {
+          // stock.js의 searchPexels, searchPixabay 사용
+          const searchResult = await window.api.invoke("stock:search", {
+            query: keyword,
+            perPage: 1,
+            providers: pexelsKey && pixabayKey ? ["pexels", "pixabay"] : pexelsKey ? ["pexels"] : ["pixabay"],
+            pexelsKey,
+            pixabayKey,
+            targetRes: { w: 1920, h: 1080 },
+            minBytes: 0,
+            maxBytes: 20 * 1024 * 1024,
+            type: "videos"
+          });
+
+          if (searchResult?.ok && searchResult?.items?.length > 0) {
+            const video = searchResult.items[0];
+
+            // 영상 다운로드
+            const videoSaveFolder = await window.api.getSetting("videoSaveFolder");
+            const videoPath = `${videoSaveFolder}/video`;
+
+            const safeKeyword = keyword.replace(/[^\w가-힣-]/g, "_");
+            const resolution = `${video.width}x${video.height}`;
+            const filename = `${safeKeyword}_${resolution}.mp4`;
+
+            const downloadResult = await window.api.invoke("media:downloadVideo", {
+              url: video.url,
+              filename,
+              videoPath,
+              maxFileSize: 20
+            });
+
+            if (downloadResult?.success) {
+              // 경로 정규화 (백슬래시를 슬래시로)
+              const normalizedPath = downloadResult.filePath.replace(/\\/g, '/');
+
+              updatedScenes[i] = {
+                ...updatedScenes[i],
+                asset: {
+                  path: normalizedPath,
+                  type: "video",
+                  provider: video.provider,
+                },
+              };
+              assignedCount++;
+            } else {
+              notFoundCount++;
+            }
+          } else {
+            notFoundCount++;
+          }
+        } catch (error) {
+          console.error(`영상 검색 실패 (${keyword}):`, error);
+          notFoundCount++;
+        }
+
+        // 약간의 딜레이
+        await new Promise(r => setTimeout(r, 300));
+      }
+
+      setScenes(updatedScenes);
+
+      if (assignedCount > 0) {
+        showSuccess(`영상 할당 완료! ${assignedCount}개 성공${notFoundCount > 0 ? `, ${notFoundCount}개 검색 결과 없음` : ""}`);
+      } else {
+        showError(`영상을 찾을 수 없습니다.`);
+      }
+    } catch (error) {
+      console.error("영상 할당 오류:", error);
+      showError(`영상 할당 중 오류가 발생했습니다: ${error.message}`);
+    } finally {
+      setIsAssigning(false);
+    }
+  }, [scenes, setScenes, isAssigning]);
 
   // 우클릭 컨텍스트 메뉴 핸들러
   const handleContextMenu = useCallback((event, index) => {
@@ -983,24 +1114,33 @@ function SceneList({
             {scenes.length}
           </Badge>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Button
             appearance="primary"
             size="small"
             icon={<ImageRegular />}
             onClick={handleAutoAssignImagesOnly}
-            disabled={mediaGenerationState.isActive || videoAssignState.isActive || scenes.length === 0}
+            disabled={mediaGenerationState.isActive || videoAssignState.isActive || isAssigning || scenes.length === 0}
           >
-            {mediaGenerationState.isActive ? "할당 중..." : "이미지 자동 할당"}
+            {mediaGenerationState.isActive ? "할당 중..." : "AI 이미지 할당"}
+          </Button>
+          <Button
+            appearance="primary"
+            size="small"
+            icon={<ImageRegular />}
+            onClick={handleAssignPhotos}
+            disabled={videoAssignState.isActive || mediaGenerationState.isActive || isAssigning || scenes.length === 0}
+          >
+            {isAssigning ? "할당 중..." : "사진 할당"}
           </Button>
           <Button
             appearance="primary"
             size="small"
             icon={<VideoRegular />}
-            onClick={handleAutoAssignVideosOnly}
-            disabled={videoAssignState.isActive || mediaGenerationState.isActive || scenes.length === 0}
+            onClick={handleAssignVideos}
+            disabled={videoAssignState.isActive || mediaGenerationState.isActive || isAssigning || scenes.length === 0}
           >
-            {videoAssignState.isActive ? "할당 중..." : "영상 할당"}
+            {isAssigning ? "할당 중..." : "영상 할당"}
           </Button>
         </div>
       </div>
