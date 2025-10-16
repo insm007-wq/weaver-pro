@@ -42,6 +42,41 @@ if (!store.has('termsAccepted')) {
   console.log("✅ 기본 termsAccepted 설정됨");
 }
 
+// 자막 설정 초기화 (YouTube 표준 스타일)
+if (!store.has('subtitleSettings')) {
+  const defaultSubtitleSettings = {
+    enableSubtitles: true,
+    fontFamily: "noto-sans",
+    fontSize: 52,
+    fontWeight: 700,
+    lineHeight: 1.3,
+    letterSpacing: 0,
+    textColor: "#FFFFFF",
+    backgroundColor: "#000000",
+    backgroundOpacity: 75,
+    outlineColor: "#000000",
+    outlineWidth: 3,
+    shadowColor: "#000000",
+    shadowOffset: 0,
+    shadowBlur: 0,
+    position: "bottom",
+    horizontalAlign: "center",
+    verticalPadding: 60,
+    horizontalPadding: 24,
+    maxWidth: 90,
+    finePositionOffset: 0,
+    useBackground: true,
+    backgroundRadius: 4,
+    useOutline: true,
+    useShadow: false,
+    autoWrap: true,
+    maxLines: 2,
+    wordBreak: "keep-all",
+  };
+  store.set('subtitleSettings', defaultSubtitleSettings);
+  console.log("✅ 기본 자막 설정됨 (fontSize: 52)");
+}
+
 // 프로젝트 관리 함수들
 const projectStore = {
   // 모든 프로젝트 가져오기
