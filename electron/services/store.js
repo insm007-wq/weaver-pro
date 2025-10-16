@@ -36,6 +36,12 @@ if (!store.has('currentProjectId')) {
   console.log("✅ 기본 currentProjectId 설정됨");
 }
 
+// 약관 동의 여부 초기화
+if (!store.has('termsAccepted')) {
+  store.set('termsAccepted', false);
+  console.log("✅ 기본 termsAccepted 설정됨");
+}
+
 // 프로젝트 관리 함수들
 const projectStore = {
   // 모든 프로젝트 가져오기
@@ -134,6 +140,21 @@ const projectStore = {
   getCurrentProject() {
     const currentId = this.getCurrentProjectId();
     return currentId ? this.findProject(currentId) : null;
+  },
+
+  // 약관 동의 여부 확인
+  getTermsAccepted() {
+    const value = store.get('termsAccepted', false);
+    console.log(`🔍 [store.js] getTermsAccepted() 반환값: ${value}, store path: ${store.path}`);
+    return value;
+  },
+
+  // 약관 동의 설정
+  setTermsAccepted(accepted) {
+    console.log(`💾 [store.js] setTermsAccepted(${accepted}) 호출, store path: ${store.path}`);
+    store.set('termsAccepted', accepted);
+    const verify = store.get('termsAccepted');
+    console.log(`✅ [store.js] 약관 동의 저장 완료: ${accepted}, 검증 읽기: ${verify}`);
   }
 };
 

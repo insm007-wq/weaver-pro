@@ -14,6 +14,7 @@ const ScriptVoiceGenerator = lazy(() => import("./components/scriptgen/ScriptVoi
 const MediaPrepEditor = lazy(() => import("./components/media-prep/MediaPrepEditor"));
 const MediaDownloadPage = lazy(() => import("./components/media-down/MediaDownloadPage"));
 const MediaEditPage = lazy(() => import("./components/media-edit/MediaEditPage"));
+const TermsOfService = lazy(() => import("./components/TermsOfService"));
 
 const useStyles = makeStyles({
   root: {
@@ -99,9 +100,39 @@ function App() {
   const [currentPage, setCurrentPage] = useState(null);
   const [isScriptGenerating, setIsScriptGenerating] = useState(false);
   const [isVideoExporting, setIsVideoExporting] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(null); // null: 로딩 중, false: 미동의, true: 동의
   const canOpenWithoutProject = true;
   const styles = useStyles();
   const fontStyles = useFontOverrideStyles();
+
+  // 약관 동의 여부 확인
+  useEffect(() => {
+    const checkTermsAcceptance = async () => {
+      try {
+        console.log("🔍 [App.jsx] 약관 동의 여부 확인 중...");
+        console.log("🔍 [App.jsx] window.electron:", window.electron);
+        console.log("🔍 [App.jsx] window.electron.store:", window.electron?.store);
+        const accepted = await window.electron?.store?.getTermsAccepted();
+        console.log("🔍 [App.jsx] 약관 동의 상태:", accepted);
+        setTermsAccepted(accepted || false);
+      } catch (error) {
+        console.error("❌ [App.jsx] 약관 동의 여부 확인 실패:", error);
+        setTermsAccepted(false);
+      }
+    };
+    checkTermsAcceptance();
+  }, []);
+
+  const handleAcceptTerms = async () => {
+    try {
+      console.log("💾 [App.jsx] 약관 동의 저장 시도...");
+      const result = await window.electron?.store?.setTermsAccepted(true);
+      console.log("💾 [App.jsx] 약관 동의 저장 결과:", result);
+      setTermsAccepted(true);
+    } catch (error) {
+      console.error("❌ [App.jsx] 약관 동의 저장 실패:", error);
+    }
+  };
 
   // 디버깅: 상태 변경 확인
   useEffect(() => {
@@ -189,6 +220,20 @@ function App() {
       window.removeEventListener('navigate-to-download', handleNavigateToDownload);
     };
   }, []);
+
+  // 약관 동의 여부 로딩 중
+  if (termsAccepted === null) {
+    return <MemoizedLoadingFallback label="초기화 중..." />;
+  }
+
+  // 약관 미동의 시 약관 화면 표시
+  if (!termsAccepted) {
+    return (
+      <Suspense fallback={<MemoizedLoadingFallback label="약관 로딩 중..." />}>
+        <TermsOfService onAccept={handleAcceptTerms} />
+      </Suspense>
+    );
+  }
 
   return (
     <div className={mergeClasses(styles.root, fontStyles.globalFont)}>

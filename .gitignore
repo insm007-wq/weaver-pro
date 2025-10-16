@@ -55,6 +55,12 @@ nul
 electron/config.js
 
 # ========================
+# Obfuscation Backup
+# ========================
+*.obfuscated.js
+*.original.js
+
+# ========================
 # Others
 # ========================
 coverage/
