@@ -288,7 +288,19 @@ const ActionCard = memo(
         } catch (error) {
           if (error.name === "AbortError" || error.message === "작업이 취소되었습니다.") {
             console.log("⏹️ 작업 취소됨");
-            addLog("⏹️ 작업이 취소되었습니다.", "info");
+            // 취소 시에는 에러로 표시하지 않고 상태만 초기화
+            setFullVideoState({
+              isGenerating: false,
+              mode: "idle",
+              currentStep: "idle",
+              progress: { script: 0, audio: 0, images: 0, video: 0, subtitle: 0 },
+              results: { script: null, audio: null, images: [], video: null },
+              streamingScript: "",
+              error: null,
+              startTime: null,
+              logs: [],
+            });
+            setDoc(null);
           } else {
             console.error("대본 생성 오류:", error);
             setError(error.message);
