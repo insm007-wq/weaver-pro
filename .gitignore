@@ -59,6 +59,7 @@ electron/config.js
 # ========================
 *.obfuscated.js
 *.original.js
+.obfuscate-backup/
 
 # ========================
 # Others
