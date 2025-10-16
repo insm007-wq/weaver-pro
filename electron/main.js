@@ -200,6 +200,18 @@ if (!gotLock) {
     }
 
     /* -----------------------------------------------------------------------
+     * API 키 기본값 초기화 (첫 실행 시 자동 설정)
+     * -------------------------------------------------------------------- */
+    console.log("[main] Initializing default API keys...");
+    const secrets = safeRequire("services/secrets", () => require("./services/secrets"));
+    if (secrets && secrets.initializeDefaultKeys) {
+      await secrets.initializeDefaultKeys();
+      console.log("[main] Default API keys initialization completed");
+    } else {
+      console.warn("[main] secrets.initializeDefaultKeys not available");
+    }
+
+    /* -----------------------------------------------------------------------
      * 메인 윈도우
      * -------------------------------------------------------------------- */
     createMainWindow();
