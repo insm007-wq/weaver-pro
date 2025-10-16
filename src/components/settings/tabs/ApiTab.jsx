@@ -1,421 +1,520 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
+import {
+  makeStyles,
+  shorthands,
+  tokens,
+  Card,
+  Body2,
+  Caption1,
+  Title3,
+  Button,
+  Input,
+  Field,
+  Spinner,
+  Textarea,
+  Badge,
+  mergeClasses,
+} from "@fluentui/react-components";
+import {
+  KeyRegular,
+  BeakerRegular,
+  SaveRegular,
+  CheckmarkCircleRegular,
+  DismissCircleRegular,
+  ClockRegular,
+} from "@fluentui/react-icons";
+import { useContainerStyles, useCardStyles } from "../../../styles/commonStyles";
+import { handleApiError } from "@utils";
+
+const useStyles = makeStyles({
+
+  servicesGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
+    ...shorthands.gap(tokens.spacingVerticalL, tokens.spacingHorizontalL),
+    width: "100%",
+  },
+
+  serviceCard: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
+    ...shorthands.borderRadius(tokens.borderRadiusLarge),
+    ...shorthands.padding(tokens.spacingVerticalL),
+    boxShadow: "0 1px 4px rgba(0, 0, 0, 0.06)",
+    transition: "all 0.2s ease",
+    position: "relative",
+    overflow: "hidden",
+
+    "&::before": {
+      content: "''",
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      height: "3px",
+      background: `linear-gradient(90deg, ${tokens.colorBrandBackground} 0%, ${tokens.colorBrandBackground2} 100%)`,
+    },
+
+    "&:hover": {
+      transform: "translateY(-2px)",
+      boxShadow: "0 4px 16px rgba(0, 0, 0, 0.1)",
+      ...shorthands.borderColor(tokens.colorBrandStroke1),
+    },
+  },
+
+  specialCard: {
+    gridColumn: "1 / -1",
+    maxWidth: "700px",
+    margin: "0 auto",
+  },
+
+  cardHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: tokens.spacingVerticalM,
+  },
+
+  serviceInfo: {
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.gap(tokens.spacingVerticalXXS),
+    flex: 1,
+  },
+
+  serviceName: {
+    fontSize: tokens.fontSizeBase400,
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground1,
+    display: "flex",
+    alignItems: "center",
+    ...shorthands.gap(tokens.spacingHorizontalS),
+    lineHeight: "1.3",
+  },
+
+  serviceDescription: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground3,
+    lineHeight: "1.3",
+  },
+
+  statusBadge: {
+    flexShrink: 0,
+    marginLeft: tokens.spacingHorizontalM,
+  },
+
+  inputSection: {
+    marginBottom: tokens.spacingVerticalM,
+  },
+
+  actionRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    ...shorthands.gap(tokens.spacingHorizontalS),
+    marginBottom: tokens.spacingVerticalS,
+  },
+
+  actionButtons: {
+    display: "flex",
+    alignItems: "center",
+    ...shorthands.gap(tokens.spacingHorizontalS),
+  },
+
+  statusMessage: {
+    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
+    ...shorthands.borderRadius(tokens.borderRadiusMedium),
+    display: "flex",
+    alignItems: "center",
+    ...shorthands.gap(tokens.spacingHorizontalS),
+    fontSize: tokens.fontSizeBase200,
+  },
+
+  successMessage: {
+    backgroundColor: tokens.colorPaletteGreenBackground1,
+    color: tokens.colorPaletteGreenForeground1,
+    ...shorthands.border("1px", "solid", tokens.colorPaletteGreenBorder1),
+  },
+
+  errorMessage: {
+    backgroundColor: tokens.colorPaletteRedBackground1,
+    color: tokens.colorPaletteRedForeground1,
+    ...shorthands.border("1px", "solid", tokens.colorPaletteRedBorder1),
+    wordWrap: "break-word",
+    wordBreak: "break-word",
+    overflowWrap: "break-word",
+    whiteSpace: "pre-wrap",
+    maxWidth: "100%",
+    overflow: "hidden",
+  },
+
+  timestamp: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase100,
+    whiteSpace: "nowrap",
+  },
+
+  textareaField: {
+    marginBottom: tokens.spacingVerticalM,
+  },
+
+  fileActions: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    ...shorthands.gap(tokens.spacingHorizontalS),
+  },
+
+  compactInput: {
+    "& .fui-Field__label": {
+      fontSize: tokens.fontSizeBase200,
+      marginBottom: tokens.spacingVerticalXXS,
+    },
+    "& .fui-Field__hint": {
+      fontSize: tokens.fontSizeBase100,
+    },
+  },
+
+  compactButton: {
+    minHeight: "32px",
+    fontSize: tokens.fontSizeBase200,
+    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalM),
+  },
+});
 
 export default function ApiTab() {
-  const [openaiKey, setOpenaiKey] = useState("");
+  const containerStyles = useContainerStyles();
+  const cardStyles = useCardStyles();
+  const s = useStyles();
+
+  // ===== 상태 =====
   const [anthropicKey, setAnthropicKey] = useState("");
   const [replicateKey, setReplicateKey] = useState("");
-
   const [pexelsKey, setPexelsKey] = useState("");
   const [pixabayKey, setPixabayKey] = useState("");
-
-  const [minimaxGroupId, setMinimaxGroupId] = useState("");
-  const [minimaxKey, setMinimaxKey] = useState("");
-
   const [googleTtsKey, setGoogleTtsKey] = useState("");
 
   const [status, setStatus] = useState({
-    openai: null,
     anthropic: null,
     replicate: null,
     pexels: null,
     pixabay: null,
-    minimax: null,
     googleTts: null,
   });
+
   const [loading, setLoading] = useState({
-    openai: false,
     anthropic: false,
     replicate: false,
     pexels: false,
     pixabay: false,
-    minimax: false,
     googleTts: false,
   });
-  const [toast, setToast] = useState(null);
 
+  // ===== 초기 로드 =====
   useEffect(() => {
     (async () => {
-      const [ok, ak, rk, gidSecret, gidOldSetting, mk, gk, pxk, pbk] = await Promise.all([
-        window.api.getSecret("openaiKey"),
+      const [ak, rk, gk, pxk, pbk] = await Promise.all([
         window.api.getSecret("anthropicKey"),
         window.api.getSecret("replicateKey"),
-        window.api.getSecret("minimaxGroupId"),
-        window.api.getSetting("miniMaxGroupId"),
-        window.api.getSecret("minimaxKey"),
         window.api.getSecret("googleTtsApiKey"),
         window.api.getSecret("pexelsApiKey"),
         window.api.getSecret("pixabayApiKey"),
       ]);
-
-      if (!gidSecret && gidOldSetting) {
-        try {
-          await window.api.setSecret({ key: "minimaxGroupId", value: String(gidOldSetting || "").trim() });
-        } catch {}
-      }
-
-      setOpenaiKey(ok || "");
       setAnthropicKey(ak || "");
       setReplicateKey(rk || "");
-      setMinimaxGroupId((gidSecret || gidOldSetting || "").trim());
-      setMinimaxKey(mk || "");
       setGoogleTtsKey(gk || "");
       setPexelsKey(pxk || "");
       setPixabayKey(pbk || "");
     })();
   }, []);
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 1600);
-    return () => clearTimeout(t);
-  }, [toast]);
+  // ===== 유틸 =====
+  const setBusy = (k, v) => setLoading((x) => ({ ...x, [k]: v }));
+  const setStat = (k, ok, msg) => setStatus((x) => ({ ...x, [k]: { ok, msg, ts: Date.now() } }));
+  const setSaved = (k) => setStatus((x) => ({ ...x, [k]: { ok: null, msg: "키 저장됨", ts: Date.now() } }));
+  const saveSecret = async (key, val) => window.api.setSecret({ key, value: (val || "").trim() });
+  const stringifyErr = (m) => (typeof m === "string" ? m : JSON.stringify(m ?? ""));
 
-  const setBusy = (k, v) => setLoading((s) => ({ ...s, [k]: v }));
-  const setStat = (k, ok, msg) => setStatus((s) => ({ ...s, [k]: { ok, msg, ts: Date.now() } }));
-  const setSaved = (k) => setStatus((s) => ({ ...s, [k]: { ok: null, msg: "키 저장됨", ts: Date.now() } }));
-
-  /* ---------------- 저장: 저장 시 상태 = Saved ---------------- */
-  const saveOpenAI = async () => {
-    await window.api.setSecret({ key: "openaiKey", value: (openaiKey || "").trim() });
-    setSaved("openai");
-    setToast({ type: "success", text: "OpenAI 키 저장 완료" });
-  };
+  // ===== 저장 =====
   const saveAnthropic = async () => {
-    await window.api.setSecret({ key: "anthropicKey", value: (anthropicKey || "").trim() });
+    await saveSecret("anthropicKey", anthropicKey);
     setSaved("anthropic");
-    setToast({ type: "success", text: "Anthropic 키 저장 완료" });
   };
   const saveReplicate = async () => {
-    await window.api.setSecret({ key: "replicateKey", value: (replicateKey || "").trim() });
+    await saveSecret("replicateKey", replicateKey);
     setSaved("replicate");
-    setToast({ type: "success", text: "Replicate 토큰 저장 완료" });
   };
   const savePexels = async () => {
-    await window.api.setSecret({ key: "pexelsApiKey", value: (pexelsKey || "").trim() });
+    await saveSecret("pexelsApiKey", pexelsKey);
     setSaved("pexels");
-    setToast({ type: "success", text: "Pexels 키 저장 완료" });
   };
   const savePixabay = async () => {
-    await window.api.setSecret({ key: "pixabayApiKey", value: (pixabayKey || "").trim() });
+    await saveSecret("pixabayApiKey", pixabayKey);
     setSaved("pixabay");
-    setToast({ type: "success", text: "Pixabay 키 저장 완료" });
-  };
-  const saveMiniMax = async () => {
-    await Promise.all([
-      window.api.setSecret({ key: "minimaxGroupId", value: (minimaxGroupId || "").trim() }),
-      window.api.setSecret({ key: "minimaxKey", value: (minimaxKey || "").trim() }),
-    ]);
-    setSaved("minimax");
-    setToast({ type: "success", text: "MiniMax 설정 저장 완료" });
   };
   const saveGoogleTts = async () => {
-    await window.api.setSecret({ key: "googleTtsApiKey", value: (googleTtsKey || "").trim() });
+    await saveSecret("googleTtsApiKey", googleTtsKey);
     setSaved("googleTts");
-    setToast({ type: "success", text: "Google TTS 키 저장 완료" });
   };
 
-  /* ---------------- 테스트: 성공 시 Connected ---------------- */
-  const handleTestOpenAI = async () => {
-    if (!openaiKey?.trim()) {
-      setToast({ type: "error", text: "OpenAI 키를 입력하세요." });
-      setStat("openai", false, "키 미입력");
-      return;
-    }
-    setBusy("openai", true);
-    setStat("openai", false, "");
-    try {
-      const res = await window.api.testOpenAI?.(openaiKey.trim());
-      res?.ok
-        ? setStat("openai", true, `연결 성공 (model: ${res?.model ?? "gpt-5-mini"})`)
-        : setStat("openai", false, `실패: ${res?.status ?? ""} ${stringifyErr(res?.message)}`);
-      setToast({ type: res?.ok ? "success" : "error", text: res?.ok ? "OpenAI 연결 성공" : "OpenAI 실패" });
-    } catch (e) {
-      setStat("openai", false, `오류: ${e?.message || e}`);
-      setToast({ type: "error", text: "OpenAI 오류" });
-    } finally {
-      setBusy("openai", false);
-    }
-  };
-
-  const handleTestAnthropic = async () => {
+  // ===== 테스트 =====
+  const testAnthropic = async () => {
+    if (!anthropicKey?.trim()) return setStat("anthropic", false, "키 미입력");
     setBusy("anthropic", true);
     setStat("anthropic", false, "");
     try {
       const res = await window.api.testAnthropic?.(anthropicKey.trim());
       res?.ok ? setStat("anthropic", true, "연결 성공") : setStat("anthropic", false, `실패: ${stringifyErr(res?.message)}`);
-      setToast({ type: res?.ok ? "success" : "error", text: res?.ok ? "Anthropic 연결 성공" : "Anthropic 실패" });
     } catch (e) {
-      setStat("anthropic", false, `오류: ${e?.message || e}`);
-      setToast({ type: "error", text: "Anthropic 오류" });
+      const { message } = handleApiError(e, "api_test", {
+        metadata: { service: "anthropic", action: "test_connection" }
+      });
+      setStat("anthropic", false, `오류: ${message}`);
     } finally {
       setBusy("anthropic", false);
     }
   };
 
-  const handleTestReplicate = async () => {
+  const testReplicate = async () => {
     setBusy("replicate", true);
     setStat("replicate", false, "");
     try {
       const res = await window.api.testReplicate?.(replicateKey.trim());
       res?.ok
         ? setStat("replicate", true, `연결 성공 (models: ${res.count})`)
-        : setStat("replicate", false, `실패: ${res?.status ?? ""} ${stringifyErr(res?.message)}`);
-      setToast({ type: res?.ok ? "success" : "error", text: res?.ok ? "Replicate 연결 성공" : "Replicate 실패" });
+        : setStat("replicate", false, `실패: ${stringifyErr(res?.message)}`);
     } catch (e) {
-      setStat("replicate", false, `오류: ${e?.message || e}`);
-      setToast({ type: "error", text: "Replicate 오류" });
+      const { message } = handleApiError(e, "api_test", {
+        metadata: { service: "replicate", action: "test_connection" }
+      });
+      setStat("replicate", false, `오류: ${message}`);
     } finally {
       setBusy("replicate", false);
     }
   };
 
-  const handleTestPexels = async () => {
-    if (!pexelsKey?.trim()) {
-      setToast({ type: "error", text: "Pexels 키를 입력하세요." });
-      setStat("pexels", false, "키 미입력");
-      return;
-    }
+  const testPexels = async () => {
+    if (!pexelsKey?.trim()) return setStat("pexels", false, "키 미입력");
     setBusy("pexels", true);
     setStat("pexels", false, "");
     try {
       const res = await window.api.testPexels?.(pexelsKey.trim());
       res?.ok
-        ? setStat("pexels", true, `연결 성공 (${res?.endpoint ?? "photos"})${res?.remaining != null ? `, 남은 호출수 ${res.remaining}` : ""}`)
-        : setStat("pexels", false, `실패: ${res?.status ?? ""} ${stringifyErr(res?.message)}`);
-      setToast({ type: res?.ok ? "success" : "error", text: res?.ok ? "Pexels 연결 성공" : "Pexels 실패" });
+        ? setStat(
+            "pexels",
+            true,
+            `연결 성공 (${res?.endpoint ?? "photos"})${res?.remaining != null ? `, 남은 호출수 ${res.remaining}` : ""}`
+          )
+        : setStat("pexels", false, `실패: ${stringifyErr(res?.message)}`);
     } catch (e) {
-      setStat("pexels", false, `오류: ${e?.message || e}`);
-      setToast({ type: "error", text: "Pexels 오류" });
+      const { message } = handleApiError(e, "api_test", {
+        metadata: { service: "pexels", action: "test_connection" }
+      });
+      setStat("pexels", false, `오류: ${message}`);
     } finally {
       setBusy("pexels", false);
     }
   };
 
-  const handleTestPixabay = async () => {
-    if (!pixabayKey?.trim()) {
-      setToast({ type: "error", text: "Pixabay 키를 입력하세요." });
-      setStat("pixabay", false, "키 미입력");
-      return;
-    }
+  const testPixabay = async () => {
+    if (!pixabayKey?.trim()) return setStat("pixabay", false, "키 미입력");
     setBusy("pixabay", true);
     setStat("pixabay", false, "");
     try {
       const res = await window.api.testPixabay?.(pixabayKey.trim());
       res?.ok
         ? setStat("pixabay", true, `연결 성공 (${res?.endpoint ?? "photos"})${res?.hits != null ? `, 샘플 히트 ${res.hits}` : ""}`)
-        : setStat("pixabay", false, `실패: ${res?.status ?? ""} ${stringifyErr(res?.message)}`);
-      setToast({ type: res?.ok ? "success" : "error", text: res?.ok ? "Pixabay 연결 성공" : "Pixabay 실패" });
+        : setStat("pixabay", false, `실패: ${stringifyErr(res?.message)}`);
     } catch (e) {
-      setStat("pixabay", false, `오류: ${e?.message || e}`);
-      setToast({ type: "error", text: "Pixabay 오류" });
+      const { message } = handleApiError(e, "api_test", {
+        metadata: { service: "pixabay", action: "test_connection" }
+      });
+      setStat("pixabay", false, `오류: ${message}`);
     } finally {
       setBusy("pixabay", false);
     }
   };
 
-  const handleTestMiniMax = async () => {
-    setBusy("minimax", true);
-    setStat("minimax", false, "");
-    try {
-      const res = await window.api.testMiniMax?.({ key: (minimaxKey || "").trim(), groupId: (minimaxGroupId || "").trim() });
-      res?.ok ? setStat("minimax", true, "연결 성공") : setStat("minimax", false, `실패: ${stringifyErr(res?.message)}`);
-      setToast({ type: res?.ok ? "success" : "error", text: res?.ok ? "MiniMax 연결 성공" : "MiniMax 실패" });
-    } catch (e) {
-      setStat("minimax", false, `오류: ${e?.message || e}`);
-      setToast({ type: "error", text: "MiniMax 오류" });
-    } finally {
-      setBusy("minimax", false);
-    }
-  };
-
-  const handleTestGoogleTts = async () => {
+  const testGoogleTts = async () => {
     setBusy("googleTts", true);
     setStat("googleTts", false, "");
     try {
       const res = await window.api.testGoogleTTS?.(googleTtsKey.trim());
-      res?.ok ? setStat("googleTts", true, `연결 성공 (voices: ${res.voices})`) : setStat("googleTts", false, `실패: ${stringifyErr(res?.message)}`);
-      setToast({ type: res?.ok ? "success" : "error", text: res?.ok ? "Google TTS 연결 성공" : "Google TTS 실패" });
+      res?.ok
+        ? setStat("googleTts", true, `연결 성공 (voices: ${res.voices})`)
+        : setStat("googleTts", false, `실패: ${stringifyErr(res?.message)}`);
     } catch (e) {
-      setStat("googleTts", false, `오류: ${e?.message || e}`);
-      setToast({ type: "error", text: "Google TTS 오류" });
+      const { message } = handleApiError(e, "api_test", {
+        metadata: { service: "googleTts", action: "test_connection" }
+      });
+      setStat("googleTts", false, `오류: ${message}`);
     } finally {
       setBusy("googleTts", false);
     }
   };
 
+
+
+  const services = [
+    {
+      key: "anthropic",
+      name: "🤖 Anthropic",
+      description: "Claude 모델을 사용한 고급 대화형 AI 및 복잡한 추론 작업",
+      value: anthropicKey,
+      setValue: setAnthropicKey,
+      placeholder: "sk-ant-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      hint: "Anthropic Console에서 발급받은 API 키를 입력하세요",
+      onSave: saveAnthropic,
+      onTest: testAnthropic,
+      status: status.anthropic,
+      loading: loading.anthropic,
+    },
+    {
+      key: "replicate",
+      name: "🔁 Replicate",
+      description: "다양한 AI 모델 호스팅 플랫폼 - 이미지 생성, 영상 처리 등",
+      value: replicateKey,
+      setValue: setReplicateKey,
+      placeholder: "r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      hint: "Replicate 대시보드에서 생성한 API 토큰을 입력하세요",
+      onSave: saveReplicate,
+      onTest: testReplicate,
+      status: status.replicate,
+      loading: loading.replicate,
+    },
+    {
+      key: "pexels",
+      name: "🖼️ Pexels",
+      description: "고품질 무료 스톡 사진 및 이미지 라이브러리 서비스",
+      value: pexelsKey,
+      setValue: setPexelsKey,
+      placeholder: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      hint: "Pexels API 페이지에서 발급받은 키를 입력하세요",
+      onSave: savePexels,
+      onTest: testPexels,
+      status: status.pexels,
+      loading: loading.pexels,
+    },
+    {
+      key: "pixabay",
+      name: "📦 Pixabay",
+      description: "무료 이미지, 벡터, 동영상 리소스 제공 플랫폼",
+      value: pixabayKey,
+      setValue: setPixabayKey,
+      placeholder: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      hint: "Pixabay API 설정에서 확인할 수 있는 API 키를 입력하세요",
+      onSave: savePixabay,
+      onTest: testPixabay,
+      status: status.pixabay,
+      loading: loading.pixabay,
+    },
+    {
+      key: "googleTts",
+      name: "🗣️ Google TTS",
+      description: "고품질 인공 지능 기반 음성 합성 서비스",
+      value: googleTtsKey,
+      setValue: setGoogleTtsKey,
+      placeholder: "AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      hint: "Google Cloud Console에서 생성한 Text-to-Speech API 키를 입력하세요",
+      onSave: saveGoogleTts,
+      onTest: testGoogleTts,
+      status: status.googleTts,
+      loading: loading.googleTts,
+    },
+  ];
+
+  const getStatusBadge = (status) => {
+    if (!status) {
+      return (
+        <Badge appearance="outline" color="subtle" icon={<ClockRegular />} className={s.statusBadge}>
+          미테스트
+        </Badge>
+      );
+    }
+
+    if (status.ok === true) {
+      return (
+        <Badge appearance="tint" color="success" icon={<CheckmarkCircleRegular />} className={s.statusBadge}>
+          연결됨
+        </Badge>
+      );
+    }
+
+    if (status.ok === false) {
+      return (
+        <Badge appearance="tint" color="danger" icon={<DismissCircleRegular />} className={s.statusBadge}>
+          실패
+        </Badge>
+      );
+    }
+
+    return (
+      <Badge appearance="tint" color="brand" icon={<SaveRegular />} className={s.statusBadge}>
+        저장됨
+      </Badge>
+    );
+  };
+
   return (
-    <div className="space-y-6 relative">
-      {/* Toast */}
-      <div aria-live="polite" className="pointer-events-none fixed right-4 top-4 z-50">
-        {toast && (
-          <div className={`pointer-events-auto px-4 py-2 rounded-lg shadow-lg text-white ${toast.type === "success" ? "bg-green-600" : "bg-red-600"}`}>
-            {toast.text}
-          </div>
-        )}
+    <div className={containerStyles.container}>
+      {/* Services Grid */}
+      <div className={s.servicesGrid}>
+        {services.map((service) => (
+          <Card key={service.key} className={s.serviceCard}>
+            <div className={s.cardHeader}>
+              <div className={s.serviceInfo}>
+                <div className={s.serviceName}>{service.name}</div>
+                <Caption1 className={s.serviceDescription}>{service.description}</Caption1>
+              </div>
+              {getStatusBadge(service.status)}
+            </div>
+
+            <div className={s.inputSection}>
+              <Field label="API Key" hint={service.hint} className={s.compactInput}>
+                <Input
+                  type="password"
+                  value={service.value}
+                  onChange={(_, data) => service.setValue(data.value)}
+                  placeholder={service.placeholder}
+                  contentBefore={<KeyRegular />}
+                  size="small"
+                />
+              </Field>
+            </div>
+
+            <div className={s.actionRow}>
+              <div className={s.actionButtons}>
+                <Button appearance="secondary" icon={<SaveRegular />} onClick={service.onSave} className={s.compactButton} size="small">
+                  저장
+                </Button>
+                <Button
+                  appearance="primary"
+                  icon={service.loading ? <Spinner size="tiny" /> : <BeakerRegular />}
+                  disabled={service.loading}
+                  onClick={service.onTest}
+                  className={s.compactButton}
+                  size="small"
+                >
+                  {service.loading ? "테스트 중..." : "테스트"}
+                </Button>
+              </div>
+              {service.status?.ts && <div className={s.timestamp}>마지막 확인: {new Date(service.status.ts).toLocaleTimeString()}</div>}
+            </div>
+
+            {service.status?.msg && (
+              <div className={mergeClasses(
+                s.statusMessage,
+                service.status.ok === false ? s.errorMessage : s.successMessage
+              )}>
+                {service.status.ok ? <CheckmarkCircleRegular /> : <DismissCircleRegular />}
+                <Caption1>{service.status.msg}</Caption1>
+              </div>
+            )}
+          </Card>
+        ))}
       </div>
-
-      {/* OpenAI */}
-      <Section title="🧠 OpenAI API Key" status={status.openai} loading={loading.openai} onTest={handleTestOpenAI} onSave={saveOpenAI}>
-        <input
-          type="password"
-          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-          value={openaiKey}
-          onChange={(e) => setOpenaiKey(e.target.value)}
-          placeholder="OpenAI API Key (sk-...)"
-          autoComplete="off"
-          spellCheck={false}
-        />
-      </Section>
-
-      {/* Anthropic */}
-      <Section title="🤖 Anthropic API Key" status={status.anthropic} loading={loading.anthropic} onTest={handleTestAnthropic} onSave={saveAnthropic}>
-        <input
-          type="password"
-          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-          value={anthropicKey}
-          onChange={(e) => setAnthropicKey(e.target.value)}
-          placeholder="Anthropic API Key"
-          autoComplete="off"
-          spellCheck={false}
-        />
-      </Section>
-
-      {/* Replicate */}
-      <Section title="🔁 Replicate API Token" status={status.replicate} loading={loading.replicate} onTest={handleTestReplicate} onSave={saveReplicate}>
-        <input
-          type="password"
-          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-          value={replicateKey}
-          onChange={(e) => setReplicateKey(e.target.value)}
-          placeholder="API Token"
-          autoComplete="off"
-          spellCheck={false}
-        />
-      </Section>
-
-      {/* Pexels */}
-      <Section title="🖼️ Pexels API Key" status={status.pexels} loading={loading.pexels} onTest={handleTestPexels} onSave={savePexels}>
-        <input
-          type="password"
-          value={pexelsKey}
-          onChange={(e) => setPexelsKey(e.target.value)}
-          placeholder="Pexels API Key"
-          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-          autoComplete="off"
-          spellCheck={false}
-        />
-      </Section>
-
-      {/* Pixabay */}
-      <Section title="📦 Pixabay API Key" status={status.pixabay} loading={loading.pixabay} onTest={handleTestPixabay} onSave={savePixabay}>
-        <input
-          type="password"
-          value={pixabayKey}
-          onChange={(e) => setPixabayKey(e.target.value)}
-          placeholder="Pixabay API Key"
-          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-          autoComplete="off"
-          spellCheck={false}
-        />
-      </Section>
-
-      {/* MiniMax */}
-      <Section title="🧩 MiniMax API" status={status.minimax} loading={loading.minimax} onTest={handleTestMiniMax} onSave={saveMiniMax}>
-        <div className="flex gap-2 w-full">
-          <input
-            type="text"
-            value={minimaxGroupId}
-            onChange={(e) => setMinimaxGroupId(e.target.value)}
-            placeholder="Group ID (예: 1940...)"
-            className="w-1/2 px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <input
-            type="password"
-            value={minimaxKey}
-            onChange={(e) => setMinimaxKey(e.target.value)}
-            placeholder="MiniMax Secret Key"
-            className="w-1/2 px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </div>
-      </Section>
-
-      {/* Google TTS */}
-      <Section title="🗣️ Google Cloud Text-to-Speech" status={status.googleTts} loading={loading.googleTts} onTest={handleTestGoogleTts} onSave={saveGoogleTts}>
-        <input
-          type="password"
-          value={googleTtsKey}
-          onChange={(e) => setGoogleTtsKey(e.target.value)}
-          placeholder="Google Cloud API Key (Text-to-Speech)"
-          className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-          autoComplete="off"
-          spellCheck={false}
-        />
-      </Section>
     </div>
   );
-}
-
-/* ---------- 재사용 컴포넌트 ---------- */
-
-function Section({ title, status, loading, onTest, onSave, children }) {
-  const borderClass = useMemo(() => {
-    if (!status) return "border-gray-200"; // Not tested
-    if (status.ok === true) return "border-green-300"; // Connected
-    if (status.ok === false) return "border-red-300"; // Failed
-    return "border-gray-200"; // Saved (ok === null)
-  }, [status]);
-
-  return (
-    <div className={`p-4 rounded-xl border ${borderClass} bg-white`}>
-      <div className="flex items-center justify-between mb-2">
-        <label className="font-medium text-sm">{title}</label>
-        <StatusBadge status={status} />
-      </div>
-
-      <div className="flex items-center gap-2 w-full">{children}</div>
-
-      <div className="mt-3 flex items-center gap-3">
-        <button onClick={onSave} className="text-sm px-3 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">
-          저장
-        </button>
-        <button
-          onClick={onTest}
-          disabled={loading}
-          className="text-sm px-3 py-2 bg-gray-900 text-white rounded-lg hover:bg-black disabled:opacity-60 flex items-center gap-2"
-        >
-          {loading && <Spinner />}
-          {loading ? "테스트 중..." : "테스트"}
-        </button>
-        {status?.ts && <span className="text-xs text-gray-500">마지막 확인: {new Date(status.ts).toLocaleTimeString()}</span>}
-      </div>
-
-      {status?.msg && (
-        <p className={`text-xs mt-2 ${status.ok === false ? "text-red-600" : status.ok === true ? "text-green-600" : "text-gray-600"}`}>{status.msg}</p>
-      )}
-    </div>
-  );
-}
-
-function StatusBadge({ status }) {
-  if (!status) return <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700 border border-gray-200">Not tested</span>;
-  if (status.ok === true) return <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800 border border-green-200">✅ Connected</span>;
-  if (status.ok === false) return <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700 border border-red-200">❌ Failed</span>;
-  return <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700 border border-gray-200">Saved</span>;
-}
-
-function Spinner() {
-  return (
-    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-    </svg>
-  );
-}
-
-function stringifyErr(m) {
-  return typeof m === "string" ? m : JSON.stringify(m ?? "");
 }

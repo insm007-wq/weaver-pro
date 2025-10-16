@@ -1,102 +1,251 @@
-// src/components/SettingsPage.jsx
-import { useState, Suspense, lazy, useRef, useLayoutEffect } from "react";
+import { useState, Suspense, lazy, useRef, useLayoutEffect, useEffect } from "react";
+import {
+  makeStyles,
+  shorthands,
+  tokens,
+  Card,
+  Body1,
+  Title1,
+  Title2,
+  Subtitle1,
+  Button,
+  Tab,
+  TabList,
+  Spinner,
+  Divider,
+} from "@fluentui/react-components";
+import { useHeaderStyles } from "../styles/commonStyles";
+import {
+  SettingsRegular,
+  KeyRegular,
+  BrainCircuitRegular,
+  SubtitlesRegular,
+  ChevronLeftRegular,
+} from "@fluentui/react-icons";
+import AdminPasswordDialog from "./settings/parts/AdminPasswordDialog";
 
-// 탭 컴포넌트 lazy-load (기존 탭 그대로 재사용)
+// lazy tabs
 const DefaultsTab = lazy(() => import("./settings/tabs/DefaultsTab"));
 const ApiTab = lazy(() => import("./settings/tabs/ApiTab"));
 const PromptTab = lazy(() => import("./settings/tabs/PromptTab"));
-const ThumbnailTab = lazy(() => import("./settings/tabs/ThumbnailTab"));
 const SubtitleTab = lazy(() => import("./settings/tabs/SubtitleTab"));
-const AppearanceTab = lazy(() => import("./settings/tabs/AppearanceTab"));
 
-const tabs = [
-  { key: "API 설정", name: "API 설정", icon: "🔐", Comp: ApiTab },
-  { key: "기본값", name: "기본값", icon: "⚙️", Comp: DefaultsTab },
-  { key: "프롬프트", name: "프롬프트", icon: "🧠", Comp: PromptTab },
-  { key: "썸네일", name: "썸네일", icon: "🖼️", Comp: ThumbnailTab },
-  { key: "자막", name: "자막", icon: "💬", Comp: SubtitleTab },
-  { key: "외관", name: "외관", icon: "🎨", Comp: AppearanceTab },
+const useStyles = makeStyles({
+  root: {
+    maxWidth: "1200px",
+    ...shorthands.margin("0", "auto"),
+    ...shorthands.padding(tokens.spacingVerticalXL, tokens.spacingHorizontalL),
+  },
+
+  pageHeader: {
+    ...shorthands.margin(0, 0, tokens.spacingVerticalL),
+  },
+  pageTitle: {
+    display: "flex",
+    alignItems: "center",
+    columnGap: tokens.spacingHorizontalM,
+  },
+  pageDesc: {
+    color: tokens.colorNeutralForeground3,
+    marginTop: tokens.spacingVerticalXS,
+    fontSize: tokens.fontSizeBase300,
+  },
+  hairline: {
+    ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke2),
+    marginTop: tokens.spacingVerticalM,
+  },
+
+  mainCard: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
+    ...shorthands.borderRadius(tokens.borderRadiusLarge),
+    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+    minHeight: "640px",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+  tabListWrap: {
+    backgroundColor: tokens.colorNeutralBackground2,
+    ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke2),
+    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalL),
+  },
+
+  tabContent: {
+    flex: 1,
+    ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalL),
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
+  },
+  sectionLead: {
+    marginBottom: tokens.spacingVerticalM,
+  },
+  scroll: {
+    flex: 1,
+    overflowY: "auto",
+    minWidth: 0,
+  },
+
+  backButton: {
+    position: "absolute",
+    top: tokens.spacingVerticalL,
+    left: tokens.spacingHorizontalL,
+    zIndex: 10,
+  },
+});
+
+// 전체 탭 정의 (관리자 전용 탭 포함)
+const allTabs = [
+  { key: "api", name: "API 설정", icon: <KeyRegular />, Comp: ApiTab, description: "외부 서비스 API 키 및 설정", adminOnly: true },
+  { key: "defaults", name: "기본값", icon: <SettingsRegular />, Comp: DefaultsTab, description: "애플리케이션 기본 설정", adminOnly: true },
+  { key: "prompt", name: "프롬프트", icon: <BrainCircuitRegular />, Comp: PromptTab, description: "AI 프롬프트 템플릿 관리", adminOnly: false },
+  { key: "subtitle", name: "자막", icon: <SubtitlesRegular />, Comp: SubtitleTab, description: "자막 및 텍스트 설정", adminOnly: false },
 ];
 
-export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState("기본값");
-  const ActiveComp = tabs.find((t) => t.key === activeTab)?.Comp ?? DefaultsTab;
+export default function SettingsPage({ onBack }) {
+  const styles = useStyles();
+  const headerStyles = useHeaderStyles();
 
-  // 💡 썸네일 생성기와 동일한 고정 폭 로직
+  // 관리자 모드 상태
+  const [isAdminMode, setIsAdminMode] = useState(() => {
+    // sessionStorage에서 관리자 모드 복원
+    return sessionStorage.getItem("adminMode") === "true";
+  });
+  const [clickCount, setClickCount] = useState(0);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const clickTimerRef = useRef(null);
+
+  // 관리자 모드에 따라 탭 필터링
+  const tabs = isAdminMode ? allTabs : allTabs.filter((t) => !t.adminOnly);
+
+  const [selectedTab, setSelectedTab] = useState(tabs[0]?.key || "prompt");
+  const active = tabs.find((t) => t.key === selectedTab) ?? tabs[0];
+
+  // 폭 고정 계산(스크롤바 점프 방지)
   const containerRef = useRef(null);
   const [fixedWidthPx, setFixedWidthPx] = useState(null);
-
   useLayoutEffect(() => {
     if (!fixedWidthPx && containerRef.current) {
-      const px = Math.round(containerRef.current.getBoundingClientRect().width);
-      if (px > 0) setFixedWidthPx(px);
+      const w = Math.round(containerRef.current.getBoundingClientRect().width);
+      if (w > 0) setFixedWidthPx(w);
     }
   }, [fixedWidthPx]);
 
+  // 관리자 모드 변경 시 sessionStorage 저장
+  useEffect(() => {
+    sessionStorage.setItem("adminMode", isAdminMode.toString());
+  }, [isAdminMode]);
+
+  // 제목 클릭 핸들러 (12번 클릭 감지)
+  const handleTitleClick = () => {
+    // 모달이 이미 열려있으면 무시
+    if (showPasswordDialog) return;
+
+    const newCount = clickCount + 1;
+    setClickCount(newCount);
+
+    // 기존 타이머 제거
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+    }
+
+    // 12번 클릭 도달 시 모달 오픈
+    if (newCount >= 12) {
+      setShowPasswordDialog(true);
+      setClickCount(0);
+      return;
+    }
+
+    // 3초 후 카운터 리셋
+    clickTimerRef.current = setTimeout(() => {
+      setClickCount(0);
+    }, 3000);
+  };
+
+  // 인증 성공 핸들러
+  const handleAdminSuccess = () => {
+    setIsAdminMode(true);
+    setSelectedTab("api"); // API 탭으로 자동 전환
+  };
+
   return (
-    <div
-      ref={containerRef}
-      className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-md"
-      style={
-        fixedWidthPx
-          ? {
-              width: `${fixedWidthPx}px`,
-              minWidth: `${fixedWidthPx}px`,
-              maxWidth: `${fixedWidthPx}px`,
-              flex: `0 0 ${fixedWidthPx}px`,
-              boxSizing: "border-box",
-              scrollbarGutter: "stable both-edges",
-            }
-          : { scrollbarGutter: "stable both-edges" }
-      }
-    >
-      {/* 헤더 (카드 내부, 썸네일 생성기와 동일한 톤) */}
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <span>⚙️</span> 전역 설정
-        </h1>
-      </div>
+    <div ref={containerRef} className={styles.root} style={fixedWidthPx ? { width: `${fixedWidthPx}px` } : undefined}>
+      {onBack && (
+        <Button appearance="subtle" icon={<ChevronLeftRegular />} onClick={onBack} className={styles.backButton} size="small">
+          돌아가기
+        </Button>
+      )}
 
-      {/* 탭 바 */}
-      <div className="border-b border-gray-200 mb-4">
-        <div className="flex gap-2">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-all duration-200 flex items-center gap-1
-                ${
-                  activeTab === tab.key
-                    ? "bg-white border border-b-0 border-gray-300 text-gray-900 shadow-sm"
-                    : "text-gray-400 hover:text-gray-700"
-                }`}
+      {/* 페이지 헤더 */}
+      <div className={headerStyles.pageHeader}>
+        <div
+          className={headerStyles.pageTitleWithIcon}
+          onClick={handleTitleClick}
+          style={{
+            cursor: "pointer",
+            userSelect: "none",
+            position: "relative",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8
+          }}
+        >
+          <SettingsRegular />
+          전역 설정
+          {clickCount >= 10 && (
+            <span
+              style={{
+                fontSize: "12px",
+                color: tokens.colorBrandForeground1,
+                fontWeight: 600,
+                backgroundColor: tokens.colorBrandBackground2,
+                padding: "2px 8px",
+                borderRadius: "12px",
+                marginLeft: 8
+              }}
             >
-              <span>{tab.icon}</span> {tab.name}
-            </button>
-          ))}
+              {clickCount}/12
+            </span>
+          )}
         </div>
+        <div className={headerStyles.pageDescription}>애플리케이션 전반의 설정을 관리합니다.</div>
+        <div className={styles.hairline} />
       </div>
 
-      {/* 내용 패널 (카드 내부 스크롤) */}
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="p-6 h-[560px] overflow-y-auto text-sm">
-          <Suspense
-            fallback={<div className="text-gray-500">불러오는 중…</div>}
-          >
-            <ActiveComp />
-          </Suspense>
+      {/* 본문 카드 */}
+      <Card className={styles.mainCard}>
+        <div className={styles.tabListWrap}>
+          <TabList selectedValue={selectedTab} onTabSelect={(_, d) => setSelectedTab(d.value)} size="medium">
+            {tabs.map((t) => (
+              <Tab key={t.key} value={t.key} icon={t.icon}>
+                {t.name}
+              </Tab>
+            ))}
+          </TabList>
         </div>
 
-        {/* 푸터 */}
-        <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-100 bg-white">
-          <button className="text-sm bg-gray-100 text-gray-700 rounded-lg px-4 py-2 hover:bg-gray-200">
-            취소
-          </button>
-          <button className="text-sm bg-purple-600 text-white rounded-lg px-4 py-2 hover:bg-purple-500">
-            저장
-          </button>
+        <div className={styles.tabContent}>
+          <div className={styles.scroll}>
+            <Suspense
+              fallback={
+                <div style={{ padding: 40 }}>
+                  <Spinner /> 불러오는 중…
+                </div>
+              }
+            >
+              <active.Comp />
+            </Suspense>
+          </div>
         </div>
-      </div>
+      </Card>
+
+      {/* 관리자 인증 다이얼로그 */}
+      <AdminPasswordDialog
+        open={showPasswordDialog}
+        onClose={() => setShowPasswordDialog(false)}
+        onSuccess={handleAdminSuccess}
+      />
     </div>
   );
 }

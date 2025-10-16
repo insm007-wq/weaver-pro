@@ -1,61 +1,573 @@
+import React, { useState, useEffect } from "react";
+import { Text, Button, Dropdown, Option, Field, Input, Card, Caption1, Label, tokens, Divider } from "@fluentui/react-components";
+import {
+  FolderRegular,
+  InfoRegular,
+  SaveRegular,
+  ArrowResetRegular,
+  VideoRegular,
+  PuzzlePieceRegular,
+} from "@fluentui/react-icons";
+import { useContainerStyles, useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
+import { showGlobalToast } from "../../common/GlobalToast";
+import { useApi } from "../../../hooks/useApi";
+import { DEFAULT_SETTINGS, AI_OPTIONS, AI_MODEL_INFO } from "../../../constants/aiModels";
+
+/**
+ * DefaultsTab 컴포넌트
+ *
+ * @description
+ * 애플리케이션의 기본 설정을 관리하는 탭 컴포넌트입니다.
+ * AI 모델, 해상도, 품질 설정 및 영상 저장 폴더를 구성하고
+ * 모든 설정을 전역 설정 파일(settings.json)에 저장합니다.
+ *
+ * @features
+ * - 일반 설정: 영상 저장 폴더, 기본 해상도
+ * - AI 모델 설정: 이미지/비디오 생성 모델, LLM 모델
+ * - 설정 저장/로드: 전역 설정 파일 기반
+ * - 설정 초기화: 기본값으로 복원
+ * - 폴더 열기: 영상 저장 폴더 빠른 접근
+ *
+ * @ipc_apis
+ * ⚙️ 설정 관리 APIs (electron/services/store.js):
+ * - window.api.getSetting(key) - 개별 설정값 조회
+ * - window.api.setSetting({key, value}) - 개별 설정값 저장
+ *
+ * 📂 파일/폴더 APIs (electron/ipc/file-pickers.js):
+ * - shell:openPath - 폴더/파일 열기 (line 48)
+ *
+ * @settings_stored
+ * 다음 설정들이 settings.json에 저장됨:
+ * - defaultResolution: 기본 해상도 (1080p, 720p, 4k)
+ * - imageModel: 이미지 생성 모델 (sdxl, dalle3, etc.)
+ * - imageResolution: 이미지 해상도 (1024x1024, etc.)
+ * - videoModel: 비디오 생성 모델 (veo-3, runway, etc.)
+ * - videoQuality: 비디오 품질 (1080p, 720p, 4k)
+ * - llmModel: LLM 모델 (anthropic, openai, etc.)
+ * - videoSaveFolder: 영상 저장 폴더
+ * - projectRootFolder: 프로젝트 루트 폴더 (자동 추출)
+ * - defaultProjectName: 기본 프로젝트 이름 (자동 추출)
+ *
+ * @author Weaver Pro Team
+ * @version 2.0.0
+ */
+
 export default function DefaultsTab() {
+  // Fluent UI 스타일 훅
+  const containerStyles = useContainerStyles();
+  const cardStyles = useCardStyles();
+  const settingsStyles = useSettingsStyles();
+  const api = useApi();
+
+  // 상태 관리
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [displayFolder, setDisplayFolder] = useState("");
+
+  // 썸네일 엔진 설정
+  const [thumbnailEngine, setThumbnailEngine] = useState("replicate");
+  const [thumbnailAnalysisEngine, setThumbnailAnalysisEngine] = useState("anthropic");
+
+  // TTS 설정
+  const [ttsEngine, setTtsEngine] = useState("google");
+  const [ttsSpeed, setTtsSpeed] = useState("1.0");
+
+  /**
+   * 컴포넌트 마운트 시 초기 데이터 로드
+   */
+  useEffect(() => {
+    /**
+     * 전역 설정에서 모든 기본 설정들을 로드하는 함수
+     * settings.json에서 AI 모델, 해상도, 품질 설정들을 읽어옴
+     */
+    const loadAllSettings = async () => {
+      try {
+        const settingsToLoad = ["llmModel", "thumbnailDefaultEngine", "thumbnailAnalysisEngine", "ttsEngine", "ttsSpeed"];
+
+        const loadedSettings = {};
+        for (const key of settingsToLoad) {
+          try {
+            const value = await window.api.getSetting(key);
+            if (value !== null && value !== undefined) {
+              loadedSettings[key] = value;
+            }
+          } catch (error) {
+            console.warn(`설정 로드 실패: ${key}`, error);
+          }
+        }
+
+        if (Object.keys(loadedSettings).length > 0) {
+          setSettings((prevSettings) => ({ ...prevSettings, ...loadedSettings }));
+
+          // 썸네일 엔진 설정 로드
+          if (loadedSettings.thumbnailDefaultEngine) {
+            setThumbnailEngine(loadedSettings.thumbnailDefaultEngine);
+          }
+          if (loadedSettings.thumbnailAnalysisEngine) {
+            setThumbnailAnalysisEngine(loadedSettings.thumbnailAnalysisEngine);
+          }
+
+          // TTS 설정 로드
+          if (loadedSettings.ttsEngine) {
+            setTtsEngine(loadedSettings.ttsEngine);
+          }
+          if (loadedSettings.ttsSpeed) {
+            setTtsSpeed(loadedSettings.ttsSpeed);
+          }
+        }
+      } catch (error) {
+        console.error("기본 설정 로드 실패:", error);
+      }
+    };
+
+    loadAllSettings();
+
+    /**
+     * 프로젝트 관리에서 저장한 경로를 로드하여 영상 저장 폴더 설정
+     * currentProjectId로 projects에서 해당 프로젝트의 paths.root를 가져옴
+     */
+    const loadProjectRootFolder = async () => {
+      try {
+        // 현재 프로젝트 ID 가져오기
+        const currentProjectId = await window.api.getSetting("currentProjectId");
+
+        if (!currentProjectId) {
+          setDisplayFolder("프로젝트 관리에서 경로를 설정해주세요");
+          return;
+        }
+
+        // projects 배열 가져오기
+        const projects = await window.api.getSetting("projects");
+
+        if (!projects || !Array.isArray(projects)) {
+          setDisplayFolder("프로젝트 관리에서 경로를 설정해주세요");
+          return;
+        }
+
+        // currentProjectId로 프로젝트 찾기
+        const currentProject = projects.find(p => p.id === currentProjectId);
+
+        if (currentProject && currentProject.paths && currentProject.paths.root) {
+          const rootPath = currentProject.paths.root;
+          setDisplayFolder(rootPath);
+          setSettings((prev) => ({ ...prev, videoSaveFolder: rootPath }));
+        } else {
+          setDisplayFolder("프로젝트 관리에서 경로를 설정해주세요");
+        }
+      } catch (error) {
+        console.error("프로젝트 경로 로드 실패:", error);
+        setDisplayFolder("프로젝트 경로를 불러올 수 없습니다");
+      }
+    };
+
+    loadProjectRootFolder();
+
+    /**
+     * 프로젝트 설정 업데이트 이벤트 리스너
+     * 프로젝트 관리에서 설정이 변경되면 자동으로 영상 저장 폴더 업데이트
+     */
+    const handleProjectSettingsUpdate = () => {
+      loadProjectRootFolder();
+    };
+
+    /**
+     * 설정 변경 이벤트 리스너
+     * settings.json이 변경되면 자동으로 경로 업데이트
+     */
+    const handleSettingsChanged = () => {
+      loadProjectRootFolder();
+    };
+
+    /**
+     * 페이지 포커스 시 경로 새로고침
+     */
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadProjectRootFolder();
+      }
+    };
+
+    window.addEventListener("projectSettings:updated", handleProjectSettingsUpdate);
+    window.addEventListener("settingsChanged", handleSettingsChanged);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("projectSettings:updated", handleProjectSettingsUpdate);
+      window.removeEventListener("settingsChanged", handleSettingsChanged);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  /**
+   * 모든 기본 설정을 전역 설정 파일(settings.json)에 저장
+   * AI 모델 설정 + 프로젝트 경로 정보 동시 저장
+   */
+  const saveSettings = async () => {
+    try {
+      // 기본 설정들을 전역 설정에 저장
+      const settingsToSave = [
+        "llmModel",
+        "videoSaveFolder",
+        "thumbnailDefaultEngine",
+        "thumbnailAnalysisEngine",
+        "ttsEngine",
+        "ttsSpeed",
+      ];
+
+      // 썸네일 엔진 및 TTS 설정을 settings 객체에 추가
+      const settingsWithThumbnail = {
+        ...settings,
+        thumbnailDefaultEngine: thumbnailEngine,
+        thumbnailAnalysisEngine: thumbnailAnalysisEngine,
+        ttsEngine: ttsEngine,
+        ttsSpeed: ttsSpeed,
+      };
+
+      for (const key of settingsToSave) {
+        if (settingsWithThumbnail[key] !== undefined && settingsWithThumbnail[key] !== null) {
+          try {
+            await window.api.setSetting({
+              key: key,
+              value: settingsWithThumbnail[key],
+            });
+            console.log(`설정 저장: ${key} = ${settingsWithThumbnail[key]}`);
+          } catch (error) {
+            console.warn(`설정 저장 실패: ${key}`, error);
+          }
+        }
+      }
+
+      // videoSaveFolder 경로에서 프로젝트 정보 자동 추출 및 저장
+      if (settings.videoSaveFolder) {
+        try {
+          const folderParts = settings.videoSaveFolder.split("\\");
+          if (folderParts.length > 1) {
+            const projectName = folderParts[folderParts.length - 1]; // 마지막 폴더명 (프로젝트명)
+            const rootFolder = folderParts.slice(0, -1).join("\\") + "\\"; // 루트 폴더
+
+            await window.api.setSetting({
+              key: "projectRootFolder",
+              value: rootFolder,
+            });
+            await window.api.setSetting({
+              key: "defaultProjectName",
+              value: projectName,
+            });
+
+            console.log(`프로젝트 정보 저장: projectRootFolder=${rootFolder}, defaultProjectName=${projectName}`);
+          }
+        } catch (projectError) {
+          console.warn("프로젝트 정보 저장 실패:", projectError);
+        }
+      }
+
+      showGlobalToast({
+        type: "success",
+        text: "기본 설정이 저장되었습니다! 🎉",
+      });
+
+      // 설정 변경 이벤트 발생
+      window.dispatchEvent(new Event('settingsChanged'));
+    } catch (error) {
+      console.error("기본 설정 저장 실패:", error);
+      showGlobalToast({
+        type: "error",
+        text: "기본 설정 저장에 실패했습니다.",
+      });
+    }
+  };
+
+  /**
+   * 폴더 선택 대화상자를 열어 영상 저장 폴더 변경
+   * 사용자가 직접 폴더를 선택할 수 있는 기능 (현재 미사용)
+   */
+  const selectFolder = async () => {
+    try {
+      console.log("폴더 선택 시작...");
+      const result = await api.invoke("dialog:selectFolder");
+      console.log("폴더 선택 결과:", result);
+
+      if (result && result.success && result.data && !result.data.canceled && result.data.filePaths && result.data.filePaths.length > 0) {
+        console.log("선택된 폴더:", result.data.filePaths[0]);
+        setSettings((prev) => ({ ...prev, videoSaveFolder: result.data.filePaths[0] }));
+        showGlobalToast({
+          type: "success",
+          text: "폴더가 선택되었습니다!",
+        });
+      } else {
+        console.log("폴더 선택이 취소되었습니다.");
+        showGlobalToast({
+          type: "info",
+          text: "폴더 선택이 취소되었습니다.",
+        });
+      }
+    } catch (error) {
+      console.error("폴더 선택 실패:", error);
+      showGlobalToast({
+        type: "error",
+        text: "폴더 선택에 실패했습니다.",
+      });
+    }
+  };
+
+  /**
+   * 모든 기본 설정을 초기값으로 복원
+   * UI 상태와 전역 설정 파일 모두 초기화
+   */
+  const resetSettings = async () => {
+    try {
+      setSettings(DEFAULT_SETTINGS);
+
+      // 전역 설정에서도 기본값으로 초기화
+      const settingsToReset = [
+        "llmModel",
+        "videoSaveFolder",
+        "ttsEngine",
+        "ttsSpeed",
+      ];
+
+      // TTS 설정도 기본값으로 초기화
+      setTtsEngine(DEFAULT_SETTINGS.ttsEngine);
+      setTtsSpeed(DEFAULT_SETTINGS.ttsSpeed);
+
+      for (const key of settingsToReset) {
+        if (DEFAULT_SETTINGS[key] !== undefined) {
+          try {
+            await window.api.setSetting({
+              key: key,
+              value: DEFAULT_SETTINGS[key],
+            });
+          } catch (error) {
+            console.warn(`설정 초기화 실패: ${key}`, error);
+          }
+        }
+      }
+
+      // displayFolder도 기본값으로 업데이트
+      if (DEFAULT_SETTINGS.videoSaveFolder) {
+        setDisplayFolder(DEFAULT_SETTINGS.videoSaveFolder);
+      } else {
+        setDisplayFolder("프로젝트 관리에서 경로를 설정해주세요");
+      }
+
+      showGlobalToast({
+        type: "success",
+        text: "기본 설정이 초기화되고 저장되었습니다! 🎉",
+      });
+    } catch (error) {
+      console.error("설정 초기화 실패:", error);
+      showGlobalToast({
+        type: "error",
+        text: "설정 초기화에 실패했습니다.",
+      });
+    }
+  };
+
+  /**
+   * 영상 저장 폴더를 시스템 파일 탐색기로 열기
+   * shell:openPath API를 사용하여 폴더 열기
+   */
+  const openVideoFolder = async () => {
+    try {
+      const folderPath = displayFolder || settings.videoSaveFolder;
+      if (!folderPath) {
+        showGlobalToast({
+          type: "error",
+          text: "폴더 경로가 설정되지 않았습니다.",
+        });
+        return;
+      }
+
+      const result = await api.invoke("shell:openPath", folderPath);
+      if (result.success) {
+        showGlobalToast({
+          type: "success",
+          text: "폴더를 열었습니다.",
+        });
+      } else {
+        showGlobalToast({
+          type: "error",
+          text: result.message || "폴더 열기에 실패했습니다.",
+        });
+      }
+    } catch (error) {
+      console.error("폴더 열기 오류:", error);
+      showGlobalToast({
+        type: "error",
+        text: "폴더 열기에 실패했습니다.",
+      });
+    }
+  };
+
+  // UI 레이아웃을 위한 스타일 상수
+  const sectionGap = tokens.spacingVerticalXXL;
+  const itemGap = tokens.spacingHorizontalXL;
+  const gridTemplate = "minmax(300px, 1fr) 1fr";
+
+  /**
+   * 드롭다운 현재 값 매핑 헬퍼 함수
+   * 설정값에 해당하는 표시 텍스트를 찾아 반환
+   * @param {Array} options - 드롭다운 옵션 배열
+   * @param {string} currentValue - 현재 설정값
+   * @returns {string} 표시할 텍스트
+   */
+  const getDropdownValue = (options, currentValue) => {
+    const selected = options.find((opt) => opt.value === currentValue);
+    return selected ? selected.text : "선택해주세요";
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Folder */}
-      <div>
-        <label className="block mb-1 font-medium text-sm">
-          🎥 영상 저장 폴더
-        </label>
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            defaultValue="C:\\tmplav"
-            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-          />
-          <button className="text-sm px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200">
-            폴더 선택
-          </button>
-        </div>
-        <p className="text-xs text-gray-500 mt-1">
-          생성된 영상 파일이 저장될 경로입니다.
-        </p>
-      </div>
-
-      {/* Resolution */}
-      <div>
-        <label className="block mb-1 font-medium text-sm">📐 기본 해상도</label>
-        <select className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
-          <option>1920x1080 (Full HD)</option>
-          <option>1280x720 (HD)</option>
-          <option>3840x2160 (4K)</option>
-        </select>
-      </div>
-
-      {/* Info box */}
-      <div className="flex items-start gap-3 bg-gray-100 border border-gray-200 rounded-lg p-4 text-sm text-gray-700">
-        <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 text-base">
-          💡
-        </div>
-        <div>
-          <b className="font-medium text-gray-800">영상 설정</b>
-          <div className="text-sm mt-1 leading-relaxed">
-            프레임레이트: <b>24fps</b> 고정
-            <br />
-            영상 길이: 프로젝트 생성 시 설정
+    <div className={containerStyles.container}>
+      <Card className={cardStyles.settingsCard} style={{ padding: sectionGap }}>
+        {/* 일반 설정 섹션 */}
+        <div style={{ marginBottom: sectionGap }}>
+          <Text
+            size={500}
+            weight="semibold"
+            style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: tokens.spacingVerticalM }}
+          >
+            <VideoRegular /> 일반 설정
+          </Text>
+          <div style={{ display: "grid", gridTemplateColumns: gridTemplate, gap: itemGap }}>
+            <Field label="영상 저장 폴더" hint="프로젝트 관리에서 설정한 경로 기반으로 자동 생성됩니다.">
+              <div style={{ display: "flex", gap: "8px", alignItems: "stretch", maxWidth: "100%" }}>
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    backgroundColor: tokens.colorNeutralBackground3,
+                    border: `1px solid ${tokens.colorNeutralStroke1}`,
+                    borderRadius: tokens.borderRadiusMedium,
+                    color: tokens.colorNeutralForeground2,
+                    fontFamily: "monospace",
+                    fontSize: "13px",
+                    width: "220px",
+                    display: "flex",
+                    alignItems: "center",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                    cursor: "default",
+                  }}
+                  title={displayFolder || settings.videoSaveFolder}
+                >
+                  {displayFolder || settings.videoSaveFolder}
+                </div>
+                <Button
+                  appearance="secondary"
+                  icon={<FolderRegular />}
+                  onClick={openVideoFolder}
+                  disabled={!displayFolder && !settings.videoSaveFolder}
+                >
+                  폴더 열기
+                </Button>
+              </div>
+            </Field>
           </div>
         </div>
-      </div>
 
-      {/* Image model */}
-      <div>
-        <label className="block mb-1 font-medium text-sm">
-          🧠 이미지 생성 모델
-        </label>
-        <select className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
-          <option>Flux Dev (고품질, 35원)</option>
-          <option>Flux Schnell (속도 우선)</option>
-        </select>
-      </div>
+        <Divider />
+
+        {/* AI 모델 설정 섹션 */}
+        <div style={{ marginTop: sectionGap }}>
+          <Text
+            size={500}
+            weight="semibold"
+            style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: tokens.spacingVerticalM }}
+          >
+            <PuzzlePieceRegular /> AI 모델 설정
+          </Text>
+
+          {/* LLM 모델 및 썸네일 엔진 설정 */}
+          <div style={{ display: "grid", gridTemplateColumns: gridTemplate, gap: itemGap }}>
+            <Field label="대본 생성 LLM 모델" hint="대본 생성에 사용할 AI 언어모델입니다.">
+              <Dropdown
+                value={getDropdownValue(AI_OPTIONS.llmModels, settings.llmModel)}
+                selectedOptions={[settings.llmModel]}
+                onOptionSelect={(_, data) => setSettings((prev) => ({ ...prev, llmModel: data.optionValue }))}
+              >
+                {AI_OPTIONS.llmModels.map((model) => (
+                  <Option key={model.value} value={model.value} text={`${model.text} (${model.provider} - ${model.cost})`}>
+                    {`${model.text} (${model.provider} - ${model.cost})`}
+                  </Option>
+                ))}
+              </Dropdown>
+            </Field>
+
+            <Field label="썸네일 생성 엔진" hint="썸네일 생성 시 기본으로 사용할 AI 엔진입니다.">
+              <Dropdown
+                value={thumbnailEngine === "replicate" ? "Replicate (고품질)" : thumbnailEngine}
+                selectedOptions={[thumbnailEngine]}
+                onOptionSelect={(_, data) => setThumbnailEngine(data.optionValue)}
+              >
+                <Option key="replicate" value="replicate" text="Replicate (고품질)">
+                  Replicate (고품질)
+                </Option>
+              </Dropdown>
+            </Field>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: gridTemplate, gap: itemGap, marginTop: itemGap }}>
+            <Field label="이미지 분석 AI" hint="참고 이미지 분석에 사용할 AI 엔진입니다.">
+              <Dropdown
+                value={thumbnailAnalysisEngine === "anthropic" ? "Claude Sonnet 4 (고성능 분석)" : thumbnailAnalysisEngine}
+                selectedOptions={[thumbnailAnalysisEngine]}
+                onOptionSelect={(_, data) => setThumbnailAnalysisEngine(data.optionValue)}
+              >
+                <Option key="anthropic" value="anthropic" text="Claude Sonnet 4 (고성능 분석)">
+                  Claude Sonnet 4 (고성능 분석)
+                </Option>
+              </Dropdown>
+            </Field>
+          </div>
+
+          {/* TTS 설정 */}
+          <div style={{ display: "grid", gridTemplateColumns: gridTemplate, gap: itemGap, marginTop: itemGap }}>
+            <Field label="TTS 엔진" hint="음성 생성에 사용할 엔진입니다.">
+              <Dropdown
+                value={AI_OPTIONS.ttsEngines.find(e => e.value === ttsEngine)?.text || "선택해주세요"}
+                selectedOptions={[ttsEngine]}
+                onOptionSelect={(_, data) => setTtsEngine(data.optionValue)}
+              >
+                {AI_OPTIONS.ttsEngines
+                  .filter(engine => engine.status === "available")
+                  .map((engine) => (
+                    <Option key={engine.value} value={engine.value} text={`${engine.text} (${engine.description})`}>
+                      {`${engine.text} (${engine.description})`}
+                    </Option>
+                  ))}
+              </Dropdown>
+            </Field>
+
+            <Field label="말하기 속도" hint="0.95~1.05 범위가 대부분 콘텐츠에 무난합니다.">
+              <Dropdown
+                value={ttsSpeed === "0.9" ? "느림 (0.9x)" : ttsSpeed === "1.1" ? "빠름 (1.1x)" : "보통 (1.0x)"}
+                selectedOptions={[ttsSpeed]}
+                onOptionSelect={(_, data) => setTtsSpeed(data.optionValue)}
+              >
+                <Option key="0.9" value="0.9" text="느림 (0.9x)">
+                  느림 (0.9x)
+                </Option>
+                <Option key="1.0" value="1.0" text="보통 (1.0x)">
+                  보통 (1.0x)
+                </Option>
+                <Option key="1.1" value="1.1" text="빠름 (1.1x)">
+                  빠름 (1.1x)
+                </Option>
+              </Dropdown>
+            </Field>
+          </div>
+        </div>
+
+        {/* 하단 액션 버튼 */}
+        <div style={{ display: "flex", gap: "16px", marginTop: "40px", padding: "0 16px 16px 16px" }}>
+          <Button appearance="primary" icon={<SaveRegular />} onClick={saveSettings}>
+            설정 저장
+          </Button>
+          <Button appearance="secondary" icon={<ArrowResetRegular />} onClick={resetSettings}>
+            기본값으로 초기화
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 }

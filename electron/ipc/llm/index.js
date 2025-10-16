@@ -1,106 +1,69 @@
-// electron/ipc/llm/index.js
+/**
+ * LLM 라우터 - 최소 라우팅만
+ */
+
 const { ipcMain } = require("electron");
-const { callOpenAIGpt5Mini } = require("./providers/openai");
-const { callAnthropic } = require("./providers/anthropic");
-const { callMinimaxAbab } = require("./providers/minimax");
+const { callAnthropic, expandThumbnailPrompt, expandScenePrompt } = require("./anthropic");
+const { callReplicate } = require("./replicate");
 
-function ensureString(v, name) {
-  if (typeof v !== "string" || !v.trim()) {
-    throw new Error(`llm/generateScript: ${name}가 비었습니다.`);
-  }
-  return v.trim();
-}
-function ensureNumber(v, name) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) {
-    throw new Error(`llm/generateScript: ${name} 숫자 아님`);
-  }
-  return n;
-}
+ipcMain.handle("llm/generateScript", async (event, payload) => {
+  const llm = payload?.llm;
+  if (!llm) throw new Error("AI 엔진을 선택해주세요.");
 
-/* ---------------- 프롬프트 fallback ---------------- */
-function buildPromptFallback(payload = {}) {
-  const type = (payload.type || "auto").toLowerCase();
-  const topic = String(payload.topic || "");
-  const style = String(payload.style || "");
-  const duration = Number(payload.duration || 5);
-  const maxScenes = Number(payload.maxScenes || 10);
-  const referenceText = String(payload.referenceText || "");
+  // 타입 안전성 확보: llm이 객체든 문자열이든 안전하게 처리
+  const llmString = typeof llm === 'string' ? llm :
+                   (llm?.value || llm?.data || String(llm) || 'anthropic');
 
-  // ⬇️ 분당 글자수 목표 (프론트에서 cpmMin/Max 주면 우선 사용, 문자열도 허용)
-  const cpmMin = Number.isFinite(Number(payload.cpmMin))
-    ? Number(payload.cpmMin)
-    : 300;
-  const cpmMax = Number.isFinite(Number(payload.cpmMax))
-    ? Number(payload.cpmMax)
-    : 400;
-
-  const minChars = Math.round(duration * cpmMin);
-  const maxChars = Math.round(duration * cpmMax);
-
-  const lines = [
-    `다음 조건에 맞는 ${duration}분 길이의 영상 대본을 작성해주세요.`,
-    `주제: ${topic || "(미정)"}`,
-    `스타일: ${style || "전문가 톤, 쉽고 차분하게"}`,
-    `언어: 한국어`,
-    `최대 장면 수: ${maxScenes}개`,
-    `총 글자 수: 약 ${minChars} ~ ${maxChars}자 범위를 맞춰주세요.`,
-    `장면별로 과도한 편차 없이 균등하게 분할하고, 전체 분량이 길이에 맞아야 합니다.`,
-    type === "reference" && referenceText
-      ? `\n[레퍼런스]\n${referenceText}`
-      : "",
-    "",
-    "응답 형식(JSON only):",
-    '{"title":"...","scenes":[{"text":"...","duration":초수}]}',
-    "마크다운/설명 문구 없이 JSON만 출력하세요.",
-  ].filter(Boolean);
-
-  return lines.join("\n");
-}
-
-/* ---------------- IPC 핸들러 ---------------- */
-ipcMain.handle("llm/generateScript", async (_evt, payload) => {
-  if (!payload || typeof payload !== "object") {
-    throw new Error("llm/generateScript: payload가 비어 있습니다.");
-  }
-
-  const llm = ensureString(payload.llm, "llm");
-
-  // 숫자 파라미터 정규화
-  payload.duration = ensureNumber(payload.duration ?? 5, "duration");
-  payload.maxScenes = ensureNumber(payload.maxScenes ?? 10, "maxScenes");
-
-  // 문자열 파라미터 정규화
-  payload.topic = String(payload.topic ?? "");
-  payload.style = String(payload.style ?? "");
-
-  // 프롬프트 탭에서 넘어온 prompt가 있으면 곧바로 사용하도록 승격
-  // (Anthropic는 compiledPrompt/customPrompt 신호를 사용)
-  const hasUserPrompt =
-    typeof payload.prompt === "string" && payload.prompt.trim().length > 0;
-
-  if (hasUserPrompt) {
-    payload.compiledPrompt = payload.prompt.trim();
-    payload.customPrompt = true; // 프로바이더에 "사용자 프롬프트 우선" 힌트
-  } else {
-    // 프롬프트 없으면 안전한 fallback 생성 (자동/레퍼런스 탭)
-    payload.prompt = buildPromptFallback(payload);
-    payload.customPrompt = false; // 명시적으로 사용자 프롬프트 아님
-  }
-
-  // 모델 라우팅
-  switch (llm) {
-    case "openai-gpt5mini":
-      return await callOpenAIGpt5Mini(payload);
-
+  switch (llmString.toLowerCase()) {
     case "anthropic":
-      return await callAnthropic(payload);
+      // event 객체를 전달하여 진행률 전송 가능하도록
+      return await callAnthropic(payload, event);
 
-    case "minimax":
-    case "minimax-abab":
-      return await callMinimaxAbab(payload);
+    case "replicate":
+    case "replicate-llama3":
+      return await callReplicate(payload);
 
     default:
-      throw new Error(`지원하지 않는 LLM입니다: ${llm}`);
+      throw new Error(`지원하지 않는 AI 엔진: ${llmString}`);
   }
 });
+
+// 썸네일 프롬프트 확장 핸들러
+ipcMain.handle("thumbnail:expand-prompt", async (event, userInput) => {
+  try {
+    if (!userInput || !userInput.trim()) {
+      throw new Error("프롬프트 입력이 필요합니다.");
+    }
+    const expandedPrompt = await expandThumbnailPrompt(userInput.trim());
+    return { ok: true, prompt: expandedPrompt };
+  } catch (error) {
+    console.error("[thumbnail:expand-prompt] 오류:", error);
+    return {
+      ok: false,
+      message: error.message,
+      // 폴백: 원본 입력 + 기본 키워드
+      fallbackPrompt: `${userInput}, ultra-realistic, cinematic YouTube thumbnail, dramatic lighting, 16:9 aspect ratio, no text`
+    };
+  }
+});
+
+// 씬 이미지용 프롬프트 확장 핸들러
+ipcMain.handle("scene:expand-prompt", async (event, sceneText) => {
+  try {
+    if (!sceneText || !sceneText.trim()) {
+      throw new Error("씬 텍스트 입력이 필요합니다.");
+    }
+    const expandedPrompt = await expandScenePrompt(sceneText.trim());
+    return { ok: true, prompt: expandedPrompt };
+  } catch (error) {
+    console.error("[scene:expand-prompt] 오류:", error);
+    return {
+      ok: false,
+      message: error.message,
+      // 폴백: 원본 입력 + 기본 스타일
+      fallbackPrompt: `${sceneText}, photorealistic scene illustration, natural lighting, cinematic composition, detailed background, 4K quality`
+    };
+  }
+});
+
+console.log("🚀 LLM 라우터 초기화: Claude, Replicate Llama 3, 썸네일 프롬프트 확장, 씬 프롬프트 확장");

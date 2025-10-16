@@ -1,74 +1,133 @@
-// src/App.jsx
-import {
-  useCallback,
-  useMemo,
-  useState,
-  useEffect,
-  Suspense,
-  lazy,
-} from "react";
+import { useCallback, useMemo, useState, useEffect, Suspense, lazy, memo } from "react";
+import { makeStyles, shorthands, tokens, Card, CardHeader, Body1, Title1, Title2, Subtitle1, Text, mergeClasses } from "@fluentui/react-components";
+import KeepAlivePane from "./components/common/KeepAlivePane";
+import { LoadingSpinner, GlobalToast } from "./components/common";
+import { useFontOverrideStyles } from "./styles/commonStyles";
 
-// ✅ 코드 스플리팅: 초기 로드 가벼움
 const Sidebar = lazy(() => import("./components/Sidebar"));
 const ProjectInit = lazy(() => import("./components/ProjectInit"));
 const SettingsPage = lazy(() => import("./components/SettingsPage"));
+const ProjectManager = lazy(() => import("./components/ProjectManager"));
 const HeaderBar = lazy(() => import("./components/HeaderBar"));
-const ThumbnailGenerator = lazy(() =>
-  import("./components/ThumbnailGenerator")
-);
-const ScriptVoiceGenerator = lazy(() =>
-  import("./components/scriptgen/ScriptVoiceGenerator")
-);
-// ⬇️ 영상 구성(Assemble)
-const AssembleEditor = lazy(() =>
-  import("./components/assemble/AssembleEditor")
-);
-// ⬇️ 초안 내보내기(Draft Export)
-const DraftExportPage = lazy(() =>
-  import("./components/draftexport/DraftExportPage")
-);
-// ⬇️ 편집 및 다듬기(Refine)
-const RefineEditor = lazy(() => import("./components/refine/RefineEditor"));
-// ⬇️ 최종 완성(Finalize)
-const FinalizePage = lazy(() => import("./components/finalize/FinalizePage"));
+const ThumbnailGenerator = lazy(() => import("./components/ThumbnailGenerator/ThumbnailGenerator"));
+const ScriptVoiceGenerator = lazy(() => import("./components/scriptgen/ScriptVoiceGenerator"));
+const MediaPrepEditor = lazy(() => import("./components/media-prep/MediaPrepEditor"));
+const MediaDownloadPage = lazy(() => import("./components/media-down/MediaDownloadPage"));
+const MediaEditPage = lazy(() => import("./components/media-edit/MediaEditPage"));
 
-/** ✅ 공용 스피너 */
-function Spinner({ label = "Loading..." }) {
+const useStyles = makeStyles({
+  root: {
+    display: "flex",
+    minHeight: "100vh",
+    flexDirection: "column",
+    backgroundColor: tokens.colorNeutralBackground1,
+  },
+  header: {
+    backgroundColor: tokens.colorNeutralBackground2,
+    ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke1),
+  },
+  body: {
+    display: "flex",
+    flex: 1,
+    overflow: "hidden",
+  },
+  main: {
+    flex: 1,
+    ...shorthands.padding(tokens.spacingVerticalXXL, tokens.spacingHorizontalXXL),
+    overflowY: "auto",
+    backgroundColor: tokens.colorNeutralBackground1,
+  },
+  loadingContainer: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    ...shorthands.padding(tokens.spacingVerticalXXXL),
+    ...shorthands.gap(tokens.spacingHorizontalM),
+  },
+  welcomeCard: {
+    maxWidth: "800px",
+    ...shorthands.margin("0", "auto"),
+    animation: "fadeIn 0.3s ease-out",
+  },
+  welcomeHeader: {
+    display: "flex",
+    alignItems: "center",
+    ...shorthands.gap(tokens.spacingHorizontalL),
+  },
+  logoBox: {
+    width: "48px",
+    height: "48px",
+    backgroundImage: `linear-gradient(135deg, ${tokens.colorBrandBackground}, ${tokens.colorBrandBackground2})`,
+    ...shorthands.borderRadius(tokens.borderRadiusLarge),
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: tokens.colorNeutralForegroundOnBrand,
+    fontSize: tokens.fontSizeBase600,
+    boxShadow: tokens.shadow16,
+  },
+  gridContainer: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+    ...shorthands.gap(tokens.spacingHorizontalL),
+    marginTop: tokens.spacingVerticalL,
+  },
+  featureCard: {
+    ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalL),
+    ...shorthands.borderRadius(tokens.borderRadiusMedium),
+    ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
+  },
+  quickStartCard: {
+    backgroundColor: tokens.colorBrandBackground2,
+    ...shorthands.borderColor(tokens.colorBrandStroke1),
+  },
+  newFeatureCard: {
+    backgroundColor: tokens.colorPaletteGreenBackground2,
+    ...shorthands.borderColor(tokens.colorPaletteGreenBorder2),
+  },
+});
+
+const MemoizedLoadingFallback = memo(function LoadingFallback({ label = "로딩 중..." }) {
+  const styles = useStyles();
   return (
-    <div className="flex items-center justify-center p-10 text-sm text-slate-600">
-      <span className="animate-pulse">{label}</span>
-    </div>
+    <LoadingSpinner size="medium" message={label} centered />
   );
-}
+});
 
-export default function App() {
+function App() {
   const [projectName, setProjectName] = useState(null);
   const [currentPage, setCurrentPage] = useState(null);
+  const [isScriptGenerating, setIsScriptGenerating] = useState(false);
+  const [isVideoExporting, setIsVideoExporting] = useState(false);
+  const canOpenWithoutProject = true;
+  const styles = useStyles();
+  const fontStyles = useFontOverrideStyles();
 
-  /** ✅ 프로젝트 생성 → 즉시 script로 이동 */
+  // 디버깅: 상태 변경 확인
+  useEffect(() => {
+    console.log("🔴 App.jsx - isScriptGenerating:", isScriptGenerating);
+  }, [isScriptGenerating]);
+
   const handleCreateProject = useCallback((name) => {
     setProjectName(name);
     setCurrentPage("script");
   }, []);
+  
+  const handleSelectMenu = useCallback((key) => setCurrentPage(key), []);
+  const handleOpenSettings = useCallback(() => setCurrentPage("settings"), []);
 
-  /** ✅ 핸들러 메모이즈(불필요한 재렌더 감소) */
-  const handleSelectMenu = useCallback((key) => {
-    setCurrentPage(key);
-  }, []);
+  // 메모이제이션된 계산값들
+  const shouldShowProjectInit = useMemo(() => 
+    !projectName && !canOpenWithoutProject, 
+    [projectName, canOpenWithoutProject]
+  );
 
-  const handleOpenSettings = useCallback(() => {
-    setCurrentPage("settings");
-  }, []);
+  const isHomePage = useMemo(() => currentPage === null, [currentPage]);
 
-  /** ✅ 모든 페이지를 프로젝트 없이도 열 수 있게 고정 허용 */
-  const canOpenWithoutProject = true;
-
-  /** ✅ (새로 추가) 전역 다운로드 큐: 탭이 꺼져 있어도 파일을 기억 */
   useEffect(() => {
     if (!window.__autoPlaceQueue) window.__autoPlaceQueue = [];
     const off = window.api?.onFileDownloaded?.((payload) => {
       try {
-        // payload: { path, category, fileName }
         if (payload?.path) window.__autoPlaceQueue.push(payload);
       } catch {}
     });
@@ -79,70 +138,154 @@ export default function App() {
     };
   }, []);
 
-  /** ✅ 메인 콘텐츠 분기 */
-  const mainContent = useMemo(() => {
-    if (!projectName && !canOpenWithoutProject) {
-      return <ProjectInit onCreate={handleCreateProject} />;
-    }
+  // 미디어 다운로드 페이지로 이동하는 커스텀 이벤트 리스너
+  useEffect(() => {
+    const handleNavigateToDownload = () => {
+      setCurrentPage('draft');
+    };
 
-    switch (currentPage) {
-      case "thumbnail":
-        return <ThumbnailGenerator />;
+    window.addEventListener('navigate-to-download', handleNavigateToDownload);
 
-      case "script":
-        return <ScriptVoiceGenerator />;
+    return () => {
+      window.removeEventListener('navigate-to-download', handleNavigateToDownload);
+    };
+  }, []);
 
-      case "assemble":
-        return <AssembleEditor />;
+  // 영상 완성 페이지로 이동하는 커스텀 이벤트 리스너
+  useEffect(() => {
+    const handleNavigateToRefine = () => {
+      setCurrentPage('refine');
+    };
 
-      case "draft":
-        return <DraftExportPage />;
+    window.addEventListener('navigate-to-refine', handleNavigateToRefine);
 
-      case "refine":
-        return <RefineEditor />;
+    return () => {
+      window.removeEventListener('navigate-to-refine', handleNavigateToRefine);
+    };
+  }, []);
 
-      case "finalize":
-        return <FinalizePage />;
+  // 미디어 준비 페이지로 이동하는 커스텀 이벤트 리스너
+  useEffect(() => {
+    const handleNavigateToAssemble = () => {
+      setCurrentPage('assemble');
+    };
 
-      case "settings":
-        return <SettingsPage onBack={() => setCurrentPage(null)} />;
+    window.addEventListener('navigate-to-assemble', handleNavigateToAssemble);
 
-      default:
-        // 기본 대시 카드 (프로젝트 없어도 표시)
-        return (
-          <div className="bg-white shadow-xl rounded-xl p-8 w-full max-w-2xl">
-            <h1 className="text-2xl font-bold mb-4">
-              {projectName || "Content Weaver Pro"}
-            </h1>
-            <div className="bg-gray-100 p-4 rounded">
-              <p className="text-sm text-gray-700">
-                시작하려면 오른쪽 사이드바에서 메뉴를 선택하세요.
-              </p>
-            </div>
-          </div>
-        );
-    }
-  }, [projectName, canOpenWithoutProject, currentPage, handleCreateProject]);
+    return () => {
+      window.removeEventListener('navigate-to-assemble', handleNavigateToAssemble);
+    };
+  }, []);
+
+  // 미디어 다운로드 페이지로 이동하는 커스텀 이벤트 리스너
+  useEffect(() => {
+    const handleNavigateToDownload = () => {
+      setCurrentPage('draft');
+    };
+
+    window.addEventListener('navigate-to-download', handleNavigateToDownload);
+
+    return () => {
+      window.removeEventListener('navigate-to-download', handleNavigateToDownload);
+    };
+  }, []);
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f5f7fa] text-gray-800">
-      {/* ▲ 헤더 */}
-      <Suspense fallback={<Spinner label="Loading header..." />}>
-        <HeaderBar onOpenSettings={handleOpenSettings} />
+    <div className={mergeClasses(styles.root, fontStyles.globalFont)}>
+      <Suspense fallback={<MemoizedLoadingFallback label="헤더 로딩 중..." />}>
+        <div className={styles.header}>
+          <HeaderBar onOpenSettings={handleOpenSettings} />
+        </div>
       </Suspense>
 
-      {/* ▼ 본문 + 사이드바 */}
-      <div className="flex flex-1">
-        {/* ✅ 중앙정렬 제거: 페이지가 꽉 차게 교체 렌더 */}
-        <main className="flex-1 p-10 overflow-auto">
-          <Suspense fallback={<Spinner />}>{mainContent}</Suspense>
-        </main>
-
-        {/* 오른쪽 사이드바 */}
-        <Suspense fallback={<Spinner label="Loading sidebar..." />}>
-          <Sidebar onSelectMenu={handleSelectMenu} />
+      <div className={styles.body}>
+        <Suspense fallback={<MemoizedLoadingFallback />}>
+          <Sidebar
+            onSelectMenu={handleSelectMenu}
+            isScriptGenerating={isScriptGenerating}
+            isVideoExporting={isVideoExporting}
+          />
         </Suspense>
+
+        <main className={styles.main}>
+          <Suspense fallback={<MemoizedLoadingFallback />}>
+            {shouldShowProjectInit ? (
+              <ProjectInit onCreate={handleCreateProject} />
+            ) : (
+              <>
+                <KeepAlivePane active={isHomePage}>
+                  <Card className={styles.welcomeCard}>
+                    <CardHeader
+                      header={
+                        <div className={styles.welcomeHeader}>
+                          <div className={styles.logoBox}>🎥</div>
+                          <div>
+                            <Title2>{projectName || "Weaver Pro"}</Title2>
+                            <Subtitle1>AI 기반 영상 제작 솔루션에 오신 것을 환영합니다</Subtitle1>
+                          </div>
+                        </div>
+                      }
+                    />
+
+                    <div className={styles.gridContainer}>
+                      <div className={mergeClasses(styles.featureCard, styles.quickStartCard)}>
+                        <Text as="h3" weight="semibold" size={500}>
+                          🎯 빠른 시작
+                        </Text>
+                        <Body1>왼쪽 사이드바에서 원하는 기능을 선택하여 시작하세요.</Body1>
+                      </div>
+
+                      <div className={mergeClasses(styles.featureCard, styles.newFeatureCard)}>
+                        <Text as="h3" weight="semibold" size={500}>
+                          ⚡ 새로운 기능
+                        </Text>
+                        <Body1>최신 AI 모델과 향상된 사용자 경험을 체험해보세요.</Body1>
+                      </div>
+                    </div>
+                  </Card>
+                </KeepAlivePane>
+
+                <KeepAlivePane active={currentPage === "thumbnail"}>
+                  <ThumbnailGenerator />
+                </KeepAlivePane>
+
+                <KeepAlivePane active={currentPage === "script"}>
+                  <ScriptVoiceGenerator onGeneratingChange={setIsScriptGenerating} />
+                </KeepAlivePane>
+
+                <KeepAlivePane active={currentPage === "assemble"}>
+                  <MediaPrepEditor />
+                </KeepAlivePane>
+
+                <KeepAlivePane active={currentPage === "draft"}>
+                  <MediaDownloadPage />
+                </KeepAlivePane>
+
+                <KeepAlivePane active={currentPage === "refine"}>
+                  <MediaEditPage
+                    isVideoExporting={isVideoExporting}
+                    setIsVideoExporting={setIsVideoExporting}
+                  />
+                </KeepAlivePane>
+
+
+                <KeepAlivePane active={currentPage === "settings"}>
+                  <SettingsPage onBack={() => setCurrentPage(null)} />
+                </KeepAlivePane>
+
+                <KeepAlivePane active={currentPage === "projects"}>
+                  <ProjectManager />
+                </KeepAlivePane>
+              </>
+            )}
+          </Suspense>
+        </main>
       </div>
+      
+      {/* 전역 토스트 */}
+      <GlobalToast />
     </div>
   );
 }
+
+export default memo(App);

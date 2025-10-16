@@ -57,6 +57,7 @@ export default function RefineEditor({
     lineClamp: 2,
     maxLineChars: 16,
   });
+  const [aspectRatio, setAspectRatio] = useState("16:9");
 
   // ---------- 내부 setScenes 헬퍼 (상위 콜백 연동) ----------
   const updateScenes = (next) => {
@@ -258,6 +259,7 @@ export default function RefineEditor({
                 onSeek={setCurrentTime}
                 scene={sel}
                 styleOpt={style}
+                aspectRatio={aspectRatio}
               />
               <div className="mt-4">
                 <TimelineBar
@@ -280,6 +282,33 @@ export default function RefineEditor({
             <h2 className="text-sm font-semibold text-slate-700 mb-3">
               스타일 & 규칙
             </h2>
+
+            {/* 화면 비율 선택 */}
+            <div className="mb-4">
+              <label className="block text-xs text-slate-600 mb-2">
+                화면 비율 (프리뷰)
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {["16:9", "9:16", "1:1", "4:3"].map((ratio) => (
+                  <button
+                    key={ratio}
+                    className={`px-2 py-2 rounded-lg border text-xs font-medium transition-all ${
+                      aspectRatio === ratio
+                        ? "bg-indigo-600 text-white border-indigo-600"
+                        : "bg-white text-slate-700 border-slate-300 hover:border-indigo-400"
+                    }`}
+                    onClick={() => setAspectRatio(ratio)}
+                  >
+                    {ratio}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {aspectRatio === "16:9" ? "가로형 (유튜브)" :
+                 aspectRatio === "9:16" ? "세로형 (쇼츠)" :
+                 aspectRatio === "1:1" ? "정사각형 (인스타)" : "일반 (4:3)"}
+              </div>
+            </div>
 
             <label className="block text-xs text-slate-600 mb-1">
               폰트 크기

@@ -11,6 +11,7 @@ package-lock.json
 # Build Output
 # ========================
 dist/
+dist_electron/
 build/
 out/
 *.tsbuildinfo
@@ -33,6 +34,7 @@ ehthumbs.db
 *.swo
 *.bak
 *.tmp
+nul
 
 # ========================
 # VSCode

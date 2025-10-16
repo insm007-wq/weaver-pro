@@ -1,160 +1,429 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { makeStyles, shorthands, tokens, Button, Text, Title3, Caption1, Tooltip, mergeClasses } from "@fluentui/react-components";
+import {
+  FolderOpenRegular,
+  ImageRegular,
+  SettingsRegular,
+  DocumentTextRegular,
+  WandRegular,
+  RocketRegular,
+  VideoRegular,
+  WrenchScrewdriverRegular,
+  ChevronLeftRegular,
+  ChevronRightRegular,
+} from "@fluentui/react-icons";
 
-export default function Sidebar({ onSelectMenu }) {
+const useStyles = makeStyles({
+  sidebar: {
+    display: "flex",
+    flexDirection: "column",
+    minHeight: "100vh",
+    backgroundColor: tokens.colorNeutralBackground1,
+    ...shorthands.borderRight("1px", "solid", tokens.colorNeutralStroke1),
+    transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+    position: "relative",
+    boxShadow: "4px 0 12px rgba(0, 0, 0, 0.05)",
+    backdropFilter: "blur(10px)",
+    WebkitBackdropFilter: "blur(10px)",
+  },
+  expanded: {
+    width: "280px",
+  },
+  collapsed: {
+    width: "72px",
+  },
+  toggleContainer: {
+    display: "flex",
+    justifyContent: "flex-end",
+    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalM),
+    ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke2),
+  },
+  
+  headerSection: {
+    ...shorthands.padding(tokens.spacingVerticalXL, tokens.spacingHorizontalL),
+    ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke2),
+    background: `linear-gradient(135deg, ${tokens.colorBrandBackground} 0%, ${tokens.colorBrandBackground2} 100%)`,
+    color: tokens.colorNeutralForegroundOnBrand,
+    position: "relative",
+    "&::before": {
+      content: "''",
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: "rgba(255, 255, 255, 0.1)",
+      backdropFilter: "blur(10px)",
+      WebkitBackdropFilter: "blur(10px)",
+    },
+  },
+  
+  logoContainer: {
+    display: "flex",
+    alignItems: "center",
+    ...shorthands.gap(tokens.spacingHorizontalM),
+    position: "relative",
+    zIndex: 1,
+  },
+  
+  logoBox: {
+    width: "44px",
+    height: "44px",
+    minWidth: "44px",
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    ...shorthands.borderRadius(tokens.borderRadiusLarge),
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "20px",
+    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+    backdropFilter: "blur(10px)",
+    WebkitBackdropFilter: "blur(10px)",
+    ...shorthands.border("1px", "solid", "rgba(255, 255, 255, 0.3)"),
+  },
+  logoText: {
+    animation: "fadeIn 0.3s ease-out",
+    color: "inherit",
+  },
+  
+  mainContent: {
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.padding(tokens.spacingVerticalL, "0"),
+    paddingBottom: tokens.spacingVerticalM,
+  },
+  
+  navigation: {
+    ...shorthands.padding("0", tokens.spacingHorizontalM),
+    marginBottom: tokens.spacingVerticalL,
+  },
+  
+  sectionTitle: {
+    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
+    marginBottom: tokens.spacingVerticalM,
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+    fontWeight: tokens.fontWeightSemibold,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  },
+  
+  menuSection: {
+    marginBottom: tokens.spacingVerticalL,
+  },
+  
+  menuItem: {
+    display: "flex",
+    alignItems: "center",
+    width: "100%",
+    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalM),
+    ...shorthands.margin("0", tokens.spacingHorizontalXS),
+    ...shorthands.borderRadius(tokens.borderRadiusLarge),
+    backgroundColor: "transparent",
+    cursor: "pointer",
+    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+    position: "relative",
+    "&::before": {
+      content: "''",
+      position: "absolute",
+      left: "0",
+      top: "50%",
+      transform: "translateY(-50%)",
+      width: "3px",
+      height: "0",
+      backgroundColor: tokens.colorBrandBackground,
+      ...shorthands.borderRadius("0", "2px", "2px", "0"),
+      transition: "height 0.3s ease",
+    },
+    "&:hover": {
+      backgroundColor: "rgba(0, 120, 212, 0.05)",
+      transform: "translateX(4px)",
+      "&::before": {
+        height: "24px",
+      },
+    },
+    "&:active": {
+      transform: "translateX(2px)",
+      backgroundColor: "rgba(0, 120, 212, 0.1)",
+    },
+  },
+  menuItemCollapsed: {
+    justifyContent: "center",
+    ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalS),
+    ...shorthands.margin("0", tokens.spacingHorizontalXXS),
+  },
+  
+  iconContainer: {
+    width: "24px",
+    height: "24px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "all 0.2s ease",
+    marginRight: tokens.spacingHorizontalM,
+    fontSize: "18px",
+  },
+  
+  iconContainerCollapsed: {
+    marginRight: "0",
+    fontSize: "20px",
+  },
+  
+  menuContent: {
+    flex: 1,
+    animation: "fadeIn 0.3s ease-out",
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.gap(tokens.spacingVerticalXXS),
+  },
+  
+  menuLabel: {
+    fontSize: tokens.fontSizeBase300,
+    fontWeight: tokens.fontWeightMedium,
+    color: tokens.colorNeutralForeground1,
+  },
+  
+  menuDescription: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground3,
+  },
+  footer: {
+    ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalL),
+    ...shorthands.borderTop("1px", "solid", tokens.colorNeutralStroke1),
+    marginTop: tokens.spacingVerticalL,
+    marginBottom: tokens.spacingVerticalM,
+  },
+  
+  footerContent: {
+    display: "flex",
+    flexDirection: "column",
+    ...shorthands.gap(tokens.spacingVerticalXS),
+  },
+
+  footerSpacer: {
+    flex: 1,
+  },
+});
+
+export default function Sidebar({ onSelectMenu, isScriptGenerating = false, isVideoExporting = false }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const styles = useStyles();
+
+  // 디버깅: prop 확인
+  useEffect(() => {
+    console.log("🟢 Sidebar - isScriptGenerating:", isScriptGenerating);
+  }, [isScriptGenerating]);
 
   const globalMenu = [
     {
-      icon: "🗂️",
+      icon: <FolderOpenRegular />,
       label: "프로젝트 관리",
       desc: "새 프로젝트 생성 및 관리",
-      key: "project",
+      key: "projects",
+      color: tokens.colorPaletteBlueForeground1,
     },
     {
-      icon: "🖼️",
+      icon: <ImageRegular />,
       label: "AI 썸네일 생성기",
       desc: "독립형 썸네일 제작 유틸리티",
       key: "thumbnail",
+      color: tokens.colorPaletteGreenForeground1,
     },
     {
-      icon: "⚙️",
+      icon: <SettingsRegular />,
       label: "전역 설정",
       desc: "API 및 계정 설정",
       key: "settings",
+      color: tokens.colorPaletteMarigoldForeground1,
     },
   ];
 
   const projectMenu = [
-    { icon: "📜", label: "대본", desc: "대본 및 음성 생성", key: "script" },
     {
-      icon: "✨",
-      label: "영상 구성",
-      desc: "AI 전략 설정 및 타임라인 생성",
-      key: "assemble",
+      icon: <DocumentTextRegular />,
+      label: "대본",
+      desc: "대본 및 음성 생성",
+      key: "script",
+      color: tokens.colorPaletteBlueForeground1,
     },
     {
-      icon: "🚀",
-      label: "초안 내보내기",
+      icon: <WandRegular />,
+      label: "미디어 준비",
+      desc: "자막과 오디오 업로드, AI 키워드 추출",
+      key: "assemble",
+      color: tokens.colorPalettePurpleForeground1,
+    },
+    {
+      icon: <RocketRegular />,
+      label: "미디어 다운로드",
       desc: "Draft 영상 렌더링",
       key: "draft",
+      color: tokens.colorPaletteMagentaForeground1,
     },
     {
-      icon: "🎬",
-      label: "편집 및 다듬기",
-      desc: "세부 편집 및 교체",
+      icon: <VideoRegular />,
+      label: "영상 완성",
+      desc: "편집 및 최종 영상 출력",
       key: "refine",
+      color: tokens.colorPaletteRedForeground1,
     },
-    { icon: "🏆", label: "최종 완성", desc: "최종 영상 출력", key: "finalize" },
-    {
-      icon: "🔧",
-      label: "프로젝트 설정",
-      desc: "프롬프트 및 모델 설정",
-      key: "projectSettings",
-    },
+    // {
+    //   icon: <TrophyRegular />,
+    //   label: "최종 완성",
+    //   desc: "최종 영상 출력",
+    //   key: "finalize",
+    //   color: tokens.colorPaletteYellowForeground1,
+    // },
+    // {
+    //   icon: <WrenchScrewdriverRegular />,
+    //   label: "프로젝트 설정",
+    //   desc: "프롬프트 및 모델 설정",
+    //   key: "projectSettings",
+    //   color: tokens.colorNeutralForeground2,
+    // },
   ];
 
   const handleMenuClick = (key) => {
     if (onSelectMenu) onSelectMenu(key);
   };
 
-  return (
-    <aside
-      className={`${
-        isCollapsed ? "w-20" : "w-72"
-      } bg-white text-slate-800 flex flex-col justify-between shadow-xl border-r border-slate-200 transition-all duration-300`}
-    >
-      <div>
-        {/* Toggle */}
-        <div className="flex justify-end p-4">
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="text-sm bg-slate-100 rounded px-2 py-1 hover:bg-slate-200 transition"
-          >
-            {isCollapsed ? "➡️" : "⬅️"}
-          </button>
-        </div>
+  const MenuItem = ({ item, collapsed }) => {
+    // 대본 생성 중일 때 미디어 준비/다운로드/영상 완성 탭 비활성화
+    // 영상 생성 중일 때 대본/미디어 준비/미디어 다운로드 탭 비활성화
+    const isDisabled =
+      (isScriptGenerating && (item.key === "assemble" || item.key === "draft" || item.key === "refine")) ||
+      (isVideoExporting && (item.key === "script" || item.key === "assemble" || item.key === "draft"));
 
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-6 mb-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-cyan-400 flex items-center justify-center text-white text-xl shadow">
-            🎥
+    const content = (
+      <div
+        className={mergeClasses(styles.menuItem, collapsed && styles.menuItemCollapsed)}
+        onClick={() => !isDisabled && handleMenuClick(item.key)}
+        style={{
+          opacity: isDisabled ? 0.5 : 1,
+          cursor: isDisabled ? "not-allowed" : "pointer",
+          pointerEvents: isDisabled ? "none" : "auto"
+        }}
+      >
+        <div
+          className={mergeClasses(styles.iconContainer, collapsed && styles.iconContainerCollapsed)}
+          style={{ color: item.color }}
+        >
+          {item.icon}
+        </div>
+        {!collapsed && (
+          <div className={styles.menuContent}>
+            <div className={styles.menuLabel}>
+              {item.label}
+            </div>
+            <div className={styles.menuDescription}>
+              {item.desc}
+            </div>
           </div>
+        )}
+      </div>
+    );
+
+    if (collapsed) {
+      let tooltipText;
+      if (isDisabled) {
+        if (isScriptGenerating) {
+          tooltipText = "⚠️ 대본 생성 중에는 이동할 수 없습니다";
+        } else if (isVideoExporting) {
+          tooltipText = "⚠️ 영상 생성 중에는 이동할 수 없습니다";
+        }
+      } else {
+        tooltipText = `${item.label} - ${item.desc}`;
+      }
+      return (
+        <Tooltip content={tooltipText} relationship="label" positioning="after">
+          {content}
+        </Tooltip>
+      );
+    }
+
+    if (isDisabled) {
+      const warningText = isScriptGenerating
+        ? "⚠️ 대본 생성 중에는 이동할 수 없습니다"
+        : "⚠️ 영상 생성 중에는 이동할 수 없습니다";
+      return (
+        <Tooltip content={warningText} relationship="label" positioning="above">
+          {content}
+        </Tooltip>
+      );
+    }
+
+    return content;
+  };
+
+  return (
+    <aside className={mergeClasses(styles.sidebar, isCollapsed ? styles.collapsed : styles.expanded)}>
+      {/* Toggle Button */}
+      <div className={styles.toggleContainer}>
+        <Button
+          appearance="subtle"
+          icon={isCollapsed ? <ChevronRightRegular /> : <ChevronLeftRegular />}
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          size="small"
+        />
+      </div>
+
+      {/* Header Section */}
+      <div className={styles.headerSection}>
+        <div className={styles.logoContainer}>
+          <div className={styles.logoBox}>🎬</div>
           {!isCollapsed && (
-            <div>
-              <div className="text-base font-bold">Content Weaver Pro</div>
-              <div className="text-xs text-slate-500">AI 영상 제작 솔루션</div>
+            <div className={styles.logoText}>
+              <Title3 block>Weaver Pro</Title3>
+              <Caption1 block>
+                AI 영상 제작 솔루션
+              </Caption1>
             </div>
           )}
         </div>
+      </div>
 
+      {/* Main Content */}
+      <div className={styles.mainContent}>
         {/* Global Menu */}
-        <nav className="px-4 py-2">
-          <ul className="space-y-2">
+        <nav className={styles.navigation}>
+          {!isCollapsed && (
+            <div className={styles.sectionTitle}>전역 메뉴</div>
+          )}
+          <div className={styles.menuSection}>
             {globalMenu.map((item) => (
-              <li
-                key={item.key}
-                onClick={() => handleMenuClick(item.key)}
-                className="group relative flex items-center gap-3 text-sm font-medium text-slate-700 hover:bg-blue-50 px-3 py-2 rounded transition-all cursor-pointer"
-              >
-                <span className="text-lg">{item.icon}</span>
-                {!isCollapsed ? (
-                  <div>
-                    <div className="text-slate-800">{item.label}</div>
-                    <div className="text-xs text-slate-500 ml-1">
-                      {item.desc}
-                    </div>
-                  </div>
-                ) : (
-                  <span className="absolute left-16 bg-white text-xs shadow px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap z-10">
-                    {item.label}
-                  </span>
-                )}
-              </li>
+              <MenuItem key={item.key} item={item} collapsed={isCollapsed} />
             ))}
-          </ul>
+          </div>
         </nav>
 
-        {/* Divider */}
-        {!isCollapsed && (
-          <div className="px-6 py-1 text-xs text-slate-400 border-b border-slate-200">
-            프로젝트 작업 영역
-          </div>
-        )}
-
         {/* Project Menu */}
-        <nav className="px-4 py-2">
-          <ul className="space-y-2">
+        <nav className={styles.navigation}>
+          {!isCollapsed && (
+            <div className={styles.sectionTitle}>프로젝트 워크플로우</div>
+          )}
+          <div className={styles.menuSection}>
             {projectMenu.map((item) => (
-              <li
-                key={item.key}
-                onClick={() => handleMenuClick(item.key)}
-                className="group relative flex items-center gap-3 text-sm font-medium text-slate-700 hover:bg-blue-50 px-3 py-2 rounded transition-all cursor-pointer"
-              >
-                <span className="text-lg">{item.icon}</span>
-                {!isCollapsed ? (
-                  <div>
-                    <div className="text-slate-800">{item.label}</div>
-                    <div className="text-xs text-slate-500 ml-1">
-                      {item.desc}
-                    </div>
-                  </div>
-                ) : (
-                  <span className="absolute left-16 bg-white text-xs shadow px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap z-10">
-                    {item.label}
-                  </span>
-                )}
-              </li>
+              <MenuItem key={item.key} item={item} collapsed={isCollapsed} />
             ))}
-          </ul>
+          </div>
         </nav>
       </div>
 
       {/* Footer */}
       {!isCollapsed && (
-        <div className="text-xs text-slate-400 p-4 border-t border-slate-200">
-          <div>Version 1.0.0</div>
-          <div className="text-[10px] mt-1">© 2025 Content Weaver</div>
-        </div>
+        <>
+          <div className={styles.footer}>
+            <div className={styles.footerContent}>
+              <Text size={200} weight="medium">
+                Version 1.0.0
+              </Text>
+              <Caption1 color="subtle">
+                © 2025 Weaver Pro
+              </Caption1>
+            </div>
+          </div>
+          <div className={styles.footerSpacer} />
+        </>
       )}
     </aside>
   );

@@ -40,42 +40,17 @@ async function pingAnthropic(apiKey) {
     return { state: "fail", detail: e?.response?.status || e?.message };
   }
 }
-async function pingMiniMax(key, groupId) {
-  if (!key || !groupId)
-    return { state: "missing", detail: !key ? "no key" : "no groupId" };
-  try {
-    await axios.post(
-      "https://api.minimax.chat/v1/text/chatcompletion",
-      { model: "abab5.5-chat", messages: [{ role: "user", content: "ping" }] },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${key}`,
-          "X-Group-Id": groupId,
-        },
-        timeout: 12000,
-      }
-    );
-    return { state: "ok", detail: "reachable" };
-  } catch (e) {
-    return { state: "fail", detail: e?.response?.status || e?.message };
-  }
-}
 
 ipcMain.handle("health:check", async () => {
-  const [anthropicKey, replicateKey, miniMaxKey, miniMaxGroupId] =
-    await Promise.all([
-      getSecret("anthropicKey"),
-      getSecret("replicateKey"),
-      getSecret("miniMaxKey"),
-      Promise.resolve(store.get("miniMaxGroupId")),
-    ]);
-
-  const [anthropic, replicate, minimax] = await Promise.all([
-    pingAnthropic(anthropicKey),
-    pingReplicate(replicateKey),
-    pingMiniMax(miniMaxKey, miniMaxGroupId),
+  const [anthropicKey, replicateKey] = await Promise.all([
+    getSecret("anthropicKey"),
+    getSecret("replicateKey"),
   ]);
 
-  return { ok: true, timestamp: Date.now(), anthropic, replicate, minimax };
+  const [anthropic, replicate] = await Promise.all([
+    pingAnthropic(anthropicKey),
+    pingReplicate(replicateKey),
+  ]);
+
+  return { ok: true, timestamp: Date.now(), anthropic, replicate };
 });
