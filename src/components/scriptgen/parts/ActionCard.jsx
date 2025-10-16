@@ -446,13 +446,7 @@ const ActionCard = memo(
                   }
                 }}
                 disabled={!fullVideoState.isGenerating && isDisabled}
-                style={{
-                  ...styles.button,
-                  ...(fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" && {
-                    borderColor: tokens.colorPaletteRedBorder2,
-                    color: tokens.colorPaletteRedForeground1,
-                  })
-                }}
+                style={styles.button}
               >
                 {fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" ? (
                   "⏹ 생성 중지"

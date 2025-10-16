@@ -442,6 +442,10 @@ function MediaDownloadPage() {
     cancelledRef.current = true;
     resetDownloadState();
 
+    // 진행 상태 및 다운로드된 데이터 초기화
+    setDownloadProgress({});
+    setDownloadedVideos([]);
+
     if (progressListenerRef.current) {
       progressListenerRef.current();
       progressListenerRef.current = null;
@@ -451,7 +455,7 @@ function MediaDownloadPage() {
       if (window.api?.cancelVideoDownload) {
         await window.api.cancelVideoDownload();
       }
-      showSuccess("다운로드가 취소되었습니다.");
+      // 토스트 제거 - 대본 취소와 일관성 유지
     } catch (error) {
       console.error("취소 실패:", error);
       showError("취소 중 오류가 발생했습니다.");
@@ -527,13 +531,13 @@ function MediaDownloadPage() {
               </Badge>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <Button appearance="subtle" size="small" onClick={() => loadKeywordsFromJSON(true)}>
+              <Button appearance="subtle" size="small" onClick={() => loadKeywordsFromJSON(true)} disabled={isDownloading}>
                 <ArrowClockwiseRegular style={{ fontSize: 16 }} />
               </Button>
-              <Button appearance="subtle" size="small" onClick={selectAllKeywords}>
+              <Button appearance="subtle" size="small" onClick={selectAllKeywords} disabled={isDownloading}>
                 {selectedKeywords.size === keywords.length ? "전체 해제" : "전체 선택"}
               </Button>
-              <Button appearance="subtle" size="small" onClick={() => window.dispatchEvent(new CustomEvent("reset-media-download"))}>
+              <Button appearance="subtle" size="small" onClick={() => window.dispatchEvent(new CustomEvent("reset-media-download"))} disabled={isDownloading}>
                 초기화
               </Button>
             </div>
@@ -592,38 +596,22 @@ function MediaDownloadPage() {
           <div style={{ marginTop: "auto" }}>
             <Divider style={{ margin: "16px 0" }} />
 
-            {isDownloading ? (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 8,
-                  padding: 16,
-                  backgroundColor: "#f8f8f8",
-                  borderRadius: 8,
-                  border: "1px solid #e0e0e0",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                  <Text size={300} weight="semibold">
-                    다운로드 진행 중
-                  </Text>
-                  {estimatedTimeRemaining !== null && (
-                    <Badge appearance="filled" color="informative" size="small">
-                      {estimatedTimeRemaining <= 0
-                        ? "거의 완료 중..."
-                        : estimatedTimeRemaining >= 3600
-                        ? `${Math.floor(estimatedTimeRemaining / 3600)}시간 ${Math.floor((estimatedTimeRemaining % 3600) / 60)}분 남음`
-                        : `${Math.floor(estimatedTimeRemaining / 60)}분 ${Math.floor(estimatedTimeRemaining % 60)}초 남음`}
-                    </Badge>
-                  )}
-                </div>
-                <Button appearance="secondary" size="medium" onClick={cancelDownload} style={{ width: "100%" }}>
-                  <DismissCircle24Regular style={{ marginRight: 8 }} />
-                  다운로드 취소
-                </Button>
+            {isDownloading && estimatedTimeRemaining !== null && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <Text size={300} weight="semibold">
+                  다운로드 진행 중
+                </Text>
+                <Badge appearance="filled" color="informative" size="small">
+                  {estimatedTimeRemaining <= 0
+                    ? "거의 완료 중..."
+                    : estimatedTimeRemaining >= 3600
+                    ? `${Math.floor(estimatedTimeRemaining / 3600)}시간 ${Math.floor((estimatedTimeRemaining % 3600) / 60)}분 남음`
+                    : `${Math.floor(estimatedTimeRemaining / 60)}분 ${Math.floor(estimatedTimeRemaining % 60)}초 남음`}
+                </Badge>
               </div>
-            ) : (
+            )}
+
+            {!isDownloading ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <style>
                   {`
@@ -688,6 +676,17 @@ function MediaDownloadPage() {
                   </Text>
                 )}
               </div>
+            ) : (
+              <Button
+                appearance="secondary"
+                size="large"
+                onClick={cancelDownload}
+                style={{
+                  width: "100%",
+                }}
+              >
+                ⏹ 다운로드 중지
+              </Button>
             )}
           </div>
         </Card>
@@ -715,6 +714,7 @@ function MediaDownloadPage() {
                   value={downloadOptions.videosPerKeyword}
                   onChange={(_, d) => setDownloadOptions((p) => ({ ...p, videosPerKeyword: d.value }))}
                   style={{ width: "100%" }}
+                  disabled={isDownloading}
                 />
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#666", marginTop: 4 }}>
                   <span>1개</span>
@@ -737,6 +737,7 @@ function MediaDownloadPage() {
                   value={downloadOptions.maxFileSize}
                   onChange={(_, d) => setDownloadOptions((p) => ({ ...p, maxFileSize: d.value }))}
                   style={{ width: "100%" }}
+                  disabled={isDownloading}
                 />
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#666", marginTop: 4 }}>
                   <span>1MB</span>
@@ -756,6 +757,7 @@ function MediaDownloadPage() {
                   value={resolutionText}
                   onOptionSelect={(_, data) => setDownloadOptions((p) => ({ ...p, minResolution: data.optionValue }))}
                   style={{ width: "100%" }}
+                  disabled={isDownloading}
                 >
                   <Option value="480p">480p (SD)</Option>
                   <Option value="720p">720p (HD)</Option>
@@ -775,6 +777,7 @@ function MediaDownloadPage() {
                   value={aspectRatioText}
                   onOptionSelect={(_, data) => setDownloadOptions((p) => ({ ...p, aspectRatio: data.optionValue }))}
                   style={{ width: "100%" }}
+                  disabled={isDownloading}
                 >
                   <Option value="any">제한 없음</Option>
                   <Option value="16:9">16:9 (와이드)</Option>

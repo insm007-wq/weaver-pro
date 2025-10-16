@@ -1,4 +1,4 @@
-import { memo, useState, useCallback } from "react";
+import { memo, useState, useCallback, useEffect } from "react";
 import { Text, Button, tokens } from "@fluentui/react-components";
 import { ChevronUpRegular, ChevronDownRegular, DismissRegular } from "@fluentui/react-icons";
 
@@ -27,6 +27,13 @@ const BottomFixedBar = memo(({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isClosed, setIsClosed] = useState(false);
+
+  // isLoading이 true로 변경되면 (다시 시작하면) isClosed를 false로 리셋
+  useEffect(() => {
+    if (isLoading) {
+      setIsClosed(false);
+    }
+  }, [isLoading]);
 
   const toggleExpand = useCallback(() => {
     setIsExpanded((prev) => !prev);

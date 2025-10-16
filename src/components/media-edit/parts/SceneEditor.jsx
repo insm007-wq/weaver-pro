@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Text, Button, Card, Dialog, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions } from "@fluentui/react-components";
+import { Text, Button, Card, Dialog, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, tokens } from "@fluentui/react-components";
 import {
   SettingsRegular,
   ArrowExportRegular,
@@ -372,17 +372,25 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
           </div>
         )}
 
-        {!isExporting && (
-          <Button
-            appearance="primary"
-            icon={<ArrowExportRegular />}
-            onClick={handleExportProject}
-            disabled={!scenes || scenes.length === 0}
-            style={{ width: "100%" }}
-          >
-            영상 내보내기
-          </Button>
-        )}
+        <Button
+          appearance={isExporting ? "secondary" : "primary"}
+          icon={isExporting ? null : <ArrowExportRegular />}
+          onClick={() => {
+            if (isExporting) {
+              // 취소 로직
+              handleCancelExport();
+            } else {
+              // 내보내기 시작
+              handleExportProject();
+            }
+          }}
+          disabled={!isExporting && (!scenes || scenes.length === 0)}
+          style={{
+            width: "100%",
+          }}
+        >
+          {isExporting ? "⏹ 내보내기 중지" : "영상 내보내기"}
+        </Button>
 
         <Text size={200} style={{ color: "#666", marginTop: 8, display: "block" }}>
           모든 씬을 하나의 영상으로 합성합니다
@@ -509,20 +517,9 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
                     💡 예상 시간은 대략적인 값이며 실제와 다를 수 있습니다
                   </Text>
                 )}
-                <Button
-                  appearance="secondary"
-                  onClick={handleCancelExport}
-                  style={{ width: "100%", marginTop: 8 }}
-                >
-                  내보내기 취소
-                </Button>
               </div>
             </div>
           }
-          onClose={() => {
-            // 닫기 버튼 클릭시 취소 처리
-            handleCancelExport();
-          }}
         />
       )}
     </Card>
