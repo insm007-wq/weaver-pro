@@ -219,12 +219,14 @@ const DropZone = memo(({ icon, label, caption, connected, onClick, inputRef, acc
       <CardFooter>
         <Button
           appearance={connected ? "primary" : "outline"}
-          size="small"
+          size="medium"
           icon={connected ? <CheckmarkCircle20Filled /> : icon}
           onClick={onClick}
           style={{
             width: "100%",
-            minWidth: "200px",
+            minWidth: "240px",
+            height: "40px",
+            fontSize: "14px",
             backgroundColor: connected ? tokens.colorPaletteGreenBackground1 : "transparent",
             borderColor: connected ? tokens.colorPaletteGreenBorderActive : tokens.colorBrandStroke1,
             color: connected ? tokens.colorPaletteGreenForeground1 : colorTheme.textColor,
@@ -327,8 +329,8 @@ const FileSelection = memo(
                   fontSize: "13px",
                   fontWeight: 600,
                   borderRadius: "6px",
-                  minWidth: "150px",
-                  width: "150px",
+                  minWidth: "180px",
+                  width: "180px",
                   boxShadow: `0 2px 8px ${tokens.colorBrandBackground}60`,
                 }}
               >
@@ -348,8 +350,8 @@ const FileSelection = memo(
                   backgroundColor: tokens.colorPaletteRedBackground1,
                   border: `1px solid ${tokens.colorPaletteRedBorder1}`,
                   transition: "all 200ms cubic-bezier(0.23, 1, 0.32, 1)",
-                  minWidth: "150px",
-                  width: "150px",
+                  minWidth: "180px",
+                  width: "180px",
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundColor = tokens.colorPaletteRedBackground2;

@@ -184,7 +184,7 @@ const Step2KeywordExtraction = memo(
           <div style={{ display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM }}>
             <PrimaryButton
               size="medium"
-              style={{ height: 40, maxWidth: 360, alignSelf: "center" }}
+              style={{ height: 40, minWidth: 280, maxWidth: 480, alignSelf: "center" }}
               disabled={!srtConnected || isExtracting}
               onClick={() => handleExtractKeywords(safeScenes)}
             >

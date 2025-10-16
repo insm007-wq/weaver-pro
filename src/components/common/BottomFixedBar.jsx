@@ -13,7 +13,7 @@ import { ChevronUpRegular, ChevronDownRegular, DismissRegular } from "@fluentui/
  * @param {string} props.borderColor - 상단 보더 색상
  * @param {React.ReactNode} props.expandedContent - 펼쳐졌을 때 표시할 내용
  * @param {Object} props.nextStepButton - 다음 단계 버튼 설정 { text, eventName }
- * @param {Function} props.onClose - 닫기 콜백
+ * @param {Function} props.onClose - 닫기 콜백 (완료 시에만 표시)
  */
 const BottomFixedBar = memo(({
   isComplete = false,
@@ -154,6 +154,7 @@ const BottomFixedBar = memo(({
                   fontSize: "13px",
                   fontWeight: 600,
                   border: "none",
+                  minWidth: "180px",
                 }}
               >
                 {nextStepButton.text}
@@ -161,22 +162,30 @@ const BottomFixedBar = memo(({
             )}
 
             {/* 상세보기/접기 버튼 */}
-            <Button appearance="subtle" size="small" icon={isExpanded ? <ChevronDownRegular /> : <ChevronUpRegular />}>
+            <Button
+              appearance="subtle"
+              size="medium"
+              icon={isExpanded ? <ChevronDownRegular /> : <ChevronUpRegular />}
+              style={{ minWidth: "100px" }}
+            >
               {isExpanded ? "접기" : "상세보기"}
             </Button>
 
-            {/* 닫기 버튼 */}
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<DismissRegular />}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleClose();
-              }}
-            >
-              닫기
-            </Button>
+            {/* 닫기 버튼 (완료 시에만 표시) */}
+            {isComplete && (
+              <Button
+                appearance="subtle"
+                size="medium"
+                icon={<DismissRegular />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleClose();
+                }}
+                style={{ minWidth: "80px" }}
+              >
+                닫기
+              </Button>
+            )}
           </div>
         </div>
 
