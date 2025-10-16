@@ -11,20 +11,20 @@ module.exports = {
 
   // 문자열 암호화 (중요!)
   stringArray: true, // 문자열을 배열로 이동
-  rotateStringArray: true, // 배열 위치 섞기
+  rotateStringArray: false, // 배열 위치 섞기 (백신 오탐 방지)
   shuffleStringArray: true, // 배열 순서 섞기
-  stringArrayThreshold: 0.75, // 75%의 문자열만 암호화 (균형)
+  stringArrayThreshold: 0.5, // 50%의 문자열만 암호화 (백신 오탐 방지)
   stringArrayIndexShift: true, // 인덱스 변환
-  stringArrayWrappersCount: 2, // 래퍼 함수 2개
-  stringArrayWrappersChainedCalls: true, // 체인 호출
+  stringArrayWrappersCount: 1, // 래퍼 함수 1개 (백신 오탐 방지)
+  stringArrayWrappersChainedCalls: false, // 체인 호출 (백신 오탐 방지)
 
   // 컨트롤 플로우 (성능 영향 최소화)
   controlFlowFlattening: false, // ❌ 매우 느려짐 (사용 안 함)
   deadCodeInjection: false, // ❌ 파일 크기 증가 (사용 안 함)
 
   // 변환 옵션
-  transformObjectKeys: true, // 객체 키 변환
-  splitStrings: true, // 문자열 분할
+  transformObjectKeys: false, // 객체 키 변환 (백신 오탐 방지)
+  splitStrings: false, // 문자열 분할 (백신 오탐 방지)
   splitStringsChunkLength: 10, // 10글자씩 분할
 
   // 디버그 보호 (선택적)
