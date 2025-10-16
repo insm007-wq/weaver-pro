@@ -90,9 +90,6 @@ export function useApi(options = {}) {
     const logMessage = `[${timestamp}] [useApi] ${message}`;
     
     switch (level) {
-      case 'info':
-        console.log(logMessage, data);
-        break;
       case 'warn':
         console.warn(logMessage, data);
         break;
@@ -100,7 +97,7 @@ export function useApi(options = {}) {
         console.error(logMessage, data);
         break;
       default:
-        console.log(logMessage, data);
+        break;
     }
   }, [enableLogging]);
 

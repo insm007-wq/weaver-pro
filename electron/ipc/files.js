@@ -258,8 +258,6 @@ ipcMain.handle("fs:mkDirRecursive", async (_e, { dirPath }) => {
 /** ✅ URL을 지정된 경로에 다운로드 */
 ipcMain.handle("files:writeUrl", async (_evt, { url, filePath }) => {
   try {
-    console.log("🌐 files:writeUrl 호출됨:", { url, filePath });
-
     if (!url || typeof url !== "string") {
       return { success: false, message: "url_required" };
     }
@@ -269,13 +267,10 @@ ipcMain.handle("files:writeUrl", async (_evt, { url, filePath }) => {
 
     // 디렉토리 생성
     const dir = path.dirname(filePath);
-    console.log("📁 디렉토리 확인/생성:", dir);
     ensureDirSync(dir);
 
     // 파일 다운로드 및 저장
-    console.log("🌐 URL 다운로드 시작:", url);
     await streamDownloadToFile(url, filePath);
-    console.log("✅ files:writeUrl 완료:", filePath);
 
     // 파일이 실제로 생성되었는지 확인
     const exists = fs.existsSync(filePath);
@@ -307,8 +302,6 @@ ipcMain.handle("files:writeUrl", async (_evt, { url, filePath }) => {
 /** ✅ 버퍼를 지정된 경로에 저장 */
 ipcMain.handle("files:writeBuffer", async (_evt, { buffer, filePath }) => {
   try {
-    console.log("💾 files:writeBuffer 호출됨:", { filePath, bufferLength: buffer?.length });
-
     if (!buffer) {
       return { success: false, message: "buffer_required" };
     }
@@ -318,13 +311,11 @@ ipcMain.handle("files:writeBuffer", async (_evt, { buffer, filePath }) => {
 
     // 디렉토리 생성
     const dir = path.dirname(filePath);
-    console.log("📁 디렉토리 확인/생성:", dir);
     ensureDirSync(dir);
 
     // 버퍼를 파일로 저장
     const bufferData = toBuffer(buffer);
     await fs.promises.writeFile(filePath, bufferData);
-    console.log("✅ files:writeBuffer 완료:", filePath);
 
     // 파일이 실제로 생성되었는지 확인
     const exists = fs.existsSync(filePath);
@@ -356,26 +347,13 @@ ipcMain.handle("files:writeBuffer", async (_evt, { buffer, filePath }) => {
 /** 텍스트 파일 저장 */
 ipcMain.handle("files:writeText", async (_evt, { filePath, content }) => {
   try {
-    console.log("💾 files:writeText 호출됨:", {
-      filePath,
-      contentLength: content?.length,
-      contentPreview: content?.substring(0, 100)
-    });
-
     // 디렉토리 생성
     const dir = path.dirname(filePath);
-    console.log("📁 디렉토리 확인/생성:", dir);
 
     ensureDirSync(dir);
-    console.log("✅ 디렉토리 생성 완료:", dir);
-
-    // 파일 쓰기 전 경로 검증
-    console.log("📝 파일 쓰기 시작:", filePath);
-    console.log("📄 내용 길이:", content?.length);
 
     // 파일 쓰기
     await fs.promises.writeFile(filePath, content, 'utf8');
-    console.log("✅ files:writeText 완료:", filePath);
 
     // 파일이 실제로 생성되었는지 확인
     const exists = fs.existsSync(filePath);
@@ -395,8 +373,6 @@ ipcMain.handle("files:writeText", async (_evt, { filePath, content }) => {
 /** 디렉토리 목록 조회 */
 ipcMain.handle("files:listDirectory", async (_evt, dirPath) => {
   try {
-    console.log("📂 files:listDirectory 호출됨:", dirPath);
-
     if (!dirPath || typeof dirPath !== "string") {
       return { success: false, message: "dirPath_required" };
     }
@@ -434,7 +410,6 @@ ipcMain.handle("files:listDirectory", async (_evt, dirPath) => {
       }
     }
 
-    console.log(`✅ files:listDirectory 완료: ${files.length}개 항목 발견`);
     return { success: true, files };
   } catch (error) {
     console.error("❌ files:listDirectory 실패:", error);
@@ -445,8 +420,6 @@ ipcMain.handle("files:listDirectory", async (_evt, dirPath) => {
 /** ✅ 파일 탐색기에서 파일 보기 */
 ipcMain.handle("shell:showInFolder", async (_evt, { filePath }) => {
   try {
-    console.log("📂 shell:showInFolder 호출됨:", filePath);
-
     if (!filePath || typeof filePath !== "string") {
       return { success: false, message: "filePath_required" };
     }
@@ -458,7 +431,6 @@ ipcMain.handle("shell:showInFolder", async (_evt, { filePath }) => {
 
     // 파일을 선택한 상태로 탐색기 열기
     shell.showItemInFolder(filePath);
-    console.log("✅ shell:showInFolder 완료:", filePath);
 
     return { success: true };
   } catch (error) {
@@ -470,8 +442,6 @@ ipcMain.handle("shell:showInFolder", async (_evt, { filePath }) => {
 /** ✅ URL에서 파일 다운로드 및 저장 (사용자 선택) */
 ipcMain.handle("file:save-url", async (_evt, { url, suggestedName }) => {
   try {
-    console.log("💾 file:save-url 호출됨:", { url, suggestedName });
-
     if (!url || typeof url !== "string") {
       return { ok: false, message: "url_required" };
     }
@@ -483,7 +453,6 @@ ipcMain.handle("file:save-url", async (_evt, { url, suggestedName }) => {
       const match = urlPath.match(/\.([a-z0-9]+)$/i);
       if (match) {
         detectedExt = match[1].toLowerCase();
-        console.log(`🔍 URL에서 추출한 확장자: .${detectedExt}`);
       }
     } catch (e) {
       console.warn("⚠️ URL 파싱 실패, 기본 확장자 사용");
@@ -494,7 +463,6 @@ ipcMain.handle("file:save-url", async (_evt, { url, suggestedName }) => {
     if (detectedExt && suggestedName) {
       const nameWithoutExt = suggestedName.replace(/\.[^.]+$/, '');
       finalSuggestedName = `${nameWithoutExt}.${detectedExt}`;
-      console.log(`✏️ 파일명 수정: ${suggestedName} → ${finalSuggestedName}`);
     }
 
     // 파일 저장 대화상자 표시
@@ -509,14 +477,11 @@ ipcMain.handle("file:save-url", async (_evt, { url, suggestedName }) => {
     });
 
     if (canceled || !filePath) {
-      console.log("❌ 사용자가 저장을 취소함");
       return { ok: false, message: "canceled" };
     }
 
     // URL에서 파일 다운로드
-    console.log("🌐 URL 다운로드 시작:", url);
     await streamDownloadToFile(url, filePath);
-    console.log("✅ file:save-url 완료:", filePath);
 
     return { ok: true, path: filePath };
   } catch (error) {
@@ -528,8 +493,6 @@ ipcMain.handle("file:save-url", async (_evt, { url, suggestedName }) => {
 /** ✅ 썸네일 전용: URL 이미지를 JPEG로 변환하여 저장 (독립적 핸들러) */
 ipcMain.handle("file:save-thumbnail-as-jpeg", async (_evt, { url, suggestedName }) => {
   try {
-    console.log("🖼️ file:save-thumbnail-as-jpeg 호출됨:", { url, suggestedName });
-
     if (!url || typeof url !== "string") {
       return { ok: false, message: "url_required" };
     }
@@ -548,7 +511,6 @@ ipcMain.handle("file:save-thumbnail-as-jpeg", async (_evt, { url, suggestedName 
     let finalSuggestedName = suggestedName || "thumbnail.jpg";
     const nameWithoutExt = finalSuggestedName.replace(/\.[^.]+$/, '');
     finalSuggestedName = `${nameWithoutExt}.jpg`;
-    console.log(`✏️ JPEG 파일명: ${finalSuggestedName}`);
 
     // 파일 저장 대화상자 표시 (JPEG만)
     const { canceled, filePath } = await dialog.showSaveDialog({
@@ -562,25 +524,19 @@ ipcMain.handle("file:save-thumbnail-as-jpeg", async (_evt, { url, suggestedName 
     });
 
     if (canceled || !filePath) {
-      console.log("❌ 사용자가 저장을 취소함");
       return { ok: false, message: "canceled" };
     }
 
     // URL에서 이미지 다운로드 (메모리에)
-    console.log("🌐 이미지 다운로드 중:", url);
     const imageBuffer = await downloadBuffer(url);
-    console.log(`✅ 다운로드 완료: ${imageBuffer.length} bytes`);
 
     // Sharp로 JPEG 변환 (품질 90%)
-    console.log("🔄 JPEG 변환 중...");
     const jpegBuffer = await sharp(imageBuffer)
       .jpeg({ quality: 90 })
       .toBuffer();
-    console.log(`✅ JPEG 변환 완료: ${jpegBuffer.length} bytes`);
 
     // 파일 저장
     await fs.promises.writeFile(filePath, jpegBuffer);
-    console.log("✅ file:save-thumbnail-as-jpeg 완료:", filePath);
 
     return { ok: true, path: filePath };
   } catch (error) {
@@ -592,8 +548,6 @@ ipcMain.handle("file:save-thumbnail-as-jpeg", async (_evt, { url, suggestedName 
 /** ✅ 파일을 프로젝트 폴더에 저장 (드래그 앤 드롭용) */
 ipcMain.handle("files/saveToProject", async (_evt, { category, fileName, buffer }) => {
   try {
-    console.log("💾 files/saveToProject 호출됨:", { category, fileName, bufferSize: buffer?.byteLength });
-
     if (!category || !fileName || !buffer) {
       return { ok: false, message: "category, fileName, buffer 필수" };
     }
@@ -637,7 +591,6 @@ ipcMain.handle("files/saveToProject", async (_evt, { category, fileName, buffer 
     const bufferData = toBuffer(buffer);
     await fs.promises.writeFile(filePath, bufferData);
 
-    console.log("✅ files/saveToProject 완료:", filePath);
     return { ok: true, path: filePath };
   } catch (error) {
     console.error("❌ files/saveToProject 실패:", error);
@@ -648,15 +601,12 @@ ipcMain.handle("files/saveToProject", async (_evt, { category, fileName, buffer 
 /** ✅ 디렉토리 내 모든 파일 삭제 (폴더는 유지) */
 ipcMain.handle("files:clearDirectory", async (_evt, { dirPath }) => {
   try {
-    console.log("🗑️ files:clearDirectory 호출됨:", dirPath);
-
     if (!dirPath || typeof dirPath !== "string") {
       return { success: false, message: "dirPath_required" };
     }
 
     // 디렉토리 존재 확인
     if (!fs.existsSync(dirPath)) {
-      console.log("⚠️ 디렉토리 없음, 새로 생성:", dirPath);
       ensureDirSync(dirPath);
       return { success: true, deletedCount: 0 };
     }
@@ -677,18 +627,15 @@ ipcMain.handle("files:clearDirectory", async (_evt, { dirPath }) => {
         if (entry.isFile()) {
           await fs.promises.unlink(fullPath);
           deletedCount++;
-          console.log("🗑️ 파일 삭제:", entry.name);
         } else if (entry.isDirectory()) {
           await fs.promises.rm(fullPath, { recursive: true, force: true });
           deletedCount++;
-          console.log("🗑️ 폴더 삭제:", entry.name);
         }
       } catch (err) {
         console.warn("⚠️ 삭제 실패:", entry.name, err.message);
       }
     }
 
-    console.log(`✅ files:clearDirectory 완료: ${deletedCount}개 항목 삭제`);
     return { success: true, deletedCount };
   } catch (error) {
     console.error("❌ files:clearDirectory 실패:", error);

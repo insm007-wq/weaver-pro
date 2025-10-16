@@ -23,7 +23,6 @@ export function useScriptGeneration() {
   // LLM 청크 진행률 리스너
   useEffect(() => {
     const handleChunkProgress = (data) => {
-      console.log("📊 LLM 청크 진행률 수신:", data);
       setChunkProgress(data);
     };
 

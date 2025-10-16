@@ -349,8 +349,6 @@ function register() {
       } catch (_) {}
     }
   });
-
-  console.log("[ipc] preview: registered");
 }
 
 module.exports = {

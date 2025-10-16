@@ -14,12 +14,10 @@ class AIKeywordService {
 
   // 🔧 새 세션 초기화 (호환성을 위해 유지)
   initNewSession() {
-    console.log("🧹 AIKeywordService 세션 초기화");
   }
 
   // 🔥 세션 캐시 수동 초기화 메서드 (호환성을 위해 유지)
   clearSessionCache() {
-    console.log("🧹 AIKeywordService 세션 캐시 수동 초기화");
   }
 
   // AI 프로바이더 초기화
@@ -60,8 +58,6 @@ class AIKeywordService {
           await this.initializeAnthropic(apiKey);
           break;
       }
-
-      console.log(`[키워드 추출] ${this.aiProvider} 클라이언트 초기화 완료`);
 
     } catch (error) {
       console.error("[키워드 추출] AI 초기화 실패:", error);
@@ -218,7 +214,6 @@ JSON 응답 형식:
       const { ipcMain } = require("electron");
       const store = require("../services/store");
       llmModel = store.get("llmModel") || "anthropic";
-      console.log(`[키워드 추출] 사용할 LLM 모델: ${llmModel}`);
     } catch (error) {
       console.warn("[키워드 추출] LLM 모델 설정 로드 실패, 기본값(anthropic) 사용:", error);
       llmModel = "anthropic";
@@ -226,8 +221,6 @@ JSON 응답 형식:
 
     // LLM 모델별 API 키 확인 및 설정
     await this.initializeAI(llmModel);
-
-    console.log(`[키워드 추출] ${subtitles.length}개 자막 처리 시작 (모델: ${llmModel})`);
 
     // Balanced batch processing for speed and reliability
     const BATCH_TOKEN_LIMIT = 15000; // 15k token limit per batch
@@ -241,23 +234,16 @@ JSON 응답 형식:
 
     const safeLimit = Math.floor((BATCH_TOKEN_LIMIT - PROMPT_OVERHEAD) * SAFETY_MARGIN);
 
-    console.log(`TOKEN CALC: limit=${BATCH_TOKEN_LIMIT}, overhead=${PROMPT_OVERHEAD}, safe=${safeLimit}, subtitles=${subtitles.length}`);
-
     // Force multi-batch processing for large subtitle counts
     if (subtitles.length > 80) {
-      console.log(`FORCE MULTI-BATCH: ${subtitles.length} subtitles (threshold: 80)`);
       return await this.extractKeywordsMulti(subtitles, safeLimit);
     } else {
       const totalText = subtitles.map((sub, i) => `${i + 1}. ${sub.text}`).join("\n");
       const totalTokens = estimateTokens(totalText);
 
-      console.log(`SINGLE BATCH CHECK: estimated ${totalTokens} tokens vs limit ${safeLimit}`);
-
       if (totalTokens <= safeLimit) {
-        console.log(`USING SINGLE BATCH`);
         return await this.extractKeywordsSingle(subtitles);
       } else {
-        console.log(`SWITCHING TO MULTI-BATCH`);
         return await this.extractKeywordsMulti(subtitles, safeLimit);
       }
     }
@@ -266,10 +252,6 @@ JSON 응답 형식:
   async extractKeywordsSingle(subtitles) {
     // 🔥 배치 내 순서 사용 (AI가 1,2,3... 순서로 응답하도록)
     const subtitleText = subtitles.map((sub, idx) => `${idx + 1}. ${sub.text}`).join("\n");
-
-    console.log(
-      `🔍 키워드 추출 대상: ${subtitles.length}개 자막 (인덱스 ${subtitles[0]?.index}~${subtitles[subtitles.length - 1]?.index})`
-    );
 
     const prompt = this.buildPrompt(subtitleText, subtitles.length, this.aiProvider);
 
@@ -284,18 +266,6 @@ JSON 응답 형식:
     const totalBatches = Math.ceil(subtitles.length / chunkSize);
     const maxRetries = 3; // 재시도 횟수
 
-    console.log(`[weaver-pro] 🚀 배치 처리 시작: ${subtitles.length}개 자막을 ${totalBatches}개 배치로 분할 (배치당 최대 ${chunkSize}개)`);
-    console.log(`[weaver-pro] 📋 배치 구성:`);
-    for (let i = 0; i < Math.min(totalBatches, 3); i++) {
-      const start = i * chunkSize;
-      const end = Math.min(start + chunkSize, subtitles.length);
-      const batchSubtitles = subtitles.slice(start, end);
-      console.log(
-        `  배치 ${i + 1}: ${batchSubtitles.length}개 자막 (인덱스 ${batchSubtitles[0]?.index || "N/A"}~${batchSubtitles[batchSubtitles.length - 1]?.index || "N/A"})`
-      );
-    }
-    if (totalBatches > 3) console.log(`  ... 외 ${totalBatches - 3}개 배치`);
-
     let successfulBatches = 0;
     let failedBatches = 0;
 
@@ -304,8 +274,6 @@ JSON 응답 형식:
       const endIdx = Math.min(startIdx + chunkSize, subtitles.length);
       const batchSubtitles = subtitles.slice(startIdx, endIdx);
 
-      console.log(`\n[배치 ${batchNum + 1}/${totalBatches}] ${batchSubtitles.length}개 자막 처리 (${startIdx}~${endIdx - 1})`);
-
       let batchSuccess = false;
       let retryCount = 0;
 
@@ -313,7 +281,6 @@ JSON 응답 형식:
       while (!batchSuccess && retryCount < maxRetries) {
         try {
           if (retryCount > 0) {
-            console.log(`🔄 BATCH ${batchNum + 1}: ${retryCount + 1}번째 재시도 중...`);
             // 재시도 시 더 긴 지연
             await new Promise((resolve) => setTimeout(resolve, 2000 + retryCount * 1000));
           }
@@ -321,18 +288,13 @@ JSON 응답 형식:
           // 🔥 배치 내 순서 사용 (AI가 1,2,3... 순서로 응답하도록)
           const batchText = batchSubtitles.map((sub, idx) => `${idx + 1}. ${sub.text}`).join("\n");
 
-          console.log(`  📝 텍스트 길이: ${batchText.length}자, 예상 토큰: ~${Math.floor(batchText.length / 3)}`);
-
           const batchPrompt = this.buildBatchPrompt(batchText, batchSubtitles.length, this.aiProvider, batchNum + 1, totalBatches);
           const prompt = batchPrompt;
 
           // API 호출 시도
-          console.log(`  🚀 ${this.aiProvider} API 호출 (시도 ${retryCount + 1}/${maxRetries})`);
-
           const apiResponse = await this.callAIAPI(prompt, batchSubtitles, true); // true = batch mode
 
           const content = apiResponse.content;
-          console.log(`  📝 응답 받음 (${content.length}자)`);
 
           // Extract JSON from response
           const jsonStart = content.indexOf("{");
@@ -361,8 +323,6 @@ JSON 응답 형식:
             throw new Error(`AI가 다음 자막 번호들에 대해 키워드를 반환하지 않음: ${missingNumbers.join(", ")}`);
           }
 
-          console.log(`  🔍 파싱 완료 - AI가 ${Object.keys(data.keywords).length}/${batchSubtitles.length}개 키워드 반환`);
-
           // 🔥 CRITICAL: 실제 자막 순서대로 정확하게 매핑
           let processedInBatch = 0;
           for (let batchPosition = 0; batchPosition < batchSubtitles.length; batchPosition++) {
@@ -383,10 +343,6 @@ JSON 응답 형식:
               throw new Error(`자막 ${batchPosition + 1}번에 대해 AI가 키워드를 반환하지 않음: "${subtitle.text.substring(0, 50)}..."`);
             }
 
-            if (allKeywords[actualSubtitleIndex].length > 0) {
-              console.log(`    자막 ${actualSubtitleIndex}: [${allKeywords[actualSubtitleIndex].join(", ")}]`);
-            }
-
             // 매핑에 키워드 추가 (한국어 → 한국어)
             allKeywords[actualSubtitleIndex].forEach((keyword) => {
               if (keyword && !allMappings[keyword]) {
@@ -396,8 +352,6 @@ JSON 응답 형식:
 
             processedInBatch++;
           }
-
-          console.log(`  ✅ 배치 완료: ${processedInBatch}개 처리, 누적 키워드: ${Object.keys(allMappings).length}개`);
 
           batchSuccess = true;
           successfulBatches++;
@@ -417,15 +371,12 @@ JSON 응답 형식:
               const subtitle = batchSubtitles[i];
               allKeywords[subtitle.index] = [];
             }
-          } else {
-            console.log(`  🔄 재시도 대기 중... (${retryCount}/${maxRetries})`);
           }
         }
       }
     }
 
     // 🔥 CRITICAL: 모든 자막에 대해 키워드 확인 및 누락된 것들 빈 배열로 초기화
-    console.log("\n🔍 최종 검증 시작...");
     let missingCount = 0;
     for (let i = 0; i < subtitles.length; i++) {
       const subtitle = subtitles[i];
@@ -435,24 +386,10 @@ JSON 응답 형식:
         // 누락된 자막은 빈 배열로 설정 (기본 키워드 할당 안함)
         allKeywords[actualIndex] = [];
         missingCount++;
-        console.log(`  ❌ 누락된 자막 ${actualIndex}: "${subtitle.text.substring(0, 40)}..." → 빈 키워드`);
       }
     }
 
     const totalProcessed = Object.keys(allKeywords).length;
-    const keywordCount = Object.values(allKeywords).filter((kw) => kw.length > 0).length;
-    const mappingCount = Object.keys(allMappings).length;
-
-    console.log(`\n[weaver-pro] 🎯 키워드 추출 완료:`);
-    console.log(`  📊 처리 결과: ${keywordCount}/${totalProcessed}개 자막에서 키워드 추출 성공`);
-    console.log(`  📝 고유 키워드: ${mappingCount}개`);
-    console.log(`  ✅ 성공한 배치: ${successfulBatches}/${totalBatches}`);
-    if (failedBatches > 0) {
-      console.log(`  ❌ 실패한 배치: ${failedBatches}/${totalBatches}`);
-    }
-    if (missingCount > 0) {
-      console.log(`  ⚠️ 누락된 자막: ${missingCount}개`);
-    }
 
     if (totalProcessed !== subtitles.length) {
       console.error(`🚨 심각한 오류: 처리된 자막 수(${totalProcessed})와 입력 자막 수(${subtitles.length})가 다름!`);
@@ -462,9 +399,6 @@ JSON 응답 형식:
   }
 
   async callAIAPI(prompt, subtitles, isBatchMode = false) {
-    const mode = isBatchMode ? "배치" : "단일 배치";
-    console.log(`[weaver-pro] 🚀 ${this.aiProvider} API ${mode} 호출: ${subtitles.length}개 자막`);
-
     let response;
     let content;
 
@@ -516,8 +450,6 @@ JSON 응답 형식:
         const jsonStr = content.substring(jsonStart, jsonEnd);
         const data = JSON.parse(jsonStr);
 
-        console.log(`[weaver-pro] 📝 Claude 응답 파싱: ${Object.keys(data.keywords || {}).length}개 키워드 엔트리`);
-
         // Convert keywords to array format with proper indices
         const keywordsBySubtitle = {};
         for (let i = 0; i < subtitles.length; i++) {
@@ -527,8 +459,6 @@ JSON 응답 형식:
           const subtitleActualIndex = subtitles[i].index;
           keywordsBySubtitle[subtitleActualIndex] = Array.isArray(keywords) ? keywords.map((kw) => kw.trim()).filter((kw) => kw) : [];
         }
-
-        console.log(`[weaver-pro] ✅ 키워드 매핑 완료: ${Object.keys(keywordsBySubtitle).length}개 자막`);
 
         // 🔧 한국어 키워드만 수집 (매핑 없이)
         const allKoreanKeywords = new Set();
@@ -542,15 +472,10 @@ JSON 응답 형식:
           koreanToKoreanMapping[keyword] = keyword;
         });
 
-        console.log(`[weaver-pro] 🎯 고유 키워드 ${allKoreanKeywords.size}개 수집 완료`);
-
         return {
           keywords: keywordsBySubtitle,
           mapping: koreanToKoreanMapping,
         };
-      } else {
-        console.error("JSON PARSE FAILED: Could not find valid JSON structure");
-        console.log("Response content:", content.substring(0, 200) + "...");
       }
     } catch (error) {
       console.error("API CALL FAILED:", error);
@@ -584,8 +509,6 @@ const aiKeywordService = new AIKeywordService();
 // IPC 핸들러 등록
 ipcMain.handle("ai:extractKeywords", async (event, { subtitles }) => {
   try {
-    console.log(`[weaver-pro IPC] 키워드 추출 요청: ${subtitles?.length || 0}개 자막`);
-
     // 입력 검증
     if (!subtitles || !Array.isArray(subtitles) || subtitles.length === 0) {
       throw new Error("유효한 자막 데이터가 없습니다.");
@@ -595,8 +518,6 @@ ipcMain.handle("ai:extractKeywords", async (event, { subtitles }) => {
     const startTime = Date.now();
     const result = await aiKeywordService.extractKeywords(subtitles);
     const duration = Date.now() - startTime;
-
-    console.log(`[weaver-pro IPC] ✅ 키워드 추출 완료: ${Object.keys(result.keywords || {}).length}개 자막, ${duration}ms 소요`);
 
     return {
       success: true,
@@ -614,5 +535,3 @@ ipcMain.handle("ai:extractKeywords", async (event, { subtitles }) => {
     };
   }
 });
-
-console.log("✅ [weaver-pro] AI 키워드 추출 IPC 핸들러 등록됨");

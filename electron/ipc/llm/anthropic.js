@@ -224,7 +224,6 @@ async function callAnthropicAPI(apiKey, prompt, minSceneCount = 5, isLongForm = 
       // 재시도 시 지수 백오프 (여유있게)
       if (attempt > 0) {
         const backoffMs = Math.min(3000 * Math.pow(2, attempt - 1), 15000);  // 3초, 6초, 12초
-        console.log(`⏳ LLM API 재시도 ${attempt}/${maxRetries} (${backoffMs}ms 대기)`);
         await new Promise(resolve => setTimeout(resolve, backoffMs));
       }
 
@@ -276,7 +275,6 @@ CRITICAL RULES:
         throw new Error("API 응답이 비어있습니다.");
       }
 
-      console.log(`✅ LLM API 호출 성공 (시도 ${attempt + 1}/${maxRetries})`);
       return result;
 
     } catch (error) {
@@ -310,9 +308,6 @@ async function callAnthropic(params, event = null) {
     cpmMin = 320,
     cpmMax = 360,
   } = params;
-
-  console.log("🤖 Anthropic 대본 생성 시작");
-  console.log(`📊 설정: ${duration}분, CPM ${cpmMin}-${cpmMax}`);
 
   const isLongForm = duration >= 20;
 
@@ -356,15 +351,6 @@ async function callAnthropic(params, event = null) {
         ? duration * cpmMin * 1.4  // 장편: 140%
         : duration * cpmMin * 1.25; // 단편: 125%
 
-      console.log(`📊 대본 생성 결과 (시도 ${attempt}/3):`);
-      console.log(`  - 요청 시간: ${duration}분`);
-      console.log(`  - 생성 장면: ${normalizedScenes.length}개`);
-      console.log(`  - 생성 글자: ${totalChars}자`);
-      console.log(`  - 최소 요구: ${expectedMinCharsCheck}자 (${isLongFormCheck ? '장편 140%' : '단편 125%'})`);
-      console.log(`  - CPM 기준: ${cpmMin}-${cpmMax}자/분`);
-      console.log(`  - 예상 TTS 길이: ${(totalChars / 220).toFixed(1)}분 (Google TTS speakingRate 1.0 기준: 220자/분)`);
-      console.log(`  - 목표 달성률: ${((totalChars / 220) / duration * 100).toFixed(0)}%`);
-
       if (totalChars < expectedMinCharsCheck && attempt < 3) {
         console.warn(`⚠️ 글자 수 부족: ${totalChars}자 < ${expectedMinCharsCheck}자`);
         throw new Error(`글자 수 부족: ${totalChars} < ${expectedMinCharsCheck}, 재시도`);
@@ -391,12 +377,8 @@ async function callAnthropic(params, event = null) {
 // 장편 대본 생성 (청크 방식)
 // ============================================================
 async function generateLongFormScript({ topic, style, duration, referenceText, cpmMin, cpmMax, customPrompt, event = null }) {
-  console.log(`🎬 장편 콘텐츠 생성 모드: ${duration}분을 청크로 분할`);
-
   const CHUNK_DURATION = 5; // 5분씩 청크
   const chunkCount = Math.ceil(duration / CHUNK_DURATION);
-
-  console.log(`📦 총 ${chunkCount}개 청크로 분할 (각 ${CHUNK_DURATION}분)`);
 
   const apiKey = await getSecret("anthropicKey");
   if (!apiKey) throw new Error("Anthropic API Key가 설정되지 않았습니다.");
@@ -407,9 +389,6 @@ async function generateLongFormScript({ topic, style, duration, referenceText, c
   for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
     const isLastChunk = chunkIndex === chunkCount - 1;
     const chunkDuration = isLastChunk ? duration - (chunkIndex * CHUNK_DURATION) : CHUNK_DURATION;
-
-    console.log(`\n🔄 청크 ${chunkIndex + 1}/${chunkCount} 생성 중 (${chunkDuration}분)...`);
-    console.log(`⏱️ 예상 소요 시간: 약 60-90초 (응답 없음이 나타날 수 있으나 정상입니다)`);
 
     const chunkTopic = chunkIndex === 0
       ? `${topic} (전체 ${duration}분 중 ${chunkIndex + 1}/${chunkCount} 파트)`
@@ -431,7 +410,6 @@ async function generateLongFormScript({ topic, style, duration, referenceText, c
         }
 
         chunkScenes = normalizeScenes(parsedData.scenes, chunkDuration);
-        console.log(`✅ 청크 ${chunkIndex + 1} 완료: ${chunkScenes.length}개 장면`);
         break;
       } catch (err) {
         console.error(`❌ 청크 ${chunkIndex + 1} 시도 ${attempt} 실패:`, err.message);
@@ -463,13 +441,10 @@ async function generateLongFormScript({ topic, style, duration, referenceText, c
         scenesGenerated: allScenes.length,
         message: `청크 ${chunkIndex + 1}/${chunkCount} 완료 (${allScenes.length}개 장면 생성)`
       });
-      console.log(`📤 진행률 전송: ${progress}% (청크 ${chunkIndex + 1}/${chunkCount})`);
     }
   }
 
   const totalChars = allScenes.reduce((sum, s) => sum + s.charCount, 0);
-  console.log(`\n🎉 장편 대본 생성 완료!`);
-  console.log(`📊 총 ${allScenes.length}개 장면, ${totalChars}자`);
 
   return {
     success: true,
@@ -484,8 +459,6 @@ async function generateLongFormScript({ topic, style, duration, referenceText, c
 // 썸네일 프롬프트 확장
 // ============================================================
 async function expandThumbnailPrompt(userInput) {
-  console.log("[Anthropic] 썸네일 프롬프트 확장 시작:", userInput);
-
   const apiKey = await getSecret("anthropicKey");
   if (!apiKey) {
     throw new Error("Anthropic API Key가 설정되지 않았습니다.");
@@ -529,8 +502,6 @@ async function expandThumbnailPrompt(userInput) {
 // 키워드를 장면 이미지 프롬프트로 확장 (미디어 다운로드용)
 // ============================================================
 async function expandKeywordToScenePrompt(keyword) {
-  console.log("[Anthropic] 키워드 → 장면 프롬프트 확장 시작:", keyword);
-
   const apiKey = await getSecret("anthropicKey");
   if (!apiKey) {
     throw new Error("Anthropic API Key가 설정되지 않았습니다.");
@@ -583,13 +554,11 @@ Now convert:`;
     const expandedPrompt = data?.content?.[0]?.text?.trim();
 
     if (expandedPrompt) {
-      console.log("[Anthropic] 키워드 프롬프트 확장 완료:", expandedPrompt);
       return expandedPrompt;
     }
 
     // 폴백: 키워드 + 기본 스타일
     const fallback = `${keyword}, photorealistic scene illustration, cinematic composition, natural lighting, detailed background, 4K quality, professional photography`;
-    console.log("[Anthropic] 키워드 프롬프트 확장 폴백 사용:", fallback);
     return fallback;
   } catch (error) {
     console.error("[Anthropic] 키워드 프롬프트 확장 실패:", error);
@@ -602,8 +571,6 @@ Now convert:`;
 // 씬 이미지용 프롬프트 확장
 // ============================================================
 async function expandScenePrompt(sceneText) {
-  console.log("[Anthropic] 씬 프롬프트 확장 시작:", sceneText);
-
   const apiKey = await getSecret("anthropicKey");
   if (!apiKey) {
     throw new Error("Anthropic API Key가 설정되지 않았습니다.");
@@ -657,13 +624,11 @@ Now convert:`;
     const expandedPrompt = data?.content?.[0]?.text?.trim();
 
     if (expandedPrompt) {
-      console.log("[Anthropic] 씬 프롬프트 확장 완료:", expandedPrompt);
       return expandedPrompt;
     }
 
     // 폴백: 원본 텍스트 + 기본 스타일
     const fallback = `${sceneText}, photorealistic scene illustration, natural lighting, cinematic composition, detailed background, 4K quality`;
-    console.log("[Anthropic] 씬 프롬프트 확장 폴백 사용:", fallback);
     return fallback;
   } catch (error) {
     console.error("[Anthropic] 씬 프롬프트 확장 실패:", error);

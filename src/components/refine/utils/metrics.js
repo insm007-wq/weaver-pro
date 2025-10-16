@@ -59,7 +59,6 @@ export function splitBalancedLines(text = "", maxLines = 2) {
   const avgCharsPerLine = clean.length / maxLines;
   if (avgCharsPerLine > 40 && maxLines === 2) {
     effectiveMaxLines = 3;
-    console.log(`✅ 긴 텍스트 감지 (${clean.length}자, 평균 ${Math.round(avgCharsPerLine)}자/줄) → 3줄로 자동 조정`);
   }
 
   // effectiveMaxLines만큼 균등 분할

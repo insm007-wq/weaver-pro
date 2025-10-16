@@ -49,8 +49,6 @@ export const useKeywordExtraction = () => {
         .map((scene, index) => `[씬 ${index + 1}] ${scene.text}`)
         .join("\\n\\n");
 
-      console.log("[키워드 추출] 시작:", scenes.length, "개 씬");
-
       // IPC 호출로 키워드 추출 요청 (이전 코드와 동일하게)
       const result = await window.api.invoke("ai:extractKeywords", {
         subtitles: scenes.map((scene, index) => ({
@@ -87,14 +85,12 @@ export const useKeywordExtraction = () => {
         try {
           const keywordList = uniqueAssets.map(asset => asset.keyword);
           await window.api.setSetting({ key: "extractedKeywords", value: keywordList });
-          console.log(`[키워드 저장] settings.json에 ${keywordList.length}개 키워드 저장됨`);
         } catch (saveError) {
           console.error("[키워드 저장] settings.json 저장 실패:", saveError);
           // 저장 실패해도 UI는 계속 진행 (키워드 추출 자체는 성공)
         }
 
         const duration = result.duration ? ` (${Math.round(result.duration / 1000)}초 소요)` : "";
-        console.log(`[키워드 추출] 완료: ${uniqueAssets.length}개 키워드${duration}`);
         showSuccess(`${uniqueAssets.length}개 키워드가 추출되었습니다.${duration}`);
       } else {
         console.warn("[키워드 추출] 키워드가 추출되지 않았습니다.");

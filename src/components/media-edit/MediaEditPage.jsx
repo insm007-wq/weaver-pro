@@ -54,28 +54,18 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
   useEffect(() => {
     const loadProjectTtsSettings = async () => {
       try {
-        console.log("🔍 프로젝트 TTS 설정 로드 시작...");
-
         // 먼저 프로젝트에서 시도
         const result = await window.api.invoke("project:current");
-        console.log("📂 project:current 결과:", result);
 
         if (result?.success && result?.project?.ttsSettings) {
           setProjectTtsSettings(result.project.ttsSettings);
-          console.log("✅ 프로젝트 TTS 설정 로드 성공:", result.project.ttsSettings);
         } else {
-          console.log("⚠️ 프로젝트에 TTS 설정이 없음, 전역 설정 확인...");
-
           // 프로젝트에 없으면 전역 설정 확인 (fallback)
           try {
             const globalSettings = await window.api.invoke("settings:get", "lastUsedTtsSettings");
-            console.log("📋 전역 TTS 설정:", globalSettings);
 
             if (globalSettings) {
               setProjectTtsSettings(globalSettings);
-              console.log("✅ 전역 TTS 설정 로드 성공 (fallback)");
-            } else {
-              console.log("ℹ️ 저장된 TTS 설정이 없습니다");
             }
           } catch (globalError) {
             console.warn("⚠️ 전역 TTS 설정 로드 실패:", globalError);
@@ -249,15 +239,35 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
 
         {/* 데이터 로드 상태 확인 */}
         {!srtConnected && !mp3Connected && (
-          <Card style={{ padding: 20, textAlign: "center", marginBottom: 24 }}>
-            <Text size={400} weight="medium" style={{ marginBottom: 8 }}>
-              편집할 프로젝트가 없습니다
+          <Card
+            style={{
+              padding: "32px 24px",
+              textAlign: "center",
+              marginBottom: 24,
+              background: "linear-gradient(135deg, #667eea15 0%, #764ba215 100%)",
+              border: "1px solid #667eea30"
+            }}
+          >
+            <div style={{ marginBottom: 16, fontSize: 48 }}>🎬</div>
+            <Text size={500} weight="semibold" style={{ marginBottom: 12, display: "block" }}>
+              영상 편집 준비 완료!
             </Text>
-            <Text size={300} style={{ color: "#666", marginBottom: 16 }}>
-              먼저 "미디어 준비" 탭에서 자막과 오디오 파일을 업로드해주세요.
+            <Text size={300} style={{ color: "#666", marginBottom: 20, lineHeight: 1.6, display: "block" }}>
+              프로젝트 파일을 불러와서 씬별로 미디어를 편집하고<br />
+              최종 영상으로 완성해보세요
             </Text>
-            <Button appearance="primary" onClick={handleInsertFromScript} disabled={isLoading}>
-              {isLoading ? "파일 로드 중..." : "프로젝트 파일 로드"}
+            <Button
+              appearance="primary"
+              size="large"
+              onClick={handleInsertFromScript}
+              disabled={isLoading}
+              style={{
+                padding: "12px 32px",
+                fontSize: "15px",
+                fontWeight: 600
+              }}
+            >
+              {isLoading ? "📂 파일 불러오는 중..." : "📂 프로젝트 파일 불러오기"}
             </Button>
           </Card>
         )}

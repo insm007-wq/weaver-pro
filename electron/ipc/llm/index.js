@@ -65,5 +65,3 @@ ipcMain.handle("scene:expand-prompt", async (event, sceneText) => {
     };
   }
 });
-
-console.log("🚀 LLM 라우터 초기화: Claude, Replicate Llama 3, 썸네일 프롬프트 확장, 씬 프롬프트 확장");

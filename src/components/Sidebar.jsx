@@ -209,11 +209,6 @@ export default function Sidebar({ onSelectMenu, isScriptGenerating = false, isVi
   const [isCollapsed, setIsCollapsed] = useState(false);
   const styles = useStyles();
 
-  // 디버깅: prop 확인
-  useEffect(() => {
-    console.log("🟢 Sidebar - isScriptGenerating:", isScriptGenerating);
-  }, [isScriptGenerating]);
-
   const globalMenu = [
     {
       icon: <FolderOpenRegular />,

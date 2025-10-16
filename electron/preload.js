@@ -10,7 +10,6 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 const DBG = process.env.DEBUG_PRELOAD === "1";
 const dlog = (...a) => DBG && console.log("[preload]", ...a);
-console.log("[preload] loaded");
 
 /* ----------------------------------------------------------------------------
  * helpers

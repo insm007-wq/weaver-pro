@@ -55,7 +55,6 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
   };
 
   try {
-    console.log("🎤 음성 및 자막 생성 시작...");
     checkAborted(); // 시작 전 체크
 
     // 2단계: 음성 생성 시작
@@ -63,12 +62,6 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       ...prev,
       progress: { ...prev.progress, audio: 25 }
     }));
-
-    if (mode === "script_mode") {
-      console.log("🎤 2단계: 음성 생성 시작...");
-    } else {
-      console.log("🚀 음성 생성 시작...");
-    }
 
     // videoSaveFolder에 직접 음성 파일 저장
     let audioFolderPath = null;
@@ -163,8 +156,6 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       }
     }
 
-    console.log("✅ TTS 응답 수신");
-
     if (audioResult && audioResult.data && audioResult.data.ok) {
       // 음성 생성 완료
       safeSetState(prev => ({
@@ -173,21 +164,17 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       }));
 
       const audioFiles = audioResult.data.audioFiles;
-      console.log(`✅ 음성 생성 완료: ${audioFiles.length}개 파일`);
 
       // TTS 실제 duration 데이터 저장 (자막 생성에 사용)
       ttsDurations = audioFiles.map(file => ({
         sceneIndex: file.sceneIndex,
         duration: file.duration || 0
       }));
-      console.log("⏱️ TTS 실제 duration 데이터:", ttsDurations);
 
       // 먼저 base64 오디오 파일들을 디스크에 저장
       const savedAudioFiles = [];
-      console.log("💾 개별 파일 저장 시작...");
 
       if (audioFiles && audioFiles.length > 0) {
-        console.log("✅ audioFiles 조건 통과 - 개별 파일 저장 루프 시작");
         if (addLog) {
           addLog(`💾 ${audioFiles.length}개 음성 파일을 디스크에 저장 중...`);
         }
@@ -198,13 +185,11 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
 
           // 이미 audioUrl이 있는 경우 (파일이 이미 저장된 경우)
           if (audioUrl && typeof audioUrl === 'string' && audioUrl.trim() !== '') {
-            console.log(`✅ ${fileName}은 이미 저장됨: ${audioUrl}`);
             savedAudioFiles.push({
               fileName: fileName,
               audioUrl: audioUrl,
               filePath: audioUrl
             });
-            console.log(`✅ savedAudioFiles에 기존 파일 추가: ${fileName}`);
             continue;
           }
 
@@ -212,8 +197,6 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
             console.warn(`⚠️ 오디오 파일 ${fileName}에 base64 데이터가 없습니다`);
             continue;
           }
-
-          console.log(`✅ ${fileName} base64 데이터 확인됨, 길이: ${base64.length}`);
 
           try {
             // videoSaveFolder에 개별 음성 파일 저장
@@ -226,7 +209,6 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
                 const audioFolder = `${videoSaveFolder}\\audio`;
                 try {
                   await api.invoke("fs:mkDirRecursive", { dirPath: audioFolder });
-                  console.log("📁 개별 음성 파일용 audio 폴더 생성/확인 완료:", audioFolder);
                 } catch (dirError) {
                   console.warn("개별 음성 파일용 audio 폴더 생성 실패:", dirError);
                 }
@@ -239,12 +221,6 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
             } catch (error) {
               console.warn("설정 가져오기 실패, electron이 기본 경로 처리");
               filePath = null; // electron이 처리
-            }
-
-            // 경로 정규화 (electron이 OS에 맞게 처리)
-            if (filePath && typeof filePath === 'string') {
-              // 슬래시 사용 (electron이 OS에 맞게 변환)
-              console.log("📁 정규화된 개별 파일 경로:", filePath);
             }
 
             // base64를 Buffer로 변환
@@ -267,12 +243,10 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
                   filePath: savedPath
                 };
                 savedAudioFiles.push(fileInfo);
-                console.log(`✅ savedAudioFiles에 추가됨: ${fileName}`, fileInfo);
 
                 if (addLog) {
                   addLog(`✅ 음성 파일 저장: ${fileName} → ${savedPath}`);
                 }
-                console.log(`💾 음성 파일 저장 완료: ${savedPath}`);
               } else {
                 console.error(`❌ 음성 파일 저장 성공했지만 경로가 유효하지 않음: ${fileName}, path: ${savedPath}`);
                 if (addLog) {
@@ -306,7 +280,6 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
         if (addLog) {
           addLog(`✅ ${savedAudioFiles.length}개 음성 파일 저장 완료`);
         }
-        console.log(`✅ ${savedAudioFiles.length}개 음성 파일 저장 완료`);
       }
     } else {
       console.error("❌ === TTS 결과 조건 실패 ===");
@@ -328,7 +301,6 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
     if (mode === "script_mode" && ttsDurations && ttsDurations.length > 0) {
       checkAborted(); // 자막 생성 전 체크
 
-      console.log("📝 자막 생성 시작 (TTS 실제 duration 적용)...");
       safeSetState(prev => ({
         ...prev,
         progress: { ...prev.progress, subtitle: 0 }
@@ -340,7 +312,6 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
         ...prev,
         progress: { ...prev.progress, subtitle: 100 }
       }));
-      console.log("✅ 자막 생성 완료 (실제 오디오 길이 반영)");
     }
 
     // 모든 단계 완료 - 모드별 메시지
@@ -373,20 +344,16 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
  */
 async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideoState, addLog }, ttsDurations = null) {
   const safeSetState = setFullVideoState;
-  console.log("🚀🚀🚀 === SRT 자막 생성 단계 시작 === 🚀🚀🚀");
 
   if (addLog) {
     addLog("📝 SRT 자막 파일을 생성하는 중...");
   }
 
   try {
-    console.log("🎬 SRT 자막 생성 시작...");
-
     // TTS duration 데이터가 있으면 ttsMarks로 전달
     const payload = { doc: scriptData };
     if (ttsDurations && ttsDurations.length > 0) {
       payload.ttsMarks = ttsDurations;
-      console.log("⏱️ TTS 실제 duration을 자막에 적용:", ttsDurations.length, "개 장면");
       if (addLog) {
         addLog("⏱️ TTS 실제 오디오 길이를 자막에 반영합니다");
       }
@@ -394,13 +361,10 @@ async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideo
 
     const srtResult = await api.invoke("script/toSrt", payload);
 
-    console.log("📝 SRT 변환 결과:", srtResult);
-
     // 응답 구조에 맞게 수정
     const srtData = srtResult?.success && srtResult?.data ? srtResult.data : srtResult;
 
     if (srtData && srtData.srt) {
-      console.log("✅ SRT 조건문 통과! 파일 생성 시작...");
       const srtFileName = `subtitle.srt`;
 
       // scripts 폴더에 자막 파일 저장 (프로젝트 기반)
@@ -424,8 +388,6 @@ async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideo
         console.warn("경로 설정 실패:", error);
       }
 
-      console.log("📁 자막 파일 저장 경로:", srtFilePath);
-
       if (addLog) {
         addLog(`📝 자막 파일 생성 시작`);
         addLog(`📂 저장 경로: ${srtFilePath}`);
@@ -433,8 +395,6 @@ async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideo
       }
 
       if (srtFilePath) {
-        console.log("💾 SRT 파일 쓰기 시작:", srtFilePath);
-
         const writeResult = await api.invoke("files:writeText", {
           filePath: srtFilePath,
           content: srtData.srt
@@ -445,9 +405,6 @@ async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideo
             addLog("✅ SRT 자막 파일 생성 완료!");
             addLog("📁 파일명: subtitle.srt");
           }
-
-          console.log("✅ SRT 자막 파일 생성 완료:", srtFilePath);
-          console.log(`SRT 자막 파일이 생성되었습니다: subtitle.srt`);
         } else {
           if (addLog) {
             addLog(`❌ SRT 파일 쓰기 실패: ${writeResult.message}`, "error");
@@ -491,13 +448,9 @@ function handleCompletionByMode(mode, { setFullVideoState, toast, addLog }) {
     }));
   }
 
-  console.log("🎉 대본 생성 모드 완료!");
-
   if (addLog) {
     addLog("🎉 모든 작업이 완료되었습니다!");
     addLog("📂 생성된 파일들을 확인해보세요.");
     addLog("✅ 닫기 버튼을 클릭하여 창을 닫을 수 있습니다.");
   }
-
-  console.log("🎉 3단계 완료: 대본, 음성, 자막이 모두 생성되었습니다!");
 }

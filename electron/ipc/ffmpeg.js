@@ -27,7 +27,6 @@ const fsp = require("fs").promises;
 let store = null;
 try {
   store = require("../services/store");
-  console.log("✅ store 로드 성공");
 } catch (error) {
   console.warn("⚠️ store 로드 실패:", error.message);
   store = { get: (key, def) => def, set: () => {} };
@@ -111,7 +110,6 @@ async function loadMusicMetadata() {
   try {
     if (!mm) {
       mm = await import("music-metadata");
-      console.log("✅ music-metadata 로드 성공");
     }
     return mm;
   } catch (error) {
@@ -176,7 +174,6 @@ function splitBalancedLines(text = "", maxLines = 2) {
   const avgCharsPerLine = clean.length / maxLines;
   if (avgCharsPerLine > 40 && maxLines === 2) {
     effectiveMaxLines = 3;
-    console.log(`✅ 긴 텍스트 감지 (${clean.length}자, 평균 ${Math.round(avgCharsPerLine)}자/줄) → 3줄로 자동 조정`);
   }
 
   // effectiveMaxLines만큼 균등 분할
@@ -331,14 +328,8 @@ function createDrawtextFilterAdvanced(subtitle, settings, textFilePath, videoWid
       if (!fs.existsSync(fontFile)) {
         console.error(`❌ 사용 가능한 폰트를 찾을 수 없습니다`);
         throw new Error("시스템 폰트를 찾을 수 없습니다");
-      } else {
-        console.log(`✅ Fallback 폰트 사용: Arial`);
       }
-    } else {
-      console.log(`✅ Fallback 폰트 사용: Malgun Gothic`);
     }
-  } else {
-    console.log(`✅ 폰트 파일 확인: ${fontFile}`);
   }
 
   // FFmpeg용 경로 변환 (이스케이프 처리)
@@ -520,10 +511,7 @@ try {
   // ASAR 패키징된 경우, app.asar를 app.asar.unpacked로 변경
   if (ffmpegPath && ffmpegPath.includes("app.asar")) {
     ffmpegPath = ffmpegPath.replace("app.asar", "app.asar.unpacked");
-    console.log("[ffmpeg] ASAR unpacked path:", ffmpegPath);
   }
-
-  console.log("[ffmpeg] ffmpeg-static path:", ffmpegPath);
 } catch (err) {
   console.error("[ffmpeg] Failed to load ffmpeg-static:", err);
   // 폴백: 하드코딩된 경로 (unpacked 사용)
@@ -565,7 +553,6 @@ function register() {
     "ffmpeg:compose",
     async (event, { audioFiles, imageFiles, outputPath, subtitlePath = null, sceneDurationsMs = null, options = {} }) => {
       try {
-        console.log(`\n🎬 영상 합성 시작: ${imageFiles?.length || 0}개 씬`);
         const videoQuality = store.get("videoQuality", "balanced");
         const videoPreset = store.get("videoPreset", "fast");
         const videoCrf = store.get("videoCrf", 23);
@@ -599,8 +586,6 @@ function register() {
             event.sender.send("ffmpeg:progress", p);
           },
         });
-
-        console.log("FFmpeg 명령어:", ffmpegArgs.join(" "));
 
         const result = await runFFmpeg(ffmpegArgs, (progress) => {
           const mapped = 30 + Math.round((progress / 100) * 70);
@@ -684,8 +669,6 @@ function register() {
       isExportCancelled = false;
       currentFfmpegProcess = null;
 
-      console.log(`\n🎬 비디오 내보내기 시작: ${scenes.length}개 씬`);
-
       // videoSaveFolder 가져오기
       const videoSaveFolder = store.get("videoSaveFolder");
       if (!videoSaveFolder) {
@@ -720,7 +703,6 @@ function register() {
           try {
             const duration = await probeDurationSec(filePath);
             totalAudioDurationMs += Math.floor(duration * 1000);
-            console.log(`✅ ${sceneNum}번 오디오: ${duration.toFixed(2)}초`);
           } catch (error) {
             console.error(`씬 ${sceneNum} 오디오 길이 측정 실패:`, error);
             totalAudioDurationMs += 3000; // 기본값 3초
@@ -734,8 +716,6 @@ function register() {
       if (audioFiles.length === 0) {
         throw new Error("사용 가능한 오디오 파일이 없습니다.");
       }
-
-      console.log(`📊 총 오디오 길이: ${(totalAudioDurationMs / 1000).toFixed(2)}초 (${audioFiles.length}개 파일 합산)`);
 
       // ✅ 2. 씬별 미디어 파일 추출 및 개별 오디오 duration 계산
       const mediaFiles = [];
@@ -785,12 +765,6 @@ function register() {
         if (diff !== 0) {
           sceneDurationsMs[sceneDurationsMs.length - 1] += diff;
         }
-
-        console.log(
-          `📊 씬 duration 조정: ${(sumOfIndividualDurationsMs / 1000).toFixed(1)}s → ${(targetDurationMs / 1000).toFixed(
-            1
-          )}s (비율: ${ratio.toFixed(3)})`
-        );
       } else {
         sceneDurationsMs = individualSceneDurationsMs;
       }
@@ -807,7 +781,6 @@ function register() {
       });
 
       if (result.success) {
-        console.log("✅ 비디오 내보내기 성공:", outputPath);
         return { success: true, outputPath };
       } else {
         throw new Error(result.error || "비디오 합성 실패");
@@ -825,13 +798,11 @@ function register() {
   // 영상 내보내기 취소
   ipcMain.handle("video:cancelExport", async () => {
     try {
-      console.log("🚫 영상 내보내기 취소 요청");
       isExportCancelled = true;
 
       if (currentFfmpegProcess) {
         try {
           currentFfmpegProcess.kill("SIGKILL");
-          console.log("✅ FFmpeg 프로세스 종료");
         } catch (error) {
           console.error("FFmpeg 프로세스 종료 실패:", error);
         }
@@ -843,8 +814,6 @@ function register() {
       return { success: false, error: error.message };
     }
   });
-
-  console.log("[ipc] ffmpeg: registered");
 }
 
 // ----------------------------------------------------------------------------
@@ -864,10 +833,6 @@ async function cleanupTempFiles(tempDir) {
           console.warn(`임시 파일 삭제 실패: ${file}`);
         }
       }
-    }
-
-    if (deletedCount > 0) {
-      console.log(`✅ 임시 파일 ${deletedCount}개 정리 완료`);
     }
   } catch (error) {
     console.warn(`임시 파일 정리 중 오류:`, error.message);
@@ -945,10 +910,6 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
     throw new Error("이미지 파일이 없습니다");
   }
 
-  console.log(`\n🎬 FFmpeg 영상 생성 시작:`);
-  console.log(`   - 씬 개수: ${imageFiles.length}개`);
-  console.log(`   - 자막: ${subtitlePath ? "있음" : "없음"}`);
-
   // 오디오 총 길이 안전하게 측정
   let totalAudioSec = 10; // 기본값
   if (audioFiles && audioFiles.length > 0 && audioFiles[0]) {
@@ -956,7 +917,6 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
       const measuredDuration = await probeDurationSec(audioFiles[0]);
       if (measuredDuration > 0) {
         totalAudioSec = measuredDuration;
-        console.log(`✅ 오디오 길이 측정 성공: ${totalAudioSec.toFixed(2)}초`);
       } else {
         console.warn(`⚠️ 측정된 오디오 길이가 0초, 기본값 사용: ${totalAudioSec}초`);
       }
@@ -991,11 +951,6 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
 
     const durSec = Math.max(MIN_CLIP_DURATION, (perSceneMs[i] || totalAudioMs / N) / 1000);
     const clipOut = path.join(tempDir, `clip_${String(i).padStart(3, "0")}_${Date.now()}.mp4`);
-
-    // 로그는 10개씩 묶어서 출력
-    if (i === 0 || (i + 1) % 10 === 0 || i === N - 1) {
-      console.log(`📹 클립 생성 중: ${i + 1}/${N}`);
-    }
 
     // ✅ 이미지 패닝 효과: crop 필터로 아래에서 위로 부드럽게 이동
     // 1. 이미지를 30% 크게 스케일 (1920*1.3=2496, 1080*1.3=1404) - 더 부드러운 패닝을 위해
@@ -1088,11 +1043,6 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
       // ✅ 실제 길이 확인
       const realSec = await probeDurationSec(clipOut);
       totalVideoSec += realSec;
-
-      // 진행 상황 로그 (10개씩 또는 마지막)
-      if ((i + 1) % 10 === 0 || i === N - 1) {
-        console.log(`   ✅ ${i + 1}개 완료 (누적: ${totalVideoSec.toFixed(1)}s)`);
-      }
     } catch (error) {
       console.error(`❌ 클립 ${i + 1} 생성 실패:`, error.message);
       throw new Error(`클립 생성 중단: ${error.message}`);
@@ -1103,11 +1053,6 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
   }
 
   // ✅ tpad 제거: 각 씬이 정확한 길이로 생성되므로 불필요
-  console.log(`\n📊 비디오 길이 확인:`);
-  console.log(`   - 비디오 총 길이: ${totalVideoSec.toFixed(2)}초`);
-  console.log(`   - 오디오 총 길이: ${totalAudioSec.toFixed(2)}초`);
-  console.log(`   - 차이: ${(totalVideoSec - totalAudioSec).toFixed(2)}초`);
-
   if (totalVideoSec < totalAudioSec - 0.5) {
     console.warn(`⚠️ 경고: 비디오가 오디오보다 ${(totalAudioSec - totalVideoSec).toFixed(2)}초 짧습니다.`);
     console.warn(`   마지막 영상이 반복 재생되지 않을 수 있습니다.`);
@@ -1118,18 +1063,10 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
     throw new Error("생성된 비디오 클립이 없습니다");
   }
 
-  console.log(`\n📊 최종 통계:`);
-  console.log(`   - 클립 개수: ${videoClips.length}개`);
-  console.log(`   - 오디오 길이: ${totalAudioSec.toFixed(2)}초`);
-  console.log(`   - 비디오 길이: ${totalVideoSec.toFixed(2)}초`);
-  console.log(`   - 차이: ${(totalVideoSec - totalAudioSec).toFixed(2)}초`);
-
   if (totalVideoSec < totalAudioSec - 0.5) {
     console.error(`\n⚠️⚠️⚠️ 경고: 비디오가 오디오보다 ${(totalAudioSec - totalVideoSec).toFixed(2)}초 짧습니다!`);
     console.error(`   이 상태로 인코딩하면 끝부분에서 영상이 멈추고 음성만 나옵니다.`);
     throw new Error(`비디오(${totalVideoSec.toFixed(2)}초)가 오디오(${totalAudioSec.toFixed(2)}초)보다 짧습니다.`);
-  } else if (totalVideoSec >= totalAudioSec) {
-    console.log(`   ✅ 비디오가 오디오를 완전히 커버합니다.`);
   }
 
   // ✅ filter_complex 기반 concat으로 PTS 불일치 방지
@@ -1158,14 +1095,9 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
 
   // ✅ enableSubtitles가 true이고 자막 파일이 존재할 때만 자막 렌더링
   if (subtitleSettings.enableSubtitles && subtitlePath && fs.existsSync(subtitlePath)) {
-    console.log(`✅ 자막 파일 확인: ${subtitlePath}`);
-    console.log(`[자막 설정] 로드 완료:`, subtitleSettings);
-
     // ✅ drawtext 필터로 자막 구현 (배경 박스 지원)
     const srtContent = fs.readFileSync(subtitlePath, "utf-8");
     const subtitles = parseSRT(srtContent);
-
-    console.log(`📝 drawtext로 ${subtitles.length}개 자막 렌더링`);
 
     let currentLabel = "[outv]";
     for (let i = 0; i < subtitles.length; i++) {
@@ -1180,9 +1112,6 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
 
     finalVideoLabel = "[v]";
   } else {
-    if (!subtitleSettings.enableSubtitles) {
-      console.log(`⚠️ 자막이 비활성화되었습니다 (enableSubtitles: false)`);
-    }
     filterComplex += `;[outv]format=yuv420p[v]`;
     finalVideoLabel = "[v]";
   }
@@ -1191,7 +1120,6 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
   if (filterComplex.length > 3000) {
     const filterScriptPath = path.join(tempDir, `filter_${Date.now()}.txt`);
     await fsp.writeFile(filterScriptPath, filterComplex, "utf8");
-    console.log(`📝 filter_complex를 파일로 저장: ${filterScriptPath} (${filterComplex.length}자)`);
     args.push("-filter_complex_script", filterScriptPath);
   } else {
     args.push("-filter_complex", filterComplex);
@@ -1238,14 +1166,11 @@ function runFFmpegViaShellScript(args, progressCallback = null) {
   return new Promise(async (resolve) => {
     // 취소 확인
     if (isExportCancelled) {
-      console.log("✋ FFmpeg 실행 취소됨");
       return resolve({ success: false, error: "사용자에 의해 취소되었습니다" });
     }
 
     const os = require("os");
     const isWindows = process.platform === "win32";
-
-    console.log(`🔧 쉘 스크립트를 사용하여 FFmpeg 실행 (플랫폼: ${process.platform})`);
 
     let tempDir;
     try {
@@ -1343,14 +1268,6 @@ exit $?`;
       if (!isWindows) {
         await fsp.chmod(scriptPath, 0o755);
       }
-
-      console.log(`📝 스크립트 파일 생성: ${scriptPath} (${scriptContent.length}바이트)`);
-
-      // 디버깅: 스크립트 내용 일부 출력 (처음 500자, 마지막 500자)
-      const contentPreview = scriptContent.length > 1000
-        ? `${scriptContent.substring(0, 500)}\n...\n${scriptContent.substring(scriptContent.length - 500)}`
-        : scriptContent;
-      console.log(`📄 스크립트 내용 미리보기:\n${contentPreview}`);
     } catch (error) {
       console.error("❌ 스크립트 파일 생성 실패:", error);
       return resolve({ success: false, error: `스크립트 파일 생성 실패: ${error.message}` });
@@ -1409,7 +1326,6 @@ exit $?`;
       // 스크립트 파일 삭제
       try {
         await fsp.unlink(scriptPath);
-        console.log(`🗑️ 스크립트 파일 삭제: ${scriptPath}`);
       } catch (error) {
         console.warn(`⚠️ 스크립트 파일 삭제 실패:`, error.message);
       }
@@ -1451,7 +1367,6 @@ exit $?`;
 function runFFmpegDirect(args, progressCallback, isCheck) {
   return new Promise((resolve) => {
     if (isExportCancelled) {
-      console.log("✋ FFmpeg 실행 취소됨");
       return resolve({ success: false, error: "사용자에 의해 취소되었습니다" });
     }
 
@@ -1544,7 +1459,6 @@ function runFFmpeg(args, progressCallback = null, isCheck = false) {
   // Windows: cmd.exe (8191자 제한) → .bat 파일 (제한 없음)
   // Mac/Linux: /bin/sh (ARG_MAX 제한, 보통 256KB~2MB) → .sh 파일 (제한 없음)
   if (commandLength > 6000 && !isCheck) {
-    console.log(`⚠️ 명령줄이 깁니다 (${commandLength}자). 쉘 스크립트 방식 사용`);
     return runFFmpegViaShellScript(args, progressCallback);
   }
 
@@ -1637,8 +1551,6 @@ async function generateSrtFromScenes(scenes, srtPath) {
       const lines = splitBalancedLines(text, subtitleSettings.maxLines);
       text = lines.join("\n");
 
-      console.log(`📝 씬 ${i + 1}: ${lines.length}줄로 분할 (maxLines: ${subtitleSettings.maxLines})`);
-
       srtContent += `${i + 1}\n`;
       srtContent += `${formatTime(startTime)} --> ${formatTime(endTime)}\n`;
       srtContent += `${text}\n\n`;
@@ -1647,8 +1559,6 @@ async function generateSrtFromScenes(scenes, srtPath) {
     }
 
     await fsp.writeFile(srtPath, srtContent, "utf8");
-    console.log("✅ SRT 자막 파일 생성 완료:", srtPath);
-    console.log(`   최종 자막 길이: ${(accumulatedTime / 1000).toFixed(2)}초`);
     return srtPath;
   } catch (error) {
     console.error("❌ SRT 자막 파일 생성 실패:", error);
@@ -1681,7 +1591,6 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
         const duration = await probeDurationSec(audioFile);
         totalAudioSec += duration;
       }
-      console.log(`📊 전체 오디오 길이: ${totalAudioSec.toFixed(2)}초 (${audioFiles.length}개 파일)`);
     } catch (error) {
       console.warn(`오디오 길이 측정 실패: ${error.message}`);
       totalAudioSec = sceneDurationsMs.reduce((sum, dur) => sum + dur, 0) / 1000;
@@ -1696,18 +1605,12 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
   for (let i = 0; i < scenes.length; i++) {
     // 취소 확인
     if (isExportCancelled) {
-      console.log("✋ 영상 내보내기가 취소되었습니다");
       throw new Error("사용자에 의해 취소되었습니다");
     }
 
     const scene = scenes[i];
     const mediaPath = mediaFiles[i];
     const durSec = Math.max(MIN_CLIP_DURATION, (sceneDurationsMs[i] || 3000) / 1000);
-
-    // 로그는 10개씩 묶어서 출력
-    if (i === 0 || (i + 1) % 10 === 0 || i === scenes.length - 1) {
-      console.log(`📹 씬 처리 중: ${i + 1}/${scenes.length}`);
-    }
 
     if (scene.asset.type === "video") {
       // 비디오: stream_loop로 반복 재생하여 오디오 길이 맞춤
@@ -1727,9 +1630,6 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
       if (originalDuration > durSec) {
         loopCount = 0; // 반복 불필요
       }
-
-      // 디버그 로그는 필요시에만
-      // console.log(`   비디오 ${i + 1}: 원본 ${originalDuration.toFixed(2)}s, 목표 ${durSec.toFixed(2)}s, loop=${loopCount}`);
 
       const vfChain = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p`;
 
@@ -1862,9 +1762,6 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
     throw new Error("생성된 비디오 클립이 없습니다");
   }
 
-  // ✅ 최종 통계
-  console.log(`\n📊 합성 준비 완료: ${videoClips.length}개 클립 (${totalVideoSec.toFixed(1)}s / ${totalAudioSec.toFixed(1)}s)`);
-
   // ✅ 오디오는 concat demuxer로 안정적으로 합치기 (filter_complex는 비디오만)
   const finalArgs = ["-y", "-hide_banner"];
 
@@ -1880,7 +1777,6 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
       })
       .join("\n");
     await fsp.writeFile(audioConcatPath, audioConcatContent, "utf8");
-    console.log(`📝 오디오 concat 파일 생성: ${audioFiles.length}개 파일`);
   }
 
   // 2. 비디오 클립들을 입력으로 추가
@@ -1906,14 +1802,9 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
 
   // ✅ enableSubtitles가 true이고 자막 파일이 존재할 때만 자막 렌더링
   if (subtitleSettings.enableSubtitles && srtPath && fs.existsSync(srtPath)) {
-    console.log(`✅ 자막 파일 확인: ${srtPath}`);
-    console.log(`[자막 설정] 로드 완료:`, subtitleSettings);
-
     // ✅ drawtext 필터로 자막 구현 (배경 박스 지원)
     const srtContent = fs.readFileSync(srtPath, "utf-8");
     const subtitles = parseSRT(srtContent);
-
-    console.log(`📝 drawtext로 ${subtitles.length}개 자막 렌더링`);
 
     let currentLabel = "[outv]";
     for (let i = 0; i < subtitles.length; i++) {
@@ -1928,9 +1819,6 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
 
     finalVideoLabel = "[v]";
   } else {
-    if (!subtitleSettings.enableSubtitles) {
-      console.log(`⚠️ 자막이 비활성화되었습니다 (enableSubtitles: false)`);
-    }
     filterComplex += `;[outv]format=yuv420p[v]`;
     finalVideoLabel = "[v]";
   }
@@ -1939,7 +1827,6 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
   if (filterComplex.length > 3000) {
     const filterScriptPath = path.join(tempDir, `filter_${Date.now()}.txt`);
     await fsp.writeFile(filterScriptPath, filterComplex, "utf8");
-    console.log(`📝 filter_complex를 파일로 저장: ${filterScriptPath} (${filterComplex.length}자)`);
     finalArgs.push("-filter_complex_script", filterScriptPath);
   } else {
     finalArgs.push("-filter_complex", filterComplex);
@@ -1978,7 +1865,6 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
 
   finalArgs.push(outputPath);
 
-  console.log("🎬 최종 합성 시작...");
   const result = await runFFmpeg(finalArgs, (progress) => {
     if (event?.sender) {
       const mapped = 50 + Math.round((progress / 100) * 50); // 50-100%

@@ -365,7 +365,6 @@ export async function discoverAvailableImages() {
       }
     }
 
-    console.log(`[이미지 발견] 사진 ${photos.length}개, AI 이미지 ${aiImages.length}개`);
     return { photos, aiImages };
 
   } catch (error) {
@@ -546,7 +545,6 @@ export async function generateImageForScene(scene, sceneIndex, options = {}) {
     try {
       const folderExists = await window.api.checkPathExists(imagesFolder);
       if (!folderExists?.exists) {
-        console.log(`[이미지 생성] images 폴더 생성: ${imagesFolder}`);
         await window.api.invoke("fs:mkDirRecursive", { dirPath: imagesFolder });
       }
     } catch (error) {
@@ -610,8 +608,6 @@ export async function generateImageForScene(scene, sceneIndex, options = {}) {
 
     const suggestedFileName = `scene-${sceneNumber}.${fileExtension}`;
     const fullImagePath = `${imagesFolder}/${suggestedFileName}`;
-
-    console.log(`[이미지 생성] 씬 ${sceneIndex + 1}: 파일 저장 - ${suggestedFileName}`);
 
     try {
       // URL에서 Blob 가져오기
