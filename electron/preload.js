@@ -430,4 +430,10 @@ contextBridge.exposeInMainWorld("electron", {
     getDuration: ({ filePath }) => ipcRenderer.invoke("audio:getDuration", { filePath }),
     getDurations: ({ filePaths }) => ipcRenderer.invoke("audio:getDurations", { filePaths }),
   },
+
+  // Store 관리 (약관 동의 등)
+  store: {
+    getTermsAccepted: () => ipcRenderer.invoke("store:getTermsAccepted"),
+    setTermsAccepted: (accepted) => ipcRenderer.invoke("store:setTermsAccepted", accepted),
+  },
 });
