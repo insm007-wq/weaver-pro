@@ -31,6 +31,7 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
   // 최소 상태 관리
   const [selectedSceneIndex, setSelectedSceneIndex] = useState(0);
   const [videoUrl, setVideoUrl] = useState(null);
+  const [projectTtsSettings, setProjectTtsSettings] = useState(null);
 
   // 비디오 ref
   const videoRef = useRef(null);
@@ -48,6 +49,45 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
       console.warn(`[MediaEditPage] 씬 ${selectedSceneIndex + 1} audioPath 없음`);
     }
   }, [selectedScene, selectedSceneIndex]);
+
+  // 프로젝트 TTS 설정 로드
+  useEffect(() => {
+    const loadProjectTtsSettings = async () => {
+      try {
+        console.log("🔍 프로젝트 TTS 설정 로드 시작...");
+
+        // 먼저 프로젝트에서 시도
+        const result = await window.api.invoke("project:current");
+        console.log("📂 project:current 결과:", result);
+
+        if (result?.success && result?.project?.ttsSettings) {
+          setProjectTtsSettings(result.project.ttsSettings);
+          console.log("✅ 프로젝트 TTS 설정 로드 성공:", result.project.ttsSettings);
+        } else {
+          console.log("⚠️ 프로젝트에 TTS 설정이 없음, 전역 설정 확인...");
+
+          // 프로젝트에 없으면 전역 설정 확인 (fallback)
+          try {
+            const globalSettings = await window.api.invoke("settings:get", "lastUsedTtsSettings");
+            console.log("📋 전역 TTS 설정:", globalSettings);
+
+            if (globalSettings) {
+              setProjectTtsSettings(globalSettings);
+              console.log("✅ 전역 TTS 설정 로드 성공 (fallback)");
+            } else {
+              console.log("ℹ️ 저장된 TTS 설정이 없습니다");
+            }
+          } catch (globalError) {
+            console.warn("⚠️ 전역 TTS 설정 로드 실패:", globalError);
+          }
+        }
+      } catch (error) {
+        console.error("❌ TTS 설정 로드 오류:", error);
+      }
+    };
+
+    loadProjectTtsSettings();
+  }, []);
 
   // 페이지 로드시 자동으로 프로젝트 파일들 로드 (한 번만)
   useEffect(() => {
@@ -231,6 +271,7 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
                 setScenes={setScenes}
                 selectedSceneIndex={selectedSceneIndex}
                 onSceneSelect={handleSceneSelect}
+                projectTtsSettings={projectTtsSettings}
               />
             </div>
 

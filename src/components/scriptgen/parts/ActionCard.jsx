@@ -223,6 +223,7 @@ const ActionCard = memo(
               progress: { ...prev.progress, script: 100, audio: 0 },
             }));
 
+            // 음성 및 자막 생성
             await generateAudioAndSubtitles(scriptResult, "script_mode", {
               form,
               voices,
@@ -231,6 +232,60 @@ const ActionCard = memo(
               addLog,
               abortSignal: abortController.signal,
             });
+
+            // ✨ TTS 설정을 프로젝트 메타데이터에 저장
+            try {
+              // 현재 프로젝트 확인
+              const currentProjectResult = await window.api.invoke("project:current");
+              console.log("📂 현재 프로젝트 상태:", currentProjectResult);
+
+              if (!currentProjectResult?.success || !currentProjectResult?.project) {
+                console.error("❌ 현재 프로젝트가 없습니다. TTS 설정을 저장할 수 없습니다.");
+                addLog("⚠️ 프로젝트가 설정되지 않았습니다", "warning");
+
+                // 프로젝트가 없으면 전역 설정에 저장
+                await window.api.invoke("settings:set", {
+                  key: "lastUsedTtsSettings",
+                  value: {
+                    voiceId: form.voice || voices[0]?.id || "ko-KR-Standard-A",
+                    speed: form.speed || "1.0",
+                    pitch: form.pitch || "-1",
+                    ttsEngine: form.ttsEngine || "google",
+                    createdAt: new Date().toISOString()
+                  }
+                });
+                console.log("✅ TTS 설정을 전역 설정에 저장했습니다 (fallback)");
+                addLog("📝 TTS 설정 저장 완료 (전역)");
+              } else {
+                // 프로젝트에 TTS 설정 저장
+                const ttsSettings = {
+                  voiceId: form.voice || voices[0]?.id || "ko-KR-Standard-A",
+                  speed: form.speed || "1.0",
+                  pitch: form.pitch || "-1",
+                  ttsEngine: form.ttsEngine || "google",
+                  createdAt: new Date().toISOString()
+                };
+
+                console.log("💾 저장할 TTS 설정:", ttsSettings);
+
+                const updateResult = await window.api.invoke("project:update", { ttsSettings });
+                console.log("📂 프로젝트 업데이트 결과:", updateResult);
+
+                if (updateResult?.success) {
+                  console.log("✅ TTS 설정이 프로젝트에 저장되었습니다");
+                  console.log("📋 저장된 프로젝트 정보:", updateResult.project);
+                  addLog("📝 TTS 설정 저장 완료");
+                } else {
+                  throw new Error(updateResult?.message || "프로젝트 업데이트 실패");
+                }
+              }
+            } catch (saveError) {
+              console.error("❌ TTS 설정 저장 실패:", saveError);
+              addLog("⚠️ TTS 설정 저장 실패", "error");
+            }
+
+            // 대본 데이터 저장
+            setDoc(scriptResult);
           } else {
             throw new Error("대본이 생성되지 않았습니다. 먼저 대본을 생성해주세요.");
           }

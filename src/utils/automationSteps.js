@@ -32,7 +32,7 @@ export async function generateAudioStep(scriptData, form, addLog, setFullVideoSt
 
     // TTS 엔진과 음성 설정 확인
     const ttsEngine = form.ttsEngine || "google";
-    const voiceId = form.voiceId;
+    const voiceId = form.voice;
 
     if (!voiceId) throw new Error("음성을 선택해주세요.");
 

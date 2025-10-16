@@ -147,6 +147,7 @@ const BottomFixedBar = memo(({
                   }
                   nextStepButton.onClick?.();
                 }}
+                className="next-step-button-pulse"
                 style={{
                   background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                   borderRadius: 8,
@@ -224,6 +225,25 @@ const BottomFixedBar = memo(({
             opacity: 1;
             height: 380px;
           }
+        }
+        @keyframes buttonPulse {
+          0%, 100% {
+            transform: scale(1);
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+          }
+          50% {
+            transform: scale(1.05);
+            box-shadow: 0 6px 24px rgba(102, 126, 234, 0.6);
+          }
+        }
+        .next-step-button-pulse {
+          animation: buttonPulse 2s ease-in-out infinite;
+          box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+          transition: all 0.3s ease;
+        }
+        .next-step-button-pulse:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 24px rgba(102, 126, 234, 0.5);
         }
       `}</style>
     </>

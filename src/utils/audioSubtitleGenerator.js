@@ -26,7 +26,6 @@
  * @param {Object} options.toast - 토스트 알림 객체
  * @param {Function} options.addLog - 로그 추가 함수
  * @param {string} outputPath - 파일 출력 경로 (선택사항)
- * @returns {Promise<void>}
  */
 export async function generateAudioAndSubtitles(scriptData, mode = "script_mode", options, outputPath = null) {
   const { form, voices, setFullVideoState, api, toast, addLog, abortSignal } = options;
@@ -56,7 +55,7 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
   };
 
   try {
-    console.log("🎤 대본 생성 모드 - 자막 및 음성 생성 시작...");
+    console.log("🎤 음성 및 자막 생성 시작...");
     checkAborted(); // 시작 전 체크
 
     // 2단계: 음성 생성 시작
@@ -142,9 +141,9 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       audioResult = await api.invoke("tts:synthesize", {
         scenes: scriptData.scenes,
         ttsEngine: form.ttsEngine || "google",
-        voiceId: form.voiceId || voices[0]?.id,
+        voiceId: form.voice || voices[0]?.id,
         speed: form.speed || "1.0",
-        outputPath: audioFolderPath, // 프로젝트 audio 폴더 경로 전달
+        outputPath: audioFolderPath,
       }, {
         timeout: timeoutMs
       });
@@ -357,7 +356,7 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       currentStep: "error"
     }));
 
-    console.error(`음성/자막 생성 실패: ${error.message}`);
+    throw error;
   } finally {
     // 함수 종료 시 마운트 상태 해제 (탭 전환 후 상태 업데이트 방지)
     isMounted = false;

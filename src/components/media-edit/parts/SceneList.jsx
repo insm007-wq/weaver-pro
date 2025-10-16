@@ -23,6 +23,7 @@ function SceneList({
   setScenes,
   selectedSceneIndex,
   onSceneSelect,
+  projectTtsSettings, // 프로젝트에 저장된 TTS 설정
 }) {
   // 내부 편집 상태 관리
   const [editingSceneIndex, setEditingSceneIndex] = useState(-1);
@@ -172,10 +173,18 @@ function SceneList({
         throw new Error("잘못된 씬 인덱스입니다.");
       }
 
+      // ✨ 프로젝트에 저장된 TTS 설정 우선 사용
+      const voiceId = projectTtsSettings?.voiceId || ttsSettings.voice || "ko-KR-Standard-A";
+      const speed = projectTtsSettings?.speed || ttsSettings.speed || "1.0";
+      const pitch = projectTtsSettings?.pitch || ttsSettings.pitch || "-1";
+
+      console.log(`🎤 씬 ${sceneIndex + 1} TTS 재생성: ${projectTtsSettings ? '프로젝트 저장된 목소리 사용' : '전역 설정 사용'}`);
+      console.log(`   목소리: ${voiceId}, 속도: ${speed}, 피치: ${pitch}`);
+
       const voiceSettings = {
-        voiceId: ttsSettings.voice,
-        speakingRate: parseFloat(ttsSettings.speed),
-        pitch: parseFloat(ttsSettings.pitch),
+        voiceId: voiceId,
+        speakingRate: parseFloat(speed),
+        pitch: parseFloat(pitch),
         volumeGainDb: 2.0
       };
 
@@ -255,10 +264,10 @@ function SceneList({
       console.error(`[TTS 재생성] 씬 ${sceneIndex + 1} 실패:`, error);
       showError(`씬 ${sceneIndex + 1} 음성 생성에 실패했습니다: ${error.message}`);
     }
-  }, [scenes, setScenes, ttsSettings, audioDurations, updateSrtFile]);
+  }, [scenes, setScenes, ttsSettings, projectTtsSettings, audioDurations, updateSrtFile]);
 
   // 미리듣기 함수
-  const handlePreviewTTS = useCallback(async (text) => {
+  const handlePreviewTTS = useCallback(async (text, sceneIndex = -1) => {
     if (!text || text.trim().length === 0) {
       showError("미리들을 텍스트가 없습니다.");
       return;
@@ -274,15 +283,24 @@ function SceneList({
         setCurrentPreviewAudio(null);
       }
 
+      // ✨ 프로젝트에 저장된 TTS 설정 우선 사용
+      let voiceToUse = projectTtsSettings?.voiceId || ttsSettings.voice || "ko-KR-Standard-A";
+      let speedToUse = projectTtsSettings?.speed || ttsSettings.speed || "1.0";
+      let pitchToUse = projectTtsSettings?.pitch || ttsSettings.pitch || "-1";
+      let engineToUse = projectTtsSettings?.ttsEngine || ttsSettings.ttsEngine || "google";
+
+      console.log(`🎤 미리듣기: ${projectTtsSettings ? '프로젝트 저장된 목소리 사용' : '전역 설정 사용'}`);
+      console.log(`   목소리: ${voiceToUse}, 속도: ${speedToUse}, 피치: ${pitchToUse}`);
+
       // 사용자 TTS 설정 사용
       const payload = {
         doc: { scenes: [{ text: text }] },
         tts: {
-          engine: ttsSettings.ttsEngine,
-          voiceId: ttsSettings.voice,
-          voiceName: ttsSettings.voice,
-          speakingRate: parseFloat(ttsSettings.speed),
-          pitch: parseFloat(ttsSettings.pitch),
+          engine: engineToUse,
+          voiceId: voiceToUse,
+          voiceName: voiceToUse,
+          speakingRate: parseFloat(speedToUse),
+          pitch: parseFloat(pitchToUse),
           provider: "Google",
         },
       };
@@ -338,7 +356,7 @@ function SceneList({
       setIsPreviewPlaying(false);
       setCurrentPreviewAudio(null);
     }
-  }, [currentPreviewAudio, ttsSettings]);
+  }, [currentPreviewAudio, ttsSettings, projectTtsSettings]);
 
   // 미리듣기 중지 함수
   const handleStopPreview = useCallback(() => {
@@ -1089,10 +1107,10 @@ function SceneList({
     const loadTtsSettings = async () => {
       try {
         const [ttsEngine, voice, speed, pitch] = await Promise.all([
-          window.api.invoke("settings:get", "ttsEngine"),
-          window.api.invoke("settings:get", "voice"),
-          window.api.invoke("settings:get", "speed"),
-          window.api.invoke("settings:get", "pitch")
+          window.api.invoke("settings:get", "ttsEngine").catch(() => null),
+          window.api.invoke("settings:get", "voice").catch(() => null),
+          window.api.invoke("settings:get", "speed").catch(() => null),
+          window.api.invoke("settings:get", "pitch").catch(() => null)
         ]);
 
         const loadedSettings = {
@@ -1102,10 +1120,19 @@ function SceneList({
           pitch: pitch || "-1"
         };
 
+        console.log("✅ TTS 설정 로드 완료:", loadedSettings);
         setTtsSettings(loadedSettings);
       } catch (error) {
-        console.error("TTS 설정 로드 실패:", error);
-        // 기본 설정 유지
+        console.error("❌ TTS 설정 로드 실패:", error);
+        // 기본 설정 사용
+        const defaultSettings = {
+          ttsEngine: "google",
+          voice: "ko-KR-Standard-A",
+          speed: "1.0",
+          pitch: "-1"
+        };
+        console.log("⚠️ 기본 TTS 설정 사용:", defaultSettings);
+        setTtsSettings(defaultSettings);
       }
     };
 

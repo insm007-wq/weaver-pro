@@ -10,17 +10,17 @@ const VoiceSettingsCard = memo(({ form, voices, voiceLoading, voiceError, onChan
 
   // 안전한 폼 데이터 처리
   const safeForm = useMemo(() => ({
-    voiceId: form?.voiceId || ""
-  }), [form?.voiceId]);
+    voice: form?.voice || ""
+  }), [form?.voice]);
 
-  const selectedVoice = useMemo(() => voices.find((v) => v.id === safeForm.voiceId), [voices, safeForm.voiceId]);
+  const selectedVoice = useMemo(() => voices.find((v) => v.id === safeForm.voice), [voices, safeForm.voice]);
 
   // 음성 자동 선택 로직
   useEffect(() => {
-    if (voices.length > 0 && !safeForm.voiceId) {
-      setForm((prev) => ({ ...prev, voiceId: voices[0].id }));
+    if (voices.length > 0 && !safeForm.voice) {
+      setForm((prev) => ({ ...prev, voice: voices[0].id }));
     }
-  }, [voices, safeForm.voiceId, setForm]);
+  }, [voices, safeForm.voice, setForm]);
 
   const getVoiceDescription = (voiceName) => {
     const name = voiceName?.toLowerCase() || "";
@@ -86,8 +86,8 @@ const VoiceSettingsCard = memo(({ form, voices, voiceLoading, voiceError, onChan
         >
           <Dropdown
             value={selectedVoice?.name || (voiceLoading ? "불러오는 중…" : "목소리 선택")}
-            selectedOptions={form.voiceId ? [form.voiceId] : []}
-            onOptionSelect={(_, d) => onChange("voiceId", d.optionValue)}
+            selectedOptions={form.voice ? [form.voice] : []}
+            onOptionSelect={(_, d) => onChange("voice", d.optionValue)}
             size="medium"
             disabled={disabled || voiceLoading || !!voiceError}
             style={{ minHeight: 36 }}
