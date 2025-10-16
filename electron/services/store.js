@@ -63,7 +63,7 @@ if (!store.has('subtitleSettings')) {
     horizontalAlign: "center",
     verticalPadding: 60,
     horizontalPadding: 24,
-    maxWidth: 90,
+    maxWidth: 85,
     finePositionOffset: 0,
     useBackground: true,
     backgroundRadius: 4,

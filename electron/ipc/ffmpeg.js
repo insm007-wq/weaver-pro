@@ -61,7 +61,7 @@ const DEFAULT_SUBTITLE_SETTINGS = {
   horizontalAlign: "center",
   verticalPadding: 60,
   horizontalPadding: 24,
-  maxWidth: 90,
+  maxWidth: 85,
   finePositionOffset: 0,
 
   // 배경 및 테두리
