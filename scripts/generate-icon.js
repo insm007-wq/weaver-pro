@@ -20,7 +20,7 @@ async function generateIcons() {
     fs.copyFileSync(iconPath, outputPng);
     console.log('✅ icon.png 복사 완료');
 
-    // 다양한 크기의 PNG 생성 (Windows용)
+    // 다양한 크기의 PNG 생성
     const sizes = [16, 24, 32, 48, 64, 128, 256, 512];
 
     for (const size of sizes) {
@@ -31,19 +31,17 @@ async function generateIcons() {
       console.log(`✅ icon_${size}x${size}.png 생성 완료`);
     }
 
-    // 256x256 아이콘을 .ico로 변환 (electron-builder가 사용)
-    await sharp(iconPath)
-      .resize(256, 256)
-      .png()
-      .toFile(path.join(buildDir, 'icon.ico.png'));
-    console.log('✅ icon.ico.png 생성 완료');
+    // Windows용 icon.ico (256x256 PNG 복사 - electron-builder가 자동 변환)
+    const icon256 = path.join(buildDir, 'icon_256x256.png');
+    const icoPath = path.join(buildDir, 'icon.ico');
+    fs.copyFileSync(icon256, icoPath);
+    console.log('✅ icon.ico 생성 완료 (electron-builder가 자동 변환)');
 
-    // macOS용 .icns 대신 PNG 생성
-    await sharp(iconPath)
-      .resize(512, 512)
-      .png()
-      .toFile(path.join(buildDir, 'icon.icns.png'));
-    console.log('✅ icon.icns.png 생성 완료');
+    // macOS용 icon.icns (512x512 PNG 복사)
+    const icon512 = path.join(buildDir, 'icon_512x512.png');
+    const icnsPath = path.join(buildDir, 'icon.icns');
+    fs.copyFileSync(icon512, icnsPath);
+    console.log('✅ icon.icns 생성 완료');
 
     console.log('');
     console.log('🎉 모든 아이콘 생성 완료!');
@@ -51,8 +49,8 @@ async function generateIcons() {
     console.log('📁 생성된 파일들:');
     console.log('  - build/icon.png (512x512)');
     console.log('  - build/icon_*.png (16~512 다양한 크기)');
-    console.log('  - build/icon.ico.png (Windows용)');
-    console.log('  - build/icon.icns.png (macOS용)');
+    console.log('  - build/icon.ico (Windows용 - electron-builder 자동 변환)');
+    console.log('  - build/icon.icns (macOS용)');
 
   } catch (error) {
     console.error('❌ 아이콘 생성 실패:', error);
