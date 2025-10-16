@@ -120,7 +120,7 @@ const ThumbnailImage = React.memo(({ src, alt, style, fallbackText = "IMAGE" }) 
   return <img src={imgSrc} alt={alt} style={style} onError={() => setFailed(true)} />;
 });
 
-function MediaDownloadPage() {
+function MediaDownloadPage({ onDownloadingChange }) {
   const headerStyles = useHeaderStyles();
   const containerStyles = useContainerStyles();
 
@@ -237,6 +237,13 @@ function MediaDownloadPage() {
       clearCountdownTimer();
     };
   }, [loadKeywordsFromJSON, loadDownloadHistory, clearCountdownTimer]);
+
+  // 다운로드 상태 변경을 부모에게 알림
+  useEffect(() => {
+    if (onDownloadingChange) {
+      onDownloadingChange(isDownloading);
+    }
+  }, [isDownloading, onDownloadingChange]);
 
   // 초기화 이벤트
   useEffect(() => {
@@ -1054,10 +1061,10 @@ function MediaDownloadPage() {
   );
 }
 
-export default function MediaDownloadPageWithBoundary() {
+export default function MediaDownloadPageWithBoundary({ onDownloadingChange }) {
   return (
     <PageErrorBoundary>
-      <MediaDownloadPage />
+      <MediaDownloadPage onDownloadingChange={onDownloadingChange} />
     </PageErrorBoundary>
   );
 }

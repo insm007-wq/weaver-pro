@@ -1166,7 +1166,7 @@ function runFFmpegViaShellScript(args, progressCallback = null) {
   return new Promise(async (resolve) => {
     // 취소 확인
     if (isExportCancelled) {
-      return resolve({ success: false, error: "사용자에 의해 취소되었습니다" });
+      return resolve({ success: false, error: "cancelled" });
     }
 
     const os = require("os");
@@ -1334,7 +1334,7 @@ exit $?`;
         resolve({ success: true, output: out || err, duration: extractDuration(err), size: 0 });
       } else {
         if (isExportCancelled) {
-          resolve({ success: false, error: "사용자에 의해 취소되었습니다" });
+          resolve({ success: false, error: "cancelled" });
         } else {
           console.error(`❌ FFmpeg 실행 실패 (코드: ${code})`);
           console.error(`stderr (전체 ${err.length}자):\n${err.slice(-3000)}`);
@@ -1367,7 +1367,7 @@ exit $?`;
 function runFFmpegDirect(args, progressCallback, isCheck) {
   return new Promise((resolve) => {
     if (isExportCancelled) {
-      return resolve({ success: false, error: "사용자에 의해 취소되었습니다" });
+      return resolve({ success: false, error: "cancelled" });
     }
 
     const timeoutMs = isCheck ? 10000 : 15 * 60 * 1000;
@@ -1424,7 +1424,7 @@ function runFFmpegDirect(args, progressCallback, isCheck) {
         resolve({ success: code === 0, output: out || err, duration: extractDuration(err), size: 0 });
       } else {
         if (isExportCancelled) {
-          resolve({ success: false, error: "사용자에 의해 취소되었습니다" });
+          resolve({ success: false, error: "cancelled" });
         } else {
           console.error(`❌ FFmpeg 실행 실패 (코드: ${code})`);
           console.error(`stderr:\n${err.slice(-1000)}`);
@@ -1605,7 +1605,7 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
   for (let i = 0; i < scenes.length; i++) {
     // 취소 확인
     if (isExportCancelled) {
-      throw new Error("사용자에 의해 취소되었습니다");
+      throw new Error("cancelled");
     }
 
     const scene = scenes[i];

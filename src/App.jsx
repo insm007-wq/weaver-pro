@@ -100,6 +100,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState(null);
   const [isScriptGenerating, setIsScriptGenerating] = useState(false);
   const [isVideoExporting, setIsVideoExporting] = useState(false);
+  const [isMediaDownloading, setIsMediaDownloading] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(null); // null: 로딩 중, false: 미동의, true: 동의
   const canOpenWithoutProject = true;
   const styles = useStyles();
@@ -249,6 +250,7 @@ function App() {
             onSelectMenu={handleSelectMenu}
             isScriptGenerating={isScriptGenerating}
             isVideoExporting={isVideoExporting}
+            isMediaDownloading={isMediaDownloading}
           />
         </Suspense>
 
@@ -303,7 +305,7 @@ function App() {
                 </KeepAlivePane>
 
                 <KeepAlivePane active={currentPage === "draft"}>
-                  <MediaDownloadPage />
+                  <MediaDownloadPage onDownloadingChange={setIsMediaDownloading} />
                 </KeepAlivePane>
 
                 <KeepAlivePane active={currentPage === "refine"}>

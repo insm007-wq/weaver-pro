@@ -53,10 +53,10 @@ const useStyles = makeStyles({
     boxShadow: '0 4px 16px rgba(220, 38, 38, 0.1)',
   },
   infoBar: {
-    backgroundColor: `${tokens.colorPaletteLightBlueBackground2} !important`,
+    backgroundColor: `#d0e7ff !important`,
     borderLeft: `4px solid ${tokens.colorPaletteLightBlueBorder2}`,
-    color: `${tokens.colorPaletteLightBlueForeground2} !important`,
-    boxShadow: '0 4px 16px rgba(59, 130, 246, 0.1)',
+    color: `#004080 !important`,
+    boxShadow: '0 4px 16px rgba(59, 130, 246, 0.2)',
   },
   warningBar: {
     backgroundColor: `${tokens.colorPaletteYellowBackground2} !important`,

@@ -278,7 +278,7 @@ async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 2
 
     // 취소 확인
     if (isCancelled()) {
-      throw new Error("다운로드가 취소되었습니다");
+      throw new Error("cancelled");
     }
 
     // 다운로드
@@ -311,7 +311,7 @@ async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 2
           // 취소 확인
           if (isCancelled()) {
             request.destroy();
-            reject(new Error("다운로드가 취소되었습니다"));
+            reject(new Error("cancelled"));
             return;
           }
 
@@ -334,7 +334,7 @@ async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 2
         response.on("end", () => {
           // 취소 확인
           if (isCancelled()) {
-            reject(new Error("다운로드가 취소되었습니다"));
+            reject(new Error("cancelled"));
             return;
           }
           resolve({ buffer: Buffer.concat(chunks), size: downloadedSize, skipped: false });
@@ -422,7 +422,7 @@ async function downloadPhotoOptimized(url, filename, onProgress) {
 
     // 취소 확인
     if (isCancelled()) {
-      throw new Error("다운로드가 취소되었습니다");
+      throw new Error("cancelled");
     }
 
     // 다운로드
@@ -447,7 +447,7 @@ async function downloadPhotoOptimized(url, filename, onProgress) {
           // 취소 확인
           if (isCancelled()) {
             request.destroy();
-            reject(new Error("다운로드가 취소되었습니다"));
+            reject(new Error("cancelled"));
             return;
           }
 
@@ -463,7 +463,7 @@ async function downloadPhotoOptimized(url, filename, onProgress) {
         response.on("end", () => {
           // 취소 확인
           if (isCancelled()) {
-            reject(new Error("다운로드가 취소되었습니다"));
+            reject(new Error("cancelled"));
             return;
           }
           resolve({ buffer: Buffer.concat(chunks), size: downloadedSize });
@@ -608,7 +608,7 @@ async function generateAndDownloadAIImage(keyword, onProgress) {
 
       // 취소 확인
       if (isCancelled()) {
-        throw new Error("AI 이미지 생성이 취소되었습니다");
+        throw new Error("cancelled");
       }
     }
 

@@ -174,7 +174,10 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
         setExportedFilePath(result.outputPath || "");
         setCompletionDialogOpen(true);
       } else {
-        showError(result?.error || "영상 내보내기에 실패했습니다.");
+        // "cancelled" 에러는 토스트를 표시하지 않음 (사용자가 의도적으로 취소한 경우)
+        if (result?.error !== "cancelled") {
+          showError(result?.error || "영상 내보내기에 실패했습니다.");
+        }
       }
     } catch (error) {
       console.error("영상 내보내기 오류:", error);
@@ -192,7 +195,7 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
   const handleCancelExport = async () => {
     try {
       await window.api?.cancelExport?.();
-      showInfo("영상 내보내기를 취소했습니다.");
+      // showInfo("영상 내보내기를 취소했습니다."); // 토스트 제거 (하단 정보창에서 표시됨)
     } catch (error) {
       console.error("취소 실패:", error);
       showError("취소 중 오류가 발생했습니다.");
@@ -225,7 +228,7 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
         {/* 프로젝트 정보 */}
         <div style={{
           padding: 12,
-          backgroundColor: "#fafafa",
+          backgroundColor: "#f5f5f5",
           borderRadius: 8,
           border: "1px solid #e0e0e0",
           marginBottom: 12
