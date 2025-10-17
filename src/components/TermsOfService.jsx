@@ -136,7 +136,7 @@ export default function TermsOfService({ onAccept }) {
 
         {/* 회사 정보 */}
         <div className={styles.companyInfo}>
-          <Title2>크리에이티브 허브</Title2>
+          <Title2>크리에이티브허브</Title2>
         </div>
 
         {/* 약관 내용 */}
@@ -146,7 +146,7 @@ export default function TermsOfService({ onAccept }) {
               <DocumentText24Regular /> 서비스 이용약관
             </div>
             <Text>
-              본 약관은 크리에이티브 허브(이하 "회사")가 제공하는 Weaver Pro 소프트웨어(이하 "서비스")의 이용과 관련하여 회사와 이용자의
+              본 약관은 크리에이티브허브(이하 "회사")가 제공하는 Weaver Pro 소프트웨어(이하 "서비스")의 이용과 관련하여 회사와 이용자의
               권리, 의무 및 책임사항을 규정합니다.
             </Text>
           </div>
@@ -273,7 +273,7 @@ export default function TermsOfService({ onAccept }) {
 
         {/* 푸터 */}
         <div className={styles.footer}>
-          <Text size={200}>© 2025 크리에이티브 허브 All rights reserved.</Text>
+          <Text size={200}>© 2025 크리에이티브허브 All rights reserved.</Text>
         </div>
       </Card>
     </div>
