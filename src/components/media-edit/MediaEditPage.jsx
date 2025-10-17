@@ -369,6 +369,7 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
                 selectedSceneIndex={selectedSceneIndex}
                 onSceneSelect={handleSceneSelect}
                 projectTtsSettings={projectTtsSettings}
+                isVideoExporting={isVideoExporting}
               />
             </div>
 

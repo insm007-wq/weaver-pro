@@ -326,8 +326,9 @@ function createDrawtextFilterAdvanced(subtitle, settings, textFilePath, videoWid
       // Fallback 2: arial.ttf (대부분의 Windows 시스템에 존재)
       fontFile = fontMap["arial"];
       if (!fs.existsSync(fontFile)) {
-        console.error(`❌ 사용 가능한 폰트를 찾을 수 없습니다`);
-        throw new Error("시스템 폰트를 찾을 수 없습니다");
+        console.warn(`⚠️ Arial 폰트를 찾을 수 없음: ${fontFile}`);
+        // 경고만 하고 진행 (FFmpeg 기본 폰트 사용)
+        fontFile = "Arial"; // FFmpeg 내장 폰트 이름 사용
       }
     }
   }
