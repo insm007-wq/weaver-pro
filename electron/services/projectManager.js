@@ -78,6 +78,11 @@ class ProjectManager {
       store.setCurrentProjectId(projectId);
       this.currentProject = projectData;
 
+      // 프로젝트 생성과 동시에 설정 자동 업데이트
+      store.set('defaultProjectName', topic);
+      store.set('videoSaveFolder', projectDir);
+      console.log(`💾 settings.json 자동 업데이트: defaultProjectName="${topic}", videoSaveFolder="${projectDir}"`);
+
       console.log(`📁 새 프로젝트 생성: ${projectId}`);
       console.log(`✅ currentProject 설정 완료:`, this.currentProject?.id);
       console.log(`📂 프로젝트 경로:`, projectData.paths.root);
