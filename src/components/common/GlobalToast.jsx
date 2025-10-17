@@ -106,6 +106,9 @@ class ToastManager {
       toast.type = 'info';
     }
 
+    // info 타입은 표시하지 않음
+    if (toast.type === 'info') return;
+
     if (this.setter && !this.isProcessing) {
       this.isProcessing = true;
       this.setter(toast);

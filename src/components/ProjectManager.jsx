@@ -65,7 +65,7 @@ const DEFAULT_PROJECT_SETTINGS = {
  * 자동 생성될 폴더 구조 상수
  * @type {string[]}
  */
-const FOLDER_STRUCTURE = ["scripts/", "audio/", "images/", "output/", "temp/"];
+const FOLDER_STRUCTURE = ["scripts/", "audio/", "images/", "video/", "output/", "temp/"];
 
 /**
  * 프로젝트 전체 경로에서 루트 폴더 경로만 추출
@@ -804,6 +804,8 @@ export default function ProjectManager() {
               &nbsp;&nbsp;&nbsp;&nbsp;├── 📁 audio/ (음성 파일)
               <br />
               &nbsp;&nbsp;&nbsp;&nbsp;├── 📁 images/ (이미지 파일)
+              <br />
+              &nbsp;&nbsp;&nbsp;&nbsp;├── 📁 video/ (다운로드된 영상)
               <br />
               &nbsp;&nbsp;&nbsp;&nbsp;├── 📁 output/ (최종 영상)
               <br />
