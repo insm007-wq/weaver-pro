@@ -86,7 +86,6 @@ export function useVoiceSettings(form) {
       try {
         setVoiceLoading(true);
         setVoiceError(null);
-        console.log("🔄 초기 목소리 로드:", form.ttsEngine);
 
         const res = await api.invoke("tts:listVoices", { engine: form.ttsEngine });
 
@@ -129,7 +128,6 @@ export function useVoiceSettings(form) {
       try {
         setVoiceLoading(true);
         setVoiceError(null);
-        console.log("🔄 TTS 엔진 변경 - 목소리 다시 로드:", form.ttsEngine);
 
         const res = await api.invoke("tts:listVoices", { engine: form.ttsEngine });
 
@@ -190,14 +188,11 @@ export function useVoiceSettings(form) {
 
   const previewVoice = useCallback(async (voiceId, voiceName) => {
     try {
-      console.log(`🎵 목소리 미리듣기 시작: ${voiceName} (${voiceId})`);
-
       // 이전 오디오가 있으면 먼저 중지
       setCurrentAudio((prevAudio) => {
         if (prevAudio) {
           prevAudio.pause();
           prevAudio.currentTime = 0;
-          console.log("🛑 이전 음성 재생 중지");
         }
         return null;
       });
@@ -231,7 +226,6 @@ export function useVoiceSettings(form) {
           console.error("목소리 미리듣기 재생에 실패했습니다.");
           setCurrentAudio(null);
         });
-        console.log("✅ 목소리 미리듣기 재생 성공");
       } else {
         throw new Error(res?.error || res?.data?.message || "음성 합성 실패");
       }
@@ -246,7 +240,6 @@ export function useVoiceSettings(form) {
       currentAudio.pause();
       currentAudio.currentTime = 0;
       setCurrentAudio(null);
-      console.log("🛑 음성 재생이 중지되었습니다.");
     }
   }, [currentAudio]);
 
@@ -259,7 +252,6 @@ export function useVoiceSettings(form) {
         const allItems = Array.isArray(res.data) ? res.data : [];
         const filteredItems = filterVoicesByEngine(allItems, form.ttsEngine);
         setVoices(filteredItems);
-        console.log(`✅ ${filteredItems.length}개의 목소리를 로드했습니다!`);
       } else {
         setVoiceError({
           code: res?.code ?? res?.errorCode ?? 1004,

@@ -204,7 +204,7 @@ const ActionCard = memo(
               videoSaveFolder = videoFolderSetting;
             }
           } catch (settingError) {
-            console.warn("⚠️ 대본 모드 - 전역 설정 읽기 실패:", settingError.message);
+            // 전역 설정 읽기 실패시 무시
           }
 
           addLog("📝 AI 대본 생성 중...");
@@ -212,7 +212,6 @@ const ActionCard = memo(
 
           if (scriptResult && scriptResult.scenes && Array.isArray(scriptResult.scenes) && scriptResult.scenes.length > 0) {
             // ✅ 대본 생성 완료 시 미디어 관련 상태 초기화
-            console.log("🔄 대본 생성 완료 - 미디어 상태 초기화");
             window.dispatchEvent(new CustomEvent("reset-keyword-extraction")); // 미디어 준비 초기화
             window.dispatchEvent(new CustomEvent("reset-media-download")); // 미디어 다운로드 초기화
             window.dispatchEvent(new CustomEvent("reset-media-edit")); // 편집 페이지 초기화
@@ -237,10 +236,8 @@ const ActionCard = memo(
             try {
               // 현재 프로젝트 확인
               const currentProjectResult = await window.api.invoke("project:current");
-              console.log("📂 현재 프로젝트 상태:", currentProjectResult);
 
               if (!currentProjectResult?.success || !currentProjectResult?.project) {
-                console.error("❌ 현재 프로젝트가 없습니다. TTS 설정을 저장할 수 없습니다.");
                 addLog("⚠️ 프로젝트가 설정되지 않았습니다", "warning");
 
                 // 프로젝트가 없으면 전역 설정에 저장
@@ -254,7 +251,6 @@ const ActionCard = memo(
                     createdAt: new Date().toISOString()
                   }
                 });
-                console.log("✅ TTS 설정을 전역 설정에 저장했습니다 (fallback)");
                 addLog("📝 TTS 설정 저장 완료 (전역)");
               } else {
                 // 프로젝트에 TTS 설정 저장
@@ -292,7 +288,19 @@ const ActionCard = memo(
         } catch (error) {
           if (error.name === "AbortError" || error.message === "작업이 취소되었습니다.") {
             console.log("⏹️ 작업 취소됨");
-            addLog("⏹️ 작업이 취소되었습니다.", "info");
+            // 취소 시에는 에러로 표시하지 않고 상태만 초기화
+            setFullVideoState({
+              isGenerating: false,
+              mode: "idle",
+              currentStep: "idle",
+              progress: { script: 0, audio: 0, images: 0, video: 0, subtitle: 0 },
+              results: { script: null, audio: null, images: [], video: null },
+              streamingScript: "",
+              error: null,
+              startTime: null,
+              logs: [],
+            });
+            setDoc(null);
           } else {
             console.error("대본 생성 오류:", error);
             setError(error.message);
@@ -438,13 +446,7 @@ const ActionCard = memo(
                   }
                 }}
                 disabled={!fullVideoState.isGenerating && isDisabled}
-                style={{
-                  ...styles.button,
-                  ...(fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" && {
-                    borderColor: tokens.colorPaletteRedBorder2,
-                    color: tokens.colorPaletteRedForeground1,
-                  })
-                }}
+                style={styles.button}
               >
                 {fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" ? (
                   "⏹ 생성 중지"

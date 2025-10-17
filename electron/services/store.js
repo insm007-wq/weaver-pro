@@ -36,6 +36,47 @@ if (!store.has('currentProjectId')) {
   console.log("✅ 기본 currentProjectId 설정됨");
 }
 
+// 약관 동의 여부 초기화
+if (!store.has('termsAccepted')) {
+  store.set('termsAccepted', false);
+  console.log("✅ 기본 termsAccepted 설정됨");
+}
+
+// 자막 설정 초기화 (YouTube 표준 스타일)
+if (!store.has('subtitleSettings')) {
+  const defaultSubtitleSettings = {
+    enableSubtitles: true,
+    fontFamily: "noto-sans",
+    fontSize: 52,
+    fontWeight: 700,
+    lineHeight: 1.3,
+    letterSpacing: 0,
+    textColor: "#FFFFFF",
+    backgroundColor: "#000000",
+    backgroundOpacity: 75,
+    outlineColor: "#000000",
+    outlineWidth: 3,
+    shadowColor: "#000000",
+    shadowOffset: 0,
+    shadowBlur: 0,
+    position: "bottom",
+    horizontalAlign: "center",
+    verticalPadding: 60,
+    horizontalPadding: 24,
+    maxWidth: 85,
+    finePositionOffset: 0,
+    useBackground: true,
+    backgroundRadius: 4,
+    useOutline: true,
+    useShadow: false,
+    autoWrap: true,
+    maxLines: 2,
+    wordBreak: "keep-all",
+  };
+  store.set('subtitleSettings', defaultSubtitleSettings);
+  console.log("✅ 기본 자막 설정됨 (fontSize: 52)");
+}
+
 // 프로젝트 관리 함수들
 const projectStore = {
   // 모든 프로젝트 가져오기
@@ -134,6 +175,21 @@ const projectStore = {
   getCurrentProject() {
     const currentId = this.getCurrentProjectId();
     return currentId ? this.findProject(currentId) : null;
+  },
+
+  // 약관 동의 여부 확인
+  getTermsAccepted() {
+    const value = store.get('termsAccepted', false);
+    console.log(`🔍 [store.js] getTermsAccepted() 반환값: ${value}, store path: ${store.path}`);
+    return value;
+  },
+
+  // 약관 동의 설정
+  setTermsAccepted(accepted) {
+    console.log(`💾 [store.js] setTermsAccepted(${accepted}) 호출, store path: ${store.path}`);
+    store.set('termsAccepted', accepted);
+    const verify = store.get('termsAccepted');
+    console.log(`✅ [store.js] 약관 동의 저장 완료: ${accepted}, 검증 읽기: ${verify}`);
   }
 };
 

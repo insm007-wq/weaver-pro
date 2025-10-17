@@ -38,8 +38,6 @@ async function generateIcons() {
     fs.mkdirSync(buildDir, { recursive: true });
   }
 
-  console.log('🎨 Weaver Pro 아이콘 생성 중...');
-
   // SVG를 버퍼로 변환
   const svgBuffer = Buffer.from(iconSVG);
 
@@ -48,21 +46,18 @@ async function generateIcons() {
     .resize(512, 512)
     .png()
     .toFile(path.join(buildDir, 'icon.png'));
-  console.log('✅ Linux icon.png (512x512) 생성 완료');
 
   // 2. Windows용 ICO (256x256 PNG로 생성 - electron-builder가 자동 변환)
   await sharp(svgBuffer)
     .resize(256, 256)
     .png()
     .toFile(path.join(buildDir, 'icon.ico.png'));
-  console.log('✅ Windows icon.ico용 PNG (256x256) 생성 완료');
 
   // 3. Mac용 ICNS (1024x1024 PNG로 생성 - electron-builder가 자동 변환)
   await sharp(svgBuffer)
     .resize(1024, 1024)
     .png()
     .toFile(path.join(buildDir, 'icon.icns.png'));
-  console.log('✅ Mac icon.icns용 PNG (1024x1024) 생성 완료');
 
   // 4. 추가 크기들 (Windows ICO 내부용)
   const sizes = [16, 24, 32, 48, 64, 128, 256];
@@ -72,13 +67,6 @@ async function generateIcons() {
       .png()
       .toFile(path.join(buildDir, `icon_${size}x${size}.png`));
   }
-  console.log('✅ 다양한 크기 아이콘 생성 완료');
-
-  console.log('\n🎉 모든 아이콘 생성 완료!');
-  console.log('📁 위치: build/ 디렉토리');
-  console.log('\n⚠️  참고: electron-builder는 PNG를 자동으로 ICO/ICNS로 변환합니다.');
-  console.log('   - Windows: icon.ico.png → icon.ico');
-  console.log('   - Mac: icon.icns.png → icon.icns');
 }
 
 generateIcons().catch(console.error);

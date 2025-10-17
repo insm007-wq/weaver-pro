@@ -278,15 +278,6 @@ export function runAutoMatch(input) {
 
   const remaining = next.filter((s) => !s.assetId).length;
 
-  if (opts.debug) {
-    console.log("[autoMatch] result:", {
-      filled: next.length - remaining,
-      remaining,
-      byStrategy,
-      reasons,
-    });
-  }
-
   return {
     scenes: next,
     stats: {

@@ -3,20 +3,26 @@
   "version": "1.0.0",
   "main": "electron/main.js",
   "scripts": {
+    "predev": "node scripts/obfuscate.js --check",
     "dev": "vite",
     "dev:5174": "vite --port 5174",
     "dev:5175": "vite --port 5175",
     "dev:auto": "vite --port 0",
-    "build": "vite build",
-    "preview": "vite preview",
-    "start": "electron .",
+    "preelectron:dev": "node scripts/obfuscate.js --check",
     "electron:dev": "cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
     "electron:dev:5174": "cross-env VITE_DEV_SERVER_URL=http://localhost:5174 electron .",
     "electron:dev:5175": "cross-env VITE_DEV_SERVER_URL=http://localhost:5175 electron .",
-    "build:win": "npm run build && electron-builder --win",
-    "build:mac": "npm run build && electron-builder --mac",
-    "build:linux": "npm run build && electron-builder --linux",
-    "build:all": "npm run build && electron-builder -mwl"
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "electron .",
+    "obfuscate": "node scripts/obfuscate.js",
+    "obfuscate:check": "node scripts/obfuscate.js --check",
+    "obfuscate:restore": "node scripts/obfuscate.js --restore",
+    "generate-icon": "node scripts/generate-icon.js",
+    "build:win": "npm run generate-icon && npm run build && npm run obfuscate && electron-builder --win && npm run obfuscate:restore",
+    "build:mac": "npm run generate-icon && npm run build && npm run obfuscate && electron-builder --mac && npm run obfuscate:restore",
+    "build:linux": "npm run generate-icon && npm run build && npm run obfuscate && electron-builder --linux && npm run obfuscate:restore",
+    "build:all": "npm run generate-icon && npm run build && npm run obfuscate && electron-builder -mwl && npm run obfuscate:restore"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.1",
@@ -50,6 +56,8 @@
     "cross-env": "^10.0.0",
     "electron": "^28.1.3",
     "electron-builder": "^26.0.12",
+    "javascript-obfuscator": "^4.1.1",
+    "png-to-ico": "^3.0.1",
     "vite": "^4.3.9"
   },
   "build": {
@@ -81,16 +89,22 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
+      "icon": "build/icon_256x256.png",
       "signAndEditExecutable": false
     },
     "mac": {
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "category": "public.app-category.productivity",
@@ -102,7 +116,9 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "category": "Utility"

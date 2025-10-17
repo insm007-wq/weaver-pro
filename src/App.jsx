@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, useEffect, Suspense, lazy, memo } from "react";
-import { makeStyles, shorthands, tokens, Card, CardHeader, Body1, Title1, Title2, Subtitle1, Text, mergeClasses } from "@fluentui/react-components";
+import { makeStyles, shorthands, tokens, Card, CardHeader, Body1, Title1, Title2, Subtitle1, Text, mergeClasses, Button } from "@fluentui/react-components";
 import KeepAlivePane from "./components/common/KeepAlivePane";
 import { LoadingSpinner, GlobalToast } from "./components/common";
 import { useFontOverrideStyles } from "./styles/commonStyles";
@@ -14,6 +14,7 @@ const ScriptVoiceGenerator = lazy(() => import("./components/scriptgen/ScriptVoi
 const MediaPrepEditor = lazy(() => import("./components/media-prep/MediaPrepEditor"));
 const MediaDownloadPage = lazy(() => import("./components/media-down/MediaDownloadPage"));
 const MediaEditPage = lazy(() => import("./components/media-edit/MediaEditPage"));
+const TermsOfService = lazy(() => import("./components/TermsOfService"));
 
 const useStyles = makeStyles({
   root: {
@@ -99,9 +100,103 @@ function App() {
   const [currentPage, setCurrentPage] = useState(null);
   const [isScriptGenerating, setIsScriptGenerating] = useState(false);
   const [isVideoExporting, setIsVideoExporting] = useState(false);
+  const [isMediaDownloading, setIsMediaDownloading] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(null); // null: 로딩 중, false: 미동의, true: 동의
+  const [hasProject, setHasProject] = useState(true); // 프로젝트 존재 여부
   const canOpenWithoutProject = true;
   const styles = useStyles();
   const fontStyles = useFontOverrideStyles();
+
+  // 약관 동의 여부 확인
+  useEffect(() => {
+    const checkTermsAcceptance = async () => {
+      try {
+        console.log("🔍 [App.jsx] 약관 동의 여부 확인 중...");
+        console.log("🔍 [App.jsx] window.electron:", window.electron);
+        console.log("🔍 [App.jsx] window.electron.store:", window.electron?.store);
+        const accepted = await window.electron?.store?.getTermsAccepted();
+        console.log("🔍 [App.jsx] 약관 동의 상태:", accepted);
+        setTermsAccepted(accepted || false);
+      } catch (error) {
+        console.error("❌ [App.jsx] 약관 동의 여부 확인 실패:", error);
+        setTermsAccepted(false);
+      }
+    };
+    checkTermsAcceptance();
+  }, []);
+
+  // 프로젝트 존재 여부 확인
+  useEffect(() => {
+    const checkProjectExists = async () => {
+      try {
+        const result = await window.api?.invoke?.("project:list");
+        if (result?.success) {
+          const projects = Array.isArray(result.data?.projects)
+            ? result.data.projects
+            : Array.isArray(result.projects)
+            ? result.projects
+            : [];
+          // 프로젝트가 1개 이상 존재하면 true
+          setHasProject(projects.length > 0);
+          console.log("📊 [App.jsx] 프로젝트 존재 여부:", projects.length > 0, `(${projects.length}개)`);
+        } else {
+          setHasProject(false);
+        }
+      } catch (error) {
+        console.error("❌ [App.jsx] 프로젝트 목록 확인 실패:", error);
+        setHasProject(false);
+      }
+    };
+
+    checkProjectExists();
+  }, []);
+
+  // 프로젝트 생성 완료 이벤트 리스너
+  useEffect(() => {
+    const handleProjectCreated = () => {
+      console.log("✅ [App.jsx] 프로젝트 생성됨 - 탭 활성화");
+      setHasProject(true);
+    };
+
+    window.addEventListener("project:created", handleProjectCreated);
+    return () => window.removeEventListener("project:created", handleProjectCreated);
+  }, []);
+
+  // 프로젝트 삭제 완료 이벤트 리스너
+  useEffect(() => {
+    const handleProjectDeleted = async () => {
+      console.log("🗑️ [App.jsx] 프로젝트 삭제됨 - hasProject 상태 갱신");
+      try {
+        const result = await window.api?.invoke?.("project:list");
+        if (result?.success) {
+          const projects = Array.isArray(result.data?.projects)
+            ? result.data.projects
+            : Array.isArray(result.projects)
+            ? result.projects
+            : [];
+          setHasProject(projects.length > 0);
+          console.log("📊 [App.jsx] 프로젝트 존재 여부 갱신:", projects.length > 0, `(${projects.length}개)`);
+        }
+      } catch (error) {
+        console.error("❌ [App.jsx] 프로젝트 상태 갱신 실패:", error);
+        setHasProject(false);
+      }
+    };
+
+    window.addEventListener("project:deleted", handleProjectDeleted);
+    return () => window.removeEventListener("project:deleted", handleProjectDeleted);
+  }, []);
+
+  const handleAcceptTerms = async () => {
+    try {
+      console.log("💾 [App.jsx] 약관 동의 저장 시도...");
+      const result = await window.electron?.store?.setTermsAccepted(true);
+      console.log("💾 [App.jsx] 약관 동의 저장 결과:", result);
+      setTermsAccepted(true);
+    } catch (error) {
+      console.error("❌ [App.jsx] 약관 동의 저장 실패:", error);
+    }
+  };
 
   // 디버깅: 상태 변경 확인
   useEffect(() => {
@@ -190,6 +285,20 @@ function App() {
     };
   }, []);
 
+  // 약관 동의 여부 로딩 중
+  if (termsAccepted === null) {
+    return <MemoizedLoadingFallback label="초기화 중..." />;
+  }
+
+  // 약관 미동의 시 약관 화면 표시
+  if (!termsAccepted) {
+    return (
+      <Suspense fallback={<MemoizedLoadingFallback label="약관 로딩 중..." />}>
+        <TermsOfService onAccept={handleAcceptTerms} />
+      </Suspense>
+    );
+  }
+
   return (
     <div className={mergeClasses(styles.root, fontStyles.globalFont)}>
       <Suspense fallback={<MemoizedLoadingFallback label="헤더 로딩 중..." />}>
@@ -204,6 +313,8 @@ function App() {
             onSelectMenu={handleSelectMenu}
             isScriptGenerating={isScriptGenerating}
             isVideoExporting={isVideoExporting}
+            isMediaDownloading={isMediaDownloading}
+            hasProject={hasProject}
           />
         </Suspense>
 
@@ -258,7 +369,7 @@ function App() {
                 </KeepAlivePane>
 
                 <KeepAlivePane active={currentPage === "draft"}>
-                  <MediaDownloadPage />
+                  <MediaDownloadPage onDownloadingChange={setIsMediaDownloading} />
                 </KeepAlivePane>
 
                 <KeepAlivePane active={currentPage === "refine"}>
@@ -281,9 +392,101 @@ function App() {
           </Suspense>
         </main>
       </div>
-      
+
+      {/* 프로젝트 없을 때 하단 고정바 */}
+      {!hasProject && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 999,
+            background: tokens.colorNeutralBackground1,
+            borderTop: `2px solid ${tokens.colorPaletteBlueBackground3}`,
+            boxShadow: "0 -4px 12px rgba(0,0,0,0.1)",
+            transition: "all 0.3s ease",
+            animation: "slideInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) both",
+          }}
+        >
+          {/* 고정바 콘텐츠 */}
+          <div
+            style={{
+              padding: `${tokens.spacingVerticalL} ${tokens.spacingHorizontalXXL}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: tokens.spacingHorizontalL,
+              cursor: "pointer",
+            }}
+          >
+            {/* 왼쪽: 상태 정보 */}
+            <div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalM, flex: 1 }}>
+              {/* 상태 아이콘 */}
+              <div
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: "50%",
+                  background: tokens.colorPaletteBlueBackground3,
+                  animation: "pulse 2s infinite",
+                }}
+              />
+              {/* 상태 텍스트 (깜빡임 애니메이션) */}
+              <Text
+                size={300}
+                weight="semibold"
+                style={{
+                  animation: "textBlink 2s ease-in-out infinite"
+                }}
+              >
+                📁 먼저 프로젝트를 생성해주세요!
+              </Text>
+            </div>
+
+            {/* 오른쪽: 액션 버튼 */}
+            <Button
+              appearance="primary"
+              onClick={() => setCurrentPage("projects")}
+              style={{
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                borderRadius: 8,
+                fontSize: "13px",
+                fontWeight: 600,
+                border: "none",
+                minWidth: "180px",
+              }}
+            >
+              프로젝트 생성하러 가기 →
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* 전역 토스트 */}
       <GlobalToast />
+
+      {/* 애니메이션 스타일 */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.7; transform: scale(1.2); }
+        }
+        @keyframes textBlink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
+        }
+        @keyframes slideInUp {
+          from {
+            opacity: 0;
+            transform: translateY(100%);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }

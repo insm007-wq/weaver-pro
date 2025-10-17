@@ -119,7 +119,6 @@ export const useFileManagement = () => {
     try {
       // videoSaveFolder 설정에서 기본 경로 가져오기
       const videoSaveFolder = await getSetting("videoSaveFolder");
-      console.log("[대본에서 가져오기] videoSaveFolder:", videoSaveFolder);
 
       if (!videoSaveFolder) {
         showError("비디오 저장 폴더가 설정되지 않았습니다. 설정 탭에서 먼저 폴더를 설정해주세요.");
@@ -130,16 +129,12 @@ export const useFileManagement = () => {
       const srtPath = `${videoSaveFolder}/scripts/subtitle.srt`;
       const audioPartsFolder = `${videoSaveFolder}/audio/parts`;
 
-      console.log("[대본에서 가져오기] 구성된 경로:", { srtPath, audioPartsFolder });
-
       let loadedSrt = false;
       let loadedMp3 = false;
 
       // SRT 파일 로드
       try {
-        console.log("[SRT 로드] 파일 존재 확인 시작:", srtPath);
         const srtExists = await window.api?.checkPathExists?.(srtPath);
-        console.log("[SRT 로드] 파일 존재 확인 결과:", srtExists);
         if (srtExists?.exists && srtExists?.isFile) {
           const content = await readTextAny(srtPath);
           const parsedScenes = parseSrtToScenes(content);
@@ -160,7 +155,6 @@ export const useFileManagement = () => {
             setSrtConnected(true);
             setSrtFilePath(srtPath);
             loadedSrt = true;
-            console.log("[SRT 로드] audioPath가 추가된 씬:", scenesWithAudio[0]);
           }
         } else {
           console.warn("SRT 파일이 존재하지 않음:", srtPath);
@@ -171,7 +165,6 @@ export const useFileManagement = () => {
 
       // 개별 MP3 파일 로드
       try {
-        console.log("[MP3 로드] 개별 오디오 파일 확인 시작:", audioPartsFolder);
         const folderExists = await window.api?.checkPathExists?.(audioPartsFolder);
 
         if (folderExists?.exists && folderExists?.isDirectory) {
@@ -200,7 +193,6 @@ export const useFileManagement = () => {
             setMp3FilePath(audioPartsFolder); // 폴더 경로 저장
             setAudioDur(totalDuration);
             loadedMp3 = true;
-            console.log(`[MP3 로드] ${foundAudioFiles}개 오디오 파일 발견, 총 길이: ${totalDuration.toFixed(2)}초`);
           } else {
             console.warn("개별 오디오 파일이 존재하지 않음:", audioPartsFolder);
           }
@@ -210,8 +202,6 @@ export const useFileManagement = () => {
       } catch (error) {
         console.error("MP3 로드 실패:", error);
       }
-
-      console.log("[대본에서 가져오기] 최종 결과:", { loadedSrt, loadedMp3 });
 
       if (loadedSrt && loadedMp3) {
         showSuccess("자막 파일과 오디오 파일을 가져왔습니다.");
@@ -245,7 +235,6 @@ export const useFileManagement = () => {
     // 설정에 저장된 키워드도 삭제
     try {
       await window.api.setSetting("extractedKeywords", []);
-      console.log("✅ 저장된 키워드 설정 삭제 완료");
 
       // 설정 변경 이벤트 강제 트리거 (캐시 문제 방지)
       window.dispatchEvent(new CustomEvent("settingsChanged", {

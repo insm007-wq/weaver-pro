@@ -100,6 +100,79 @@ function buildScalePadFilter(width, height) {
   return `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,format=yuv420p`;
 }
 
+// 텍스트를 균형있게 여러 줄로 분할 (maxWidth 85% 적용)
+function splitBalancedLines(text = "", maxLines = 2) {
+  const clean = text.replace(/\s+/g, " ").trim();
+
+  // 이미 줄바꿈이 있으면 그대로 사용
+  if (text.includes("\n")) {
+    const lines = text.split("\n").map(line => line.trim()).filter(line => line);
+    return lines.slice(0, maxLines);
+  }
+
+  // maxLines가 1이면 분할하지 않음
+  if (maxLines === 1) {
+    return [clean];
+  }
+
+  // 텍스트가 너무 짧으면 1줄로 반환 (20자 이하)
+  if (clean.length <= 20) {
+    return [clean];
+  }
+
+  // ✅ 자동 줄 수 조정: 텍스트가 너무 길면 줄 수 증가
+  let effectiveMaxLines = maxLines;
+  const avgCharsPerLine = clean.length / maxLines;
+  if (avgCharsPerLine > 40 && maxLines === 2) {
+    effectiveMaxLines = 3;
+  }
+
+  // effectiveMaxLines만큼 균등 분할
+  const lines = [];
+  let remaining = clean;
+
+  for (let lineIndex = 0; lineIndex < effectiveMaxLines && remaining.length > 0; lineIndex++) {
+    const isLastLine = lineIndex === effectiveMaxLines - 1;
+
+    if (isLastLine) {
+      lines.push(remaining.trim());
+      break;
+    }
+
+    const remainingLines = effectiveMaxLines - lineIndex;
+    const targetLength = Math.ceil(remaining.length / remainingLines);
+
+    let cut = Math.min(targetLength, remaining.length);
+    let foundBreak = false;
+
+    const searchRange = Math.floor(targetLength * 0.2);
+    for (let offset = 0; offset <= searchRange && cut + offset < remaining.length; offset++) {
+      if (offset > 0 && cut + offset < remaining.length && /[ \-–—·,.:;!?]/.test(remaining[cut + offset])) {
+        cut = cut + offset + 1;
+        foundBreak = true;
+        break;
+      }
+      if (offset > 0 && cut - offset > 0 && /[ \-–—·,.:;!?]/.test(remaining[cut - offset])) {
+        cut = cut - offset + 1;
+        foundBreak = true;
+        break;
+      }
+    }
+
+    if (!foundBreak && cut < remaining.length) {
+      cut = targetLength;
+    }
+
+    const line = remaining.slice(0, cut).trim();
+    if (line) {
+      lines.push(line);
+    }
+    remaining = remaining.slice(cut).trim();
+  }
+
+  return lines.filter(line => line);
+}
+
 async function writeSrtFileFromCues(cues, filepath) {
   // cues = [{start(ms), end(ms), text}]
   const msToSrt = (ms) => {
@@ -113,9 +186,13 @@ async function writeSrtFileFromCues(cues, filepath) {
   let idx = 1;
   const parts = [];
   for (const cue of cues || []) {
+    // ✅ 텍스트를 85% 너비에 맞게 줄바꿈 (maxLines: 2)
+    const lines = splitBalancedLines(cue.text || "", 2);
+    const processedText = lines.join("\n");
+
     parts.push(String(idx++));
     parts.push(`${msToSrt(cue.start)} --> ${msToSrt(cue.end)}`);
-    parts.push((cue.text || "").replace(/\r?\n/g, "\n"));
+    parts.push(processedText);
     parts.push(""); // 빈 줄
   }
   await fsp.writeFile(filepath, parts.join("\n"), "utf8");
@@ -349,8 +426,6 @@ function register() {
       } catch (_) {}
     }
   });
-
-  console.log("[ipc] preview: registered");
 }
 
 module.exports = {

@@ -10,7 +10,6 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 const DBG = process.env.DEBUG_PRELOAD === "1";
 const dlog = (...a) => DBG && console.log("[preload]", ...a);
-console.log("[preload] loaded");
 
 /* ----------------------------------------------------------------------------
  * helpers
@@ -430,5 +429,11 @@ contextBridge.exposeInMainWorld("electron", {
   audio: {
     getDuration: ({ filePath }) => ipcRenderer.invoke("audio:getDuration", { filePath }),
     getDurations: ({ filePaths }) => ipcRenderer.invoke("audio:getDurations", { filePaths }),
+  },
+
+  // Store 관리 (약관 동의 등)
+  store: {
+    getTermsAccepted: () => ipcRenderer.invoke("store:getTermsAccepted"),
+    setTermsAccepted: (accepted) => ipcRenderer.invoke("store:setTermsAccepted", accepted),
   },
 });

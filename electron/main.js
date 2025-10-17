@@ -189,6 +189,39 @@ if (!gotLock) {
       }
     });
 
+    // ✅ Store 관리 (약관 동의 등)
+    const store = safeRequire("services/store", () => require("./services/store"));
+    if (store) {
+      console.log("📝 [main] Store module loaded, store path:", store.path);
+
+      ipcMain.handle("store:getTermsAccepted", async () => {
+        try {
+          console.log("🔍 [main] getTermsAccepted called");
+          const result = store.getTermsAccepted();
+          console.log("🔍 [main] getTermsAccepted result:", result);
+          return result;
+        } catch (error) {
+          console.error("❌ [main] getTermsAccepted error:", error);
+          return false;
+        }
+      });
+
+      ipcMain.handle("store:setTermsAccepted", async (event, accepted) => {
+        try {
+          console.log("💾 [main] setTermsAccepted called with:", accepted);
+          store.setTermsAccepted(accepted);
+          const verify = store.getTermsAccepted();
+          console.log("💾 [main] setTermsAccepted completed, verification read:", verify);
+          return { success: true };
+        } catch (error) {
+          console.error("❌ [main] setTermsAccepted error:", error);
+          return { success: false, message: error.message };
+        }
+      });
+    } else {
+      console.error("❌ [main] Store module failed to load!");
+    }
+
     /* -----------------------------------------------------------------------
      * 기본 설정 초기화 (IPC 등록 완료 후)
      * -------------------------------------------------------------------- */
@@ -197,6 +230,18 @@ if (!gotLock) {
       settingsModule.initializeDefaultSettings();
     } else {
       console.warn("[main] settingsModule or initializeDefaultSettings not available");
+    }
+
+    /* -----------------------------------------------------------------------
+     * API 키 기본값 초기화 (첫 실행 시 자동 설정)
+     * -------------------------------------------------------------------- */
+    console.log("[main] Initializing default API keys...");
+    const secrets = safeRequire("services/secrets", () => require("./services/secrets"));
+    if (secrets && secrets.initializeDefaultKeys) {
+      await secrets.initializeDefaultKeys();
+      console.log("[main] Default API keys initialization completed");
+    } else {
+      console.warn("[main] secrets.initializeDefaultKeys not available");
     }
 
     /* -----------------------------------------------------------------------

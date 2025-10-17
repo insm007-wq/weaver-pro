@@ -95,7 +95,6 @@ export function usePromptSettings() {
       }
       debounceTimer = setTimeout(() => {
         if (isMounted && !isLoading) {
-          console.log("[usePromptSettings] 프롬프트 변경 감지, 다시 로드");
           loadPrompts();
         }
       }, 500); // 디바운스 시간을 500ms로 증가 (안정성 강화)

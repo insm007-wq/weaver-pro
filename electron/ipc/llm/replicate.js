@@ -244,9 +244,6 @@ async function callReplicate(params) {
     model = DEFAULT_MODEL
   } = params;
 
-  console.log("🤖 Replicate 대본 생성 시작 (Llama 3 기반)");
-  console.log(`📊 설정: ${duration}분, CPM ${cpmMin}-${cpmMax}`);
-
   const isLongForm = duration >= 20;
 
   // 장편(20분 이상)은 청크로 나눠서 생성 (Anthropic과 동일)
@@ -268,9 +265,6 @@ async function callReplicate(params) {
   const minSceneCount = Math.max(3, Math.floor(targetSceneCount * 0.9));
   const maxSceneCount = Math.ceil(targetSceneCount * 1.3);
 
-  console.log(`📊 예상 장면 수: ${minSceneCount}~${maxSceneCount}개 (권장: ${targetSceneCount}개)`);
-  console.log(`🦙 모델: ${model}`);
-
   // 1. API 키 확인
   const apiKey = await getSecret("replicateKey");
   if (!apiKey) {
@@ -284,13 +278,9 @@ async function callReplicate(params) {
   let lastError = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    console.log(`🔄 시도 ${attempt}/${maxRetries}: Replicate 대본 생성`);
-
     try {
     // 3. 프롬프트 생성 (커스텀 프롬프트 지원)
     const prompt = await _buildPrompt(topic, duration, style, params.prompt, referenceText, cpmMin, cpmMax);
-
-    console.log("📝 프롬프트 길이:", prompt.length, "자");
 
     // 4. Replicate 클라이언트 생성
     const replicate = createReplicate(apiKey);
@@ -302,8 +292,6 @@ async function callReplicate(params) {
     }
 
     // 6. 예측 생성
-    console.log(`🚀 Replicate 예측 시작: ${modelSlug}`);
-
     let prediction = await replicate.predictions.create({
       version: versionId,
       input: {
@@ -315,8 +303,6 @@ async function callReplicate(params) {
       }
     });
 
-    console.log(`🔄 Replicate prediction 생성: ${prediction.id}`);
-
     // 7. 결과 폴링 (최대 3분)
     const maxTries = 180; // 3분
     let tries = 0;
@@ -325,9 +311,6 @@ async function callReplicate(params) {
       ["starting", "processing", "queued"].includes(prediction.status) &&
       tries < maxTries
     ) {
-      if (tries % 15 === 0) {
-        console.log(`⏳ Replicate 대기 중: ${prediction.status} (${tries}/${maxTries})`);
-      }
       await new Promise((r) => setTimeout(r, 1000));
       prediction = await replicate.predictions.get(prediction.id);
       tries++;
@@ -338,8 +321,6 @@ async function callReplicate(params) {
       throw new Error("대본 생성 시간이 초과되었습니다. 다시 시도해주세요.");
     }
 
-    console.log(`🎯 Replicate 최종 상태: ${prediction.status}`);
-
     if (prediction.status !== "succeeded") {
       console.error("❌ Replicate 실패:", prediction.error);
       throw new Error(`대본 생성 실패: ${prediction.error || "알 수 없는 오류"}`);
@@ -349,8 +330,6 @@ async function callReplicate(params) {
     const rawResponse = Array.isArray(prediction.output)
       ? prediction.output.join("")
       : String(prediction.output || "");
-
-    console.log("✅ Replicate 응답 수신, 길이:", rawResponse.length, "자");
 
     // 9. JSON 파싱
     const parsedData = parseJsonResponse(rawResponse);
@@ -365,7 +344,6 @@ async function callReplicate(params) {
 
     // 11. 씬 데이터 정규화
     const actualScenes = parsedData.scenes.length;
-    console.log(`🎯 AI가 생성한 장면 수: ${actualScenes}개`);
 
     const normalizedScenes = normalizeScenes(parsedData.scenes, duration);
 
@@ -381,10 +359,6 @@ async function callReplicate(params) {
     const actualDurationMinutes = totalDuration / 60;
     const actualCPM = Math.round(totalChars / duration);
 
-    console.log(`🎉 Replicate 대본 생성 완료! (시도 ${attempt}/${maxRetries})`);
-    console.log(`📈 기본 통계: ${normalizedScenes.length}개 장면, ${totalChars}자, ${actualDurationMinutes.toFixed(1)}분`);
-    console.log(`📊 실제 CPM: ${actualCPM}자/분 (목표: ${cpmMin}-${cpmMax})`);
-
     // ⚠️ 글자 수가 최소 기준 미만이면 재시도 (장편/단편 구분)
     const isLongForm = duration >= 20;
     const expectedMinChars = isLongForm
@@ -392,26 +366,11 @@ async function callReplicate(params) {
       : Math.round(duration * cpmMin * 1.25); // 단편: 125% (3분 = 825자)
     const actualSceneCount = normalizedScenes.length;
 
-    console.log(`📊 Replicate 대본 생성 결과 (시도 ${attempt}/${maxRetries}):`);
-    console.log(`  - 요청 시간: ${duration}분`);
-    console.log(`  - 생성 장면: ${actualSceneCount}개`);
-    console.log(`  - 생성 글자: ${totalChars}자`);
-    console.log(`  - 최소 요구: ${expectedMinChars}자 (${isLongForm ? '장편 140%' : '단편 125%'})`);
-    console.log(`  - CPM 기준: ${cpmMin}-${cpmMax}자/분`);
-    console.log(`  - 예상 TTS 길이: ${(totalChars / 220).toFixed(1)}분 (Google TTS speakingRate 1.0 기준: 220자/분)`);
-    console.log(`  - 목표 달성률: ${((totalChars / 220) / duration * 100).toFixed(0)}%`);
-
     if (totalChars < expectedMinChars && attempt < maxRetries) {
       console.warn(`⚠️ 글자 수 부족: ${totalChars}자 < ${expectedMinChars}자 (최소 요구)`);
       console.warn(`🔄 재시도 ${attempt + 1}/${maxRetries}...`);
       throw new Error(`글자 수 부족: ${totalChars}자 < ${expectedMinChars}자, 재시도`);
     }
-
-    // 장면 수 검증 로그
-    console.log(`🔍 장면 수 검증:`);
-    console.log(`  📋 요청 범위: ${minSceneCount}~${maxSceneCount}개`);
-    console.log(`  📝 실제 장면: ${actualSceneCount}개`);
-    console.log(`  ✅ 범위 내 여부: ${actualSceneCount >= minSceneCount && actualSceneCount <= maxSceneCount ? '✅ 적합' : '⚠️ 범위 벗어남'}`);
 
     return { success: true, data: result };
 
@@ -420,7 +379,6 @@ async function callReplicate(params) {
       console.error(`❌ 시도 ${attempt} 실패:`, error.message);
 
       if (attempt < maxRetries) {
-        console.log(`⏳ ${2}초 후 재시도...`);
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
@@ -435,12 +393,8 @@ async function callReplicate(params) {
 // 장편 대본 생성 (청크 방식) - Replicate
 // ============================================================
 async function generateLongFormScriptReplicate({ topic, style, duration, referenceText, cpmMin, cpmMax, model, customPrompt }) {
-  console.log(`🎬 Replicate 장편 콘텐츠 생성 모드: ${duration}분을 청크로 분할`);
-
   const CHUNK_DURATION = 5;
   const chunkCount = Math.ceil(duration / CHUNK_DURATION);
-
-  console.log(`📦 총 ${chunkCount}개 청크로 분할 (각 ${CHUNK_DURATION}분)`);
 
   const apiKey = await getSecret("replicateKey");
   if (!apiKey) throw new Error("Replicate API Key가 설정되지 않았습니다.");
@@ -455,8 +409,6 @@ async function generateLongFormScriptReplicate({ topic, style, duration, referen
   for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
     const isLastChunk = chunkIndex === chunkCount - 1;
     const chunkDuration = isLastChunk ? duration - (chunkIndex * CHUNK_DURATION) : CHUNK_DURATION;
-
-    console.log(`\n🔄 청크 ${chunkIndex + 1}/${chunkCount} 생성 중 (${chunkDuration}분)...`);
 
     const chunkTopic = chunkIndex === 0
       ? `${topic} (전체 ${duration}분 중 ${chunkIndex + 1}/${chunkCount} 파트)`
@@ -503,7 +455,6 @@ async function generateLongFormScriptReplicate({ topic, style, duration, referen
         }
 
         chunkScenes = normalizeScenes(parsedData.scenes, chunkDuration);
-        console.log(`✅ 청크 ${chunkIndex + 1} 완료: ${chunkScenes.length}개 장면`);
         break;
       } catch (err) {
         console.error(`❌ 청크 ${chunkIndex + 1} 시도 ${attempt} 실패:`, err.message);
@@ -526,8 +477,6 @@ async function generateLongFormScriptReplicate({ topic, style, duration, referen
   }
 
   const totalChars = allScenes.reduce((sum, s) => sum + s.charCount, 0);
-  console.log(`\n🎉 Replicate 장편 대본 생성 완료!`);
-  console.log(`📊 총 ${allScenes.length}개 장면, ${totalChars}자`);
 
   return {
     success: true,

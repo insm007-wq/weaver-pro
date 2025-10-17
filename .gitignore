@@ -50,6 +50,18 @@ nul
 .env.local
 
 # ========================
+# API Keys Config
+# ========================
+electron/config.js
+
+# ========================
+# Obfuscation Backup
+# ========================
+*.obfuscated.js
+*.original.js
+.obfuscate-backup/
+
+# ========================
 # Others
 # ========================
 coverage/

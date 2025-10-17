@@ -98,7 +98,7 @@ const Step1FileUpload = memo(
               iconPosition="after"
               onClick={onNext}
               style={{
-                minWidth: "180px",
+                minWidth: "220px",
                 height: "40px",
                 fontSize: "14px",
                 fontWeight: 600,

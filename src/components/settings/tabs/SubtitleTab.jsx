@@ -433,10 +433,10 @@ function SubtitleTab() {
         </div>
       </Card>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto 1fr", gap: "12px", alignItems: "start" }}>
         {/* 위치 및 정렬 설정 */}
         <FormSection title="위치 및 정렬" icon={<PositionToFrontRegular />}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
             <Switch
               checked={subtitleSettings.enableSubtitles}
               onChange={(_, data) => updateSetting("enableSubtitles", data.checked)}
@@ -444,12 +444,13 @@ function SubtitleTab() {
             />
           </div>
 
-          <Field label="수직 위치">
+          <Field label="수직 위치" size="small">
             <Dropdown
               value={POSITIONS.find((p) => p.key === subtitleSettings.position)?.text}
               selectedOptions={[subtitleSettings.position]}
               onOptionSelect={(_, data) => updateSetting("position", data.optionValue)}
               disabled={!subtitleSettings.enableSubtitles}
+              size="small"
             >
               {POSITIONS.map((pos) => (
                 <Option key={pos.key} value={pos.key}>
@@ -459,12 +460,13 @@ function SubtitleTab() {
             </Dropdown>
           </Field>
 
-          <Field label="수평 정렬">
+          <Field label="수평 정렬" size="small">
             <Dropdown
               value={TEXT_ALIGNS.find((a) => a.key === subtitleSettings.horizontalAlign)?.text}
               selectedOptions={[subtitleSettings.horizontalAlign]}
               onOptionSelect={(_, data) => updateSetting("horizontalAlign", data.optionValue)}
               disabled={!subtitleSettings.enableSubtitles}
+              size="small"
             >
               {TEXT_ALIGNS.map((align) => (
                 <Option key={align.key} value={align.key} text={align.text}>
@@ -474,7 +476,7 @@ function SubtitleTab() {
             </Dropdown>
           </Field>
 
-          <Field label={`세밀한 위치 조정: ${subtitleSettings.finePositionOffset || 0}px`}>
+          <Field label={`위치 조정: ${subtitleSettings.finePositionOffset || 0}px`} size="small">
             <Slider
               value={subtitleSettings.finePositionOffset || 0}
               onChange={(_, data) => updateSetting("finePositionOffset", data.value)}
@@ -482,19 +484,23 @@ function SubtitleTab() {
               max={50}
               step={2}
               disabled={!subtitleSettings.enableSubtitles}
+              size="small"
             />
-            <div style={{ fontSize: "12px", color: "rgba(0,0,0,0.6)", marginTop: "4px" }}>음수 값: 더 위로, 양수 값: 더 아래로</div>
           </Field>
         </FormSection>
 
+        {/* 세로 구분선 1 */}
+        <Divider vertical style={{ height: "100%", minHeight: "400px" }} />
+
         {/* 텍스트 스타일 설정 */}
         <FormSection title="텍스트 스타일" icon={<TextFontRegular />}>
-          <Field label="폰트">
+          <Field label="폰트" size="small">
             <Dropdown
               value={FONT_FAMILIES.find((f) => f.key === subtitleSettings.fontFamily)?.text}
               selectedOptions={[subtitleSettings.fontFamily]}
               onOptionSelect={(_, data) => updateSetting("fontFamily", data.optionValue)}
               disabled={!subtitleSettings.enableSubtitles}
+              size="small"
             >
               {FONT_FAMILIES.map((font) => (
                 <Option key={font.key} value={font.key}>
@@ -504,7 +510,7 @@ function SubtitleTab() {
             </Dropdown>
           </Field>
 
-          <Field label={`폰트 크기: ${subtitleSettings.fontSize}px`}>
+          <Field label={`크기: ${subtitleSettings.fontSize}px`} size="small">
             <Slider
               value={subtitleSettings.fontSize}
               onChange={(_, data) => updateSetting("fontSize", data.value)}
@@ -512,10 +518,11 @@ function SubtitleTab() {
               max={72}
               step={2}
               disabled={!subtitleSettings.enableSubtitles}
+              size="small"
             />
           </Field>
 
-          <Field label={`굵기: ${subtitleSettings.fontWeight}`}>
+          <Field label={`굵기: ${subtitleSettings.fontWeight}`} size="small">
             <Slider
               value={subtitleSettings.fontWeight}
               onChange={(_, data) => updateSetting("fontWeight", data.value)}
@@ -523,10 +530,11 @@ function SubtitleTab() {
               max={900}
               step={100}
               disabled={!subtitleSettings.enableSubtitles}
+              size="small"
             />
           </Field>
 
-          <Field label={`줄 간격: ${subtitleSettings.lineHeight.toFixed(1)}`}>
+          <Field label={`줄 간격: ${subtitleSettings.lineHeight.toFixed(1)}`} size="small">
             <Slider
               value={subtitleSettings.lineHeight}
               onChange={(_, data) => updateSetting("lineHeight", data.value)}
@@ -534,10 +542,11 @@ function SubtitleTab() {
               max={2.0}
               step={0.1}
               disabled={!subtitleSettings.enableSubtitles}
+              size="small"
             />
           </Field>
 
-          <Field label={`글자 간격: ${subtitleSettings.letterSpacing}px`}>
+          <Field label={`글자 간격: ${subtitleSettings.letterSpacing}px`} size="small">
             <Slider
               value={subtitleSettings.letterSpacing}
               onChange={(_, data) => updateSetting("letterSpacing", data.value)}
@@ -545,18 +554,22 @@ function SubtitleTab() {
               max={5}
               step={0.5}
               disabled={!subtitleSettings.enableSubtitles}
+              size="small"
             />
           </Field>
         </FormSection>
 
+        {/* 세로 구분선 2 */}
+        <Divider vertical style={{ height: "100%", minHeight: "400px" }} />
+
         {/* 색상 설정 */}
         <FormSection title="색상 및 효과" icon={<ColorRegular />}>
-          <Field label="텍스트 색상">
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <Field label="텍스트" size="small">
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <div
                 style={{
-                  width: "40px",
-                  height: "40px",
+                  width: "32px",
+                  height: "32px",
                   borderRadius: "50%",
                   border: "2px solid #ccc",
                   backgroundColor: subtitleSettings.textColor,
@@ -587,29 +600,30 @@ function SubtitleTab() {
               <Input
                 value={subtitleSettings.textColor}
                 onChange={(_, data) => updateSetting("textColor", data.value)}
-                style={{ width: "100px" }}
+                style={{ width: "90px", fontSize: "12px" }}
                 disabled={!subtitleSettings.enableSubtitles}
+                size="small"
               />
             </div>
           </Field>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
             <Switch
               checked={subtitleSettings.useBackground}
               onChange={(_, data) => updateSetting("useBackground", data.checked)}
-              label="배경 사용"
+              label="배경"
               disabled={!subtitleSettings.enableSubtitles}
             />
           </div>
 
           {subtitleSettings.useBackground && (
             <>
-              <Field label="배경 색상">
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <Field label="배경 색상" size="small">
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <div
                     style={{
-                      width: "40px",
-                      height: "40px",
+                      width: "32px",
+                      height: "32px",
                       borderRadius: "50%",
                       border: "2px solid #ccc",
                       backgroundColor: subtitleSettings.backgroundColor,
@@ -640,13 +654,14 @@ function SubtitleTab() {
                   <Input
                     value={subtitleSettings.backgroundColor}
                     onChange={(_, data) => updateSetting("backgroundColor", data.value)}
-                    style={{ width: "100px" }}
+                    style={{ width: "90px", fontSize: "12px" }}
                     disabled={!subtitleSettings.enableSubtitles}
+                    size="small"
                   />
                 </div>
               </Field>
 
-              <Field label={`배경 투명도: ${subtitleSettings.backgroundOpacity}%`}>
+              <Field label={`투명도: ${subtitleSettings.backgroundOpacity}%`} size="small">
                 <Slider
                   value={subtitleSettings.backgroundOpacity}
                   onChange={(_, data) => updateSetting("backgroundOpacity", data.value)}
@@ -654,10 +669,11 @@ function SubtitleTab() {
                   max={100}
                   step={5}
                   disabled={!subtitleSettings.enableSubtitles}
+                  size="small"
                 />
               </Field>
 
-              <Field label={`모서리 둥글기: ${subtitleSettings.backgroundRadius}px`}>
+              <Field label={`둥글기: ${subtitleSettings.backgroundRadius}px`} size="small">
                 <Slider
                   value={subtitleSettings.backgroundRadius}
                   onChange={(_, data) => updateSetting("backgroundRadius", data.value)}
@@ -665,28 +681,29 @@ function SubtitleTab() {
                   max={20}
                   step={1}
                   disabled={!subtitleSettings.enableSubtitles}
+                  size="small"
                 />
               </Field>
             </>
           )}
 
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
             <Switch
               checked={subtitleSettings.useOutline}
               onChange={(_, data) => updateSetting("useOutline", data.checked)}
-              label="테두리 사용"
+              label="테두리"
               disabled={!subtitleSettings.enableSubtitles}
             />
           </div>
 
           {subtitleSettings.useOutline && (
             <>
-              <Field label="테두리 색상">
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <Field label="테두리 색상" size="small">
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <div
                     style={{
-                      width: "40px",
-                      height: "40px",
+                      width: "32px",
+                      height: "32px",
                       borderRadius: "50%",
                       border: "2px solid #ccc",
                       backgroundColor: subtitleSettings.outlineColor,
@@ -717,13 +734,14 @@ function SubtitleTab() {
                   <Input
                     value={subtitleSettings.outlineColor}
                     onChange={(_, data) => updateSetting("outlineColor", data.value)}
-                    style={{ width: "100px" }}
+                    style={{ width: "90px", fontSize: "12px" }}
                     disabled={!subtitleSettings.enableSubtitles}
+                    size="small"
                   />
                 </div>
               </Field>
 
-              <Field label={`테두리 두께: ${subtitleSettings.outlineWidth}px`}>
+              <Field label={`두께: ${subtitleSettings.outlineWidth}px`} size="small">
                 <Slider
                   value={subtitleSettings.outlineWidth}
                   onChange={(_, data) => updateSetting("outlineWidth", data.value)}
@@ -731,23 +749,24 @@ function SubtitleTab() {
                   max={5}
                   step={1}
                   disabled={!subtitleSettings.enableSubtitles}
+                  size="small"
                 />
               </Field>
             </>
           )}
 
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "8px" }}>
             <Switch
               checked={subtitleSettings.useShadow}
               onChange={(_, data) => updateSetting("useShadow", data.checked)}
-              label="그림자 사용"
+              label="그림자"
               disabled={!subtitleSettings.enableSubtitles}
             />
           </div>
 
           {subtitleSettings.useShadow && (
             <>
-              <Field label={`그림자 거리: ${subtitleSettings.shadowOffset}px`}>
+              <Field label={`거리: ${subtitleSettings.shadowOffset}px`} size="small">
                 <Slider
                   value={subtitleSettings.shadowOffset}
                   onChange={(_, data) => updateSetting("shadowOffset", data.value)}
@@ -755,10 +774,11 @@ function SubtitleTab() {
                   max={10}
                   step={1}
                   disabled={!subtitleSettings.enableSubtitles}
+                  size="small"
                 />
               </Field>
 
-              <Field label={`그림자 흐림: ${subtitleSettings.shadowBlur}px`}>
+              <Field label={`흐림: ${subtitleSettings.shadowBlur}px`} size="small">
                 <Slider
                   value={subtitleSettings.shadowBlur}
                   onChange={(_, data) => updateSetting("shadowBlur", data.value)}
@@ -766,70 +786,11 @@ function SubtitleTab() {
                   max={20}
                   step={1}
                   disabled={!subtitleSettings.enableSubtitles}
+                  size="small"
                 />
               </Field>
             </>
           )}
-        </FormSection>
-
-        {/* 애니메이션 및 타이밍 */}
-        <FormSection title="애니메이션 및 타이밍" icon={<PlayRegular />}>
-          <Field label="애니메이션 효과">
-            <Dropdown
-              value={ANIMATIONS.find((a) => a.key === subtitleSettings.animation)?.text}
-              selectedOptions={[subtitleSettings.animation]}
-              onOptionSelect={(_, data) => updateSetting("animation", data.optionValue)}
-              disabled={!subtitleSettings.enableSubtitles}
-            >
-              {ANIMATIONS.map((anim) => (
-                <Option key={anim.key} value={anim.key}>
-                  {anim.text}
-                </Option>
-              ))}
-            </Dropdown>
-          </Field>
-
-          <Field label={`애니메이션 속도: ${subtitleSettings.animationDuration.toFixed(1)}초`}>
-            <Slider
-              value={subtitleSettings.animationDuration}
-              onChange={(_, data) => updateSetting("animationDuration", data.value)}
-              min={0.1}
-              max={2.0}
-              step={0.1}
-              disabled={!subtitleSettings.enableSubtitles}
-            />
-          </Field>
-
-          <Field label={`표시 시간: ${subtitleSettings.displayDuration.toFixed(1)}초`}>
-            <Slider
-              value={subtitleSettings.displayDuration}
-              onChange={(_, data) => updateSetting("displayDuration", data.value)}
-              min={1.0}
-              max={10.0}
-              step={0.5}
-              disabled={!subtitleSettings.enableSubtitles}
-            />
-          </Field>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <Switch
-              checked={subtitleSettings.autoWrap}
-              onChange={(_, data) => updateSetting("autoWrap", data.checked)}
-              label="자동 줄바꿈"
-              disabled={!subtitleSettings.enableSubtitles}
-            />
-          </div>
-
-          <Field label={`최대 줄 수: ${subtitleSettings.maxLines}`}>
-            <Slider
-              value={subtitleSettings.maxLines}
-              onChange={(_, data) => updateSetting("maxLines", data.value)}
-              min={1}
-              max={5}
-              step={1}
-              disabled={!subtitleSettings.enableSubtitles}
-            />
-          </Field>
         </FormSection>
       </div>
 
@@ -839,12 +800,14 @@ function SubtitleTab() {
           appearance="primary"
           onClick={saveSettings}
           disabled={saveLoading}
+          style={{ minWidth: "200px" }}
         >
           {saveLoading ? "저장 중..." : "설정 저장"}
         </Button>
         <Button
           appearance="secondary"
           onClick={resetSettings}
+          style={{ minWidth: "200px" }}
         >
           기본값으로 초기화
         </Button>

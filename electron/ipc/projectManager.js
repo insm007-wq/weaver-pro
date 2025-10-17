@@ -106,8 +106,6 @@ function register() {
       return { success: false, message: error.message };
     }
   });
-
-  console.log('[ipc] project-manager: registered');
 }
 
 module.exports = { register };

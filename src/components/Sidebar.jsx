@@ -205,14 +205,9 @@ const useStyles = makeStyles({
   },
 });
 
-export default function Sidebar({ onSelectMenu, isScriptGenerating = false, isVideoExporting = false }) {
+export default function Sidebar({ onSelectMenu, isScriptGenerating = false, isVideoExporting = false, isMediaDownloading = false, hasProject = true }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const styles = useStyles();
-
-  // 디버깅: prop 확인
-  useEffect(() => {
-    console.log("🟢 Sidebar - isScriptGenerating:", isScriptGenerating);
-  }, [isScriptGenerating]);
 
   const globalMenu = [
     {
@@ -288,11 +283,18 @@ export default function Sidebar({ onSelectMenu, isScriptGenerating = false, isVi
   };
 
   const MenuItem = ({ item, collapsed }) => {
+    // 프로젝트 없을 때 프로젝트 워크플로우 탭 비활성화
+    const projectWorkflowTabs = ["script", "assemble", "draft", "refine"];
+    const isProjectWorkflowTab = projectWorkflowTabs.includes(item.key);
+
     // 대본 생성 중일 때 미디어 준비/다운로드/영상 완성 탭 비활성화
     // 영상 생성 중일 때 대본/미디어 준비/미디어 다운로드 탭 비활성화
+    // 미디어 다운로드 중일 때 대본/미디어 준비/영상 완성 탭 비활성화
     const isDisabled =
+      (!hasProject && isProjectWorkflowTab) ||
       (isScriptGenerating && (item.key === "assemble" || item.key === "draft" || item.key === "refine")) ||
-      (isVideoExporting && (item.key === "script" || item.key === "assemble" || item.key === "draft"));
+      (isVideoExporting && (item.key === "script" || item.key === "assemble" || item.key === "draft")) ||
+      (isMediaDownloading && (item.key === "script" || item.key === "assemble" || item.key === "refine"));
 
     const content = (
       <div
@@ -326,10 +328,14 @@ export default function Sidebar({ onSelectMenu, isScriptGenerating = false, isVi
     if (collapsed) {
       let tooltipText;
       if (isDisabled) {
-        if (isScriptGenerating) {
+        if (!hasProject && isProjectWorkflowTab) {
+          tooltipText = "📁 먼저 프로젝트를 생성해주세요";
+        } else if (isScriptGenerating) {
           tooltipText = "⚠️ 대본 생성 중에는 이동할 수 없습니다";
         } else if (isVideoExporting) {
           tooltipText = "⚠️ 영상 생성 중에는 이동할 수 없습니다";
+        } else if (isMediaDownloading) {
+          tooltipText = "⚠️ 미디어 다운로드 중에는 이동할 수 없습니다";
         }
       } else {
         tooltipText = `${item.label} - ${item.desc}`;
@@ -342,9 +348,16 @@ export default function Sidebar({ onSelectMenu, isScriptGenerating = false, isVi
     }
 
     if (isDisabled) {
-      const warningText = isScriptGenerating
-        ? "⚠️ 대본 생성 중에는 이동할 수 없습니다"
-        : "⚠️ 영상 생성 중에는 이동할 수 없습니다";
+      let warningText;
+      if (!hasProject && isProjectWorkflowTab) {
+        warningText = "📁 먼저 프로젝트를 생성해주세요";
+      } else if (isScriptGenerating) {
+        warningText = "⚠️ 대본 생성 중에는 이동할 수 없습니다";
+      } else if (isVideoExporting) {
+        warningText = "⚠️ 영상 생성 중에는 이동할 수 없습니다";
+      } else if (isMediaDownloading) {
+        warningText = "⚠️ 미디어 다운로드 중에는 이동할 수 없습니다";
+      }
       return (
         <Tooltip content={warningText} relationship="label" positioning="above">
           {content}

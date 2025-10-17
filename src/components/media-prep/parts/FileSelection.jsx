@@ -219,12 +219,14 @@ const DropZone = memo(({ icon, label, caption, connected, onClick, inputRef, acc
       <CardFooter>
         <Button
           appearance={connected ? "primary" : "outline"}
-          size="small"
+          size="medium"
           icon={connected ? <CheckmarkCircle20Filled /> : icon}
           onClick={onClick}
           style={{
             width: "100%",
-            minWidth: "200px",
+            minWidth: "240px",
+            height: "40px",
+            fontSize: "14px",
             backgroundColor: connected ? tokens.colorPaletteGreenBackground1 : "transparent",
             borderColor: connected ? tokens.colorPaletteGreenBorderActive : tokens.colorBrandStroke1,
             color: connected ? tokens.colorPaletteGreenForeground1 : colorTheme.textColor,
@@ -254,6 +256,14 @@ const FileSelection = memo(
     handleInsertFromScript,
     handleReset,
   }) => {
+    // 펄스 애니메이션 상태 (처음에만 true)
+    const [showPulse, setShowPulse] = useState(true);
+
+    // 애니메이션 종료 핸들러
+    const handleAnimationEnd = useCallback(() => {
+      setShowPulse(false);
+    }, []);
+
     // 중앙 정렬 스타일 메모화
     const containerStyle = useMemo(
       () => ({
@@ -289,59 +299,71 @@ const FileSelection = memo(
     return (
       <Card
         style={{
-          padding: "12px 16px",
+          padding: "16px 20px",
           borderRadius: "16px",
           border: `1px solid ${tokens.colorNeutralStroke2}`,
           display: "flex",
           flexDirection: "column",
         }}
       >
-        <div style={{ marginBottom: tokens.spacingVerticalS }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        {/* 헤더와 액션 버튼 */}
+        <div style={{ marginBottom: tokens.spacingVerticalM }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <FolderOpen24Regular />
               <Text size={400} weight="semibold" style={{ letterSpacing: 0.2 }}>
                 파일 선택
               </Text>
             </div>
-            <div
-              style={{
-                display: "flex",
-                gap: tokens.spacingHorizontalS,
-                alignItems: "center",
-              }}
-            >
+            {/* 액션 버튼들 - 우측 상단에 세련되게 배치 */}
+            <div style={{ display: "flex", gap: tokens.spacingHorizontalS }}>
               <Button
-                appearance="subtle"
+                appearance="primary"
                 icon={<LinkSquare24Regular />}
                 onClick={handleInsertFromScript}
                 size="medium"
+                className={showPulse ? "import-button-pulse" : ""}
+                onAnimationEnd={handleAnimationEnd}
                 style={{
-                  color: tokens.colorBrandForeground1,
+                  height: "34px",
+                  fontSize: "13px",
                   fontWeight: 600,
-                  height: "36px",
-                  minHeight: "36px",
-                  padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalL}`,
-                  alignItems: "center",
-                  display: "flex",
-                  minWidth: "160px",
+                  borderRadius: "6px",
+                  minWidth: "180px",
+                  width: "180px",
+                  boxShadow: `0 2px 8px ${tokens.colorBrandBackground}60`,
                 }}
               >
                 대본에서 가져오기
               </Button>
               <Button
-                appearance="subtle"
+                appearance="outline"
                 icon={<DismissCircle24Regular />}
                 onClick={handleReset}
                 size="medium"
                 style={{
-                  color: tokens.colorNeutralForeground3,
+                  height: "34px",
+                  fontSize: "13px",
                   fontWeight: 600,
-                  height: "36px",
-                  minHeight: "36px",
-                  padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
-                  alignItems: "center",
-                  display: "flex",
+                  borderRadius: "6px",
+                  color: tokens.colorPaletteRedForeground2,
+                  backgroundColor: tokens.colorPaletteRedBackground1,
+                  border: `1px solid ${tokens.colorPaletteRedBorder1}`,
+                  transition: "all 200ms cubic-bezier(0.23, 1, 0.32, 1)",
+                  minWidth: "180px",
+                  width: "180px",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = tokens.colorPaletteRedBackground2;
+                  e.currentTarget.style.borderColor = tokens.colorPaletteRedBorder2;
+                  e.currentTarget.style.color = tokens.colorPaletteRedForeground1;
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = tokens.colorPaletteRedBackground1;
+                  e.currentTarget.style.borderColor = tokens.colorPaletteRedBorder1;
+                  e.currentTarget.style.color = tokens.colorPaletteRedForeground2;
+                  e.currentTarget.style.transform = "translateY(0)";
                 }}
               >
                 초기화
@@ -352,7 +374,6 @@ const FileSelection = memo(
             size={200}
             style={{
               color: tokens.colorNeutralForeground3,
-              marginTop: 4,
               display: "block",
             }}
           >
@@ -383,5 +404,30 @@ const FileSelection = memo(
 // 컴포넌트 이름 설정 (개발자 도구에서 디버깅 편의)
 FileSelection.displayName = "FileSelection";
 DropZone.displayName = "DropZone";
+
+// 전역 스타일 추가 (버튼 pulse 애니메이션 - 처음 3초만)
+if (typeof document !== 'undefined') {
+  const styleId = 'import-button-pulse-styles';
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      @keyframes buttonPulse {
+        0%, 100% {
+          transform: scale(1);
+          box-shadow: 0 2px 8px rgba(0, 120, 212, 0.4);
+        }
+        50% {
+          transform: scale(1.05);
+          box-shadow: 0 4px 16px rgba(0, 120, 212, 0.6);
+        }
+      }
+      .import-button-pulse {
+        animation: buttonPulse 1s ease-in-out 3;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+}
 
 export default FileSelection;
