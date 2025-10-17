@@ -233,7 +233,9 @@
       "Read(//d/project/weaver-pro/src/components/common/**)",
       "Read(//d/project/weaver-pro/**)",
       "Bash(git restore:*)",
-      "Read(//d/**)"
+      "Read(//d/**)",
+      "Bash(cat:*)",
+      "Bash(git log:*)"
     ],
     "deny": [],
     "ask": []
