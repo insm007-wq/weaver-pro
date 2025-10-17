@@ -432,6 +432,8 @@ function MediaDownloadPage({ onDownloadingChange }) {
       if (!cancelledRef.current) {
         if (result.success) {
           showSuccess(`다운로드 완료: ${result.summary.success}/${result.summary.total}개 성공`);
+          // 미디어 다운로드 완료 이벤트 발생 (영상 완성 탭에서 자동 할당 트리거)
+          window.dispatchEvent(new CustomEvent("media-download-completed"));
         } else {
           showError(`다운로드 실패: ${result.error}`);
         }
@@ -848,7 +850,22 @@ function MediaDownloadPage({ onDownloadingChange }) {
           }
           progress={downloadProgressPercent}
           nextStepButton={
-            !isDownloading && downloadedVideos.length > 0 ? { text: "➡️ 다음 단계: 영상 완성", eventName: "navigate-to-refine" } : undefined
+            !isDownloading && downloadedVideos.length > 0
+              ? {
+                  text: "➡️ 다음 단계: 영상 완성",
+                  eventName: "navigate-to-refine",
+                  onClick: async () => {
+                    try {
+                      // 탭 이동 후 자동 파일 로드 이벤트 발생
+                      setTimeout(() => {
+                        window.dispatchEvent(new CustomEvent("auto-load-project-files"));
+                      }, 100);
+                    } catch (error) {
+                      console.error("자동 로드 이벤트 발생 실패:", error);
+                    }
+                  }
+                }
+              : undefined
           }
           expandedContent={
             isDownloading ? (

@@ -156,6 +156,68 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
     autoAssignMedia();
   }, [srtConnected, scenes, isLoading, setScenes]);
 
+  // 미디어 다운로드 완료 후 자동 할당 재트리거
+  useEffect(() => {
+    const handleMediaDownloadCompleted = async () => {
+      // 페이지가 로드되어 있고, 파일이 연결되어 있으면 자동 할당 재실행
+      if (srtConnected && scenes.length > 0 && !isLoading) {
+        // 플래그 리셋하여 자동 할당 다시 실행
+        hasAutoAssignedRef.current = false;
+
+        // 미디어가 없는 씬이 있는지 확인
+        const missingScenes = scenes.filter(scene => !scene.asset?.path && scene.text && scene.text.trim().length > 0);
+
+        if (missingScenes.length > 0) {
+          showInfo(`미디어를 자동으로 할당하는 중... (${missingScenes.length}개 씬)`);
+
+          try {
+            // 1. extractedKeywords 가져오기
+            const extractedKeywords = await window.api.getSetting("extractedKeywords");
+            const keywordsArray = Array.isArray(extractedKeywords) ? extractedKeywords : [];
+
+            // 2. 씬에 키워드 할당 (순서대로 1:1 매칭)
+            const scenesWithKeywords = scenes.map((scene, index) => {
+              // 이미 키워드가 있으면 유지, 없으면 extractedKeywords에서 순서대로 할당
+              if (scene.keyword) {
+                return scene;
+              }
+
+              const keyword = keywordsArray[index % keywordsArray.length]; // 순환 할당
+              return {
+                ...scene,
+                keyword: keyword || null,
+              };
+            });
+
+            setScenes(scenesWithKeywords);
+
+            // 3. 키워드가 할당된 씬으로 미디어 자동 할당
+            const assignedScenes = await assignPrioritizedMediaToMissingScenes(scenesWithKeywords, {
+              minScore: 0.1,
+              allowDuplicates: false,
+            });
+
+            setScenes(assignedScenes);
+
+            const assignedCount = assignedScenes.filter(s => s.asset?.path).length;
+            const totalCount = assignedScenes.length;
+
+            showSuccess(`자동 할당 완료! ${assignedCount}/${totalCount}개 씬에 미디어가 할당되었습니다.`);
+          } catch (error) {
+            console.error("[자동 할당] 오류:", error);
+            // 오류가 발생해도 조용히 넘어감 (사용자가 수동으로 할당 가능)
+          }
+        }
+      }
+    };
+
+    window.addEventListener("media-download-completed", handleMediaDownloadCompleted);
+
+    return () => {
+      window.removeEventListener("media-download-completed", handleMediaDownloadCompleted);
+    };
+  }, [srtConnected, scenes, isLoading, setScenes]);
+
   // 편집 페이지 초기화 이벤트 리스너
   useEffect(() => {
     const handleResetMediaEdit = () => {
@@ -179,6 +241,31 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
       window.removeEventListener("reset-media-edit", handleResetMediaEdit);
     };
   }, [setScenes, setSrtConnected, setMp3Connected]);
+
+  // 자동 파일 로드 이벤트 리스너 (다음 단계 버튼에서 발생)
+  useEffect(() => {
+    const handleAutoLoadProjectFiles = async () => {
+      console.log("[MediaEditPage] auto-load-project-files 이벤트 수신");
+
+      // 플래그 리셋하여 자동 로드 강제 실행
+      hasTriedLoadRef.current = false;
+      hasAutoAssignedRef.current = false;
+
+      // 파일 로드 시도
+      setTimeout(() => {
+        if (!srtConnected && !mp3Connected && !isLoading) {
+          console.log("[MediaEditPage] 자동으로 파일 불러오는 중...");
+          handleInsertFromScript();
+        }
+      }, 50);
+    };
+
+    window.addEventListener("auto-load-project-files", handleAutoLoadProjectFiles);
+
+    return () => {
+      window.removeEventListener("auto-load-project-files", handleAutoLoadProjectFiles);
+    };
+  }, [srtConnected, mp3Connected, isLoading, handleInsertFromScript]);
 
   // 선택된 씬의 미디어 URL 로드 (비디오 및 이미지 모두 지원)
   useEffect(() => {
