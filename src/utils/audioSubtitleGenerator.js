@@ -165,6 +165,22 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
 
       const audioFiles = audioResult.data.audioFiles;
 
+      // 📋 관리자 페이지에 TTS 작업 로그 기록
+      if (window.api?.logActivity) {
+        window.api.logActivity({
+          type: "tts",
+          title: "음성 합성",
+          detail: `${sceneCount}개 장면 (${form.ttsEngine}) - ${audioFiles?.length || 0}개 파일 생성`,
+          status: "success",
+          metadata: {
+            sceneCount: sceneCount,
+            fileCount: audioFiles?.length || 0,
+            engine: form.ttsEngine,
+            voice: form.voice
+          }
+        });
+      }
+
       // TTS 실제 duration 데이터 저장 (자막 생성에 사용)
       ttsDurations = audioFiles.map(file => ({
         sceneIndex: file.sceneIndex,
@@ -287,6 +303,21 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       console.error("❌ audioResult:", audioResult);
       console.error("❌ 개별 파일 저장을 건너뜁니다");
 
+      // 📋 관리자 페이지에 TTS 실패 로그 기록
+      if (window.api?.logActivity) {
+        window.api.logActivity({
+          type: "tts",
+          title: "음성 합성",
+          detail: `${sceneCount}개 장면 (${form.ttsEngine}) - 생성 실패`,
+          status: "error",
+          metadata: {
+            sceneCount: sceneCount,
+            engine: form.ttsEngine,
+            error: audioResult?.data?.error || "알 수 없는 오류"
+          }
+        });
+      }
+
       if (addLog) {
         addLog(`❌ TTS 결과 처리 실패 - 조건 체크 실패`, "error");
         if (audioResult) {
@@ -405,10 +436,42 @@ async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideo
             addLog("✅ SRT 자막 파일 생성 완료!");
             addLog("📁 파일명: subtitle.srt");
           }
+
+          // 📋 관리자 페이지에 자막 생성 성공 로그 기록
+          if (window.api?.logActivity) {
+            const sceneCount = scriptData.scenes?.length || 0;
+            window.api.logActivity({
+              type: "subtitle",
+              title: "자막 생성",
+              detail: `${sceneCount}개 장면 - SRT 자막 파일 생성 완료`,
+              status: "success",
+              metadata: {
+                sceneCount: sceneCount,
+                fileName: srtFileName,
+                filePath: srtFilePath
+              }
+            });
+          }
         } else {
           if (addLog) {
             addLog(`❌ SRT 파일 쓰기 실패: ${writeResult.message}`, "error");
           }
+
+          // 📋 관리자 페이지에 자막 생성 실패 로그 기록
+          if (window.api?.logActivity) {
+            const sceneCount = scriptData.scenes?.length || 0;
+            window.api.logActivity({
+              type: "subtitle",
+              title: "자막 생성",
+              detail: `${sceneCount}개 장면 - 자막 파일 저장 실패: ${writeResult.message}`,
+              status: "error",
+              metadata: {
+                sceneCount: sceneCount,
+                error: writeResult.message
+              }
+            });
+          }
+
           console.error("❌ 파일 쓰기 실패:", writeResult.message);
           console.error(`SRT 파일 쓰기 실패: ${writeResult.message}`);
         }

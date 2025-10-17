@@ -334,6 +334,51 @@ contextBridge.exposeInMainWorld("api", {
   cacheStats: () => ipcRenderer.invoke("cache:stats"),
 
   // ========================================================================
+  // 관리자 기능
+  // ========================================================================
+  getSystemInfo: () => ipcRenderer.invoke("admin:getSystemInfo"),
+  exportSettings: () => ipcRenderer.invoke("admin:exportSettings"),
+  importSettings: () => ipcRenderer.invoke("admin:importSettings"),
+
+  // ========================================================================
+  // 활동 로그 (작업 기록)
+  // ========================================================================
+  logActivity: (log) => {
+    // 클라이언트 측 로컬스토리지에 직접 저장
+    try {
+      const normalizedLog = {
+        type: log.type || "unknown",
+        title: log.title || "작업 수행",
+        detail: log.detail || "",
+        status: log.status || "pending",
+        timestamp: log.timestamp || Date.now(),
+        metadata: log.metadata || {},
+      };
+
+      const storedLogs = localStorage.getItem("activityLogs");
+      let logs = [];
+      if (storedLogs) {
+        try {
+          logs = JSON.parse(storedLogs);
+        } catch (e) {
+          logs = [];
+        }
+      }
+
+      logs.push(normalizedLog);
+      if (logs.length > 500) {
+        logs = logs.slice(-500);
+      }
+
+      localStorage.setItem("activityLogs", JSON.stringify(logs));
+      return true;
+    } catch (error) {
+      console.error("로그 저장 실패:", error);
+      return false;
+    }
+  },
+
+  // ========================================================================
   // 테스트 채널들
   // ========================================================================
   testReplicate: (token) => ipcRenderer.invoke("replicate:test", token),

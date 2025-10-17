@@ -1351,6 +1351,173 @@ ipcMain.handle("prompts:reset", async (_e) => {
   }
 });
 
+/* ========================================================================== */
+/* 캐시 관리 API                                                              */
+/* ========================================================================== */
+
+// 캐시 초기화
+ipcMain.handle("cache:clear", async () => {
+  try {
+    // 로컬스토리지 캐시 초기화
+    // (렌더러 프로세스에서 처리하지만, 백엔드 캐시도 함께 초기화)
+
+    // 프롬프트 버전 히스토리 유지, 기본 설정만 유지
+    const backup = {
+      appInitialized: store.get("appInitialized"),
+      prompts: store.get("prompts", []),
+      prompt_versions: store.get("prompt_versions", {}),
+      prompt_templates: store.get("prompt_templates", []),
+    };
+
+    // 백업된 데이터 복원 (다른 모든 캐시 제거)
+    store.clear();
+    for (const [key, value] of Object.entries(backup)) {
+      if (value !== undefined) {
+        store.set(key, value);
+      }
+    }
+
+    broadcastChanged({ key: "cache_cleared", value: true });
+
+    return { ok: true, message: "캐시가 초기화되었습니다." };
+  } catch (error) {
+    return { ok: false, message: String(error?.message || error) };
+  }
+});
+
+// 캐시 통계
+ipcMain.handle("cache:stats", async () => {
+  try {
+    const stats = {
+      storePath: store.path,
+      promptCount: (store.get("prompts", []) || []).length,
+      templateCount: (store.get("prompt_templates", []) || []).length,
+      versionCount: Object.keys(store.get("prompt_versions", {}) || {}).length,
+    };
+    return { ok: true, data: stats };
+  } catch (error) {
+    return { ok: false, message: String(error?.message || error) };
+  }
+});
+
+/* ========================================================================== */
+/* 시스템 정보 및 관리 API                                                    */
+/* ========================================================================== */
+
+// 시스템 정보 조회
+ipcMain.handle("admin:getSystemInfo", async () => {
+  try {
+    const os = require("os");
+    const { app } = require("electron");
+
+    return {
+      success: true,
+      appVersion: app.getVersion(),
+      nodeVersion: process.version,
+      platform: process.platform,
+      arch: process.arch,
+      cpuCount: os.cpus().length,
+      totalMemory: os.totalmem(),
+      freeMemory: os.freemem(),
+    };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+});
+
+// 전체 설정 내보내기
+ipcMain.handle("admin:exportSettings", async () => {
+  try {
+    const { dialog } = require("electron");
+    const fs = require("fs").promises;
+
+    // 모든 설정 데이터 가져오기
+    const allSettings = {};
+    const allKeys = store.store ? Object.keys(store.store) : [];
+
+    for (const key of allKeys) {
+      allSettings[key] = store.get(key);
+    }
+
+    // 파일 저장 대화상자
+    const result = await dialog.showSaveDialog({
+      title: "설정 내보내기",
+      defaultPath: `weaver-pro-settings-${new Date().toISOString().split("T")[0]}.json`,
+      filters: [
+        { name: "JSON Files", extensions: ["json"] },
+        { name: "All Files", extensions: ["*"] },
+      ],
+    });
+
+    if (result.canceled) {
+      return { success: false, message: "사용자가 취소했습니다." };
+    }
+
+    const exportData = {
+      version: "1.0",
+      exportedAt: new Date().toISOString(),
+      exportedBy: "weaver-pro-admin",
+      settings: allSettings,
+    };
+
+    await fs.writeFile(result.filePath, JSON.stringify(exportData, null, 2), "utf8");
+
+    return {
+      success: true,
+      message: "설정이 내보내졌습니다.",
+      filePath: result.filePath,
+    };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+});
+
+// 전체 설정 가져오기
+ipcMain.handle("admin:importSettings", async () => {
+  try {
+    const { dialog } = require("electron");
+    const fs = require("fs").promises;
+
+    // 파일 선택 대화상자
+    const result = await dialog.showOpenDialog({
+      title: "설정 가져오기",
+      filters: [
+        { name: "JSON Files", extensions: ["json"] },
+        { name: "All Files", extensions: ["*"] },
+      ],
+      properties: ["openFile"],
+    });
+
+    if (result.canceled || !result.filePaths[0]) {
+      return { success: false, message: "사용자가 취소했습니다." };
+    }
+
+    const content = await fs.readFile(result.filePaths[0], "utf8");
+    const importData = JSON.parse(content);
+
+    if (!importData.settings || typeof importData.settings !== "object") {
+      return { success: false, message: "잘못된 설정 파일 형식입니다." };
+    }
+
+    // 모든 설정 적용
+    const settings = importData.settings;
+    for (const [key, value] of Object.entries(settings)) {
+      store.set(key, value);
+    }
+
+    // 변경 사항 브로드캐스트
+    broadcastChanged({ key: "all", value: "settings_imported" });
+
+    return {
+      success: true,
+      message: "설정이 가져와졌습니다.",
+      importedSettings: Object.keys(settings).length,
+    };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+});
+
 // 모듈 초기화 시 기본 설정 확인은 main.js에서 수동 호출
 // initializeDefaultSettings(); // 제거: main.js에서 수동으로 호출
 

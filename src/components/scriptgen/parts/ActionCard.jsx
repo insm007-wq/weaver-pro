@@ -282,6 +282,21 @@ const ActionCard = memo(
 
             // 대본 데이터 저장
             setDoc(scriptResult);
+
+            // 📋 관리자 페이지에 작업 로그 기록
+            if (window.api?.logActivity) {
+              window.api.logActivity({
+                type: "llm",
+                title: "대본 생성",
+                detail: `"${formData.topic || '(제목 없음)'}" - ${formData.durationMin}분 (${scriptResult.scenes?.length || 0}개 장면)`,
+                status: "success",
+                metadata: {
+                  sceneCount: scriptResult.scenes?.length || 0,
+                  duration: formData.durationMin,
+                  totalChars: scriptResult.scenes?.reduce((sum, s) => sum + (s.text?.length || 0), 0) || 0
+                }
+              });
+            }
           } else {
             throw new Error("대본이 생성되지 않았습니다. 먼저 대본을 생성해주세요.");
           }
@@ -309,6 +324,20 @@ const ActionCard = memo(
               error: error.message,
               isGenerating: false,
             }));
+
+            // 📋 관리자 페이지에 에러 로그 기록
+            if (window.api?.logActivity) {
+              window.api.logActivity({
+                type: "llm",
+                title: "대본 생성",
+                detail: `"${formData.topic || '(제목 없음)'}" - 생성 실패: ${error.message}`,
+                status: "error",
+                metadata: {
+                  error: error.message,
+                  duration: formData.durationMin
+                }
+              });
+            }
           }
         } finally {
           setIsLoading(false);

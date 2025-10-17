@@ -648,13 +648,28 @@ function ThumbnailGenerator() {
       setTookMs(Date.now() - started);
 
       updateProgress("completed", count, count);
-      
+
       // 성공 토스트 표시
-      showGlobalToast({ 
-        type: "success", 
-        text: `썸네일 ${count}개가 성공적으로 생성되었습니다!` 
+      showGlobalToast({
+        type: "success",
+        text: `썸네일 ${count}개가 성공적으로 생성되었습니다!`
       });
-      
+
+      // 📋 관리자 페이지에 작업 로그 기록
+      if (window.api?.logActivity) {
+        window.api.logActivity({
+          type: "thumbnail",
+          title: "썸네일 생성",
+          detail: `${count}개 생성 완료 (${(tookMs / 1000).toFixed(1)}초)`,
+          status: "success",
+          metadata: {
+            count: count,
+            duration: (Date.now() - started) / 1000,
+            promptUsed: !!usedPrompt
+          }
+        });
+      }
+
       setTimeout(() => updateProgress("idle"), 3000);
     } catch (e) {
       console.error("썸네일 생성 실패:", e);
@@ -667,6 +682,20 @@ function ThumbnailGenerator() {
           hasPrompt: !!prompt.trim(),
         },
       });
+
+      // 📋 관리자 페이지에 에러 로그 기록
+      if (window.api?.logActivity) {
+        window.api.logActivity({
+          type: "thumbnail",
+          title: "썸네일 생성",
+          detail: `${count}개 생성 실패: ${String(e?.message || e)}`,
+          status: "error",
+          metadata: {
+            count: count,
+            error: String(e?.message || e)
+          }
+        });
+      }
     } finally {
       setLoading(false);
       setRemainingTime(null); // 카운트다운 리셋

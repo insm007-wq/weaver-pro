@@ -592,6 +592,21 @@ export async function generateImageForScene(scene, sceneIndex, options = {}) {
 
     if (!generateResult?.ok || !generateResult?.images || generateResult.images.length === 0) {
       console.error(`[이미지 생성] 씬 ${sceneIndex + 1}: 생성 실패`);
+
+      // 📋 관리자 페이지에 이미지 API 생성 실패 로그 기록
+      if (window.api?.logActivity) {
+        window.api.logActivity({
+          type: "image",
+          title: "이미지 생성",
+          detail: `씬 ${sceneIndex + 1} - Replicate API 호출 실패`,
+          status: "error",
+          metadata: {
+            sceneIndex: sceneIndex,
+            error: "API 응답 없음"
+          }
+        });
+      }
+
       return null;
     }
 
@@ -642,6 +657,22 @@ export async function generateImageForScene(scene, sceneIndex, options = {}) {
 
       const savedImagePath = saveResult.data.path;
 
+      // 📋 관리자 페이지에 이미지 생성 성공 로그 기록
+      if (window.api?.logActivity) {
+        window.api.logActivity({
+          type: "image",
+          title: "이미지 생성",
+          detail: `씬 ${sceneIndex + 1} - 키워드: "${topKeywords}"`,
+          status: "success",
+          metadata: {
+            sceneIndex: sceneIndex,
+            keywords: topKeywords,
+            filePath: savedImagePath,
+            provider: 'replicate-flux'
+          }
+        });
+      }
+
       // 6. asset 객체 반환
       return {
         type: 'image',
@@ -653,6 +684,21 @@ export async function generateImageForScene(scene, sceneIndex, options = {}) {
     } catch (saveError) {
       console.error(`[이미지 생성] 씬 ${sceneIndex + 1}: 이미지 저장 실패 ❌ -`, saveError);
       console.error(`[이미지 생성] 씬 ${sceneIndex + 1}: 에러 상세:`, saveError.message, saveError.stack);
+
+      // 📋 관리자 페이지에 이미지 생성 실패 로그 기록
+      if (window.api?.logActivity) {
+        window.api.logActivity({
+          type: "image",
+          title: "이미지 생성",
+          detail: `씬 ${sceneIndex + 1} - 이미지 저장 실패: ${saveError.message}`,
+          status: "error",
+          metadata: {
+            sceneIndex: sceneIndex,
+            error: saveError.message
+          }
+        });
+      }
+
       return null;
     }
 

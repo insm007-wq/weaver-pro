@@ -11,10 +11,23 @@ ipcMain.handle("llm/generateScript", async (event, payload) => {
   if (!llm) throw new Error("AI 엔진을 선택해주세요.");
 
   // 타입 안전성 확보: llm이 객체든 문자열이든 안전하게 처리
-  const llmString = typeof llm === 'string' ? llm :
-                   (llm?.value || llm?.data || String(llm) || 'anthropic');
+  let llmString = '';
+  if (typeof llm === 'string') {
+    llmString = llm;
+  } else if (typeof llm === 'object' && llm !== null) {
+    llmString = llm?.value || llm?.data || llm?.key || '';
+  } else {
+    llmString = '';
+  }
 
-  switch (llmString.toLowerCase()) {
+  // 기본값 설정
+  if (!llmString || llmString.trim() === '') {
+    llmString = 'anthropic';
+  }
+
+  llmString = llmString.toLowerCase().trim();
+
+  switch (llmString) {
     case "anthropic":
       // event 객체를 전달하여 진행률 전송 가능하도록
       return await callAnthropic(payload, event);
@@ -24,7 +37,7 @@ ipcMain.handle("llm/generateScript", async (event, payload) => {
       return await callReplicate(payload);
 
     default:
-      throw new Error(`지원하지 않는 AI 엔진: ${llmString}`);
+      throw new Error(`지원하지 않는 AI 엔진: ${llmString} (전달된 값: ${typeof llm === 'string' ? llm : 'object'})`);
   }
 });
 
