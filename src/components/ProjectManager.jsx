@@ -58,7 +58,7 @@ import { useApi } from "../hooks/useApi";
  */
 const DEFAULT_PROJECT_SETTINGS = {
   projectRootFolder: "", // 빈 문자열로 초기화 (electron에서 설정됨)
-  defaultProjectName: "default",
+  defaultProjectName: "",
 };
 
 /**
@@ -230,47 +230,40 @@ export default function ProjectManager() {
           : [];
         setProjects(projects);
 
-        // 프로젝트가 기본(default)만 있을 경우 자동으로 선택 및 저장
-        if (projects.length === 1 && projects[0]?.id === 'default') {
-          const defaultProject = projects[0];
-          setSelectedProject(defaultProject);
+        // 현재 프로젝트가 있으면 설정 업데이트
+        if (projects.length > 0) {
+          const currentProj = projects[0]; // 가장 최신 프로젝트
 
-          // 백엔드에 프로젝트 로드 요청
-          try {
-            const result = await window.api.invoke('project:load', defaultProject.id);
-            if (result?.success) {
-              console.log('✅ 기본 프로젝트 자동 로드 성공');
-            }
-          } catch (error) {
-            console.error('❌ 기본 프로젝트 로드 오류:', error);
-          }
+          // 프로젝트 루트 폴더 경로 추출
+          const projectRootPath = currentProj.paths.root.substring(
+            0,
+            currentProj.paths.root.lastIndexOf('\\') !== -1
+              ? currentProj.paths.root.lastIndexOf('\\')
+              : currentProj.paths.root.lastIndexOf('/')
+          );
 
-          // 설정 자동 업데이트
+          // 설정 업데이트
           const newSettings = {
-            ...settings,
-            defaultProjectName: defaultProject.topic,
-            videoSaveFolder: defaultProject.paths.root,
+            projectRootFolder: projectRootPath,
+            defaultProjectName: currentProj.topic,
+            videoSaveFolder: currentProj.paths.root,
           };
           setSettings(newSettings);
+          setOriginalSettings(newSettings);
 
-          // 자동 저장
-          try {
-            await window.api.setSetting({
-              key: "defaultProjectName",
-              value: defaultProject.topic,
-            });
-            await window.api.setSetting({
-              key: "videoSaveFolder",
-              value: defaultProject.paths.root,
-            });
+          console.log("✅ 프로젝트 목록 로드 후 설정 업데이트 완료");
+        } else {
+          // 프로젝트가 없을 때: 설정 초기화
+          const currentRootFolder = await window?.api?.getSetting?.("projectRootFolder") || "";
+          const emptySettings = {
+            projectRootFolder: currentRootFolder,
+            defaultProjectName: "",  // 빈 문자열로 초기화
+            videoSaveFolder: "",     // 빈 문자열로 초기화
+          };
+          setSettings(emptySettings);
+          setOriginalSettings(emptySettings);
 
-            setOriginalSettings(newSettings);
-
-            // 전역 이벤트 발생
-            dispatchProjectSettingsUpdate(settings.projectRootFolder, defaultProject.topic);
-          } catch (saveError) {
-            console.error("기본 프로젝트 자동 저장 실패:", saveError);
-          }
+          console.log("✅ 모든 프로젝트 삭제됨 - 설정 초기화 완료");
         }
       } else {
         console.error("프로젝트 목록 로드 실패:", result?.message || "알 수 없는 오류");
@@ -391,6 +384,51 @@ export default function ProjectManager() {
         setNewProjectTopic("");
         setShowCreateForm(false);
 
+        // 프로젝트 생성 완료 이벤트 발생 (App.jsx에서 감지)
+        window.dispatchEvent(new CustomEvent("project:created"));
+
+        // 프로젝트 생성 후 경로 자동 저장
+        try {
+          const createdProject = result.project;
+          if (createdProject?.topic && createdProject?.paths?.root) {
+            // 프로젝트 루트 폴더 경로 추출 (프로젝트 폴더의 부모 디렉토리)
+            const projectRootPath = createdProject.paths.root.substring(
+              0,
+              createdProject.paths.root.lastIndexOf('\\') !== -1
+                ? createdProject.paths.root.lastIndexOf('\\')
+                : createdProject.paths.root.lastIndexOf('/')
+            );
+
+            // 설정 상태 업데이트
+            const newSettings = {
+              projectRootFolder: projectRootPath,
+              defaultProjectName: createdProject.topic,
+              videoSaveFolder: createdProject.paths.root,
+            };
+            setSettings(newSettings);
+
+            // 즉시 저장 (저장 버튼 없이)
+            await window.api.setSetting({
+              key: "projectRootFolder",
+              value: projectRootPath,
+            });
+            await window.api.setSetting({
+              key: "defaultProjectName",
+              value: createdProject.topic,
+            });
+            await window.api.setSetting({
+              key: "videoSaveFolder",
+              value: createdProject.paths.root,
+            });
+
+            setOriginalSettings(newSettings);
+            console.log("✅ 프로젝트 모든 경로 자동 저장 완료");
+          }
+        } catch (saveError) {
+          console.warn("프로젝트 경로 자동 저장 중 경고:", saveError.message);
+          // 경로 저장 실패해도 프로젝트 생성은 성공한 것으로 처리
+        }
+
         await refreshProjectData();
       } else {
         console.error("프로젝트 생성 실패:", result.message);
@@ -448,6 +486,9 @@ export default function ProjectManager() {
           type: "success",
           text: "프로젝트가 삭제되었습니다.",
         });
+
+        // 프로젝트 삭제 완료 이벤트 발생 (App.jsx에서 감지)
+        window.dispatchEvent(new CustomEvent("project:deleted"));
 
         await refreshProjectData();
 
@@ -733,7 +774,6 @@ export default function ProjectManager() {
                       appearance="subtle"
                       icon={<DeleteRegular />}
                       size="small"
-                      disabled={project?.id === 'default'}
                       onClick={(e) => {
                         e.stopPropagation(); // 이벤트 버블링 방지
                         // 버튼에서 포커스 제거
