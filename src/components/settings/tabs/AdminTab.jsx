@@ -89,42 +89,50 @@ const useStyles = makeStyles({
   logList: {
     display: "flex",
     flexDirection: "column",
-    ...shorthands.gap(tokens.spacingVerticalM),
-    maxHeight: "400px",
+    ...shorthands.gap("4px"),
+    maxHeight: "600px",
     overflowY: "auto",
   },
 
   logItem: {
     backgroundColor: tokens.colorNeutralBackground2,
     ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
-    ...shorthands.borderRadius(tokens.borderRadiusMedium),
-    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
+    ...shorthands.borderRadius("4px"),
+    ...shorthands.padding("6px", "10px"),
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    minHeight: "auto",
   },
 
   logItemContent: {
     display: "flex",
     flexDirection: "column",
     flex: 1,
+    gap: "2px",
   },
 
   logItemTitle: {
-    fontSize: tokens.fontSizeBase300,
+    fontSize: "12px",
     fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorNeutralForeground1,
+    lineHeight: "1.2",
   },
 
   logItemMeta: {
-    fontSize: tokens.fontSizeBase200,
+    fontSize: "11px",
     color: tokens.colorNeutralForeground3,
-    marginTop: tokens.spacingVerticalXS,
+    marginTop: 0,
+    lineHeight: "1.2",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   },
 
   logItemStatus: {
     flexShrink: 0,
-    marginLeft: tokens.spacingHorizontalM,
+    marginLeft: "8px",
+    fontSize: "10px",
   },
 
   emptyLog: {
@@ -183,8 +191,8 @@ export default function AdminTab() {
       const storedLogs = localStorage.getItem("activityLogs");
       if (storedLogs) {
         const logs = JSON.parse(storedLogs);
-        // 최신순으로 정렬 (최대 50개 표시)
-        setActivityLogs(logs.sort((a, b) => b.timestamp - a.timestamp).slice(0, 50));
+        // 최신순으로 정렬 (최대 100개 표시)
+        setActivityLogs(logs.sort((a, b) => b.timestamp - a.timestamp).slice(0, 100));
       }
     } catch (error) {
       console.error("로그 로드 실패:", error);
@@ -357,6 +365,7 @@ export default function AdminTab() {
                     appearance="filled"
                     color={getStatusColor(log.status)}
                     className={s.logItemStatus}
+                    style={{ padding: "2px 6px", fontSize: "10px", height: "20px", display: "flex", alignItems: "center" }}
                   >
                     {log.status === "success" ? "성공" : log.status === "error" ? "실패" : "진행중"}
                   </Badge>
