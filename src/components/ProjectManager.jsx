@@ -68,6 +68,20 @@ const DEFAULT_PROJECT_SETTINGS = {
 const FOLDER_STRUCTURE = ["scripts/", "audio/", "images/", "output/", "temp/"];
 
 /**
+ * 프로젝트 전체 경로에서 루트 폴더 경로만 추출
+ * @param {string} fullPath - 프로젝트 전체 경로 (예: C:\Projects\MyProject)
+ * @returns {string} 루트 폴더 경로 (예: C:\Projects)
+ */
+const getProjectRootPath = (fullPath) => {
+  if (!fullPath) return "";
+  const separatorIndex = Math.max(
+    fullPath.lastIndexOf('\\'),
+    fullPath.lastIndexOf('/')
+  );
+  return fullPath.substring(0, separatorIndex);
+};
+
+/**
  * ProjectManager 컴포넌트 - 프로젝트 생성 및 관리
  *
  * @returns {JSX.Element} ProjectManager 컴포넌트
@@ -109,10 +123,12 @@ export default function ProjectManager() {
   }, []);
 
   /**
-   * 설정 수정 사항 감지 및 저장 버튼 활성화 상태 업데이트 (성능 최적화)
+   * 설정 수정 사항 감지 및 저장 버튼 활성화 상태 업데이트 (성능 최적화 - 필드 비교 사용)
    */
   const isModifiedMemo = useMemo(() => {
-    return JSON.stringify(settings) !== JSON.stringify(originalSettings);
+    return settings.projectRootFolder !== originalSettings.projectRootFolder ||
+           settings.defaultProjectName !== originalSettings.defaultProjectName ||
+           settings.videoSaveFolder !== originalSettings.videoSaveFolder;
   }, [settings, originalSettings]);
 
   useEffect(() => {
@@ -235,14 +251,7 @@ export default function ProjectManager() {
         // 현재 프로젝트가 있으면 설정 업데이트
         if (projects.length > 0) {
           const currentProj = projects[0]; // 가장 최신 프로젝트
-
-          // 프로젝트 루트 폴더 경로 추출
-          const projectRootPath = currentProj.paths.root.substring(
-            0,
-            currentProj.paths.root.lastIndexOf('\\') !== -1
-              ? currentProj.paths.root.lastIndexOf('\\')
-              : currentProj.paths.root.lastIndexOf('/')
-          );
+          const projectRootPath = getProjectRootPath(currentProj.paths.root);
 
           // 설정 업데이트
           const newSettings = {
@@ -303,22 +312,25 @@ export default function ProjectManager() {
   };
 
   /**
-   * 현재 설정된 프로젝트 설정을 전역 설정에 저장
+   * 현재 설정된 프로젝트 설정을 전역 설정에 저장 (병렬화 - 성능 개선)
    */
   const saveSettings = async () => {
     try {
-      await window.api.setSetting({
-        key: "projectRootFolder",
-        value: settings.projectRootFolder,
-      });
-      await window.api.setSetting({
-        key: "defaultProjectName",
-        value: settings.defaultProjectName,
-      });
-      await window.api.setSetting({
-        key: "videoSaveFolder",
-        value: settings.videoSaveFolder,
-      });
+      // 모든 설정을 병렬로 저장 (순차 처리 대신)
+      await Promise.all([
+        window.api.setSetting({
+          key: "projectRootFolder",
+          value: settings.projectRootFolder,
+        }),
+        window.api.setSetting({
+          key: "defaultProjectName",
+          value: settings.defaultProjectName,
+        }),
+        window.api.setSetting({
+          key: "videoSaveFolder",
+          value: settings.videoSaveFolder,
+        }),
+      ]);
 
       setOriginalSettings(settings);
 
@@ -389,17 +401,11 @@ export default function ProjectManager() {
         // 프로젝트 생성 완료 이벤트 발생 (App.jsx에서 감지)
         window.dispatchEvent(new CustomEvent("project:created"));
 
-        // 프로젝트 생성 후 경로 자동 저장
+        // 프로젝트 생성 후 경로 자동 저장 (백엔드에서도 자동 저장되므로 UI만 업데이트)
         try {
           const createdProject = result.project;
           if (createdProject?.topic && createdProject?.paths?.root) {
-            // 프로젝트 루트 폴더 경로 추출 (프로젝트 폴더의 부모 디렉토리)
-            const projectRootPath = createdProject.paths.root.substring(
-              0,
-              createdProject.paths.root.lastIndexOf('\\') !== -1
-                ? createdProject.paths.root.lastIndexOf('\\')
-                : createdProject.paths.root.lastIndexOf('/')
-            );
+            const projectRootPath = getProjectRootPath(createdProject.paths.root);
 
             // 설정 상태 업데이트
             const newSettings = {
@@ -408,23 +414,9 @@ export default function ProjectManager() {
               videoSaveFolder: createdProject.paths.root,
             };
             setSettings(newSettings);
-
-            // 즉시 저장 (저장 버튼 없이)
-            await window.api.setSetting({
-              key: "projectRootFolder",
-              value: projectRootPath,
-            });
-            await window.api.setSetting({
-              key: "defaultProjectName",
-              value: createdProject.topic,
-            });
-            await window.api.setSetting({
-              key: "videoSaveFolder",
-              value: createdProject.paths.root,
-            });
-
             setOriginalSettings(newSettings);
-            console.log("✅ 프로젝트 모든 경로 자동 저장 완료");
+
+            console.log("✅ 프로젝트 설정 상태 업데이트 완료 (백엔드에서 자동 저장됨)");
           }
         } catch (saveError) {
           console.warn("프로젝트 경로 자동 저장 중 경고:", saveError.message);
@@ -482,26 +474,10 @@ export default function ProjectManager() {
         // 프로젝트 데이터 새로고침 후 설정 자동 반영
         await refreshProjectData();
 
-        // 포커스 강제 리셋 - 여러 시점에서 시도
-        const resetFocus = () => {
-          try {
-            if (document.activeElement && document.activeElement !== document.body) {
-              document.activeElement.blur();
-            }
-            document.body.setAttribute('tabindex', '-1');
-            document.body.focus();
-            document.body.blur();
-            document.body.removeAttribute('tabindex');
-          } catch (e) {
-            console.error('포커스 리셋 오류:', e);
-          }
-        };
-
-        // 여러 번, 다른 타이밍에 포커스 리셋 시도
-        setTimeout(resetFocus, 0);
-        setTimeout(resetFocus, 50);
-        setTimeout(resetFocus, 100);
-        setTimeout(resetFocus, 200);
+        // 포커스 리셋 (한 번만 시도, 최소 딜레이)
+        setTimeout(() => {
+          document.activeElement?.blur?.();
+        }, 100);
       } else {
         console.error("프로젝트 삭제 실패:", result.message);
         showGlobalToast({
@@ -680,33 +656,11 @@ export default function ProjectManager() {
                       ? `2px solid ${tokens.colorBrandStroke1}`
                       : `1px solid ${tokens.colorNeutralStroke2}`,
                 }}
-                onClick={async () => {
+                onClick={() => {
                   setSelectedProject(project);
-                  // 안전한 프로젝트 선택 처리
-                  if (project?.topic && project?.paths?.root) {
-                    setSettings((prev) => ({
-                      ...prev,
-                      defaultProjectName: project.topic,
-                      videoSaveFolder: project.paths.root,
-                    }));
-
-                    // 안전한 전역 이벤트 발생
-                    dispatchProjectSettingsUpdate(settings?.projectRootFolder, project.topic);
-                  }
-
-                  // 백엔드에 프로젝트 로드 요청하여 currentProject 설정
-                  try {
-                    if (project?.id && window?.api?.invoke) {
-                      const result = await window.api.invoke('project:load', project.id);
-                      if (result?.success) {
-                        console.log('✅ 프로젝트 로드 성공:', project.id);
-                      } else {
-                        console.error('❌ 프로젝트 로드 실패:', result?.message);
-                      }
-                    }
-                  } catch (error) {
-                    console.error('❌ 프로젝트 로드 오류:', error);
-                  }
+                  // 프로젝트 선택 시 백엔드의 현재 프로젝트로 설정 (폴더 열기 시에만 로드)
+                  // 프로젝트 경로 설정의 "기본 프로젝트 이름"은 현재 활성 프로젝트만 표시하도록 변경
+                  // 따라서 선택 시 settings 업데이트 없음 (UI 혼동 방지)
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -794,25 +748,25 @@ export default function ProjectManager() {
           weight="semibold"
           style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: tokens.spacingVerticalM }}
         >
-          <FolderRegular /> 프로젝트 경로 설정
+          <FolderRegular /> 현재 프로젝트 경로
         </Text>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: itemGap, marginBottom: tokens.spacingVerticalL }}>
-          <Field label="프로젝트 루트 폴더" hint="모든 프로젝트가 생성될 기본 폴더입니다.">
+          <Field label="프로젝트 루트 폴더" hint="모든 프로젝트가 저장되는 기본 폴더입니다.">
             <Input
               value={settings.projectRootFolder}
               contentBefore={<FolderRegular style={{ color: tokens.colorBrandForeground1 }} />}
-              placeholder="예: /Users/username/Documents/WeaverPro (Mac) 또는 C:\\WeaverPro (Windows)"
+              placeholder="예: C:\\WeaverPro"
               disabled={true}
               input={{ style: { color: tokens.colorBrandForeground1 } }}
             />
           </Field>
 
-          <Field label="기본 프로젝트 이름" hint="프로젝트 목록에서 선택하면 자동으로 업데이트됩니다.">
+          <Field label="현재 활성 프로젝트" hint="현재 작업 중인 프로젝트명입니다.">
             <Input
-              value={settings.defaultProjectName}
-              contentBefore={<DocumentRegular style={{ color: tokens.colorBrandForeground1 }} />}
-              placeholder="프로젝트 이름을 입력하세요"
+              value={currentProject?.topic || settings.defaultProjectName || "활성 프로젝트 없음"}
+              contentBefore={<CheckmarkCircleRegular style={{ color: tokens.colorBrandForeground1 }} />}
+              placeholder="프로젝트 선택 후 표시됩니다"
               disabled={true}
               input={{ style: { color: tokens.colorBrandForeground1 } }}
             />
@@ -843,7 +797,7 @@ export default function ProjectManager() {
             <Caption1 style={{ color: tokens.colorNeutralForeground3, lineHeight: 1.4, fontFamily: "monospace" }}>
               📁 {settings.projectRootFolder}
               <br />
-              └── 📁 {selectedProject?.topic || settings?.defaultProjectName || "Unknown"}/
+              └── 📁 {currentProject?.topic || settings.defaultProjectName || "프로젝트명"}/
               <br />
               &nbsp;&nbsp;&nbsp;&nbsp;├── 📁 scripts/ (대본 파일)
               <br />

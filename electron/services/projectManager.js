@@ -15,6 +15,20 @@ const { getDefaultProjectRoot } = require('../utils/pathHelper');
 class ProjectManager {
   constructor() {
     this.currentProject = null;
+    this.migrationCompleted = false; // 마이그레이션 캐싱 플래그
+  }
+
+  // 프로젝트 경로 객체 생성 헬퍼
+  createPathsObject(projectDir) {
+    return {
+      root: projectDir,
+      output: path.join(projectDir, 'output'),
+      scripts: path.join(projectDir, 'scripts'),
+      audio: path.join(projectDir, 'audio'),
+      images: path.join(projectDir, 'images'),
+      video: path.join(projectDir, 'video'),
+      temp: path.join(projectDir, 'temp')
+    };
   }
 
   // 기본 디렉토리 가져오기 (루트 폴더만, 날짜 폴더 제거)
@@ -59,15 +73,7 @@ class ProjectManager {
         id: projectId,
         topic: topic,
         createdAt: new Date().toISOString(),
-        paths: {
-          root: projectDir,
-          output: path.join(projectDir, 'output'),
-          scripts: path.join(projectDir, 'scripts'),
-          audio: path.join(projectDir, 'audio'),
-          images: path.join(projectDir, 'images'),
-          video: path.join(projectDir, 'video'),
-          temp: path.join(projectDir, 'temp')
-        },
+        paths: this.createPathsObject(projectDir),
         options: options
       };
 
@@ -156,24 +162,37 @@ class ProjectManager {
   // 프로젝트 목록 가져오기 (설정 파일 기반 + 기존 폴더 마이그레이션)
   async listProjects() {
     try {
-      // 기존 폴더 기반 프로젝트 마이그레이션 실행
-      await this.migrateExistingProjects();
+      // 마이그레이션은 처음 한 번만 실행 (성능 개선)
+      if (!this.migrationCompleted) {
+        await this.migrateExistingProjects();
+        this.migrationCompleted = true;
+      }
 
       // 설정에서 프로젝트 목록 가져오기
       let projects = store.getProjects();
 
-      // 기본(default) 프로젝트 필터링 (완전 제거)
+      // 기본(default) 프로젝트 필터링 (런타임에만 적용, 저장소에 다시 쓰지 않음)
       projects = projects.filter(p => p.id !== 'default' && p.topic !== 'default');
-      store.set('projects', projects);
 
       // 생성일 기준 내림차순 정렬 (최신 프로젝트가 맨 위)
-      return projects.sort((a, b) => {
-        return new Date(b.createdAt) - new Date(a.createdAt);
-      });
+      return this.sortProjectsByCreatedAt(projects);
     } catch (error) {
       console.error('❌ 프로젝트 목록 조회 실패:', error);
       return [];
     }
+  }
+
+  // 프로젝트를 생성일 기준으로 정렬
+  sortProjectsByCreatedAt(projects) {
+    return projects.sort((a, b) => {
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+  }
+
+  // 최신 프로젝트 한 개 가져오기
+  getLatestProject(projects) {
+    if (projects.length === 0) return null;
+    return this.sortProjectsByCreatedAt(projects)[0];
   }
 
   // 날짜 폴더 내 프로젝트들을 루트로 마이그레이션하고 설정에 추가
@@ -198,15 +217,7 @@ class ProjectManager {
             await fs.rename(oldProjectDir, newProjectDir);
 
             // 프로젝트 메타데이터의 경로 업데이트
-            projectData.paths = {
-              root: newProjectDir,
-              output: path.join(newProjectDir, 'output'),
-              scripts: path.join(newProjectDir, 'scripts'),
-              audio: path.join(newProjectDir, 'audio'),
-              images: path.join(newProjectDir, 'images'),
-              video: path.join(newProjectDir, 'video'),
-              temp: path.join(newProjectDir, 'temp')
-            };
+            projectData.paths = this.createPathsObject(newProjectDir);
 
             // 설정에 프로젝트 추가 (중복 체크는 addProject에서 처리)
             store.addProject(projectData);
@@ -251,15 +262,7 @@ class ProjectManager {
         if (!project.paths) {
           const rootFolder = this.getProjectRootFolder();
           const projectDir = path.join(rootFolder, projectId);
-          project.paths = {
-            root: projectDir,
-            output: path.join(projectDir, 'output'),
-            scripts: path.join(projectDir, 'scripts'),
-            audio: path.join(projectDir, 'audio'),
-            images: path.join(projectDir, 'images'),
-            video: path.join(projectDir, 'video'),
-            temp: path.join(projectDir, 'temp')
-          };
+          project.paths = this.createPathsObject(projectDir);
 
           // 업데이트된 경로를 설정에 저장
           store.updateProject(projectId, { paths: project.paths });
@@ -328,22 +331,17 @@ class ProjectManager {
 
       // 프로젝트 삭제 후 다른 프로젝트가 있으면 그 프로젝트로 자동 전환 및 설정 업데이트
       const remainingProjects = store.getProjects();
-      if (remainingProjects.length > 0) {
-        // 가장 최신 프로젝트 (생성일 기준 내림차순)
-        const nextProject = remainingProjects.sort((a, b) => {
-          return new Date(b.createdAt) - new Date(a.createdAt);
-        })[0];
+      const nextProject = this.getLatestProject(remainingProjects);
 
-        if (nextProject) {
-          // 다음 프로젝트를 현재 프로젝트로 설정
-          store.setCurrentProjectId(nextProject.id);
-          this.currentProject = nextProject;
+      if (nextProject) {
+        // 다음 프로젝트를 현재 프로젝트로 설정
+        store.setCurrentProjectId(nextProject.id);
+        this.currentProject = nextProject;
 
-          // 설정 자동 업데이트
-          store.set('defaultProjectName', nextProject.topic);
-          store.set('videoSaveFolder', nextProject.paths.root);
-          console.log(`💾 프로젝트 삭제 후 설정 자동 업데이트: defaultProjectName="${nextProject.topic}", videoSaveFolder="${nextProject.paths.root}"`);
-        }
+        // 설정 자동 업데이트
+        store.set('defaultProjectName', nextProject.topic);
+        store.set('videoSaveFolder', nextProject.paths.root);
+        console.log(`💾 프로젝트 삭제 후 설정 자동 업데이트: defaultProjectName="${nextProject.topic}", videoSaveFolder="${nextProject.paths.root}"`);
       } else {
         // 모든 프로젝트가 삭제되면 설정 초기화
         store.set('defaultProjectName', 'default');
