@@ -125,6 +125,8 @@ export default function ProjectManager() {
   const refreshProjectData = useCallback(async () => {
     try {
       await Promise.all([loadProjects(), loadCurrentProject()]);
+      // 프로젝트 삭제 후 설정이 백엔드에서 업데이트되었으므로 최신 설정 다시 로드
+      await loadSettings();
     } catch (error) {
       console.error("프로젝트 데이터 새로고침 실패:", error);
       // 에러가 발생해도 앱이 죽지 않도록 처리
@@ -469,19 +471,6 @@ export default function ProjectManager() {
       const result = await api.invoke("project:delete", projectId);
 
       if (result.success) {
-        // 삭제된 프로젝트가 선택된 프로젝트라면 안전하게 초기화
-        if (selectedProject?.id === projectId) {
-          setSelectedProject(null);
-          // 안전한 설정 복원
-          if (originalSettings?.defaultProjectName) {
-            setSettings((prev) => ({
-              ...prev,
-              defaultProjectName: originalSettings.defaultProjectName,
-              videoSaveFolder: originalSettings.videoSaveFolder || "",
-            }));
-          }
-        }
-
         showGlobalToast({
           type: "success",
           text: "프로젝트가 삭제되었습니다.",
@@ -490,6 +479,7 @@ export default function ProjectManager() {
         // 프로젝트 삭제 완료 이벤트 발생 (App.jsx에서 감지)
         window.dispatchEvent(new CustomEvent("project:deleted"));
 
+        // 프로젝트 데이터 새로고침 후 설정 자동 반영
         await refreshProjectData();
 
         // 포커스 강제 리셋 - 여러 시점에서 시도

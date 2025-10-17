@@ -326,6 +326,31 @@ class ProjectManager {
         this.currentProject = null;
       }
 
+      // 프로젝트 삭제 후 다른 프로젝트가 있으면 그 프로젝트로 자동 전환 및 설정 업데이트
+      const remainingProjects = store.getProjects();
+      if (remainingProjects.length > 0) {
+        // 가장 최신 프로젝트 (생성일 기준 내림차순)
+        const nextProject = remainingProjects.sort((a, b) => {
+          return new Date(b.createdAt) - new Date(a.createdAt);
+        })[0];
+
+        if (nextProject) {
+          // 다음 프로젝트를 현재 프로젝트로 설정
+          store.setCurrentProjectId(nextProject.id);
+          this.currentProject = nextProject;
+
+          // 설정 자동 업데이트
+          store.set('defaultProjectName', nextProject.topic);
+          store.set('videoSaveFolder', nextProject.paths.root);
+          console.log(`💾 프로젝트 삭제 후 설정 자동 업데이트: defaultProjectName="${nextProject.topic}", videoSaveFolder="${nextProject.paths.root}"`);
+        }
+      } else {
+        // 모든 프로젝트가 삭제되면 설정 초기화
+        store.set('defaultProjectName', 'default');
+        store.set('videoSaveFolder', '');
+        console.log('💾 모든 프로젝트 삭제됨 - 설정 초기화');
+      }
+
       console.log(`🗑️ 프로젝트 삭제 완료: ${projectId}`);
       return { success: true };
     } catch (error) {
