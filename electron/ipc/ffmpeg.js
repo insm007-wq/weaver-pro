@@ -670,10 +670,29 @@ function register() {
       isExportCancelled = false;
       currentFfmpegProcess = null;
 
-      // videoSaveFolder 가져오기
-      const videoSaveFolder = store.get("videoSaveFolder");
+      // videoSaveFolder 가져오기 (폴백 로직 포함)
+      let videoSaveFolder = store.get("videoSaveFolder");
+
+      // 폴더가 설정되지 않았으면 기본값 사용
       if (!videoSaveFolder) {
-        throw new Error("비디오 저장 폴더가 설정되지 않았습니다.");
+        const os = require("os");
+        const homeDir = os.homedir();
+
+        // Windows: Documents/Weaver Pro, Mac/Linux: ~/Weaver Pro
+        const defaultFolder = process.platform === "win32"
+          ? path.join(homeDir, "Documents", "Weaver Pro")
+          : path.join(homeDir, "Weaver Pro");
+
+        videoSaveFolder = defaultFolder;
+        console.warn(`⚠️ videoSaveFolder이 설정되지 않았습니다. 기본값 사용: ${videoSaveFolder}`);
+
+        // 설정에 저장
+        try {
+          store.set("videoSaveFolder", videoSaveFolder);
+          console.log(`✅ videoSaveFolder 기본값 저장됨: ${videoSaveFolder}`);
+        } catch (error) {
+          console.warn(`⚠️ videoSaveFolder 저장 실패: ${error.message}`);
+        }
       }
 
       // output 폴더 생성

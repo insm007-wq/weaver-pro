@@ -118,11 +118,27 @@ export const useFileManagement = () => {
 
     try {
       // videoSaveFolder 설정에서 기본 경로 가져오기
-      const videoSaveFolder = await getSetting("videoSaveFolder");
+      let videoSaveFolder = await getSetting("videoSaveFolder");
 
+      // 폴더가 설정되지 않았으면 기본값 사용
       if (!videoSaveFolder) {
-        showError("비디오 저장 폴더가 설정되지 않았습니다. 설정 탭에서 먼저 폴더를 설정해주세요.");
-        return;
+        // 운영체제별 기본 경로 설정
+        const isWindows = navigator.platform.indexOf('Win') > -1;
+        const homeDir = isWindows ? process.env.USERPROFILE : process.env.HOME;
+
+        videoSaveFolder = isWindows
+          ? `${homeDir}\\Documents\\Weaver Pro`
+          : `${homeDir}/Weaver Pro`;
+
+        console.warn(`⚠️ videoSaveFolder이 설정되지 않았습니다. 기본값 사용: ${videoSaveFolder}`);
+
+        // 설정에 저장
+        try {
+          await setSetting({ key: "videoSaveFolder", value: videoSaveFolder });
+          console.log(`✅ videoSaveFolder 기본값 저장됨: ${videoSaveFolder}`);
+        } catch (error) {
+          console.warn(`⚠️ videoSaveFolder 저장 실패: ${error.message}`);
+        }
       }
 
       // 파일 경로 구성
