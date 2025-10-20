@@ -96,10 +96,7 @@ const Step1FileUpload = memo(
               size="medium"
               icon={<ArrowRight24Regular />}
               iconPosition="after"
-              onClick={() => {
-                console.log("🔄 Step 1 → Step 2 이동");
-                onNext();
-              }}
+              onClick={onNext}
               style={{
                 minWidth: "220px",
                 height: "40px",

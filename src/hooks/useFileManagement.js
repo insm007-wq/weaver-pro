@@ -16,6 +16,7 @@ export const useFileManagement = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [srtFilePath, setSrtFilePath] = useState("");
   const [mp3FilePath, setMp3FilePath] = useState("");
+  const [srtSource, setSrtSource] = useState(null); // "auto" | "manual" | null
 
   // Refs
   const srtInputRef = useRef(null);
@@ -92,13 +93,13 @@ export const useFileManagement = () => {
       setScenes(scenesWithAudio);
       setSrtConnected(true);
       setSrtFilePath(file.path);
+      setSrtSource("manual"); // 수동 업로드
 
       // 설정 저장
       await setSetting({ key: "paths.srt", value: file.path });
 
       showSuccess(`자막 파일이 업로드되었습니다. (${parsedScenes.length}개 씬)`);
     } catch (error) {
-      console.error("자막 파일 업로드 오류:", error);
       showError("자막 파일 업로드 중 오류가 발생했습니다.");
     } finally {
       setIsLoading(false);
@@ -130,14 +131,11 @@ export const useFileManagement = () => {
           ? `${homeDir}\\Documents\\Weaver Pro`
           : `${homeDir}/Weaver Pro`;
 
-        console.warn(`⚠️ videoSaveFolder이 설정되지 않았습니다. 기본값 사용: ${videoSaveFolder}`);
-
         // 설정에 저장
         try {
           await setSetting({ key: "videoSaveFolder", value: videoSaveFolder });
-          console.log(`✅ videoSaveFolder 기본값 저장됨: ${videoSaveFolder}`);
         } catch (error) {
-          console.warn(`⚠️ videoSaveFolder 저장 실패: ${error.message}`);
+          // 에러 무시 - 기본값으로 계속 진행
         }
       }
 
@@ -170,13 +168,12 @@ export const useFileManagement = () => {
             setScenes(scenesWithAudio);
             setSrtConnected(true);
             setSrtFilePath(srtPath);
+            setSrtSource("auto"); // 자동 로드
             loadedSrt = true;
           }
-        } else {
-          console.warn("SRT 파일이 존재하지 않음:", srtPath);
         }
       } catch (error) {
-        console.error("SRT 로드 실패:", error);
+        // SRT 로드 실패 - 계속 진행
       }
 
       // 개별 MP3 파일 로드
@@ -199,24 +196,20 @@ export const useFileManagement = () => {
                 const duration = await getMp3DurationSafe(audioPath);
                 totalDuration += duration;
               } catch (error) {
-                console.warn(`씬 ${i + 1} 오디오 길이 측정 실패:`, error);
+                // 오디오 길이 측정 실패 - 계속 진행
               }
             }
           }
 
           if (foundAudioFiles > 0) {
             setMp3Connected(true);
-            setMp3FilePath(audioPartsFolder); // 폴더 경로 저장
+            setMp3FilePath(audioPartsFolder);
             setAudioDur(totalDuration);
             loadedMp3 = true;
-          } else {
-            console.warn("개별 오디오 파일이 존재하지 않음:", audioPartsFolder);
           }
-        } else {
-          console.warn("오디오 폴더가 존재하지 않음:", audioPartsFolder);
         }
       } catch (error) {
-        console.error("MP3 로드 실패:", error);
+        // MP3 로드 실패 - 계속 진행
       }
 
       if (loadedSrt && loadedMp3) {
@@ -229,7 +222,6 @@ export const useFileManagement = () => {
         showError("가져올 파일이 없습니다. 대본 탭에서 먼저 대본을 생성하세요.");
       }
     } catch (error) {
-      console.error("대본에서 가져오기 오류:", error);
       showError("파일을 가져오는 중 오류가 발생했습니다.");
     } finally {
       setIsLoading(false);
@@ -244,21 +236,10 @@ export const useFileManagement = () => {
     setAudioDur(0);
     setSrtFilePath("");
     setMp3FilePath("");
+    setSrtSource(null); // 초기화
 
     // 파일 입력 필드 초기화
     if (srtInputRef.current) srtInputRef.current.value = "";
-
-    // 설정에 저장된 키워드도 삭제
-    try {
-      await window.api.setSetting("extractedKeywords", []);
-
-      // 설정 변경 이벤트 강제 트리거 (캐시 문제 방지)
-      window.dispatchEvent(new CustomEvent("settingsChanged", {
-        detail: { key: "extractedKeywords", value: [] }
-      }));
-    } catch (error) {
-      console.error("키워드 설정 삭제 실패:", error);
-    }
 
     // 대본 생성 페이지도 초기화
     window.dispatchEvent(new CustomEvent("reset-script-generation"));
@@ -281,6 +262,7 @@ export const useFileManagement = () => {
     isLoading,
     srtFilePath,
     mp3FilePath,
+    srtSource,
 
     // Refs
     srtInputRef,
@@ -299,6 +281,7 @@ export const useFileManagement = () => {
     setAudioDur,
     setSrtFilePath,
     setMp3FilePath,
+    setSrtSource,
   };
 };
 

@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from "react";
+import React, { useMemo, useEffect, useRef, useCallback } from "react";
 import { tokens, useId, Text } from "@fluentui/react-components";
 import { Target24Regular } from "@fluentui/react-icons";
 
@@ -25,6 +25,7 @@ function MediaPrepEditor() {
   const containerStyles = useContainerStyles();
   const headerStyles = useHeaderStyles();
   const srtInputId = useId("srt-input");
+  const initialAutoLoadRef = useRef(false); // 처음 자동 로드 1회만 실행
 
   // Custom Hooks
   const fileManagement = useFileManagement();
@@ -42,29 +43,71 @@ function MediaPrepEditor() {
     return Math.max(0, last - first);
   }, [fileManagement.scenes]);
 
-  // 자동 단계 진행 로직
+  // 페이지 진입 시 상태 초기화 (수동 모드)
   useEffect(() => {
-    // 1단계: SRT 파일 업로드 완료 시 1단계를 완료로 표시
-    if (wizardStep.currentStep === 1 && fileManagement.srtConnected && fileManagement.scenes.length > 0) {
-      wizardStep.completeStep(1);
-    }
+    const initializeState = () => {
+      // 이미 실행되었으면 스킵
+      if (initialAutoLoadRef.current) return;
+      initialAutoLoadRef.current = true;
 
+      // 모든 상태 초기화 - 사용자가 수동으로 업로드/가져오기 하기까지 대기
+      fileManagement.setScenes([]);
+      fileManagement.setSrtConnected(false);
+      fileManagement.setMp3Connected(false);
+      fileManagement.setAudioDur(0);
+      fileManagement.setSrtFilePath("");
+      fileManagement.setMp3FilePath("");
+      fileManagement.setSrtSource(null);
+      keywordExtraction.clearAssets();
+      wizardStep.reset();
+    };
+
+    initializeState();
+  }, []); // 마운트 시 1회만 실행
+
+  // 자동 단계 진행 로직 - 키워드 추출 완료 시만 자동 이동
+  useEffect(() => {
     // 2단계: 키워드 추출 완료 시 2단계를 완료로 표시
     if (wizardStep.currentStep === 2 && keywordExtraction.assets.length > 0) {
       wizardStep.completeStep(2);
     }
   }, [
     wizardStep.currentStep,
-    fileManagement.srtConnected,
-    fileManagement.scenes.length,
     keywordExtraction.assets.length,
   ]);
+
+  // 대본 & 음성 생성에서 이동 - 자막 자동 삽입 후 Step 2로 자동 이동
+  const handleNavigateToAssemble = useCallback(async () => {
+    try {
+      console.log("🔄 자막 자동 삽입 시작");
+
+      // 자막 자동 삽입 (대본에서 생성된 SRT 파일 가져오기)
+      await fileManagement.handleInsertFromScript();
+
+      console.log("✅ 자막 자동 삽입 완료");
+
+      // 상태 업데이트 후 즉시 Step 2로 이동 (setTimeout 제거)
+      wizardStep.completeStep(1);
+      wizardStep.nextStep();
+    } catch (error) {
+      console.error("❌ 자막 자동 삽입 실패:", error);
+      // 실패 시에도 Step 진행 (사용자가 수동으로 조정 가능)
+      wizardStep.completeStep(1);
+      wizardStep.nextStep();
+    }
+  }, [fileManagement, wizardStep]);
+
+  useEffect(() => {
+    window.addEventListener("navigate-to-assemble", handleNavigateToAssemble);
+
+    return () => {
+      window.removeEventListener("navigate-to-assemble", handleNavigateToAssemble);
+    };
+  }, [handleNavigateToAssemble]);
 
   // 키워드 추출 초기화 이벤트 리스너
   useEffect(() => {
     const handleResetKeywordExtraction = () => {
-      console.log("🔄 미디어 준비 초기화 - SRT, 키워드 모두 초기화");
-
       // 키워드 초기화
       keywordExtraction.clearAssets();
 
@@ -72,9 +115,13 @@ function MediaPrepEditor() {
       fileManagement.setScenes([]);
       fileManagement.setSrtConnected(false);
       fileManagement.setSrtFilePath("");
+      fileManagement.setSrtSource(null);
 
       // 위저드를 1단계로 초기화
       wizardStep.reset();
+
+      // 자동 로드 플래그 리셋
+      initialAutoLoadRef.current = false;
     };
 
     window.addEventListener("reset-keyword-extraction", handleResetKeywordExtraction);
@@ -82,15 +129,14 @@ function MediaPrepEditor() {
     return () => {
       window.removeEventListener("reset-keyword-extraction", handleResetKeywordExtraction);
     };
-  }, [keywordExtraction, fileManagement, wizardStep]);
+  }, []);
 
-  // 단계별 렌더링
-  const renderCurrentStep = () => {
+  // 단계별 렌더링 (메모화)
+  const renderCurrentStep = useCallback(() => {
     switch (wizardStep.currentStep) {
       case 1:
         return (
           <Step1FileUpload
-            // FileSelection props
             srtConnected={fileManagement.srtConnected}
             srtFilePath={fileManagement.srtFilePath}
             scenes={fileManagement.scenes}
@@ -102,7 +148,6 @@ function MediaPrepEditor() {
             srtInputId={srtInputId}
             handleInsertFromScript={fileManagement.handleInsertFromScript}
             handleReset={fileManagement.handleReset}
-            // Navigation
             onNext={wizardStep.nextStep}
             canProceed={wizardStep.isCurrentStepCompleted}
           />
@@ -111,7 +156,6 @@ function MediaPrepEditor() {
       case 2:
         return (
           <Step2KeywordExtraction
-            // Keyword extraction props
             srtConnected={fileManagement.srtConnected}
             isExtracting={keywordExtraction.isExtracting}
             handleExtractKeywords={keywordExtraction.handleExtractKeywords}
@@ -119,7 +163,6 @@ function MediaPrepEditor() {
             scenes={fileManagement.scenes}
             currentLlmModel={keywordExtraction.currentLlmModel}
             getLlmDisplayName={keywordExtraction.getLlmDisplayName}
-            // Navigation
             onPrev={wizardStep.prevStep}
             canProceed={wizardStep.isCurrentStepCompleted}
           />
@@ -128,7 +171,21 @@ function MediaPrepEditor() {
       default:
         return null;
     }
-  };
+  }, [
+    wizardStep.currentStep,
+    fileManagement,
+    keywordExtraction,
+    totalDur,
+    srtInputId,
+    wizardStep.nextStep,
+    wizardStep.prevStep,
+    wizardStep.isCurrentStepCompleted,
+  ]);
+
+  // BottomFixedBar 조건 단순화
+  const hasAssets = Array.isArray(keywordExtraction.assets) && keywordExtraction.assets.length > 0;
+  const isExtracting = keywordExtraction.isExtracting;
+  const showBottomBar = isExtracting || hasAssets;
 
   return (
     <div className={containerStyles.container} style={{ overflowX: "hidden", maxWidth: "100vw" }}>
@@ -167,17 +224,17 @@ function MediaPrepEditor() {
       </div>
 
       {/* 하단 고정 진행바 */}
-      {(keywordExtraction.isExtracting || (keywordExtraction.assets && keywordExtraction.assets.length > 0)) && (
+      {showBottomBar && (
         <BottomFixedBar
-          isComplete={!keywordExtraction.isExtracting && keywordExtraction.assets && keywordExtraction.assets.length > 0}
-          isLoading={keywordExtraction.isExtracting}
+          isComplete={hasAssets && !isExtracting}
+          isLoading={isExtracting}
           statusText={
-            keywordExtraction.isExtracting
+            isExtracting
               ? "🤖 키워드 추출 중..."
-              : `✅ 키워드 추출 완료 (${keywordExtraction.assets?.length || 0}개)`
+              : `✅ 키워드 추출 완료 (${keywordExtraction.assets.length}개)`
           }
           nextStepButton={
-            !keywordExtraction.isExtracting && keywordExtraction.assets && keywordExtraction.assets.length > 0
+            hasAssets && !isExtracting
               ? {
                   text: "➡️ 다음 단계: 미디어 다운로드",
                   eventName: "navigate-to-download",
@@ -185,7 +242,7 @@ function MediaPrepEditor() {
               : undefined
           }
           expandedContent={
-            keywordExtraction.assets && keywordExtraction.assets.length > 0 ? (
+            hasAssets ? (
               <div style={{ padding: "12px 16px" }}>
                 <Text size={300} weight="semibold" style={{ marginBottom: 12, display: "block" }}>
                   📝 추출된 키워드 ({keywordExtraction.assets.length}개)
@@ -214,7 +271,7 @@ function MediaPrepEditor() {
                   ))}
                 </div>
               </div>
-            ) : keywordExtraction.isExtracting ? (
+            ) : isExtracting ? (
               <div style={{ padding: "12px 16px", textAlign: "center" }}>
                 <Text size={300} weight="semibold" style={{ marginBottom: 8, display: "block" }}>
                   🤖 AI가 키워드를 추출하고 있습니다...
