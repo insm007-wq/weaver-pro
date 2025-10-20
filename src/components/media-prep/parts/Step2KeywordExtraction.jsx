@@ -84,6 +84,7 @@ const Step2KeywordExtraction = memo(
     // Keyword extraction props
     srtConnected,
     isExtracting,
+    isGeneratingAudio = false,
     handleExtractKeywords,
     assets,
     scenes,
@@ -185,10 +186,14 @@ const Step2KeywordExtraction = memo(
             <PrimaryButton
               size="medium"
               style={{ height: 40, minWidth: 280, maxWidth: 480, alignSelf: "center" }}
-              disabled={!srtConnected || isExtracting}
+              disabled={!srtConnected || isExtracting || isGeneratingAudio}
               onClick={() => handleExtractKeywords(safeScenes)}
             >
-              {isExtracting ? "키워드 추출 중..." : "🤖 키워드 추출 시작"}
+              {isGeneratingAudio
+                ? "🎵 음성 생성 중..."
+                : isExtracting
+                  ? "키워드 추출 중..."
+                  : "🤖 키워드 추출 시작"}
             </PrimaryButton>
 
             {/* 결과 영역 */}

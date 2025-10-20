@@ -8,6 +8,8 @@ import { useFileManagement, useKeywordExtraction, useWizardStep, useVoiceSetting
 // Utils
 import { useContainerStyles, useHeaderStyles } from "../../styles/commonStyles";
 import { PageErrorBoundary } from "../common/ErrorBoundary";
+import { generateAudioAndSubtitles } from "../../utils/audioSubtitleGenerator";
+import { showSuccess, showError } from "../common/GlobalToast";
 
 // Wizard Components
 import StepProgress from "./parts/StepProgress";
@@ -44,7 +46,7 @@ function MediaPrepEditor() {
     ttsEngine: "",
   });
   const [currentPreviewAudio, setCurrentPreviewAudio] = useState(null);
-  const [isGeneratingAudio] = useState(false);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const { voices, voiceLoading, voiceError } = useVoiceSettings(voiceForm);
 
   // 전역 설정에서 TTS 설정 불러오기 (대본 생성과 동일)
@@ -215,6 +217,52 @@ function MediaPrepEditor() {
     setVoiceForm((prev) => ({ ...prev, ttsEngine: prev.ttsEngine }));
   }, []);
 
+  // 음원 생성 + 키워드 추출 통합 핸들러
+  const handleExtractKeywordsWithAudio = useCallback(async (scenes) => {
+    // 수동 모드일 때만 음원 생성
+    if (fileManagement.srtSource === "manual") {
+      console.log("🎵 수동 모드: 음원 생성 시작");
+      setIsGeneratingAudio(true);
+
+      try {
+        // SRT 자막 데이터를 대본 형식으로 변환
+        const scriptData = {
+          scenes: scenes.map((scene, index) => ({
+            id: index,
+            text: scene.text || "",
+            duration: (Number(scene.end) - Number(scene.start)) / 1000,
+          })),
+        };
+
+        // 음원 생성
+        await generateAudioAndSubtitles(scriptData, "manual_mode", {
+          form: {
+            voice: voiceForm.voice,
+            speed: voiceForm.speed,
+            pitch: voiceForm.pitch,
+            ttsEngine: voiceForm.ttsEngine,
+          },
+          voices,
+          api,
+        });
+
+        console.log("✅ 음원 생성 완료");
+        showSuccess(`음원이 생성되었습니다. (${scenes.length}개 씬)`);
+      } catch (error) {
+        console.error("❌ 음원 생성 실패:", error);
+        showError("음원 생성 중 오류가 발생했습니다.");
+        setIsGeneratingAudio(false);
+        return; // 실패 시 키워드 추출 진행 안 함
+      } finally {
+        setIsGeneratingAudio(false);
+      }
+    }
+
+    // 음원 생성 완료 후 또는 자동 모드에서 키워드 추출
+    console.log("🤖 키워드 추출 시작");
+    await keywordExtraction.handleExtractKeywords(scenes);
+  }, [fileManagement.srtSource, voiceForm, voices, api, keywordExtraction]);
+
   // 키워드 추출 초기화 이벤트 리스너
   useEffect(() => {
     const handleResetKeywordExtraction = () => {
@@ -284,7 +332,8 @@ function MediaPrepEditor() {
           <Step2KeywordExtraction
             srtConnected={fileManagement.srtConnected}
             isExtracting={keywordExtraction.isExtracting}
-            handleExtractKeywords={keywordExtraction.handleExtractKeywords}
+            isGeneratingAudio={isGeneratingAudio}
+            handleExtractKeywords={handleExtractKeywordsWithAudio}
             assets={keywordExtraction.assets}
             scenes={fileManagement.scenes}
             currentLlmModel={keywordExtraction.currentLlmModel}

@@ -385,7 +385,7 @@ const FileSelection = memo(
           <div style={dropZoneStyle}>
             <DropZone
               icon={<TextDescriptionRegular />}
-              label="SRT/TXT 자막 파일"
+              label="외부 SRT/TXT 자막 파일"
               caption={srtCaption}
               connected={srtConnected}
               onClick={openSrtPicker}
@@ -406,10 +406,10 @@ FileSelection.displayName = "FileSelection";
 DropZone.displayName = "DropZone";
 
 // 전역 스타일 추가 (버튼 pulse 애니메이션 - 처음 3초만)
-if (typeof document !== 'undefined') {
-  const styleId = 'import-button-pulse-styles';
+if (typeof document !== "undefined") {
+  const styleId = "import-button-pulse-styles";
   if (!document.getElementById(styleId)) {
-    const style = document.createElement('style');
+    const style = document.createElement("style");
     style.id = styleId;
     style.textContent = `
       @keyframes buttonPulse {
