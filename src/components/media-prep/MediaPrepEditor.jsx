@@ -9,6 +9,7 @@ import { useFileManagement, useKeywordExtraction, useWizardStep, useVoiceSetting
 import { useContainerStyles, useHeaderStyles } from "../../styles/commonStyles";
 import { PageErrorBoundary } from "../common/ErrorBoundary";
 import { generateAudioAndSubtitles } from "../../utils/audioSubtitleGenerator";
+import { readTextAny } from "../../utils/ipcSafe";
 import { showSuccess, showError } from "../common/GlobalToast";
 
 // Wizard Components
@@ -248,6 +249,31 @@ function MediaPrepEditor() {
 
         console.log("✅ 음원 생성 완료");
         showSuccess(`음원이 생성되었습니다. (${scenes.length}개 씬)`);
+
+        // 음원 생성 후 SRT 파일을 scripts 폴더로 복사
+        try {
+          const videoSaveFolderResult = await window.api.getSetting("videoSaveFolder");
+          const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
+          if (videoSaveFolder && fileManagement.srtFilePath) {
+            const targetSrtPath = `${videoSaveFolder}/scripts/subtitle.srt`;
+
+            // scripts 폴더 생성
+            await api.invoke("fs:mkDirRecursive", { dirPath: `${videoSaveFolder}/scripts` });
+
+            // SRT 파일 읽기
+            const srtContent = await readTextAny(fileManagement.srtFilePath);
+            if (srtContent) {
+              // SRT 파일 복사
+              await api.invoke("files:writeText", {
+                filePath: targetSrtPath,
+                content: srtContent
+              });
+              console.log(`✅ SRT 파일 복사 완료: ${targetSrtPath}`);
+            }
+          }
+        } catch (copyError) {
+          console.warn("⚠️ SRT 파일 복사 중 오류 (계속 진행):", copyError);
+        }
       } catch (error) {
         console.error("❌ 음원 생성 실패:", error);
         showError("음원 생성 중 오류가 발생했습니다.");
@@ -266,6 +292,8 @@ function MediaPrepEditor() {
   // 키워드 추출 초기화 이벤트 리스너
   useEffect(() => {
     const handleResetKeywordExtraction = () => {
+      console.log("🔄 초기화 이벤트 핸들러 실행");
+
       // 키워드 초기화
       keywordExtraction.clearAssets();
 
@@ -276,13 +304,16 @@ function MediaPrepEditor() {
       fileManagement.setSrtSource(null);
 
       // 위저드를 1단계로 초기화
-      wizardStep.reset();
-
-      // 자동 로드 플래그 리셋
-      initialAutoLoadRef.current = false;
+      console.log("📍 Step을 1로 설정 시도");
+      wizardStep.goToStep(1);
+      console.log("📍 Step 설정 완료:", wizardStep.currentStep);
 
       // 음성 상태도 초기화
       setVoiceForm({ voice: "", speed: "1.0", pitch: "-1", ttsEngine: "" });
+
+      // 영상 완성도 초기화
+      setIsGeneratingAudio(false);
+      setCurrentPreviewAudio(null);
     };
 
     window.addEventListener("reset-keyword-extraction", handleResetKeywordExtraction);
@@ -294,6 +325,7 @@ function MediaPrepEditor() {
 
   // 단계별 렌더링 (메모화)
   const renderCurrentStep = useCallback(() => {
+    console.log("🎯 현재 Step 렌더링:", wizardStep.currentStep);
     switch (wizardStep.currentStep) {
       case 1:
         return (

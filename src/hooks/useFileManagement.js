@@ -73,6 +73,17 @@ export const useFileManagement = () => {
         return;
       }
 
+      // 자막 길이 제한 체크 (30분 59초)
+      const lastScene = parsedScenes[parsedScenes.length - 1];
+      const maxMs = (30 * 60 + 59) * 1000; // 30분 59초 = 1859초
+      if (lastScene.end > maxMs) {
+        const totalSeconds = Math.floor(lastScene.end / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        showError(`⏱️ 자막이 너무 깁니다!\n\n지원 최대: 30분 59초\n현재: ${minutes}분 ${seconds}초\n\n더 짧은 자막을 사용해주세요.`);
+        return;
+      }
+
       // videoSaveFolder 가져오기
       const videoSaveFolder = await getSetting("videoSaveFolder");
 
@@ -249,6 +260,9 @@ export const useFileManagement = () => {
 
     // 미디어 다운로드 페이지도 초기화
     window.dispatchEvent(new CustomEvent("reset-media-download"));
+
+    // 영상 완성 페이지도 초기화
+    window.dispatchEvent(new CustomEvent("reset-media-edit"));
 
     showSuccess("모든 파일이 초기화되었습니다.");
   }, []);

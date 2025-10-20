@@ -70,7 +70,9 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
       if (videoSaveFolder) {
         audioFolderPath = videoSaveFolder;
-        addLog(`📁 음성 파일 저장 위치: ${audioFolderPath}`);
+        if (addLog) {
+          addLog(`📁 음성 파일 저장 위치: ${audioFolderPath}`);
+        }
       }
     } catch (pathError) {
       console.warn("videoSaveFolder 가져오기 실패:", pathError);
