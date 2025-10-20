@@ -8,12 +8,10 @@ import { useFileManagement, useKeywordExtraction, useWizardStep, useVoiceSetting
 // Utils
 import { useContainerStyles, useHeaderStyles } from "../../styles/commonStyles";
 import { PageErrorBoundary } from "../common/ErrorBoundary";
-import { generateAudioAndSubtitles } from "../../utils/audioSubtitleGenerator";
-import { showSuccess, showError } from "../common/GlobalToast";
 
 // Wizard Components
 import StepProgress from "./parts/StepProgress";
-import Step1FileUpload from "./parts/Step1FileUpload";
+import Step1SubtitleUpload from "./parts/Step1SubtitleUpload";
 import Step2KeywordExtraction from "./parts/Step2KeywordExtraction";
 import BottomFixedBar from "../common/BottomFixedBar";
 
@@ -38,14 +36,48 @@ function MediaPrepEditor() {
   });
   const api = useApi();
 
-  // 음성 생성 상태
+  // 음성 생성 상태 및 훅
   const [voiceForm, setVoiceForm] = useState({
     voice: "",
     speed: "1.0",
     pitch: "-1",
+    ttsEngine: "",
   });
-  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [currentPreviewAudio, setCurrentPreviewAudio] = useState(null);
+  const [isGeneratingAudio] = useState(false);
   const { voices, voiceLoading, voiceError } = useVoiceSettings(voiceForm);
+
+  // 전역 설정에서 TTS 설정 불러오기 (대본 생성과 동일)
+  useEffect(() => {
+    const loadTtsSettings = async () => {
+      try {
+        const ttsEngine = await window.api.getSetting("ttsEngine");
+        const ttsSpeed = await window.api.getSetting("ttsSpeed");
+
+        if (ttsEngine) {
+          setVoiceForm((prev) => ({ ...prev, ttsEngine }));
+        }
+        if (ttsSpeed) {
+          setVoiceForm((prev) => ({ ...prev, speed: ttsSpeed }));
+        }
+      } catch (error) {
+        console.error("TTS 설정 로드 실패:", error);
+      }
+    };
+
+    loadTtsSettings();
+
+    // 설정 변경 이벤트 리스너
+    const handleSettingsChanged = () => {
+      loadTtsSettings();
+    };
+
+    window.addEventListener("settingsChanged", handleSettingsChanged);
+
+    return () => {
+      window.removeEventListener("settingsChanged", handleSettingsChanged);
+    };
+  }, []);
 
   // Derived values
   const totalDur = useMemo(() => {
@@ -122,47 +154,66 @@ function MediaPrepEditor() {
     setVoiceForm((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  // 음성 생성 핸들러
-  const handleGenerateAudio = useCallback(async (scenes) => {
-    if (!scenes || scenes.length === 0) {
-      showError("처리할 씬이 없습니다.");
-      return;
-    }
-
-    if (!voiceForm.voice) {
-      showError("목소리를 선택해주세요.");
-      return;
-    }
-
-    setIsGeneratingAudio(true);
-
+  // 미리 듣기 핸들러
+  const handlePreviewVoice = useCallback(async (voiceId, voiceName) => {
     try {
-      console.log("🎵 음성 생성 시작");
+      // 이전 오디오가 있으면 먼저 중지
+      if (currentPreviewAudio) {
+        currentPreviewAudio.pause();
+        currentPreviewAudio.currentTime = 0;
+      }
 
-      // SRT 자막 데이터를 대본 형식으로 변환
-      const scriptData = {
-        scenes: scenes.map((scene, index) => ({
-          id: index,
-          text: scene.text || "",
-          duration: (Number(scene.end) - Number(scene.start)) / 1000,
-        })),
+      const sampleText = "안녕하세요. 이것은 목소리 미리듣기 샘플입니다. 자연스럽고 명확한 발음으로 한국어를 읽어드립니다.";
+      const payload = {
+        doc: { scenes: [{ text: sampleText }] },
+        tts: {
+          engine: voiceForm.ttsEngine,
+          voiceId: voiceId,
+          voiceName: voiceName,
+          speakingRate: voiceForm.speed || "1.0",
+          provider: "Google",
+        },
       };
 
-      await generateAudioAndSubtitles(scriptData, "manual_mode", {
-        form: { voice: voiceForm.voice, speed: voiceForm.speed, pitch: voiceForm.pitch },
-        voices,
-        api,
-      });
+      const res = await api.invoke("tts/synthesizeByScenes", payload);
+      if (res?.success && res?.data?.parts?.length > 0) {
+        const audioBlob = new Blob([Uint8Array.from(atob(res.data.parts[0].base64), (c) => c.charCodeAt(0))], { type: "audio/mpeg" });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
 
-      showSuccess(`음성 생성이 완료되었습니다. (${scenes.length}개 씬)`);
-      console.log("✅ 음성 생성 완료");
+        // 오디오 상태 저장
+        setCurrentPreviewAudio(audio);
+
+        // 재생 완료 시 정리
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          setCurrentPreviewAudio(null);
+        };
+
+        audio.play().catch((err) => {
+          console.error("오디오 재생 실패:", err);
+          setCurrentPreviewAudio(null);
+        });
+      }
     } catch (error) {
-      console.error("❌ 음성 생성 실패:", error);
-      showError("음성 생성 중 오류가 발생했습니다.");
-    } finally {
-      setIsGeneratingAudio(false);
+      console.error("미리 듣기 실패:", error);
     }
-  }, [voiceForm, voices, api]);
+  }, [voiceForm.ttsEngine, voiceForm.speed, api, currentPreviewAudio]);
+
+  // 미리 듣기 중지 핸들러
+  const handleStopVoice = useCallback(() => {
+    if (currentPreviewAudio) {
+      currentPreviewAudio.pause();
+      currentPreviewAudio.currentTime = 0;
+      setCurrentPreviewAudio(null);
+    }
+  }, [currentPreviewAudio]);
+
+  // 재시도 핸들러
+  const handleRetryVoiceLoad = useCallback(() => {
+    // voiceForm의 ttsEngine 변경으로 useVoiceSettings가 다시 로드됨
+    setVoiceForm((prev) => ({ ...prev, ttsEngine: prev.ttsEngine }));
+  }, []);
 
   // 키워드 추출 초기화 이벤트 리스너
   useEffect(() => {
@@ -183,8 +234,7 @@ function MediaPrepEditor() {
       initialAutoLoadRef.current = false;
 
       // 음성 상태도 초기화
-      setVoiceForm({ voice: "", speed: "1.0", pitch: "-1" });
-      setIsGeneratingAudio(false);
+      setVoiceForm({ voice: "", speed: "1.0", pitch: "-1", ttsEngine: "" });
     };
 
     window.addEventListener("reset-keyword-extraction", handleResetKeywordExtraction);
@@ -199,10 +249,11 @@ function MediaPrepEditor() {
     switch (wizardStep.currentStep) {
       case 1:
         return (
-          <Step1FileUpload
+          <Step1SubtitleUpload
             // File selection props
             srtConnected={fileManagement.srtConnected}
             srtFilePath={fileManagement.srtFilePath}
+            srtSource={fileManagement.srtSource}
             scenes={fileManagement.scenes}
             totalDur={totalDur}
             getFileInfo={fileManagement.getFileInfo}
@@ -221,7 +272,9 @@ function MediaPrepEditor() {
             form={voiceForm}
             onChange={handleVoiceChange}
             setForm={setVoiceForm}
-            onGenerateAudio={handleGenerateAudio}
+            onPreviewVoice={handlePreviewVoice}
+            onStopVoice={handleStopVoice}
+            onRetryVoiceLoad={handleRetryVoiceLoad}
             isGeneratingAudio={isGeneratingAudio}
           />
         );
