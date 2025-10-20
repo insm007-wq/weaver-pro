@@ -856,10 +856,8 @@ function MediaDownloadPage({ onDownloadingChange }) {
                   eventName: "navigate-to-refine",
                   onClick: async () => {
                     try {
-                      // 탭 이동 후 자동 파일 로드 이벤트 발생
-                      setTimeout(() => {
-                        window.dispatchEvent(new CustomEvent("auto-load-project-files"));
-                      }, 100);
+                      // 페이지 전환 전에 이벤트 먼저 발생 (타이밍 경합 제거)
+                      window.dispatchEvent(new CustomEvent("auto-load-project-files"));
                     } catch (error) {
                       console.error("자동 로드 이벤트 발생 실패:", error);
                     }

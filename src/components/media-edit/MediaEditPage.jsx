@@ -251,13 +251,11 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
       hasTriedLoadRef.current = false;
       hasAutoAssignedRef.current = false;
 
-      // 파일 로드 시도
-      setTimeout(() => {
-        if (!srtConnected && !mp3Connected && !isLoading) {
-          console.log("[MediaEditPage] 자동으로 파일 불러오는 중...");
-          handleInsertFromScript();
-        }
-      }, 50);
+      // 즉시 파일 로드 (setTimeout 제거하여 경합 제거)
+      if (!srtConnected && !mp3Connected && !isLoading) {
+        console.log("[MediaEditPage] 자동으로 파일 불러오는 중...");
+        handleInsertFromScript();
+      }
     };
 
     window.addEventListener("auto-load-project-files", handleAutoLoadProjectFiles);

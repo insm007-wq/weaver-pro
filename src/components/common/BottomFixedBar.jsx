@@ -149,10 +149,12 @@ const BottomFixedBar = memo(({
                 size="medium"
                 onClick={(e) => {
                   e.stopPropagation();
+                  // onClick 콜백 먼저 실행 (이벤트 리스너 준비)
+                  nextStepButton.onClick?.();
+                  // 그 다음 페이지 전환 이벤트 발생
                   if (nextStepButton.eventName) {
                     window.dispatchEvent(new CustomEvent(nextStepButton.eventName));
                   }
-                  nextStepButton.onClick?.();
                 }}
                 className="next-step-button-pulse"
                 style={{
