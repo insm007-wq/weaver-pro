@@ -1,13 +1,15 @@
-import React, { useMemo, useEffect, useRef, useCallback } from "react";
+import React, { useMemo, useEffect, useRef, useCallback, useState } from "react";
 import { tokens, useId, Text } from "@fluentui/react-components";
 import { Target24Regular } from "@fluentui/react-icons";
 
 // Hooks
-import { useFileManagement, useKeywordExtraction, useWizardStep } from "../../hooks";
+import { useFileManagement, useKeywordExtraction, useWizardStep, useVoiceSettings, useApi } from "../../hooks";
 
 // Utils
 import { useContainerStyles, useHeaderStyles } from "../../styles/commonStyles";
 import { PageErrorBoundary } from "../common/ErrorBoundary";
+import { generateAudioAndSubtitles } from "../../utils/audioSubtitleGenerator";
+import { showSuccess, showError } from "../common/GlobalToast";
 
 // Wizard Components
 import StepProgress from "./parts/StepProgress";
@@ -34,6 +36,16 @@ function MediaPrepEditor() {
     totalSteps: 2,
     initialStep: 1,
   });
+  const api = useApi();
+
+  // 음성 생성 상태
+  const [voiceForm, setVoiceForm] = useState({
+    voice: "",
+    speed: "1.0",
+    pitch: "-1",
+  });
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const { voices, voiceLoading, voiceError } = useVoiceSettings(voiceForm);
 
   // Derived values
   const totalDur = useMemo(() => {
@@ -105,6 +117,53 @@ function MediaPrepEditor() {
     };
   }, [handleNavigateToAssemble]);
 
+  // 음성 변경 핸들러
+  const handleVoiceChange = useCallback((key, value) => {
+    setVoiceForm((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  // 음성 생성 핸들러
+  const handleGenerateAudio = useCallback(async (scenes) => {
+    if (!scenes || scenes.length === 0) {
+      showError("처리할 씬이 없습니다.");
+      return;
+    }
+
+    if (!voiceForm.voice) {
+      showError("목소리를 선택해주세요.");
+      return;
+    }
+
+    setIsGeneratingAudio(true);
+
+    try {
+      console.log("🎵 음성 생성 시작");
+
+      // SRT 자막 데이터를 대본 형식으로 변환
+      const scriptData = {
+        scenes: scenes.map((scene, index) => ({
+          id: index,
+          text: scene.text || "",
+          duration: (Number(scene.end) - Number(scene.start)) / 1000,
+        })),
+      };
+
+      await generateAudioAndSubtitles(scriptData, "manual_mode", {
+        form: { voice: voiceForm.voice, speed: voiceForm.speed, pitch: voiceForm.pitch },
+        voices,
+        api,
+      });
+
+      showSuccess(`음성 생성이 완료되었습니다. (${scenes.length}개 씬)`);
+      console.log("✅ 음성 생성 완료");
+    } catch (error) {
+      console.error("❌ 음성 생성 실패:", error);
+      showError("음성 생성 중 오류가 발생했습니다.");
+    } finally {
+      setIsGeneratingAudio(false);
+    }
+  }, [voiceForm, voices, api]);
+
   // 키워드 추출 초기화 이벤트 리스너
   useEffect(() => {
     const handleResetKeywordExtraction = () => {
@@ -122,6 +181,10 @@ function MediaPrepEditor() {
 
       // 자동 로드 플래그 리셋
       initialAutoLoadRef.current = false;
+
+      // 음성 상태도 초기화
+      setVoiceForm({ voice: "", speed: "1.0", pitch: "-1" });
+      setIsGeneratingAudio(false);
     };
 
     window.addEventListener("reset-keyword-extraction", handleResetKeywordExtraction);
@@ -129,7 +192,7 @@ function MediaPrepEditor() {
     return () => {
       window.removeEventListener("reset-keyword-extraction", handleResetKeywordExtraction);
     };
-  }, []);
+  }, [keywordExtraction, fileManagement, wizardStep]);
 
   // 단계별 렌더링 (메모화)
   const renderCurrentStep = useCallback(() => {
@@ -137,6 +200,7 @@ function MediaPrepEditor() {
       case 1:
         return (
           <Step1FileUpload
+            // File selection props
             srtConnected={fileManagement.srtConnected}
             srtFilePath={fileManagement.srtFilePath}
             scenes={fileManagement.scenes}
@@ -150,6 +214,15 @@ function MediaPrepEditor() {
             handleReset={fileManagement.handleReset}
             onNext={wizardStep.nextStep}
             canProceed={wizardStep.isCurrentStepCompleted}
+            // Voice generation props
+            voices={voices}
+            voiceLoading={voiceLoading}
+            voiceError={voiceError}
+            form={voiceForm}
+            onChange={handleVoiceChange}
+            setForm={setVoiceForm}
+            onGenerateAudio={handleGenerateAudio}
+            isGeneratingAudio={isGeneratingAudio}
           />
         );
 

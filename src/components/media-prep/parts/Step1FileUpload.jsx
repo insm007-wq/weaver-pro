@@ -1,6 +1,6 @@
-import React, { memo, useMemo } from "react";
-import { tokens, Text, Card, Button } from "@fluentui/react-components";
-import { ArrowRight24Regular, LinkSquare24Regular, DismissCircle24Regular } from "@fluentui/react-icons";
+import React, { memo, useMemo, useState, useCallback } from "react";
+import { tokens, Text, Card, Button, Dropdown, Option, Field, Spinner } from "@fluentui/react-components";
+import { ArrowRight24Regular, LinkSquare24Regular, DismissCircle24Regular, MicRegular } from "@fluentui/react-icons";
 import FileSelection from "./FileSelection";
 
 /**
@@ -23,11 +23,38 @@ const Step1FileUpload = memo(
     // Step navigation
     onNext,
     canProceed,
+    // Voice settings (새로 추가)
+    voices = [],
+    voiceLoading = false,
+    voiceError = null,
+    form = {},
+    onChange = () => {},
+    setForm = () => {},
+    onGenerateAudio = () => {},
+    isGeneratingAudio = false,
   }) => {
+    // 음성 생성 UI 표시 여부
+    const [showVoiceUI, setShowVoiceUI] = useState(false);
+
     // 다음 단계 진행 가능 여부 (SRT 파일이 업로드되어야 함)
     const isReadyToNext = useMemo(() => {
       return srtConnected && scenes.length > 0;
     }, [srtConnected, scenes.length]);
+
+    // SRT 삽입 시 음성 UI 자동 표시
+    React.useEffect(() => {
+      if (srtConnected && scenes.length > 0) {
+        setShowVoiceUI(true);
+      } else {
+        setShowVoiceUI(false);
+      }
+    }, [srtConnected, scenes.length]);
+
+    // 초기화 핸들러 오버라이드
+    const handleResetWithUI = useCallback(() => {
+      handleReset();
+      setShowVoiceUI(false);
+    }, [handleReset]);
 
     return (
       <div
@@ -74,8 +101,86 @@ const Step1FileUpload = memo(
           handleSrtUpload={handleSrtUpload}
           srtInputId={srtInputId}
           handleInsertFromScript={handleInsertFromScript}
-          handleReset={handleReset}
+          handleReset={handleResetWithUI}
         />
+
+        {/* 음성 생성 섹션 (SRT 삽입 후 자동 표시) */}
+        {showVoiceUI && (
+          <Card
+            style={{
+              padding: "12px 16px",
+              borderRadius: 16,
+              borderColor: tokens.colorNeutralStroke2,
+              display: "flex",
+              flexDirection: "column",
+              animation: "fadeIn 300ms ease-out",
+            }}
+          >
+            {/* 헤더 */}
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <MicRegular />
+                <Text size={400} weight="semibold" style={{ letterSpacing: 0.2 }}>
+                  음성 생성
+                </Text>
+              </div>
+              <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                업로드된 SRT 자막에 음성(나레이션)을 추가합니다.
+              </Text>
+            </div>
+
+            {/* 음성 선택 드롭다운 */}
+            <div style={{ marginBottom: tokens.spacingVerticalM }}>
+              <Field
+                label={
+                  <Text size={300} weight="semibold">
+                    목소리 선택
+                  </Text>
+                }
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Dropdown
+                    value={form?.voice || "목소리 선택"}
+                    selectedOptions={form?.voice ? [form.voice] : []}
+                    onOptionSelect={(_, d) => onChange("voice", d.optionValue)}
+                    size="medium"
+                    disabled={voiceLoading || !!voiceError || isGeneratingAudio}
+                    style={{ flex: 1, minHeight: 36 }}
+                  >
+                    {voices.map((v) => (
+                      <Option key={v.id} value={v.id}>
+                        {v.name || v.id}
+                      </Option>
+                    ))}
+                  </Dropdown>
+                  {voiceLoading && <Spinner size="tiny" />}
+                </div>
+              </Field>
+            </div>
+
+            {/* 음성 생성 버튼 */}
+            <Button
+              appearance="primary"
+              size="medium"
+              onClick={() => onGenerateAudio(scenes)}
+              disabled={!srtConnected || isGeneratingAudio || !form?.voice}
+              style={{
+                height: 40,
+                minWidth: 200,
+                fontSize: "14px",
+                fontWeight: 600,
+              }}
+            >
+              {isGeneratingAudio ? "🎵 음성 생성 중..." : "🎵 음성 생성"}
+            </Button>
+
+            {voiceError && (
+              <Text size={200} style={{ color: tokens.colorPaletteRedForeground1, marginTop: 8 }}>
+                ⚠️ {voiceError}
+              </Text>
+            )}
+          </Card>
+        )}
 
         {/* 다음 단계 버튼 */}
         <div
