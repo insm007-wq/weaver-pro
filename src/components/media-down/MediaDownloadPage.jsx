@@ -210,6 +210,11 @@ function MediaDownloadPage({ onDownloadingChange }) {
 
   // 초기 로드
   useEffect(() => {
+    // 프로그램 시작 시 다운로드 목록 초기화
+    setDownloadedVideos([]);
+    setDownloadProgress({});
+    resetDownloadState();
+
     loadKeywordsFromJSON();
     loadDownloadHistory();
 
@@ -236,7 +241,7 @@ function MediaDownloadPage({ onDownloadingChange }) {
       window.removeEventListener("focus", handleFocus);
       clearCountdownTimer();
     };
-  }, [loadKeywordsFromJSON, loadDownloadHistory, clearCountdownTimer]);
+  }, [loadKeywordsFromJSON, loadDownloadHistory, clearCountdownTimer, resetDownloadState]);
 
   // 다운로드 상태 변경을 부모에게 알림
   useEffect(() => {
