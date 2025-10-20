@@ -21,7 +21,6 @@ const Step1SubtitleUpload = memo(
     handleSrtUpload,
     srtInputId,
     handleInsertFromScript,
-    handleReset,
     // Step navigation
     onNext,
     canProceed,
@@ -54,11 +53,6 @@ const Step1SubtitleUpload = memo(
       }
     }, [srtConnected, scenes.length, srtSource]);
 
-    // 초기화 핸들러 오버라이드
-    const handleResetWithUI = useCallback(() => {
-      handleReset();
-      setShowVoiceUI(false);
-    }, [handleReset]);
 
     return (
       <div
@@ -105,7 +99,6 @@ const Step1SubtitleUpload = memo(
           handleSrtUpload={handleSrtUpload}
           srtInputId={srtInputId}
           handleInsertFromScript={handleInsertFromScript}
-          handleReset={handleResetWithUI}
         />
 
         {/* 음성 선택 섹션 (SRT 삽입 후 자동 표시) */}

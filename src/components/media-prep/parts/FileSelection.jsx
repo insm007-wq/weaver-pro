@@ -254,7 +254,6 @@ const FileSelection = memo(
     handleSrtUpload,
     srtInputId,
     handleInsertFromScript,
-    handleReset,
   }) => {
     // 펄스 애니메이션 상태 (처음에만 true)
     const [showPulse, setShowPulse] = useState(true);
@@ -335,38 +334,6 @@ const FileSelection = memo(
                 }}
               >
                 대본에서 가져오기
-              </Button>
-              <Button
-                appearance="outline"
-                icon={<DismissCircle24Regular />}
-                onClick={handleReset}
-                size="medium"
-                style={{
-                  height: "34px",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  borderRadius: "6px",
-                  color: tokens.colorPaletteRedForeground2,
-                  backgroundColor: tokens.colorPaletteRedBackground1,
-                  border: `1px solid ${tokens.colorPaletteRedBorder1}`,
-                  transition: "all 200ms cubic-bezier(0.23, 1, 0.32, 1)",
-                  minWidth: "180px",
-                  width: "180px",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = tokens.colorPaletteRedBackground2;
-                  e.currentTarget.style.borderColor = tokens.colorPaletteRedBorder2;
-                  e.currentTarget.style.color = tokens.colorPaletteRedForeground1;
-                  e.currentTarget.style.transform = "translateY(-1px)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = tokens.colorPaletteRedBackground1;
-                  e.currentTarget.style.borderColor = tokens.colorPaletteRedBorder1;
-                  e.currentTarget.style.color = tokens.colorPaletteRedForeground2;
-                  e.currentTarget.style.transform = "translateY(0)";
-                }}
-              >
-                초기화
               </Button>
             </div>
           </div>

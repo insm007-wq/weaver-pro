@@ -342,7 +342,6 @@ function MediaPrepEditor() {
             handleSrtUpload={fileManagement.handleSrtUpload}
             srtInputId={srtInputId}
             handleInsertFromScript={fileManagement.handleInsertFromScript}
-            handleReset={fileManagement.handleReset}
             onNext={wizardStep.nextStep}
             canProceed={wizardStep.isCurrentStepCompleted}
             // Voice generation props
