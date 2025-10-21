@@ -68,7 +68,7 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
   };
 
   // 안전한 상태 업데이트 함수 (글로벌 abort 플래그로 완전히 차단)
-  // 🛑 로그를 유지하면서 진행률만 업데이트
+  // 🛑 로그를 유지하면서 진행률 및 선택적으로 다른 필드 업데이트
   const safeSetState = (updates) => {
     // 🛑 글로벌 abort 플래그 확인 (가장 우선)
     if (abortFlagRef?.current?.shouldAbort) {
@@ -84,9 +84,9 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
 
     if (setFullVideoState) {
       try {
-        // 🛑 로그를 보존하면서 진행률만 업데이트
+        // 🛑 로그를 보존하면서 진행률 및 선택적 필드 업데이트
         setFullVideoState((prev) => {
-          // 진행률만 병합 (로그, currentStep 등은 유지)
+          // 진행률 병합 (로그, currentStep 등은 유지)
           const newProgress = { ...prev.progress };
           if (updates.progress) {
             Object.assign(newProgress, updates.progress);
@@ -94,9 +94,11 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
 
           return {
             ...prev,
-            // progress만 선택적으로 업데이트
+            // progress 선택적 업데이트
             ...(updates.progress && { progress: newProgress }),
-            // 나머지 필드는 업데이트하지 않음 (로그, currentStep 유지)
+            // currentStep 선택적 업데이트
+            ...(updates.currentStep && { currentStep: updates.currentStep }),
+            // 나머지 필드는 업데이트하지 않음 (로그 유지)
           };
         });
       } catch (err) {
@@ -109,10 +111,7 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
     // 🛑 진입 초기 가장 먼저 abort 확인 (이 시점에 취소되었으면 즉시 반환)
     checkAborted('함수 진입 초기');
 
-    // ✅ 음성 생성 단계로 전환은 useScriptGenerator에서 이미 처리됨
-    // 여기서는 중복 설정하지 않음
-
-    // 음성 생성 진행률 업데이트
+    // 📊 음성 생성 진행률 업데이트 (currentStep은 useScriptGenerator에서 이미 설정됨)
     safeSetState({
       progress: { audio: 25 }
     });
@@ -409,17 +408,20 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
     }
 
     // 🛑 모든 단계 완료 - currentStep을 'completed'로 설정
-    if (!shouldAbort) {
+    // 🛑 abort 플래그 최종 확인 (이 시점에 취소되었으면 상태 업데이트 스킵)
+    checkGlobalAbort();
+
+    if (!shouldAbort && !abortFlagRef?.current?.shouldAbort) {
       // 진행률 100%로 업데이트
       safeSetState({
         progress: { audio: 100, subtitle: 100 }
       });
 
       // ✅ 완료 상태 설정 (currentStep: 'completed')
+      // 🛑 isGenerating은 useScriptGenerator에서만 설정 (여기서는 설정하지 않음)
       if (setFullVideoState) {
         setFullVideoState((prev) => ({
           ...prev,
-          isGenerating: false,
           currentStep: 'completed',
           logs: [
             ...(prev.logs || []),
@@ -440,10 +442,12 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
     }
 
   } catch (error) {
-    console.error("음성/자막 생성 오류:", error);
 
-    // 오류 발생 시 상태 초기화 (단, shouldAbort이면 스킵)
-    if (!shouldAbort) {
+    // 🛑 abort 플래그 최종 확인 (취소된 경우 상태 업데이트 스킵)
+    const isCancelled = shouldAbort || abortFlagRef?.current?.shouldAbort;
+
+    // 오류 발생 시 상태 초기화 (단, 취소된 경우면 스킵)
+    if (!isCancelled && !shouldAbort) {
       safeSetState({
         isGenerating: false,
         currentStep: "error"
@@ -452,13 +456,9 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
 
     throw error;
   } finally {
-    // 함수 종료 시 로컬 shouldAbort 플래그 설정 (모든 상태 업데이트 차단)
-    shouldAbort = true;
-    console.log('🛑 finally 블록: shouldAbort = true 설정 (모든 상태 업데이트 차단)');
-
-    // 글로벌 abort 플래그도 확인하여 추가 로깅
+    // 이미 abort되었거나 글로벌 abort 플래그가 설정된 경우만 shouldAbort = true
     if (abortFlagRef?.current?.shouldAbort) {
-      console.log('🛑 글로벌 abort 플래그가 이미 설정되어 있습니다');
+      shouldAbort = true;
     }
   }
 }

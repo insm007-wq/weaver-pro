@@ -205,7 +205,7 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
       </div>
 
       {/* 하단 고정 미니 진행바 */}
-      {(fullVideoState?.isGenerating || isLoading || doc) && (
+      {(fullVideoState?.isGenerating || isLoading || ["complete", "completed"].includes(fullVideoState?.currentStep)) && (
         <BottomFixedBar
           isComplete={["complete", "completed"].includes(fullVideoState?.currentStep)}
           isLoading={fullVideoState?.isGenerating || isLoading}

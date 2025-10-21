@@ -1,5 +1,5 @@
 import { memo, useMemo, useCallback } from "react";
-import { Card, Text, Button, tokens } from "@fluentui/react-components";
+import { Card, Text, Button, tokens, Spinner } from "@fluentui/react-components";
 import { DocumentEditRegular, PlayRegular, WarningRegular } from "@fluentui/react-icons";
 import { useCardStyles } from "../../../styles/commonStyles";
 import { useScriptGenerator } from "../../../hooks/useScriptGenerator";
@@ -51,7 +51,7 @@ const ActionCard = memo(
     const cardStyles = useCardStyles();
 
     // 새 훅 사용
-    const { runScriptMode, cancelGeneration } = useScriptGenerator();
+    const { runScriptMode, cancelGeneration, isCancelling } = useScriptGenerator();
     const { remainingTime } = useGenerationTimer(
       fullVideoState?.isGenerating,
       fullVideoState?.startTime,
@@ -210,8 +210,8 @@ const ActionCard = memo(
             {/* 실행 버튼 영역 */}
             <div style={styles.buttonContainer}>
               <Button
-                appearance={fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" ? "secondary" : "primary"}
-                icon={fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" ? null : <PlayRegular />}
+                appearance={isCancelling ? "secondary" : fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" ? "secondary" : "primary"}
+                icon={isCancelling ? <Spinner size="tiny" /> : fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" ? null : <PlayRegular />}
                 onClick={() => {
                   // 생성 중이면 중지, 아니면 생성 시작
                   if (fullVideoState.isGenerating && fullVideoState.currentStep !== "completed") {
@@ -225,10 +225,12 @@ const ActionCard = memo(
                     currentMode.onGenerate();
                   }
                 }}
-                disabled={!fullVideoState.isGenerating && isDisabled}
+                disabled={isCancelling || (!fullVideoState.isGenerating && isDisabled)}
                 style={styles.button}
               >
-                {fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" ? (
+                {isCancelling ? (
+                  "⏳ 취소 중..."
+                ) : fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" ? (
                   "⏹ 생성 중지"
                 ) : (
                   <span className={fullVideoState.isGenerating && fullVideoState.currentStep !== "completed" ? "loading-text" : ""}>

@@ -17,6 +17,9 @@ export function useScriptGenerator() {
   // 작업 취소를 위한 AbortController 관리
   const [currentOperation, setCurrentOperation] = useState(null);
 
+  // 취소 진행 중 상태 (UI에서 사용자에게 표시)
+  const [isCancelling, setIsCancelling] = useState(false);
+
   // 전역 abort 플래그 (어디서든 접근 가능)
   const abortFlagRef = useRef({ shouldAbort: false });
 
@@ -79,9 +82,11 @@ export function useScriptGenerator() {
       setIsLoading(true);
       setDoc(null);
 
-      // 모든 상태를 한 번에 초기화 (로그 포함)
+      // 모든 상태를 한 번에 초기화 (로그만 초기화)
       const startTime = new Date();
-      const initialState = {
+
+      // 🛑 한 번의 setState 호출로 상태 배치 방지
+      setFullVideoState({
         isGenerating: true,
         mode: 'script_mode',
         currentStep: 'script',
@@ -95,10 +100,7 @@ export function useScriptGenerator() {
           message: '📝 AI 대본 생성 중...',
           type: 'info'
         }],
-      };
-
-      // 🛑 한 번의 setState 호출로 상태 배치 방지
-      setFullVideoState(initialState);
+      });
 
       try {
         // AbortController 신호 확인 (취소된 경우)
@@ -106,9 +108,14 @@ export function useScriptGenerator() {
           throw new Error('작업이 취소되었습니다.');
         }
 
+        // 🛑 runGenerate 호출 전 abort 확인
+        if (abortFlagRef.current.shouldAbort) {
+          throw new Error('작업이 취소되었습니다.');
+        }
+
         const scriptResult = await runGenerate(formData);
 
-        // 🛑 대본 생성 완료 후 즉시 abort 확인 (취소되었으면 진행 중단)
+        // 🛑 대본 생성 완료 후 abort 확인 (취소되었으면 진행 중단)
         if (abortFlagRef.current.shouldAbort) {
           throw new Error('작업이 취소되었습니다.');
         }
@@ -124,13 +131,16 @@ export function useScriptGenerator() {
             throw new Error('작업이 취소되었습니다.');
           }
 
-          // 🎤 음성 생성 단계로 전환 (여기서 미리 상태 변경)
+          // 🛑 상태 설정 전 abort 플래그 확인 (취소되었으면 여기서 중단)
+          if (abortFlagRef.current.shouldAbort) {
+            throw new Error('작업이 취소되었습니다.');
+          }
+
+          // 🎤 음성 생성 단계로 전환
           const audioStartTime = new Date();
           setFullVideoState((prev) => ({
             ...prev,
             currentStep: 'audio',
-            progress: { ...prev.progress, audio: 0 },
-            startTime: audioStartTime,
             logs: [
               ...(prev.logs || []),
               {
@@ -146,12 +156,7 @@ export function useScriptGenerator() {
           // 음성 생성 단계의 AbortController를 currentOperation에 저장 (취소 시 접근 가능하도록)
           setCurrentOperation(audioAbortController);
 
-          // 🛑 상태 설정 후 다시 abort 확인
-          if (abortController.signal.aborted) {
-            throw new Error('작업이 취소되었습니다.');
-          }
-
-          // 🛑 음성 생성 시작 전 abort 재확인
+          // 🛑 음성 생성 시작 전 abort 확인
           if (abortController.signal.aborted) {
             throw new Error('작업이 취소되었습니다.');
           }
@@ -175,6 +180,12 @@ export function useScriptGenerator() {
           // 대본 데이터 저장
           setDoc(scriptResult);
 
+          // ✅ 모든 작업 완료 - isGenerating: false 설정
+          setFullVideoState((prev) => ({
+            ...prev,
+            isGenerating: false,
+          }));
+
           // 📋 관리자 페이지에 작업 로그 기록
           logGenerationActivity(
             {
@@ -194,20 +205,8 @@ export function useScriptGenerator() {
         }
       } catch (error) {
         if (error.name === 'AbortError' || error.message === '작업이 취소되었습니다.') {
-          console.log('⏹️ 작업 취소됨');
-          // 취소 시에는 에러로 표시하지 않고 상태만 초기화
-          setFullVideoState({
-            isGenerating: false,
-            mode: 'idle',
-            currentStep: 'idle',
-            progress: { script: 0, audio: 0, images: 0, video: 0, subtitle: 0 },
-            results: { script: null, audio: null, images: [], video: null },
-            streamingScript: '',
-            error: null,
-            startTime: null,
-            logs: [],
-          });
-          setDoc(null);
+          // 취소된 경우: 상태 초기화는 cancelGeneration에서 이미 처리됨
+          // 추가 상태 업데이트 불필요
         } else {
           const errorInfo = classifyGenerationError(error, 'script');
           console.error('대본 생성 오류:', error);
@@ -245,23 +244,22 @@ export function useScriptGenerator() {
     (options = {}) => {
       const { setFullVideoState, setIsLoading, setDoc } = options;
 
-      console.log('🛑 작업 중단 요청');
+      // 취소 진행 중 상태 표시 (UI에서 버튼 비활성화)
+      setIsCancelling(true);
 
-      // 🛑 0단계: 글로벌 abort 플래그를 가장 먼저 설정 (모든 백그라운드 작업 차단)
+      // 글로벌 abort 플래그 설정 (모든 백그라운드 작업 차단)
       abortFlagRef.current.shouldAbort = true;
-      console.log('🛑 abortFlagRef.current.shouldAbort = true 설정됨');
 
-      // 1단계: AbortController abort (즉시 실행)
+      // AbortController abort
       if (currentOperation) {
         try {
           currentOperation.abort();
-          console.log('🛑 AbortController abort 호출됨');
         } catch (e) {
           console.warn('AbortController abort 실패:', e);
         }
       }
 
-      // 2단계: 즉시 isGenerating을 false로 설정 (모든 작업 중단 신호)
+      // 상태 초기화
       if (setFullVideoState) {
         setFullVideoState({
           isGenerating: false,
@@ -274,10 +272,8 @@ export function useScriptGenerator() {
           startTime: null,
           logs: [],
         });
-        console.log('🛑 fullVideoState 초기화됨');
       }
 
-      // 3단계: 다른 상태 리셋
       if (setIsLoading) {
         setIsLoading(false);
       }
@@ -286,9 +282,14 @@ export function useScriptGenerator() {
         setDoc(null);
       }
 
-      // 4단계: AbortController 정리
+      // AbortController 정리
       setCurrentOperation(null);
-      console.log('🛑 모든 취소 작업 완료');
+
+      // 1500ms 후 취소 진행 중 상태 해제 (재생성 허용)
+      // abort flag와 백그라운드 작업이 완전히 정리될 시간 제공
+      setTimeout(() => {
+        setIsCancelling(false);
+      }, 1500);
     },
     [currentOperation]
   );
@@ -300,6 +301,7 @@ export function useScriptGenerator() {
     setCurrentOperation,
     addLog,
     updateFullVideoState,
+    isCancelling,
   };
 }
 
