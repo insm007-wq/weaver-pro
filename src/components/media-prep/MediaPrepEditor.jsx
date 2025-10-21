@@ -3,7 +3,11 @@ import { tokens, useId, Text } from "@fluentui/react-components";
 import { Target24Regular } from "@fluentui/react-icons";
 
 // Hooks
-import { useFileManagement, useKeywordExtraction, useWizardStep, useVoiceSettings, useApi } from "../../hooks";
+import { useFileManagement } from "../../hooks/useFileManagement";
+import { useKeywordExtraction } from "../../hooks/useKeywordExtraction";
+import { useWizardStep } from "../../hooks/useWizardStep";
+import { useVoiceSettings } from "../../hooks/useVoiceSettings";
+import { useApi } from "../../hooks/useApi";
 
 // Utils
 import { useContainerStyles, useHeaderStyles } from "../../styles/commonStyles";
