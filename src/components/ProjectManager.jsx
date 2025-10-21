@@ -578,6 +578,7 @@ export default function ProjectManager() {
               }
               setShowCreateForm(!showCreateForm);
             }}
+            style={{ minWidth: "200px" }}
           >
             새 프로젝트
           </Button>

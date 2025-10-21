@@ -49,20 +49,17 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
   const checkAborted = (reason = '') => {
     // 🛑 글로벌 abort 플래그 우선 확인 (가장 빠른 중단)
     if (checkGlobalAbort()) {
-      console.log(`🛑 글로벌 abort 플래그로 중단됨: ${reason}`);
       throw new Error("작업이 취소되었습니다.");
     }
 
     // 로컬 중단 플래그 확인
     if (shouldAbort) {
-      console.log(`🛑 작업 중단됨: ${reason}`);
       throw new Error("작업이 취소되었습니다.");
     }
 
     // AbortSignal 확인
     if (abortSignal?.aborted) {
       shouldAbort = true;
-      console.log(`🛑 AbortSignal 감지: ${reason}`);
       throw new Error("작업이 취소되었습니다.");
     }
   };
@@ -72,13 +69,11 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
   const safeSetState = (updates) => {
     // 🛑 글로벌 abort 플래그 확인 (가장 우선)
     if (abortFlagRef?.current?.shouldAbort) {
-      console.log('⚠️ 글로벌 abort 플래그로 인해 상태 업데이트 차단:', updates);
       return;
     }
 
     // abort 상태면 상태 업데이트 차단
     if (shouldAbort) {
-      console.log('⚠️ shouldAbort 플래그로 인해 상태 업데이트 차단:', updates);
       return;
     }
 
@@ -102,7 +97,7 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
           };
         });
       } catch (err) {
-        console.warn("상태 업데이트 실패:", err);
+        console.error("상태 업데이트 실패:", err);
       }
     }
   };
@@ -323,30 +318,27 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
                   addLog(`✅ 음성 파일 저장: ${fileName} → ${savedPath}`);
                 }
               } else {
-                console.error(`❌ 음성 파일 저장 성공했지만 경로가 유효하지 않음: ${fileName}, path: ${savedPath}`);
+                console.error(`음성 파일 저장 성공했지만 경로가 유효하지 않음: ${fileName}, path: ${savedPath}`);
                 if (addLog) {
-                  addLog(`❌ 음성 파일 저장 성공했지만 경로가 유효하지 않음: ${fileName}`, "error");
+                  addLog(`음성 파일 저장 성공했지만 경로가 유효하지 않음: ${fileName}`, "error");
                 }
               }
             } else {
-              console.error(`❌ 음성 파일 저장 실패: ${fileName}`, saveResult);
+              console.error(`음성 파일 저장 실패: ${fileName}`, saveResult);
               if (addLog) {
-                addLog(`❌ 음성 파일 저장 실패: ${fileName} - ${saveResult.message || '알 수 없는 오류'}`, "error");
+                addLog(`음성 파일 저장 실패: ${fileName} - ${saveResult.message || '알 수 없는 오류'}`, "error");
               }
             }
           } catch (error) {
-            console.error(`❌ 음성 파일 ${fileName} 저장 오류:`, error);
+            console.error(`음성 파일 ${fileName} 저장 오류:`, error);
             if (addLog) {
-              addLog(`❌ 음성 파일 ${fileName} 저장 오류: ${error.message}`, "error");
+              addLog(`음성 파일 ${fileName} 저장 오류: ${error.message}`, "error");
             }
           }
         }
       } else {
-        console.warn("⚠️ audioFiles가 비어있거나 유효하지 않음");
-        console.warn("⚠️ audioFiles:", audioFiles);
-        console.warn("⚠️ audioFiles 조건:", audioFiles && audioFiles.length > 0);
         if (addLog) {
-          addLog(`⚠️ 저장할 음성 파일이 없습니다`, "warning");
+          addLog(`저장할 음성 파일이 없습니다`, "warning");
         }
       }
 
@@ -357,10 +349,7 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
         }
       }
     } else {
-      console.error("❌ === TTS 결과 조건 실패 ===");
-      console.error("❌ audioResult && audioResult.data && audioResult.data.ok 조건이 실패했습니다");
-      console.error("❌ audioResult:", audioResult);
-      console.error("❌ 개별 파일 저장을 건너뜁니다");
+      console.error("TTS 응답이 올바르지 않습니다");
 
       // 📋 관리자 페이지에 TTS 실패 로그 기록
       if (window.api?.logActivity) {
@@ -551,8 +540,9 @@ async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideo
             });
           }
         } else {
+          console.error(`SRT 파일 쓰기 실패: ${writeResult.message}`);
           if (addLog) {
-            addLog(`❌ SRT 파일 쓰기 실패: ${writeResult.message}`, "error");
+            addLog(`SRT 파일 쓰기 실패: ${writeResult.message}`, "error");
           }
 
           // 📋 관리자 페이지에 자막 생성 실패 로그 기록
@@ -569,26 +559,18 @@ async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideo
               }
             });
           }
-
-          console.error("❌ 파일 쓰기 실패:", writeResult.message);
-          console.error(`SRT 파일 쓰기 실패: ${writeResult.message}`);
         }
       } else {
-        console.error("❌ scripts 폴더 경로 생성 실패");
-        console.error(`자막 경로 생성 실패`);
+        console.error("자막 경로 생성 실패");
       }
     } else {
-      console.warn("⚠️ SRT 변환 결과가 없음:", srtResult);
-
       if (srtResult?.success === false) {
-        console.error("❌ SRT 변환 실패:", srtResult.error || srtResult.message);
         console.error(`SRT 변환 실패: ${srtResult.error || srtResult.message || '알 수 없는 오류'}`);
       } else {
         console.warn("SRT 자막을 생성할 수 없습니다. 대본 데이터를 확인해주세요.");
       }
     }
   } catch (error) {
-    console.error("❌ SRT 자막 생성 오류:", error);
     console.error(`SRT 자막 생성 오류: ${error.message}`);
   }
 }
