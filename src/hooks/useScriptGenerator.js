@@ -119,6 +119,23 @@ export function useScriptGenerator() {
             throw new Error('작업이 취소되었습니다.');
           }
 
+          // 🎤 음성 생성 단계로 전환 (여기서 미리 상태 변경)
+          const audioStartTime = new Date();
+          setFullVideoState((prev) => ({
+            ...prev,
+            currentStep: 'audio',
+            progress: { ...prev.progress, audio: 0 },
+            startTime: audioStartTime,
+            logs: [
+              ...(prev.logs || []),
+              {
+                timestamp: audioStartTime.toLocaleTimeString(),
+                message: '🎤 음성 합성 중...',
+                type: 'info'
+              }
+            ],
+          }));
+
           // 음성 및 자막 생성용 새로운 AbortController 생성
           const audioAbortController = new AbortController();
           // 음성 생성 단계의 AbortController를 currentOperation에 저장 (취소 시 접근 가능하도록)

@@ -109,25 +109,8 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
     // 🛑 진입 초기 가장 먼저 abort 확인 (이 시점에 취소되었으면 즉시 반환)
     checkAborted('함수 진입 초기');
 
-    // 음성 생성 단계로 전환 (currentStep 변경)
-    const audioStartTime = new Date();
-    if (setFullVideoState) {
-      setFullVideoState((prev) => ({
-        ...prev,
-        currentStep: 'audio',
-        progress: { ...prev.progress, audio: 0 },
-        startTime: audioStartTime,
-        // 로그에 음성 생성 메시지 추가
-        logs: [
-          ...(prev.logs || []),
-          {
-            timestamp: audioStartTime.toLocaleTimeString(),
-            message: '🎤 음성 합성 중...',
-            type: 'info'
-          }
-        ],
-      }));
-    }
+    // ✅ 음성 생성 단계로 전환은 useScriptGenerator에서 이미 처리됨
+    // 여기서는 중복 설정하지 않음
 
     // 음성 생성 진행률 업데이트
     safeSetState({
