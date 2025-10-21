@@ -155,17 +155,11 @@ const BottomFixedBar = memo(({
                 appearance="primary"
                 size="medium"
                 onClick={(e) => {
-                  console.log("🔘 다음 단계 버튼 클릭됨!");
                   e.stopPropagation();
 
-                  // 이벤트 이름이 있으면 먼저 이벤트 발생
+                  // 이벤트 이름이 있으면 이벤트 발생
                   if (nextStepButton.eventName) {
-                    console.log("📤 이벤트 발생:", nextStepButton.eventName);
-                    // 작은 딜레이를 두어 리스너가 준비될 수 있도록 함
-                    setTimeout(() => {
-                      console.log("📤 dispatchEvent 실행:", nextStepButton.eventName);
-                      window.dispatchEvent(new CustomEvent(nextStepButton.eventName));
-                    }, 100);
+                    window.dispatchEvent(new CustomEvent(nextStepButton.eventName));
                   }
 
                   // onClick 콜백도 실행

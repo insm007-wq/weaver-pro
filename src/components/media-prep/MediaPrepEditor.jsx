@@ -33,7 +33,7 @@ function MediaPrepEditor() {
   const headerStyles = useHeaderStyles();
   const srtInputId = useId("srt-input");
   const initialAutoLoadRef = useRef(false); // 처음 자동 로드 1회만 실행
-  const listenerRegisteredRef = useRef(false); // 이벤트 리스너 등록 여부
+  const isNavigatingRef = useRef(false); // 중복 네비게이션 방지
 
   // Custom Hooks
   const fileManagement = useFileManagement();
@@ -131,31 +131,38 @@ function MediaPrepEditor() {
 
   // 이벤트 리스너 - 현재 상태를 캡처하여 저장
   useEffect(() => {
-    console.log("🎯 이벤트 핸들러 상태 업데이트");
-
     // window 객체에 현재 상태의 핸들러 저장
     window._mediaPrepHandler = async () => {
-      console.log("📢 navigate-to-assemble 이벤트 감지됨!");
-      console.log("🔄 handleInsertFromScript 호출 시작");
+      // 중복 네비게이션 방지
+      if (isNavigatingRef.current) {
+        console.log("⚠️ 이미 네비게이션 진행 중 - 스킵");
+        return;
+      }
+
+      isNavigatingRef.current = true;
+
       try {
+        // 자막 자동 삽입 (대본에서 생성된 SRT 파일 가져오기)
         await fileManagement.handleInsertFromScript();
-        console.log("✅ handleInsertFromScript 완료");
+
+        // 소량의 딜레이를 두어 상태 업데이트 완료 보장
+        await new Promise((resolve) => setTimeout(resolve, 50));
 
         // 2단계로 이동
-        console.log("📍 Step 2로 이동");
         wizardStep.goToStep(2);
       } catch (error) {
-        console.error("❌ 오류 발생:", error);
-        // 오류 발생해도 2단계로 이동
+        console.error("❌ 자막 삽입 실패:", error);
+        // 실패해도 2단계로 이동 (사용자가 수동 조정 가능)
         wizardStep.goToStep(2);
+      } finally {
+        // 네비게이션 완료 표시
+        isNavigatingRef.current = false;
       }
     };
   }, [fileManagement, wizardStep]);
 
   // 마운트/언마운트 시에만 리스너 등록/해제
   useEffect(() => {
-    console.log("📌 navigate-to-assemble 이벤트 리스너 등록");
-
     const listener = () => {
       if (window._mediaPrepHandler) {
         window._mediaPrepHandler();
@@ -165,7 +172,6 @@ function MediaPrepEditor() {
     window.addEventListener("navigate-to-assemble", listener);
 
     return () => {
-      console.log("📌 navigate-to-assemble 이벤트 리스너 제거");
       window.removeEventListener("navigate-to-assemble", listener);
     };
   }, []);
