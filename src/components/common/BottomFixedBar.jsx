@@ -35,6 +35,13 @@ const BottomFixedBar = memo(({
     }
   }, [isLoading]);
 
+  // 완료 상태 로깅 (디버깅용)
+  useEffect(() => {
+    if (isComplete) {
+      console.log("✅ BottomFixedBar 완료 상태 감지 - 다음 단계 버튼 표시됨");
+    }
+  }, [isComplete]);
+
   const toggleExpand = useCallback(() => {
     setIsExpanded((prev) => !prev);
   }, []);
@@ -149,12 +156,17 @@ const BottomFixedBar = memo(({
                 size="medium"
                 onClick={(e) => {
                   e.stopPropagation();
-                  // onClick 콜백 먼저 실행 (이벤트 리스너 준비)
-                  nextStepButton.onClick?.();
-                  // 그 다음 페이지 전환 이벤트 발생
+
+                  // 이벤트 이름이 있으면 먼저 이벤트 발생
                   if (nextStepButton.eventName) {
-                    window.dispatchEvent(new CustomEvent(nextStepButton.eventName));
+                    // 작은 딜레이를 두어 리스너가 준비될 수 있도록 함
+                    setTimeout(() => {
+                      window.dispatchEvent(new CustomEvent(nextStepButton.eventName));
+                    }, 50);
                   }
+
+                  // onClick 콜백도 실행
+                  nextStepButton.onClick?.();
                 }}
                 className="next-step-button-pulse"
                 style={{

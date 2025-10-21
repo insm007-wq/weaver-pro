@@ -61,8 +61,9 @@ export function useScriptGenerator() {
         setFullVideoState,
       } = options;
 
-      // 🛑 이전 abort 플래그 리셋 (새 생성 시작)
-      abortFlagRef.current.shouldAbort = false;
+      // 🛑 abort 플래그 명확하게 리셋 (새 생성 시작 시)
+      abortFlagRef.current = { shouldAbort: false };
+      console.log("✅ [runScriptMode] abort 플래그 리셋:", abortFlagRef.current);
 
       // 기존 작업이 진행 중이면 안전하게 취소
       if (currentOperation) {
@@ -126,16 +127,6 @@ export function useScriptGenerator() {
           window.dispatchEvent(new CustomEvent('reset-media-download')); // 미디어 다운로드 초기화
           window.dispatchEvent(new CustomEvent('reset-media-edit')); // 편집 페이지 초기화
 
-          // 🛑 음성 생성 단계 진입 전 abort 확인
-          if (abortController.signal.aborted) {
-            throw new Error('작업이 취소되었습니다.');
-          }
-
-          // 🛑 상태 설정 전 abort 플래그 확인 (취소되었으면 여기서 중단)
-          if (abortFlagRef.current.shouldAbort) {
-            throw new Error('작업이 취소되었습니다.');
-          }
-
           // 🎤 음성 생성 단계로 전환
           const audioStartTime = new Date();
           setFullVideoState((prev) => ({
@@ -156,11 +147,6 @@ export function useScriptGenerator() {
           // 음성 생성 단계의 AbortController를 currentOperation에 저장 (취소 시 접근 가능하도록)
           setCurrentOperation(audioAbortController);
 
-          // 🛑 음성 생성 시작 전 abort 확인
-          if (abortController.signal.aborted) {
-            throw new Error('작업이 취소되었습니다.');
-          }
-
           // 음성 및 자막 생성 (이 함수 내에서 상태를 업데이트할 것)
           await generateAudioAndSubtitles(scriptResult, 'script_mode', {
             form,
@@ -172,19 +158,10 @@ export function useScriptGenerator() {
             abortFlagRef, // 글로벌 abort 플래그 전달
           });
 
-          // 🛑 abort 확인 (generateAudioAndSubtitles 완료 후)
-          if (abortFlagRef.current.shouldAbort) {
-            throw new Error('작업이 취소되었습니다.');
-          }
-
           // 대본 데이터 저장
           setDoc(scriptResult);
 
-          // ✅ 모든 작업 완료 - isGenerating: false 설정
-          setFullVideoState((prev) => ({
-            ...prev,
-            isGenerating: false,
-          }));
+          // ✅ 모든 작업 완료 - isGenerating: false는 generateAudioAndSubtitles에서 이미 설정됨
 
           // 📋 관리자 페이지에 작업 로그 기록
           logGenerationActivity(

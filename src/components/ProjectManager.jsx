@@ -62,6 +62,13 @@ const DEFAULT_PROJECT_SETTINGS = {
 };
 
 /**
+ * 프로젝트 주제 길이 제한
+ * Windows 최대 경로 길이: 260자
+ * 프로젝트 경로 기본 구조를 고려하여 안전한 제한값 설정
+ */
+const MAX_PROJECT_TOPIC_LENGTH = 50;
+
+/**
  * 자동 생성될 폴더 구조 상수
  * @type {string[]}
  */
@@ -112,6 +119,17 @@ export default function ProjectManager() {
   // 삭제 확인 다이얼로그 상태
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState(null);
+
+  /**
+   * 프로젝트 주제 입력 필터 - 폴더명으로 사용 불가능한 문자 제거 및 길이 제한
+   */
+  const handleProjectTopicChange = useCallback((value) => {
+    // 길이 제한 (50자)
+    let filtered = value.substring(0, MAX_PROJECT_TOPIC_LENGTH);
+    // Windows 폴더명 금지 문자 제거: < > : " / \ | ? *
+    filtered = filtered.replace(/[<>:"/\\|?*]/g, '');
+    setNewProjectTopic(filtered);
+  }, []);
 
   /**
    * 컴포넌트 마운트 시 초기 데이터 로드
@@ -375,10 +393,42 @@ export default function ProjectManager() {
    * 새로운 프로젝트를 생성하고 필요한 폴더 구조를 자동 생성
    */
   const createNewProject = async () => {
-    if (!newProjectTopic.trim()) {
+    const trimmedTopic = newProjectTopic.trim();
+
+    if (!trimmedTopic) {
       showGlobalToast({
         type: "error",
         text: "프로젝트 주제를 입력해주세요.",
+      });
+      return;
+    }
+
+    // 길이 검사 (50자 제한)
+    if (trimmedTopic.length > MAX_PROJECT_TOPIC_LENGTH) {
+      showGlobalToast({
+        type: "error",
+        text: `프로젝트 주제는 ${MAX_PROJECT_TOPIC_LENGTH}자 이하여야 합니다. (현재: ${trimmedTopic.length}자)`,
+      });
+      return;
+    }
+
+    // 폴더명으로 사용 불가능한 문자 검사
+    // Windows 폴더명 금지 문자: < > : " / \ | ? *
+    const invalidCharsRegex = /[<>:"/\\|?*]/;
+    if (invalidCharsRegex.test(trimmedTopic)) {
+      showGlobalToast({
+        type: "error",
+        text: "다음 문자는 사용할 수 없습니다: < > : \" / \\ | ? *",
+      });
+      return;
+    }
+
+    // 예약어 검사 (Windows 예약어)
+    const reservedNames = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'];
+    if (reservedNames.includes(trimmedTopic.toUpperCase())) {
+      showGlobalToast({
+        type: "error",
+        text: `"${trimmedTopic}"은(는) Windows 예약어입니다. 다른 이름을 사용해주세요.`,
       });
       return;
     }
@@ -589,7 +639,7 @@ export default function ProjectManager() {
             <Field label="프로젝트 주제" required>
               <Input
                 value={newProjectTopic}
-                onChange={(_, data) => setNewProjectTopic(data.value)}
+                onChange={(_, data) => handleProjectTopicChange(data.value)}
                 placeholder="예: 유튜브 마케팅 전략, 요리 레시피 소개 등"
                 contentBefore={<DocumentRegular />}
                 disabled={creating}

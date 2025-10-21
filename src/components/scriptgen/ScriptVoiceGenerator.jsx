@@ -205,12 +205,13 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
       </div>
 
       {/* 하단 고정 미니 진행바 */}
-      {(fullVideoState?.isGenerating || isLoading || ["complete", "completed"].includes(fullVideoState?.currentStep)) && (
+      {(fullVideoState?.isGenerating || isLoading || fullVideoState?.currentStep === "completed") && (
         <BottomFixedBar
-          isComplete={["complete", "completed"].includes(fullVideoState?.currentStep)}
+          key={`bottombar-${fullVideoState?.currentStep}`}
+          isComplete={fullVideoState?.currentStep === "completed"}
           isLoading={fullVideoState?.isGenerating || isLoading}
           statusText={
-            ["complete", "completed"].includes(fullVideoState?.currentStep)
+            fullVideoState?.currentStep === "completed"
               ? "✅ 대본 생성 완료"
               : `🎬 ${
                   {

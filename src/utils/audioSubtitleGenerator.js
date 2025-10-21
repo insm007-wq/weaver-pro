@@ -407,11 +407,12 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       });
 
       // ✅ 완료 상태 설정 (currentStep: 'completed')
-      // 🛑 isGenerating은 useScriptGenerator에서만 설정 (여기서는 설정하지 않음)
       if (setFullVideoState) {
+        console.log("✅ [generateAudioAndSubtitles] 완료 상태 설정 중... (isGenerating: false 포함)");
         setFullVideoState((prev) => ({
           ...prev,
           currentStep: 'completed',
+          isGenerating: false,
           logs: [
             ...(prev.logs || []),
             {
@@ -421,6 +422,7 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
             }
           ],
         }));
+        console.log("✅ [generateAudioAndSubtitles] 완료 상태 설정 완료!");
       }
 
       // 추가 로그
