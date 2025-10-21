@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useRef, useCallback, useState } from "react";
+import React, { useMemo, useEffect, useRef, useCallback, useState, useLayoutEffect } from "react";
 import { tokens, useId, Text } from "@fluentui/react-components";
 import { Target24Regular } from "@fluentui/react-icons";
 
@@ -33,6 +33,7 @@ function MediaPrepEditor() {
   const headerStyles = useHeaderStyles();
   const srtInputId = useId("srt-input");
   const initialAutoLoadRef = useRef(false); // 처음 자동 로드 1회만 실행
+  const listenerRegisteredRef = useRef(false); // 이벤트 리스너 등록 여부
 
   // Custom Hooks
   const fileManagement = useFileManagement();
@@ -127,43 +128,47 @@ function MediaPrepEditor() {
     keywordExtraction.assets.length,
   ]);
 
-  // 대본 & 음성 생성에서 이동 - 자막 자동 삽입 후 Step 2로 자동 이동
-  const handleNavigateToAssemble = useCallback(async () => {
-    try {
-      console.log("🔄 자막 자동 삽입 시작");
 
-      // 자막 자동 삽입 (대본에서 생성된 SRT 파일 가져오기)
-      await fileManagement.handleInsertFromScript();
+  // 이벤트 리스너 - 현재 상태를 캡처하여 저장
+  useEffect(() => {
+    console.log("🎯 이벤트 핸들러 상태 업데이트");
 
-      console.log("✅ 자막 자동 삽입 완료");
+    // window 객체에 현재 상태의 핸들러 저장
+    window._mediaPrepHandler = async () => {
+      console.log("📢 navigate-to-assemble 이벤트 감지됨!");
+      console.log("🔄 handleInsertFromScript 호출 시작");
+      try {
+        await fileManagement.handleInsertFromScript();
+        console.log("✅ handleInsertFromScript 완료");
 
-      // 1단계 완료 표시
-      wizardStep.completeStep(1);
-
-      // 작은 딜레이 후 2단계로 직접 이동 (상태 업데이트 배칭 문제 해결)
-      setTimeout(() => {
-        console.log("📍 Step 2로 이동 시도");
+        // 2단계로 이동
+        console.log("📍 Step 2로 이동");
         wizardStep.goToStep(2);
-      }, 100);
-    } catch (error) {
-      console.error("❌ 자막 자동 삽입 실패:", error);
-      // 실패 시에도 1단계 완료 후 2단계로 이동 (사용자가 수동으로 조정 가능)
-      wizardStep.completeStep(1);
-
-      setTimeout(() => {
-        console.log("📍 Step 2로 이동 시도 (오류 처리)");
+      } catch (error) {
+        console.error("❌ 오류 발생:", error);
+        // 오류 발생해도 2단계로 이동
         wizardStep.goToStep(2);
-      }, 100);
-    }
+      }
+    };
   }, [fileManagement, wizardStep]);
 
+  // 마운트/언마운트 시에만 리스너 등록/해제
   useEffect(() => {
-    window.addEventListener("navigate-to-assemble", handleNavigateToAssemble);
+    console.log("📌 navigate-to-assemble 이벤트 리스너 등록");
+
+    const listener = () => {
+      if (window._mediaPrepHandler) {
+        window._mediaPrepHandler();
+      }
+    };
+
+    window.addEventListener("navigate-to-assemble", listener);
 
     return () => {
-      window.removeEventListener("navigate-to-assemble", handleNavigateToAssemble);
+      console.log("📌 navigate-to-assemble 이벤트 리스너 제거");
+      window.removeEventListener("navigate-to-assemble", listener);
     };
-  }, [handleNavigateToAssemble]);
+  }, []);
 
   // 음성 변경 핸들러
   const handleVoiceChange = useCallback((key, value) => {
@@ -434,8 +439,9 @@ function MediaPrepEditor() {
         {/* 현재 단계 렌더링 */}
         <div
           style={{
-            transition: "opacity 300ms ease",
-            opacity: wizardStep.isTransitioning ? 0.5 : 1,
+            transition: "all 400ms cubic-bezier(0.4, 0, 0.2, 1)",
+            opacity: wizardStep.isTransitioning ? 0.3 : 1,
+            transform: wizardStep.isTransitioning ? "translateY(10px)" : "translateY(0)",
           }}
         >
           {renderCurrentStep()}

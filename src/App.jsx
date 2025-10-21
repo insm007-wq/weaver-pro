@@ -364,9 +364,10 @@ function App() {
                   <ScriptVoiceGenerator onGeneratingChange={setIsScriptGenerating} />
                 </KeepAlivePane>
 
-                <KeepAlivePane active={currentPage === "assemble"}>
+                {/* MediaPrepEditor는 항상 마운트 상태 유지 (이벤트 리스너 문제 해결) */}
+                <div style={{ display: currentPage === "assemble" ? "block" : "none" }}>
                   <MediaPrepEditor />
-                </KeepAlivePane>
+                </div>
 
                 <KeepAlivePane active={currentPage === "draft"}>
                   <MediaDownloadPage onDownloadingChange={setIsMediaDownloading} />
