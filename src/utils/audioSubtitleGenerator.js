@@ -407,12 +407,12 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       });
 
       // ✅ 완료 상태 설정 (currentStep: 'completed')
-      if (setFullVideoState) {
-        console.log("✅ [generateAudioAndSubtitles] 완료 상태 설정 중... (isGenerating: false 포함)");
+      // 🛑 abort 플래그 재확인 - 완료 상태 설정 직전 확인
+      if (!abortFlagRef?.current?.shouldAbort && setFullVideoState) {
+        console.log("✅ [generateAudioAndSubtitles] 완료 상태 설정 중...");
         setFullVideoState((prev) => ({
           ...prev,
           currentStep: 'completed',
-          isGenerating: false,
           logs: [
             ...(prev.logs || []),
             {
