@@ -23,6 +23,7 @@ import { useCardStyles, useSettingsStyles } from "../../styles/commonStyles";
  * @param {boolean} showPreview - 미리듣기 버튼 표시 여부
  * @param {string} title - 컴포넌트 제목
  * @param {string} description - 컴포넌트 설명
+ * @param {boolean} isGeneratingAudio - 음성 생성 중 여부
  */
 const VoiceSelector = memo(
   ({
@@ -39,6 +40,7 @@ const VoiceSelector = memo(
     showPreview = true,
     title = "음성 설정",
     description = "목소리를 선택해 나레이션 톤을 맞춰요.",
+    isGeneratingAudio = false,
   }) => {
     const cardStyles = useCardStyles();
     const settingsStyles = useSettingsStyles();
@@ -223,6 +225,27 @@ const VoiceSelector = memo(
             )}
           </Field>
         </div>
+
+        {/* 음성 생성 중 스피너 */}
+        {isGeneratingAudio && (
+          <div
+            style={{
+              marginTop: tokens.spacingVerticalM,
+              padding: tokens.spacingVerticalM,
+              borderRadius: 12,
+              border: `1px solid ${tokens.colorBrandStroke1}`,
+              background: tokens.colorBrandBackground2,
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <Spinner size="small" />
+            <Text weight="semibold" style={{ color: tokens.colorBrandForeground1 }}>
+              🎵 음성을 생성하고 있습니다...
+            </Text>
+          </div>
+        )}
 
         {/* 오류 패널 */}
         {voiceError && (

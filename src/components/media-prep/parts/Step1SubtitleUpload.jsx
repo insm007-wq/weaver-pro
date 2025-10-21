@@ -1,5 +1,5 @@
 import React, { memo, useMemo, useState, useEffect } from "react";
-import { tokens, Text, Card, Button } from "@fluentui/react-components";
+import { tokens, Text, Card, Button, Spinner } from "@fluentui/react-components";
 import { ArrowRight24Regular } from "@fluentui/react-icons";
 import FileSelection from "./FileSelection";
 import VoiceSelector from "../../common/VoiceSelector";
@@ -119,6 +119,7 @@ const Step1SubtitleUpload = memo(
             showPreview={true}
             title="음성 선택"
             description="업로드된 SRT 자막에 사용할 나레이션 목소리를 선택합니다."
+            isGeneratingAudio={isGeneratingAudio}
           />
         )}
 
