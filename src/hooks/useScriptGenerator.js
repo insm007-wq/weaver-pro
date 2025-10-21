@@ -108,6 +108,11 @@ export function useScriptGenerator() {
 
         const scriptResult = await runGenerate(formData);
 
+        // 🛑 대본 생성 완료 후 즉시 abort 확인 (취소되었으면 진행 중단)
+        if (abortFlagRef.current.shouldAbort) {
+          throw new Error('작업이 취소되었습니다.');
+        }
+
         if (scriptResult && scriptResult.scenes && Array.isArray(scriptResult.scenes) && scriptResult.scenes.length > 0) {
           // ✅ 대본 생성 완료 시 미디어 관련 상태 초기화
           window.dispatchEvent(new CustomEvent('reset-keyword-extraction')); // 미디어 준비 초기화
