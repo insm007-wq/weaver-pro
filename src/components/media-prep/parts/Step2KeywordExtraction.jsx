@@ -207,30 +207,6 @@ const Step2KeywordExtraction = memo(
                   : "🤖 키워드 추출 시작"}
             </PrimaryButton>
 
-            {/* 음성 생성 중 스피너 및 상태 표시 */}
-            {isGeneratingAudio && (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: tokens.spacingVerticalS,
-                  padding: tokens.spacingVerticalM,
-                  borderRadius: tokens.borderRadiusMedium,
-                  backgroundColor: tokens.colorBrandBackground2,
-                  border: `1px solid ${tokens.colorBrandStroke1}`,
-                }}
-              >
-                <Spinner size="large" />
-                <Text weight="semibold" style={{ color: tokens.colorBrandForeground1 }}>
-                  🎵 음성을 생성하고 있습니다
-                </Text>
-                <Text size={200} style={{ color: tokens.colorNeutralForeground3, textAlign: "center" }}>
-                  잠시만 기다려주세요. 이 과정은 몇 초 정도 소요됩니다.
-                </Text>
-              </div>
-            )}
-
             {/* 결과 영역 */}
             <div
               style={{
@@ -246,7 +222,19 @@ const Step2KeywordExtraction = memo(
                 boxShadow: "inset 0 1px 2px rgba(0,0,0,0.06)",
               }}
             >
-              {safeAssets.length > 0 ? (
+              {isGeneratingAudio ? (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: tokens.spacingVerticalM,
+                    alignItems: "center",
+                  }}
+                >
+                  <Spinner size="medium" />
+                  <Body2 style={{ color: tokens.colorBrandForeground1 }}>🎵 수동 모드 음원을 생성하고 있습니다...</Body2>
+                </div>
+              ) : safeAssets.length > 0 ? (
                 <div style={{ textAlign: "center", width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
                   <div
                     style={{
@@ -383,7 +371,7 @@ const Step2KeywordExtraction = memo(
                     }}
                   >
                     {srtConnected
-                      ? "키워드 추출 버튼을 눌러 영상 소스 검색을 시작하세요"
+                      ? "🤖 키워드 추출 시작 버튼을 눌러 자동 분석을 시작하세요"
                       : "SRT 파일을 먼저 업로드해야 키워드 추출이 가능합니다"}
                   </Body2>
                   <Caption1
@@ -394,7 +382,7 @@ const Step2KeywordExtraction = memo(
                       textAlign: "center",
                     }}
                   >
-                    추출된 키워드를 기반으로 영상 제작에 필요한 소스를 자동으로 검색 및 추천합니다.
+                    AI가 자막을 분석하여 필요한 영상 소스를 자동으로 검색하고 추천합니다.
                   </Caption1>
                 </div>
               )}

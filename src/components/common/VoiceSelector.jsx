@@ -226,27 +226,6 @@ const VoiceSelector = memo(
           </Field>
         </div>
 
-        {/* 음성 생성 중 스피너 */}
-        {isGeneratingAudio && (
-          <div
-            style={{
-              marginTop: tokens.spacingVerticalM,
-              padding: tokens.spacingVerticalM,
-              borderRadius: 12,
-              border: `1px solid ${tokens.colorBrandStroke1}`,
-              background: tokens.colorBrandBackground2,
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <Spinner size="small" />
-            <Text weight="semibold" style={{ color: tokens.colorBrandForeground1 }}>
-              🎵 음성을 생성하고 있습니다...
-            </Text>
-          </div>
-        )}
-
         {/* 오류 패널 */}
         {voiceError && (
           <div
