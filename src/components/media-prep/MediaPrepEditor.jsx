@@ -351,7 +351,6 @@ function MediaPrepEditor() {
 
   // 단계별 렌더링 (메모화)
   const renderCurrentStep = useCallback(() => {
-    console.log("🎯 현재 Step 렌더링:", wizardStep.currentStep);
     switch (wizardStep.currentStep) {
       case 1:
         return (
@@ -405,13 +404,14 @@ function MediaPrepEditor() {
     }
   }, [
     wizardStep.currentStep,
-    fileManagement,
-    keywordExtraction,
-    totalDur,
-    srtInputId,
     wizardStep.nextStep,
     wizardStep.prevStep,
     wizardStep.isCurrentStepCompleted,
+    handleVoiceChange,
+    handlePreviewVoice,
+    handleStopVoice,
+    handleRetryVoiceLoad,
+    handleExtractKeywordsWithAudio,
   ]);
 
   // BottomFixedBar 조건 단순화
