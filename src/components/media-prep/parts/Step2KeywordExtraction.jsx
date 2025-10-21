@@ -5,10 +5,12 @@ import { PrimaryButton } from "../../common";
 
 /**
  * 키워드 배지 리스트 컴포넌트
+ * - 최대 50개 키워드 표시
+ * - 더보기 버튼으로 추가 키워드 표시
  */
-const KeywordBadgeList = memo(({ assets }) => {
+const KeywordBadgeList = memo(({ assets = [] }) => {
   const [showAll, setShowAll] = React.useState(false);
-  const maxDisplay = 50;
+  const MAX_DISPLAY = 50;
 
   const badgeStyle = useMemo(
     () => ({
@@ -31,30 +33,39 @@ const KeywordBadgeList = memo(({ assets }) => {
   );
 
   const displayItems = useMemo(() => {
-    const displayCount = showAll ? assets.length : maxDisplay;
+    if (!assets?.length) return [];
+
+    const displayCount = showAll ? assets.length : MAX_DISPLAY;
     const items = assets.slice(0, displayCount).map((asset, index) => (
-      <Badge key={asset.id || `keyword-${index}`} appearance="tint" color="brand" size="small" style={badgeStyle}>
+      <Badge
+        key={asset.id || `keyword-${index}`}
+        appearance="tint"
+        color="brand"
+        size="small"
+        style={badgeStyle}
+      >
         {asset.keyword || `키워드 ${index + 1}`}
       </Badge>
     ));
 
-    if (assets.length > maxDisplay && !showAll) {
+    // 더보기 버튼
+    if (assets.length > MAX_DISPLAY && !showAll) {
       items.push(
         <Badge
-          key="more"
+          key="more-btn"
           appearance="outline"
           color="neutral"
           size="small"
           style={{ ...badgeStyle, fontWeight: 500, cursor: "pointer" }}
           onClick={() => setShowAll(true)}
         >
-          +{assets.length - maxDisplay}개 더
+          +{assets.length - MAX_DISPLAY}개 더
         </Badge>
       );
     }
 
     return items;
-  }, [assets, maxDisplay, badgeStyle, showAll]);
+  }, [assets, badgeStyle, showAll]);
 
   return (
     <div

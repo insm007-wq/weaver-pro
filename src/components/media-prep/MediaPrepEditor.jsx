@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useRef, useCallback, useState, useLayoutEffect } from "react";
+import React, { useMemo, useEffect, useRef, useCallback, useState } from "react";
 import { tokens, useId, Text } from "@fluentui/react-components";
 import { Target24Regular } from "@fluentui/react-icons";
 
@@ -66,14 +66,14 @@ function MediaPrepEditor() {
         const ttsEngine = await window.api.getSetting("ttsEngine");
         const ttsSpeed = await window.api.getSetting("ttsSpeed");
 
-        if (ttsEngine) {
-          setVoiceForm((prev) => ({ ...prev, ttsEngine }));
-        }
-        if (ttsSpeed) {
-          setVoiceForm((prev) => ({ ...prev, speed: ttsSpeed }));
-        }
+        setVoiceForm((prev) => ({
+          ...prev,
+          ttsEngine: ttsEngine || prev.ttsEngine,
+          speed: ttsSpeed || prev.speed,
+        }));
       } catch (error) {
         console.error("TTS 설정 로드 실패:", error);
+        // 기본값 유지
       }
     };
 
@@ -154,7 +154,9 @@ function MediaPrepEditor() {
         // 2단계로 이동
         wizardStep.goToStep(2);
       } catch (error) {
+        console.error("자막 삽입 중 오류:", error);
         // 실패해도 2단계로 이동 (사용자가 수동 조정 가능)
+        showError("자막 삽입에 실패했습니다. 수동으로 조정해주세요.");
         wizardStep.goToStep(2);
       } finally {
         // 네비게이션 완료 표시
@@ -348,6 +350,22 @@ function MediaPrepEditor() {
       window.removeEventListener("reset-keyword-extraction", handleResetKeywordExtraction);
     };
   }, [keywordExtraction, fileManagement, wizardStep]);
+
+  // 컴포넌트 언마운트 시 리소스 정리
+  useEffect(() => {
+    return () => {
+      // 오디오 재생 중지 및 정리
+      if (currentPreviewAudio) {
+        currentPreviewAudio.pause();
+        currentPreviewAudio.currentTime = 0;
+      }
+
+      // window 핸들러 정리
+      delete window._mediaPrepHandler;
+
+      // 타이머 정리는 자동으로 됨 (useRef 사용)
+    };
+  }, [currentPreviewAudio]);
 
   // 단계별 렌더링 (메모화)
   const renderCurrentStep = useCallback(() => {

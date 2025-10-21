@@ -1,20 +1,23 @@
-import React, { memo, useMemo, useState, useCallback } from "react";
+import React, { memo, useMemo, useState, useEffect } from "react";
 import { tokens, Text, Card, Button } from "@fluentui/react-components";
-import { ArrowRight24Regular, LinkSquare24Regular, DismissCircle24Regular } from "@fluentui/react-icons";
+import { ArrowRight24Regular } from "@fluentui/react-icons";
 import FileSelection from "./FileSelection";
 import VoiceSelector from "../../common/VoiceSelector";
 
 /**
  * 1단계: 자막 업로드
+ * - 자막 파일 선택 및 업로드
+ * - 대본에서 자동 삽입
+ * - 음성 선택 (수동 모드일 때만)
  */
 const Step1SubtitleUpload = memo(
   ({
     // FileSelection props
     srtConnected,
     srtFilePath,
-    srtSource = null, // "auto" | "manual" | null
-    scenes,
-    totalDur,
+    srtSource = null,
+    scenes = [],
+    totalDur = 0,
     getFileInfo,
     openSrtPicker,
     srtInputRef,
@@ -40,17 +43,16 @@ const Step1SubtitleUpload = memo(
     const [showVoiceUI, setShowVoiceUI] = useState(false);
 
     // 다음 단계 진행 가능 여부 (SRT 파일이 업로드되어야 함)
-    const isReadyToNext = useMemo(() => {
-      return srtConnected && scenes.length > 0;
-    }, [srtConnected, scenes.length]);
+    const isReadyToNext = useMemo(
+      () => srtConnected && scenes.length > 0,
+      [srtConnected, scenes.length]
+    );
 
     // SRT 수동 삽입 시만 음성 UI 자동 표시
-    React.useEffect(() => {
-      if (srtConnected && scenes.length > 0 && srtSource === "manual") {
-        setShowVoiceUI(true);
-      } else {
-        setShowVoiceUI(false);
-      }
+    useEffect(() => {
+      setShowVoiceUI(
+        srtConnected && scenes.length > 0 && srtSource === "manual"
+      );
     }, [srtConnected, scenes.length, srtSource]);
 
 
@@ -166,20 +168,18 @@ const Step1SubtitleUpload = memo(
           )}
         </div>
 
-        <style>
-          {`
-            @keyframes fadeIn {
-              from {
-                opacity: 0;
-                transform: translateY(20px);
-              }
-              to {
-                opacity: 1;
-                transform: translateY(0);
-              }
+        <style>{`
+          @keyframes fadeIn {
+            from {
+              opacity: 0;
+              transform: translateY(20px);
             }
-          `}
-        </style>
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+        `}</style>
       </div>
     );
   }
