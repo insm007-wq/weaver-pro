@@ -244,8 +244,8 @@ const ActionCard = memo(
                 <Text size={200} style={{ color: tokens.colorNeutralForeground3, textAlign: "center" }}>
                   {chunkProgress
                     ? `청크 ${chunkProgress.current}/${chunkProgress.total} 생성 중... (${chunkProgress.progress}%)`
-                    : fullVideoState.currentStep && remainingTime
-                    ? `${getStepDisplayName(fullVideoState.currentStep)} ${remainingTime}`
+                    : fullVideoState.currentStep
+                    ? `${getStepDisplayName(fullVideoState.currentStep)} ${remainingTime || '진행 중...'}`
                     : currentMode.loadingText}
                 </Text>
               )}

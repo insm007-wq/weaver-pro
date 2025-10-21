@@ -29,17 +29,25 @@ export function useGenerationTimer(isGenerating, startTime, currentStep, duratio
       const scriptEstimatedSec = Math.min(durationMin * 8, 600); // 최대 10분
       const audioEstimatedSec = durationMin * 60 * 0.2; // 병렬 처리로 더 빠름
       const subtitleEstimatedSec = 10;
-      const totalEstimatedSec = scriptEstimatedSec + audioEstimatedSec + subtitleEstimatedSec;
+
+      // 현재 단계에 따른 진행 상황 계산
+      let totalEstimatedSec = scriptEstimatedSec + audioEstimatedSec + subtitleEstimatedSec;
+      let adjustedElapsedSec = elapsedSec;
+
+      // script 단계에서 예상 시간 초과 시 audio로 진입
+      if (currentStep === 'audio' && elapsedSec > scriptEstimatedSec) {
+        adjustedElapsedSec = scriptEstimatedSec + (elapsedSec - scriptEstimatedSec);
+      }
 
       // 경과 시간
-      const elapsedMin = Math.floor(elapsedSec / 60);
-      const elapsedSecOnly = elapsedSec % 60;
+      const elapsedMin = Math.floor(adjustedElapsedSec / 60);
+      const elapsedSecOnly = adjustedElapsedSec % 60;
       setElapsedTime(`${String(elapsedMin).padStart(2, '0')}:${String(elapsedSecOnly).padStart(2, '0')}`);
 
       // 남은 시간
-      const remainingSec = Math.max(0, totalEstimatedSec - elapsedSec);
+      const remainingSec = Math.max(0, totalEstimatedSec - adjustedElapsedSec);
 
-      if (remainingSec === 0 && elapsedSec > totalEstimatedSec) {
+      if (remainingSec === 0 && adjustedElapsedSec > totalEstimatedSec) {
         setRemainingTime('생성 중...');
       } else {
         const remainingMin = Math.floor(remainingSec / 60);
@@ -57,7 +65,7 @@ export function useGenerationTimer(isGenerating, startTime, currentStep, duratio
     const interval = setInterval(updateTime, 1000); // 1초마다 업데이트
 
     return () => clearInterval(interval);
-  }, [isGenerating, startTime, durationMin]);
+  }, [isGenerating, startTime, durationMin, currentStep]);
 
   return {
     remainingTime,
