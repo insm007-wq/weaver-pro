@@ -3,14 +3,26 @@ import { tokens, Text, Card, Button, Caption1, CardFooter } from "@fluentui/reac
 import {
   FolderOpen24Regular,
   LinkSquare24Regular,
-  DismissCircle24Regular,
   TextDescriptionRegular,
   CheckmarkCircle20Filled,
   ArrowUpload24Regular,
 } from "@fluentui/react-icons";
 
+// 상수 정의
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
 // DropZone 컴포넌트 - 성능 최적화를 위해 메모화
-const DropZone = memo(({ icon, label, caption, connected, onClick, inputRef, accept, onChange, inputId }) => {
+const DropZone = memo(({
+  icon = null,
+  label = "파일 선택",
+  caption = "파일을 선택하세요",
+  connected = false,
+  onClick = () => {},
+  inputRef = null,
+  accept = ".txt",
+  onChange = () => {},
+  inputId = "file-input"
+}) => {
   // 색상 테마 계산 메모화
   const colorTheme = useMemo(
     () => ({
@@ -62,8 +74,7 @@ const DropZone = memo(({ icon, label, caption, connected, onClick, inputRef, acc
 
         const file = files[0];
 
-        // 파일 크기 검증 (50MB 제한)
-        const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+        // 파일 크기 검증
         if (file.size > MAX_FILE_SIZE) {
           console.error(`파일 크기가 너무 큽니다. 최대 ${MAX_FILE_SIZE / 1024 / 1024}MB까지 지원됩니다.`);
           return;
@@ -157,7 +168,6 @@ const DropZone = memo(({ icon, label, caption, connected, onClick, inputRef, acc
                 const file = e.target.files?.[0];
                 if (file) {
                   // 파일 크기 검증
-                  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
                   if (file.size > MAX_FILE_SIZE) {
                     console.error(`파일 크기가 너무 큽니다. 최대 ${MAX_FILE_SIZE / 1024 / 1024}MB까지 지원됩니다.`);
                     return;
@@ -244,16 +254,16 @@ const DropZone = memo(({ icon, label, caption, connected, onClick, inputRef, acc
 // FileSelection 컴포넌트 메모화로 성능 최적화
 const FileSelection = memo(
   ({
-    srtConnected,
-    srtFilePath,
-    scenes,
-    totalDur,
-    getFileInfo,
-    openSrtPicker,
-    srtInputRef,
-    handleSrtUpload,
-    srtInputId,
-    handleInsertFromScript,
+    srtConnected = false,
+    srtFilePath = "",
+    scenes = [],
+    totalDur = 0,
+    getFileInfo = () => ({ displayPath: "", fileName: "" }),
+    openSrtPicker = () => {},
+    srtInputRef = null,
+    handleSrtUpload = () => {},
+    srtInputId = "srt-input",
+    handleInsertFromScript = () => {},
   }) => {
     // 펄스 애니메이션 상태 (처음에만 true)
     const [showPulse, setShowPulse] = useState(true);
