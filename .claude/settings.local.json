@@ -235,7 +235,10 @@
       "Bash(git restore:*)",
       "Read(//d/**)",
       "Bash(cat:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(ie4uinit.exe -ClearIconCache)",
+      "Read(//c//**)",
+      "Bash(tree:*)"
     ],
     "deny": [],
     "ask": []

@@ -9,7 +9,7 @@ import { useFileManagement, useKeywordExtraction, useWizardStep, useVoiceSetting
 import { useContainerStyles, useHeaderStyles } from "../../styles/commonStyles";
 import { PageErrorBoundary } from "../common/ErrorBoundary";
 import { generateAudioAndSubtitles } from "../../utils/audioSubtitleGenerator";
-import { readTextAny } from "../../utils/ipcSafe";
+import { readTextFile } from "../../utils/fileManager";
 import { showSuccess, showError } from "../common/GlobalToast";
 
 // Wizard Components
@@ -261,7 +261,7 @@ function MediaPrepEditor() {
             await api.invoke("fs:mkDirRecursive", { dirPath: `${videoSaveFolder}/scripts` });
 
             // SRT 파일 읽기
-            const srtContent = await readTextAny(fileManagement.srtFilePath);
+            const srtContent = await readTextFile(fileManagement.srtFilePath);
             if (srtContent) {
               // SRT 파일 복사
               await api.invoke("files:writeText", {

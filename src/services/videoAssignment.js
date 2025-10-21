@@ -7,6 +7,7 @@
 // ============================================================================
 
 import { getSetting } from "../utils/ipcSafe";
+import { checkFileExists } from "../utils/fileManager";
 
 /**
  * 한국어-영어 키워드 매핑 (VREW 스타일)
@@ -215,12 +216,7 @@ export async function discoverAvailableVideos() {
     const videoPath = `${videoSaveFolder}/video`;
 
     // 디렉토리 존재 확인
-    if (!window?.api?.checkPathExists) {
-      console.error("[영상 발견] API 없음");
-      return [];
-    }
-
-    const dirExists = await window.api.checkPathExists(videoPath);
+    const dirExists = await checkFileExists(videoPath);
     if (!dirExists?.exists) {
       console.error("[영상 발견] 디렉토리 없음:", videoPath);
       return [];
@@ -299,12 +295,7 @@ export async function discoverAvailableImages() {
     const imagesPath = `${videoSaveFolder}/images`;
 
     // 디렉토리 존재 확인
-    if (!window?.api?.checkPathExists) {
-      console.error("[이미지 발견] API 없음");
-      return { photos: [], aiImages: [] };
-    }
-
-    const dirExists = await window.api.checkPathExists(imagesPath);
+    const dirExists = await checkFileExists(imagesPath);
     if (!dirExists?.exists) {
       console.warn("[이미지 발견] 디렉토리 없음:", imagesPath);
       return { photos: [], aiImages: [] };
@@ -543,7 +534,7 @@ export async function generateImageForScene(scene, sceneIndex, options = {}) {
 
     // images 폴더 존재 확인 및 생성
     try {
-      const folderExists = await window.api.checkPathExists(imagesFolder);
+      const folderExists = await checkFileExists(imagesFolder);
       if (!folderExists?.exists) {
         await window.api.invoke("fs:mkDirRecursive", { dirPath: imagesFolder });
       }

@@ -15,7 +15,7 @@ import {
 import { ensureSceneDefaults } from "../../../utils/scenes";
 import { assignVideosToScenes, assignMediaToScenes, assignVideosWithDownload, assignImagesToMissingScenes, assignVideosToMissingScenes, assignPhotosToMissingScenes, assignPrioritizedMediaToMissingScenes } from "../../../services/videoAssignment";
 import { showError, showSuccess, showInfo } from "../../common/GlobalToast";
-import { isVideoFile, isImageFile } from "../../../utils/fileHelpers";
+import { isVideoFile, isImageFile } from "../../../utils/fileManager";
 import BottomFixedBar from "../../common/BottomFixedBar";
 
 function SceneList({

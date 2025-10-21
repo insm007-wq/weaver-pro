@@ -18,7 +18,7 @@ export * from './time';
 export * from './eta';
 
 // ===== 파일 관련 유틸리티 =====
-export * from './fileUtils';
+export * from './fileManager';
 export * from './buffer';
 export * from './parseSrt';
 export * from './media';
@@ -50,7 +50,7 @@ export * from './prompts';
 
 // ===== 카테고리별 네임스페이스 export =====
 export * as time from './time';
-export * as file from './fileUtils';
+export * as file from './fileManager';
 export * as text from './extract';
 export * as validation from './common';
 export * as platform from './platform';

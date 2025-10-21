@@ -3,7 +3,7 @@ import { Field, Label, Button, Body1, Caption1, Card, Title3, Badge, Body2, Spin
 import { ImageRegular, DeleteRegular, DismissCircleRegular } from "@fluentui/react-icons";
 import { tokens } from "@fluentui/react-components";
 import { MAX_UPLOAD_MB } from "../../constants/thumbnailConstants";
-import { validateImageFile, createImagePreview, safeRevokeObjectURL } from "../../utils/fileUtils";
+import { validateImageFile, createImagePreview, safeRevokeObjectURL } from "../../utils/fileManager";
 import { StandardCard } from "../common";
 
 const ReferenceImageUpload = ({ 

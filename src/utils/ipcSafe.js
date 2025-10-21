@@ -37,21 +37,11 @@ export async function setSecret({ key, value }) {
   return r ?? null;
 }
 
-/* -------- 파일 읽기 / 오디오 길이 -------- */
-export async function readTextAny(path) {
-  const a = await tryCall("readText", path);
-  if (a) return a;
-  const b = await tryCall("readTextFile", path);
-  if (b) return b;
-  return null;
-}
-export async function getMp3DurationSafe(path) {
-  const a = await tryCall("getMp3Duration", path);
-  if (a != null) return Number(a) || 0;
-  const b = await tryCall("audioGetDuration", path);
-  if (b != null) return Number(b) || 0;
-  return 0;
-}
+/* -------- 파일 작업은 fileManager.js로 이동됨 --------
+ * checkPathExists → checkFileExists
+ * readTextAny → readTextFile
+ * getMp3DurationSafe → getAudioDuration
+ */
 
 /* -------- 스톡 검색/저장 -------- */
 export async function stockSearch(options) {

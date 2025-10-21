@@ -6,6 +6,7 @@ import {
   CheckmarkCircleRegular,
 } from "@fluentui/react-icons";
 import { splitBalancedLines } from "../../refine/utils/metrics";
+import { checkFileExists } from "../../../utils/fileManager";
 
 const VideoPreview = memo(function VideoPreview({
   selectedScene,
@@ -441,7 +442,7 @@ const VideoPreview = memo(function VideoPreview({
 
       try {
         // 파일 존재 여부 확인
-        const pathCheck = await window.api?.checkPathExists?.(selectedScene.audioPath);
+        const pathCheck = await checkFileExists(selectedScene.audioPath);
 
         if (!isMounted) return; // 컴포넌트가 언마운트되었으면 중단
 
