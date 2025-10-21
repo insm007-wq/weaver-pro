@@ -1,9 +1,9 @@
-import { memo, useMemo, useCallback, useState, useEffect } from "react";
+import { memo, useMemo, useCallback } from "react";
 import { Card, Text, Button, tokens } from "@fluentui/react-components";
-import { DocumentEditRegular, SparkleRegular, PlayRegular, WarningRegular } from "@fluentui/react-icons";
-import { useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
-import { AI_ENGINE_OPTIONS } from "../../../constants/scriptSettings";
-import { generateAudioAndSubtitles } from "../../../utils/audioSubtitleGenerator";
+import { DocumentEditRegular, PlayRegular, WarningRegular } from "@fluentui/react-icons";
+import { useCardStyles } from "../../../styles/commonStyles";
+import { useScriptGenerator } from "../../../hooks/useScriptGenerator";
+import { useGenerationTimer } from "../../../hooks/useGenerationTimer";
 
 // 로딩 애니메이션 스타일
 const loadingAnimation = `
@@ -49,55 +49,15 @@ const ActionCard = memo(
     centered = false,
   }) => {
     const cardStyles = useCardStyles();
-    const settingsStyles = useSettingsStyles();
 
-    // 작업 취소를 위한 AbortController 관리
-    const [currentOperation, setCurrentOperation] = useState(null);
-
-    // 실시간 시간 업데이트를 위한 상태
-    const [remainingTime, setRemainingTime] = useState("");
-
-    // 실시간 시간 업데이트 (1초마다)
-    useEffect(() => {
-      if (!fullVideoState?.isGenerating || !fullVideoState?.startTime) {
-        setRemainingTime("");
-        return;
-      }
-
-      const updateTime = () => {
-        const now = new Date();
-        const startTime = new Date(fullVideoState.startTime);
-        const elapsedSec = Math.floor((now - startTime) / 1000);
-
-        const durationMin = form?.durationMin || 3;
-        const currentStep = fullVideoState.currentStep;
-
-        // 각 단계별 예상 시간 (초) - 더 현실적인 공식
-        const scriptEstimatedSec = Math.min(durationMin * 8, 600); // 최대 10분
-        const audioEstimatedSec = durationMin * 60 * 0.2; // 병렬 처리로 더 빠름
-        const subtitleEstimatedSec = 10;
-        const totalEstimatedSec = scriptEstimatedSec + audioEstimatedSec + subtitleEstimatedSec;
-
-        // 전체 남은 시간 = 전체 예상 시간 - 경과 시간
-        const remainingSec = Math.max(0, totalEstimatedSec - elapsedSec);
-
-        // 예상 시간을 초과하면 "생성 중..."만 표시
-        if (remainingSec === 0 && elapsedSec > totalEstimatedSec) {
-          setRemainingTime("생성 중...");
-          return;
-        }
-
-        const remainingMin = Math.floor(remainingSec / 60);
-        const remainingSecOnly = Math.floor(remainingSec % 60);
-
-        setRemainingTime(`${String(remainingMin).padStart(2, "0")}:${String(remainingSecOnly).padStart(2, "0")}`);
-      };
-
-      updateTime(); // 즉시 실행
-      const interval = setInterval(updateTime, 1000); // 1초마다 업데이트
-
-      return () => clearInterval(interval);
-    }, [fullVideoState?.isGenerating, fullVideoState?.startTime, form?.durationMin]);
+    // 새 훅 사용
+    const { runScriptMode, cancelGeneration } = useScriptGenerator();
+    const { remainingTime } = useGenerationTimer(
+      fullVideoState?.isGenerating,
+      fullVideoState?.startTime,
+      fullVideoState?.currentStep,
+      form?.durationMin
+    );
 
     // 안전한 폼 데이터 처리
     const safeForm = useMemo(
@@ -137,215 +97,19 @@ const ActionCard = memo(
       [isLoading, validationState.errors.length, fullVideoState?.isGenerating]
     );
 
-    const selectedEngine = useMemo(() => AI_ENGINE_OPTIONS.find((engine) => engine.key === safeForm.aiEngine), [safeForm.aiEngine]);
-
-    // 로그 추가 헬퍼 함수
-    const addLog = useCallback(
-      (message, type = "info") => {
-        const timestamp = new Date().toLocaleTimeString();
-        setFullVideoState((prev) => ({
-          ...prev,
-          logs: [...(prev.logs || []), { timestamp, message, type }],
-        }));
-      },
-      [setFullVideoState]
-    );
-
-    // 상태 업데이트 헬퍼 함수
-    const updateFullVideoState = useCallback(
-      (updates) => {
-        setFullVideoState((prev) => ({
-          ...prev,
-          ...updates,
-          logs: updates.logs ? [...(prev.logs || []), ...updates.logs] : prev.logs,
-        }));
-      },
-      [setFullVideoState]
-    );
-
-    // 대본 생성 모드 실행 함수
-    const runScriptMode = useCallback(
-      async (formData) => {
-        // 기존 작업이 진행 중이면 취소
-        if (currentOperation) {
-          currentOperation.abort();
-        }
-
-        const abortController = new AbortController();
-        setCurrentOperation(abortController);
-
-        setError("");
-        setIsLoading(true);
-        setDoc(null);
-
-        setFullVideoState({
-          isGenerating: true,
-          mode: "script_mode",
-          currentStep: "script",
-          progress: { script: 0, audio: 0, images: 0, video: 0, subtitle: 0 },
-          results: { script: null, audio: null, images: [], video: null },
-          streamingScript: "",
-          error: null,
-          startTime: new Date(),
-          logs: [],
-        });
-
-        try {
-          // 전역 설정에서 영상 폴더 경로 가져오기
-          let videoSaveFolder = null;
-          if (!window.api?.getSetting) {
-            throw new Error("API를 사용할 수 없습니다.");
-          }
-
-          try {
-            const videoFolderSettingResult = await window.api.getSetting("videoSaveFolder");
-            const videoFolderSetting = videoFolderSettingResult?.value || videoFolderSettingResult;
-            if (videoFolderSetting) {
-              videoSaveFolder = videoFolderSetting;
-            }
-          } catch (settingError) {
-            // 전역 설정 읽기 실패시 무시
-          }
-
-          addLog("📝 AI 대본 생성 중...");
-          const scriptResult = await runGenerate(formData);
-
-          if (scriptResult && scriptResult.scenes && Array.isArray(scriptResult.scenes) && scriptResult.scenes.length > 0) {
-            // ✅ 대본 생성 완료 시 미디어 관련 상태 초기화
-            window.dispatchEvent(new CustomEvent("reset-keyword-extraction")); // 미디어 준비 초기화
-            window.dispatchEvent(new CustomEvent("reset-media-download")); // 미디어 다운로드 초기화
-            window.dispatchEvent(new CustomEvent("reset-media-edit")); // 편집 페이지 초기화
-
-            setFullVideoState((prev) => ({
-              ...prev,
-              currentStep: "audio",
-              progress: { ...prev.progress, script: 100, audio: 0 },
-            }));
-
-            // 음성 및 자막 생성
-            await generateAudioAndSubtitles(scriptResult, "script_mode", {
-              form,
-              voices,
-              setFullVideoState,
-              api,
-              addLog,
-              abortSignal: abortController.signal,
-            });
-
-            // ✨ TTS 설정을 프로젝트 메타데이터에 저장
-            try {
-              // 현재 프로젝트 확인
-              const currentProjectResult = await window.api.invoke("project:current");
-
-              if (!currentProjectResult?.success || !currentProjectResult?.project) {
-                addLog("⚠️ 프로젝트가 설정되지 않았습니다", "warning");
-
-                // 프로젝트가 없으면 전역 설정에 저장
-                await window.api.invoke("settings:set", {
-                  key: "lastUsedTtsSettings",
-                  value: {
-                    voiceId: form.voice || voices[0]?.id || "ko-KR-Standard-A",
-                    speed: form.speed || "1.0",
-                    pitch: form.pitch || "-1",
-                    ttsEngine: form.ttsEngine || "google",
-                    createdAt: new Date().toISOString()
-                  }
-                });
-                addLog("📝 TTS 설정 저장 완료 (전역)");
-              } else {
-                // 프로젝트에 TTS 설정 저장
-                const ttsSettings = {
-                  voiceId: form.voice || voices[0]?.id || "ko-KR-Standard-A",
-                  speed: form.speed || "1.0",
-                  pitch: form.pitch || "-1",
-                  ttsEngine: form.ttsEngine || "google",
-                  createdAt: new Date().toISOString()
-                };
-
-                console.log("💾 저장할 TTS 설정:", ttsSettings);
-
-                const updateResult = await window.api.invoke("project:update", { ttsSettings });
-                console.log("📂 프로젝트 업데이트 결과:", updateResult);
-
-                if (updateResult?.success) {
-                  console.log("✅ TTS 설정이 프로젝트에 저장되었습니다");
-                  console.log("📋 저장된 프로젝트 정보:", updateResult.project);
-                  addLog("📝 TTS 설정 저장 완료");
-                } else {
-                  throw new Error(updateResult?.message || "프로젝트 업데이트 실패");
-                }
-              }
-            } catch (saveError) {
-              console.error("❌ TTS 설정 저장 실패:", saveError);
-              addLog("⚠️ TTS 설정 저장 실패", "error");
-            }
-
-            // 대본 데이터 저장
-            setDoc(scriptResult);
-
-            // 📋 관리자 페이지에 작업 로그 기록
-            if (window.api?.logActivity) {
-              window.api.logActivity({
-                type: "llm",
-                title: "대본 생성",
-                detail: `"${formData.topic || '(제목 없음)'}" - ${formData.durationMin}분 (${scriptResult.scenes?.length || 0}개 장면)`,
-                status: "success",
-                metadata: {
-                  sceneCount: scriptResult.scenes?.length || 0,
-                  duration: formData.durationMin,
-                  totalChars: scriptResult.scenes?.reduce((sum, s) => sum + (s.text?.length || 0), 0) || 0
-                }
-              });
-            }
-          } else {
-            throw new Error("대본이 생성되지 않았습니다. 먼저 대본을 생성해주세요.");
-          }
-        } catch (error) {
-          if (error.name === "AbortError" || error.message === "작업이 취소되었습니다.") {
-            console.log("⏹️ 작업 취소됨");
-            // 취소 시에는 에러로 표시하지 않고 상태만 초기화
-            setFullVideoState({
-              isGenerating: false,
-              mode: "idle",
-              currentStep: "idle",
-              progress: { script: 0, audio: 0, images: 0, video: 0, subtitle: 0 },
-              results: { script: null, audio: null, images: [], video: null },
-              streamingScript: "",
-              error: null,
-              startTime: null,
-              logs: [],
-            });
-            setDoc(null);
-          } else {
-            console.error("대본 생성 오류:", error);
-            setError(error.message);
-            setFullVideoState(prev => ({
-              ...prev,
-              error: error.message,
-              isGenerating: false,
-            }));
-
-            // 📋 관리자 페이지에 에러 로그 기록
-            if (window.api?.logActivity) {
-              window.api.logActivity({
-                type: "llm",
-                title: "대본 생성",
-                detail: `"${formData.topic || '(제목 없음)'}" - 생성 실패: ${error.message}`,
-                status: "error",
-                metadata: {
-                  error: error.message,
-                  duration: formData.durationMin
-                }
-              });
-            }
-          }
-        } finally {
-          setIsLoading(false);
-          setCurrentOperation(null);
-        }
-      },
-      [currentOperation, setError, setIsLoading, setDoc, setFullVideoState, addLog, runGenerate, form, voices, api]
-    );
+    // 생성 시작 핸들러 (훅으로 위임)
+    const handleStartGeneration = useCallback(async () => {
+      await runScriptMode(form, {
+        form,
+        voices,
+        api,
+        runGenerate,
+        setError,
+        setIsLoading,
+        setDoc,
+        setFullVideoState,
+      });
+    }, [runScriptMode, form, voices, api, runGenerate, setError, setIsLoading, setDoc, setFullVideoState]);
 
     // 모드 설정 메모화
     const modes = useMemo(
@@ -360,14 +124,13 @@ const ActionCard = memo(
           gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
           estimatedTime: "3-5분",
           outputFormat: "대본 텍스트 + 음성 파일 + SRT 자막",
-          onGenerate: () => runScriptMode(form),
+          onGenerate: handleStartGeneration,
         },
       }),
-      [runScriptMode, form]
+      [handleStartGeneration]
     );
 
     const currentMode = useMemo(() => modes[selectedMode], [modes, selectedMode]);
-    const Icon = currentMode?.icon;
 
     // 스타일 메모화
     const styles = useMemo(
@@ -452,23 +215,11 @@ const ActionCard = memo(
                 onClick={() => {
                   // 생성 중이면 중지, 아니면 생성 시작
                   if (fullVideoState.isGenerating && fullVideoState.currentStep !== "completed") {
-                    // 중지 로직: AbortController로 실제 작업 중단
-                    if (currentOperation) {
-                      console.log("🛑 작업 중단 요청");
-                      currentOperation.abort();
-                      setCurrentOperation(null);
-                    }
-
-                    // 상태 초기화
-                    setFullVideoState(prev => ({
-                      ...prev,
-                      isGenerating: false,
-                      currentStep: "idle",
-                      progress: { script: 0, audio: 0, images: 0, video: 0, subtitle: 0 },
-                      error: null
-                    }));
-                    setIsLoading(false);
-                    setDoc(null);
+                    cancelGeneration({
+                      setFullVideoState,
+                      setIsLoading,
+                      setDoc,
+                    });
                   } else {
                     // 생성 시작
                     currentMode.onGenerate();

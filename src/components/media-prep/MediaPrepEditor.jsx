@@ -137,14 +137,15 @@ function MediaPrepEditor() {
 
       console.log("✅ 자막 자동 삽입 완료");
 
-      // 상태 업데이트 후 즉시 Step 2로 이동 (setTimeout 제거)
+      // 1단계 완료 표시 후 2단계로 직접 이동
       wizardStep.completeStep(1);
-      wizardStep.nextStep();
+      // goToStep을 사용하여 직접 상태 변경 (상태 업데이트 배칭 문제 해결)
+      wizardStep.goToStep(2);
     } catch (error) {
       console.error("❌ 자막 자동 삽입 실패:", error);
-      // 실패 시에도 Step 진행 (사용자가 수동으로 조정 가능)
+      // 실패 시에도 1단계 완료 후 2단계로 이동 (사용자가 수동으로 조정 가능)
       wizardStep.completeStep(1);
-      wizardStep.nextStep();
+      wizardStep.goToStep(2);
     }
   }, [fileManagement, wizardStep]);
 
