@@ -50,7 +50,7 @@ export const useWizardStep = ({ totalSteps = 3, initialStep = 1, onStepChange } 
   // 특정 단계로 이동
   const goToStep = useCallback(
     (step) => {
-      if (isValidStep(step) && step !== currentStep) {
+      if (isValidStep(step)) {
         setIsTransitioning(true);
         setTimeout(() => {
           setCurrentStep(step);
