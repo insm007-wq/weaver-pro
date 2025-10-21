@@ -207,6 +207,30 @@ const Step2KeywordExtraction = memo(
                   : "🤖 키워드 추출 시작"}
             </PrimaryButton>
 
+            {/* 음성 생성 중 스피너 및 상태 표시 */}
+            {isGeneratingAudio && (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: tokens.spacingVerticalS,
+                  padding: tokens.spacingVerticalM,
+                  borderRadius: tokens.borderRadiusMedium,
+                  backgroundColor: tokens.colorBrandBackground2,
+                  border: `1px solid ${tokens.colorBrandStroke1}`,
+                }}
+              >
+                <Spinner size="large" />
+                <Text weight="semibold" style={{ color: tokens.colorBrandForeground1 }}>
+                  🎵 음성을 생성하고 있습니다
+                </Text>
+                <Text size={200} style={{ color: tokens.colorNeutralForeground3, textAlign: "center" }}>
+                  잠시만 기다려주세요. 이 과정은 몇 초 정도 소요됩니다.
+                </Text>
+              </div>
+            )}
+
             {/* 결과 영역 */}
             <div
               style={{
