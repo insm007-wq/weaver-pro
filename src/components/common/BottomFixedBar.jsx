@@ -35,12 +35,6 @@ const BottomFixedBar = memo(({
     }
   }, [isLoading]);
 
-  // 완료 상태 로깅 (디버깅용)
-  useEffect(() => {
-    if (isComplete) {
-      console.log("✅ BottomFixedBar 완료 상태 감지 - 다음 단계 버튼 표시됨");
-    }
-  }, [isComplete]);
 
   const toggleExpand = useCallback(() => {
     setIsExpanded((prev) => !prev);

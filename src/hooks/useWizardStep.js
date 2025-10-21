@@ -52,11 +52,12 @@ export const useWizardStep = ({ totalSteps = 3, initialStep = 1, onStepChange } 
     (step) => {
       if (isValidStep(step)) {
         setIsTransitioning(true);
+        // 400ms로 애니메이션 시간 조정 (부드러운 전환)
         setTimeout(() => {
           setCurrentStep(step);
           setIsTransitioning(false);
           onStepChange?.(step);
-        }, 300);
+        }, 400);
       }
     },
     [currentStep, isValidStep, onStepChange]

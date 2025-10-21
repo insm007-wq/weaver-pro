@@ -9,6 +9,9 @@ import { useWizardStep } from "../../hooks/useWizardStep";
 import { useVoiceSettings } from "../../hooks/useVoiceSettings";
 import { useApi } from "../../hooks/useApi";
 
+// Constants
+import { makeDefaultForm } from "../../constants/scriptSettings";
+
 // Utils
 import { useContainerStyles, useHeaderStyles } from "../../styles/commonStyles";
 import { PageErrorBoundary } from "../common/ErrorBoundary";
@@ -45,11 +48,12 @@ function MediaPrepEditor() {
   const api = useApi();
 
   // 음성 생성 상태 및 훅
+  const defaultForm = useMemo(() => makeDefaultForm(), []);
   const [voiceForm, setVoiceForm] = useState({
-    voice: "",
+    voice: defaultForm.voice || "ko-KR-Wavenet-A",
     speed: "1.0",
     pitch: "-1",
-    ttsEngine: "",
+    ttsEngine: defaultForm.ttsEngine || "google",
   });
   const [currentPreviewAudio, setCurrentPreviewAudio] = useState(null);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
@@ -129,13 +133,12 @@ function MediaPrepEditor() {
   ]);
 
 
-  // 이벤트 리스너 - 현재 상태를 캡처하여 저장
+  // 미디어 준비 페이지로의 네비게이션 처리
   useEffect(() => {
     // window 객체에 현재 상태의 핸들러 저장
     window._mediaPrepHandler = async () => {
       // 중복 네비게이션 방지
       if (isNavigatingRef.current) {
-        console.log("⚠️ 이미 네비게이션 진행 중 - 스킵");
         return;
       }
 
@@ -151,7 +154,6 @@ function MediaPrepEditor() {
         // 2단계로 이동
         wizardStep.goToStep(2);
       } catch (error) {
-        console.error("❌ 자막 삽입 실패:", error);
         // 실패해도 2단계로 이동 (사용자가 수동 조정 가능)
         wizardStep.goToStep(2);
       } finally {
