@@ -148,6 +148,18 @@ export const useFileManagement = () => {
             if (currentProject && currentProject.paths && currentProject.paths.root) {
               videoSaveFolder = currentProject.paths.root;
               console.log(`✅ [handleInsertFromScript] 프로젝트 경로 복구: ${videoSaveFolder}`);
+
+              // ✅ 복구된 경로를 다시 저장 (다음번 호출 시 빠르게 + EXE 환경 안정성)
+              try {
+                await setSetting({
+                  key: "videoSaveFolder",
+                  value: videoSaveFolder,
+                });
+                console.log(`💾 [handleInsertFromScript] videoSaveFolder 저장 완료: ${videoSaveFolder}`);
+              } catch (saveError) {
+                console.warn(`⚠️ [handleInsertFromScript] videoSaveFolder 저장 실패:`, saveError);
+                // 저장 실패해도 계속 진행 (이미 메모리에는 있음)
+              }
             }
           }
         }
