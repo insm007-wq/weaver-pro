@@ -130,10 +130,29 @@ export const useFileManagement = () => {
     setIsLoading(true);
 
     try {
-      // videoSaveFolder 설정에서 기본 경로 가져오기
-      const videoSaveFolder = await getSetting("videoSaveFolder");
+      // ✅ 1단계: videoSaveFolder 설정에서 가져오기
+      let videoSaveFolder = await getSetting("videoSaveFolder");
 
-      // 폴더가 설정되지 않았으면 기본값 사용
+      // ✅ 2단계: 설정이 없으면 현재 프로젝트에서 가져오기 (exe 환경에서 타이밍 이슈 해결)
+      if (!videoSaveFolder) {
+        console.warn("[handleInsertFromScript] videoSaveFolder 설정이 없음. 현재 프로젝트 확인 중...");
+
+        // 현재 프로젝트 ID 확인
+        const currentProjectId = await getSetting("currentProjectId");
+        if (currentProjectId) {
+          // 프로젝트 목록에서 현재 프로젝트 찾기
+          const projects = await getSetting("projects");
+          if (Array.isArray(projects)) {
+            const currentProject = projects.find(p => p.id === currentProjectId);
+            if (currentProject && currentProject.paths && currentProject.paths.root) {
+              videoSaveFolder = currentProject.paths.root;
+              console.log(`✅ [handleInsertFromScript] 프로젝트 경로 복구: ${videoSaveFolder}`);
+            }
+          }
+        }
+      }
+
+      // 폴더가 여전히 설정되지 않았으면 에러
       if (!videoSaveFolder) {
         showError("프로젝트 저장 폴더가 설정되지 않았습니다. 설정 탭에서 폴더를 지정해주세요.");
         return;

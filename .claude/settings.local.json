@@ -4,7 +4,10 @@
       "Bash(npm run generate-icon:*)",
       "Bash(npm run build:win:*)",
       "Bash(npm run obfuscate:restore:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(node scripts/generate-icon.js:*)",
+      "Bash(npm info:*)",
+      "Bash(findstr:*)"
     ],
     "deny": [],
     "ask": []
