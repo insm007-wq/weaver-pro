@@ -24,6 +24,136 @@ const fs = require("fs");
 const fsp = require("fs").promises;
 
 // ============================================================================
+// 🔧 전역 상수 (마법의 숫자 추출)
+// ============================================================================
+
+// 타임아웃 설정 (밀리초)
+const TIMEOUTS = {
+  FFMPEG_CHECK: 10000,              // FFmpeg 설치 확인
+  VIDEO_ENCODE: 15 * 60 * 1000,     // 비디오 인코딩 (15분)
+  CLIP_GENERATION: 30000,           // 단일 클립 생성 (30초)
+  DEFAULT_SCENE_DURATION: 3000,     // 기본 씬 지속시간 (3초)
+};
+
+// 비디오 사양
+const VIDEO_SPECS = {
+  WIDTH: 1920,
+  HEIGHT: 1080,
+  DEFAULT_FPS: 24,
+  DEFAULT_CRF: 23,                  // 기본 품질 설정
+  MIN_CLIP_DURATION: 0.25,          // 최소 클립 지속시간
+};
+
+// 이미지 팬 효과 설정
+const IMAGE_PAN = {
+  SCALE_FACTOR: 1.3,
+  BASE_WIDTH: 2496,
+  BASE_HEIGHT: 1404,
+  CROP_WIDTH: 1920,
+  CROP_HEIGHT: 1080,
+  CROP_X_OFFSET: 288,
+  PAN_HEIGHT: 324,
+};
+
+// 자막 텍스트 분할 설정
+const TEXT_SPLIT_SETTINGS = {
+  CHAR_WIDTH_RATIO: 0.72,           // fontSize * 0.72 = 픽셀 너비
+  MAX_WIDTH_PERCENT: 0.85,          // 1920 * 0.85 = 1632px
+  MAX_WIDTH_PX: 1632,
+  MIN_SHORT_TEXT: 20,               // 이 이상이면 분할 고려
+  MAX_SEARCH_RANGE_RATIO: 0.2,      // 목표 길이의 ±20% 범위 검색
+};
+
+// 오디오 인코딩 설정
+const AUDIO_ENCODE = {
+  CODEC: 'aac',
+  BITRATE: '128k',
+  SAMPLE_RATE: '48000',
+  CHANNELS: 2,
+};
+
+// 비디오 품질 프리셋
+const QUALITY_PRESETS = {
+  high: { crf: 18, preset: "fast" },
+  balanced: { crf: 23, preset: "veryfast" },
+  medium: { crf: 21, preset: "veryfast" },
+  low: { crf: 28, preset: "ultrafast" },
+};
+
+// 버퍼 및 메모리 설정
+const BUFFER_LIMITS = {
+  STDERR_MAX: 10000,                // 최대 stderr 버퍼 크기
+  STDERR_TRIM: 5000,                // 트림 이후 유지할 크기
+  FILTER_COMPLEX_MAX: 3000,         // 필터 복잡도 최대값
+  COMMAND_LENGTH_THRESHOLD: 6000,   // 셸 스크립트 사용 임계값
+};
+
+// 임시 파일 접두사
+const TEMP_FILE_PREFIXES = ["concat_", "clip_", "scene_"];
+
+// FFmpeg 공통 플래그
+const FFMPEG_FLAGS = {
+  HIDE_BANNER: "-hide_banner",
+  OVERWRITE: "-y",
+  TIMESTAMP_FIX: "make_zero",
+  PTS_DISCARD: "+genpts+discardcorrupt",
+  PIXEL_FORMAT: "yuv420p",
+  PROFILE: "main",
+  FASTSTART: "+faststart",
+};
+
+// 스크립트 실행 설정
+const SCRIPT_SETTINGS = {
+  WINDOWS_EXT: "bat",
+  UNIX_EXT: "sh",
+  UNIX_PERMISSION: 0o755,
+  WINDOWS_CHARSET: 65001,           // UTF-8
+};
+
+// 진행률 보고 범위
+const PROGRESS_RANGES = {
+  CLIP_GENERATION: 30,
+  COMPOSE: 30,
+  FINAL_ENCODE: 70,
+};
+
+// 로그 레벨
+const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
+
+// ============================================================================
+// 📝 구조화된 로깅 유틸리티
+// ============================================================================
+
+/**
+ * 구조화된 로그 출력 (프로덕션/개발 환경 구분)
+ * @param {string} level - 로그 레벨 ('error', 'warn', 'info', 'debug')
+ * @param {string} message - 로그 메시지
+ * @param {object} data - 추가 데이터 (선택사항)
+ */
+function log(level, message, data = {}) {
+  if (LOG_LEVELS[level] > LOG_LEVELS[LOG_LEVEL]) return;
+
+  const timestamp = new Date().toISOString();
+  const context = {
+    timestamp,
+    level,
+    module: 'ffmpeg',
+    message,
+    ...data
+  };
+
+  // 프로덕션 환경에서는 구조화된 JSON 로그만 출력
+  if (process.env.NODE_ENV === 'production') {
+    console.log(JSON.stringify(context));
+  } else {
+    // 개발 환경에서는 읽기 좋은 형식으로 출력
+    const prefix = { error: '❌', warn: '⚠️', info: 'ℹ️', debug: '🔍' }[level];
+    console.log(`${prefix} [${level.toUpperCase()}] ${message}`, Object.keys(data).length > 0 ? data : '');
+  }
+}
+
+// ============================================================================
 // 여러 줄 균형 분할 (한국어 기준 간단 규칙)
 // ============================================================================
 function splitBalancedLines(text = "", maxLines = 2, fontSize = 52) {
@@ -38,13 +168,12 @@ function splitBalancedLines(text = "", maxLines = 2, fontSize = 52) {
     return [clean];
   }
 
-  if (clean.length <= 20) {
+  if (clean.length <= TEXT_SPLIT_SETTINGS.MIN_SHORT_TEXT) {
     return [clean];
   }
 
-  const charWidthPx = fontSize * 0.72;
-  const maxWidthPx = 1632;
-  const maxCharsPerLine = Math.floor(maxWidthPx / charWidthPx);
+  const charWidthPx = fontSize * TEXT_SPLIT_SETTINGS.CHAR_WIDTH_RATIO;
+  const maxCharsPerLine = Math.floor(TEXT_SPLIT_SETTINGS.MAX_WIDTH_PX / charWidthPx);
 
   let effectiveMaxLines = maxLines;
   const avgCharsPerLine = clean.length / maxLines;
@@ -76,7 +205,7 @@ function splitBalancedLines(text = "", maxLines = 2, fontSize = 52) {
     let cut = Math.min(targetLength, remaining.length);
     let foundBreak = false;
 
-    const searchRange = Math.floor(targetLength * 0.2);
+    const searchRange = Math.floor(targetLength * TEXT_SPLIT_SETTINGS.MAX_SEARCH_RANGE_RATIO);
     for (let offset = 0; offset <= searchRange && cut + offset < remaining.length; offset++) {
       if (offset > 0 && cut + offset < remaining.length && /[ \-–—·,.:;!?]/.test(remaining[cut + offset])) {
         cut = cut + offset + 1;
@@ -109,7 +238,7 @@ let store = null;
 try {
   store = require("../services/store");
 } catch (error) {
-  console.warn("⚠️ store 로드 실패:", error.message);
+  log('warn', 'store 로드 실패', { error: error.message });
   store = { get: (key, def) => def, set: () => {} };
 }
 
@@ -509,7 +638,7 @@ async function getAudioDuration(filePath) {
 
     return duration;
   } catch (error) {
-    console.error("음성 파일 길이 가져오기 실패:", error);
+    log('error', '음성 파일 길이 가져오기 실패', { filePath, error: error.message });
     throw error;
   }
 }
@@ -524,7 +653,7 @@ try {
     ffmpegPath = ffmpegPath.replace("app.asar", "app.asar.unpacked");
   }
 } catch (err) {
-  console.error("[ffmpeg] Failed to load ffmpeg-static:", err);
+  log('error', 'ffmpeg-static 로드 실패, 폴백 사용', { error: err.message });
   // 폴백: 하드코딩된 경로 (unpacked 사용)
   const appPath = app.getAppPath();
   if (appPath.includes("app.asar")) {
@@ -610,7 +739,7 @@ function register() {
           throw new Error(result.error || "FFmpeg compose failed");
         }
       } catch (error) {
-        console.error("❌ FFmpeg 영상 합성 실패:", error);
+        log('error', 'FFmpeg 영상 합성 실패', { error: error.message, stack: error.stack });
         return { success: false, message: error.message, error: error.toString() };
       }
     }
