@@ -207,9 +207,12 @@ export async function discoverAvailableVideos() {
     let videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
 
     if (!videoSaveFolder || typeof videoSaveFolder !== 'string') {
-      console.error("[영상 발견] videoSaveFolder 설정이 없음");
+      console.error("[영상 발견] ❌ videoSaveFolder 설정이 없음");
+      console.error("[영상 발견] videoSaveFolderResult:", videoSaveFolderResult);
       return [];
     }
+
+    console.log(`[영상 발견] ✅ videoSaveFolder: ${videoSaveFolder}`);
 
     // Node.js/Electron 표준: 슬래시(/) 사용
     videoSaveFolder = videoSaveFolder.replace(/\\/g, '/');
@@ -286,9 +289,12 @@ export async function discoverAvailableImages() {
     let videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
 
     if (!videoSaveFolder || typeof videoSaveFolder !== 'string') {
-      console.error("[이미지 발견] videoSaveFolder 설정이 없음");
+      console.error("[이미지 발견] ❌ videoSaveFolder 설정이 없음");
+      console.error("[이미지 발견] videoSaveFolderResult:", videoSaveFolderResult);
       return { photos: [], aiImages: [] };
     }
+
+    console.log(`[이미지 발견] ✅ videoSaveFolder: ${videoSaveFolder}`);
 
     // Node.js/Electron 표준: 슬래시(/) 사용
     videoSaveFolder = videoSaveFolder.replace(/\\/g, '/');

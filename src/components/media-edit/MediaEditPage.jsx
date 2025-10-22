@@ -171,6 +171,16 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
           showInfo(`미디어를 자동으로 할당하는 중... (${missingScenes.length}개 씬)`);
 
           try {
+            // ✅ 0. videoSaveFolder 설정 검증 (exe 환경에서 경로 설정 보장)
+            const videoSaveFolder = await window.api.getSetting("videoSaveFolder");
+            if (!videoSaveFolder || typeof videoSaveFolder !== 'string' || videoSaveFolder.trim() === '') {
+              console.warn("[자동 할당] videoSaveFolder 설정이 없음. 설정을 다시 확인합니다.");
+              // 설정이 없으면 미디어 할당을 진행할 수 없음
+              showInfo("미디어 폴더 설정이 필요합니다. 설정 > 기본 설정에서 영상 저장 폴더를 지정해주세요.");
+              return;
+            }
+            console.log(`✅ [자동 할당] videoSaveFolder 확인됨: ${videoSaveFolder}`);
+
             // 1. extractedKeywords 가져오기
             const extractedKeywords = await window.api.getSetting("extractedKeywords");
             const keywordsArray = Array.isArray(extractedKeywords) ? extractedKeywords : [];

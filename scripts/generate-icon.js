@@ -6,21 +6,48 @@ const path = require('path');
 const iconPath = path.join(__dirname, '../electron/assets/icon.png');
 const buildDir = path.join(__dirname, '../build');
 
-// 간단한 ICO 파일 생성 헬퍼 함수
-async function createSimpleIco(inputPngPath, outputIcoPath) {
+// 간단한 ICO 헤더 생성 함수
+function createIcoFromPng(pngPath, icoPath) {
   try {
-    // 256x256 PNG를 읽음
-    const pngBuffer = fs.readFileSync(inputPngPath);
+    console.log(`📝 ICO 생성 시작: ${pngPath}`);
 
-    // 간단한 BMP 헤더를 ICO 헤더로 변환하는 기초적인 방법
-    // 실제로는 ico 라이브러리가 필요하지만, 여기서는 PNG를 ico로 rename
-    // electron-builder가 ico 포맷을 지원하므로 이 방식으로도 작동 가능
+    // PNG 파일을 읽음
+    const pngBuffer = fs.readFileSync(pngPath);
 
-    fs.copyFileSync(inputPngPath, outputIcoPath);
+    // 간단한 ICO 형식 생성
+    // ICO 헤더: 6 bytes (reserved=0, type=1, count=1)
+    const icoHeader = Buffer.alloc(6);
+    icoHeader.writeUInt16LE(0, 0);  // 예약됨
+    icoHeader.writeUInt16LE(1, 2);  // 타입 (1 = ICO)
+    icoHeader.writeUInt16LE(1, 4);  // 이미지 개수
+
+    // 이미지 디렉토리: 16 bytes
+    const imageDir = Buffer.alloc(16);
+    imageDir[0] = 256;              // 너비 (0 = 256)
+    imageDir[1] = 256;              // 높이 (0 = 256)
+    imageDir[2] = 0;                // 팔레트 색상 (0 = 없음)
+    imageDir[3] = 0;                // 예약됨
+    imageDir.writeUInt16LE(1, 4);   // 색상 평면
+    imageDir.writeUInt16LE(32, 6);  // 비트/픽셀
+    imageDir.writeUInt32LE(pngBuffer.length, 8);  // 이미지 크기
+    imageDir.writeUInt32LE(6 + 16, 12);  // 이미지 오프셋
+
+    // 최종 ICO 파일 (헤더 + 디렉토리 + PNG 데이터)
+    const icoBuffer = Buffer.concat([icoHeader, imageDir, pngBuffer]);
+
+    fs.writeFileSync(icoPath, icoBuffer);
+    console.log(`✅ ICO 생성 완료: ${icoPath}`);
     return true;
   } catch (error) {
-    console.error('ICO 생성 실패:', error.message);
-    return false;
+    console.error('❌ ICO 생성 실패:', error.message);
+    console.warn('⚠️  PNG를 그대로 복사합니다...');
+    try {
+      fs.copyFileSync(pngPath, icoPath);
+      return true;
+    } catch (copyError) {
+      console.error('❌ 복사 실패:', copyError.message);
+      return false;
+    }
   }
 }
 
@@ -53,8 +80,8 @@ async function generateIcons() {
     const icon256 = path.join(buildDir, 'icon_256x256.png');
     const icoPath = path.join(buildDir, 'icon.ico');
 
-    // 더 간단한 방식으로 ico 생성
-    const success = await createSimpleIco(icon256, icoPath);
+    // ICO 형식으로 생성
+    const success = createIcoFromPng(icon256, icoPath);
     if (success) {
       console.log('✅ icon.ico 생성 완료');
     } else {
