@@ -10,6 +10,7 @@ import BottomFixedBar from "../../common/BottomFixedBar";
 
 function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExporting }) {
   const [isExporting, setIsExporting] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [audioDurations, setAudioDurations] = useState({});
   const [exportStartTime, setExportStartTime] = useState(null);
@@ -191,14 +192,30 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
     }
   };
 
-  // 영상 내보내기 취소
+  // 영상 내보내기 취소 (대본 생성 취소와 동일한 안전 장치 적용)
   const handleCancelExport = async () => {
     try {
+      setIsCancelling(true);
+
+      // FFmpeg 프로세스 취소
       await window.api?.cancelExport?.();
-      // showInfo("영상 내보내기를 취소했습니다."); // 토스트 제거 (하단 정보창에서 표시됨)
+
+      // 상태 초기화
+      setIsExporting(false);
+      setIsVideoExporting?.(false);
+      setExportProgress(0);
+      setExportStartTime(null);
+      setEstimatedTimeRemaining(null);
+
+      // FFmpeg 프로세스 완전 종료 대기 (1500ms)
+      // 이 시간 동안 백그라운드 리소스 정리 및 상태 안정화
+      setTimeout(() => {
+        setIsCancelling(false);
+      }, 1500);
     } catch (error) {
       console.error("취소 실패:", error);
       showError("취소 중 오류가 발생했습니다.");
+      setIsCancelling(false);
     }
   };
 
@@ -376,23 +393,23 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
         )}
 
         <Button
-          appearance={isExporting ? "secondary" : "primary"}
-          icon={isExporting ? null : <ArrowExportRegular />}
+          appearance={isCancelling ? "secondary" : isExporting ? "secondary" : "primary"}
+          icon={isCancelling ? null : isExporting ? null : <ArrowExportRegular />}
           onClick={() => {
-            if (isExporting) {
+            if (isExporting && !isCancelling) {
               // 취소 로직
               handleCancelExport();
-            } else {
+            } else if (!isExporting && !isCancelling) {
               // 내보내기 시작
               handleExportProject();
             }
           }}
-          disabled={!isExporting && (!scenes || scenes.length === 0)}
+          disabled={isCancelling || (!isExporting && (!scenes || scenes.length === 0))}
           style={{
             width: "100%",
           }}
         >
-          {isExporting ? "⏹ 내보내기 중지" : "영상 내보내기"}
+          {isCancelling ? "⏳ 취소 중..." : isExporting ? "⏹ 내보내기 중지" : "영상 내보내기"}
         </Button>
 
         <Text size={200} style={{ color: "#666", marginTop: 8, display: "block" }}>

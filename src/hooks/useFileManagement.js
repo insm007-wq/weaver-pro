@@ -200,8 +200,6 @@ export const useFileManagement = () => {
 
     // 영상 완성 페이지도 초기화
     window.dispatchEvent(new CustomEvent("reset-media-edit"));
-
-    showSuccess("모든 파일이 초기화되었습니다.");
   }, []);
 
   return {
