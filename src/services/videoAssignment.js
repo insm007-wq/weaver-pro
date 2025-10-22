@@ -202,9 +202,26 @@ function calculateSceneVideoScore(scene, videoInfo) {
  */
 export async function discoverAvailableVideos() {
   try {
-    // 설정에서 videoSaveFolder 가져오기
+    // ✅ 1단계: 설정에서 videoSaveFolder 가져오기
     const videoSaveFolderResult = await getSetting("videoSaveFolder");
     let videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
+
+    // ✅ 2단계: 설정이 없으면 프로젝트에서 경로 복구 (exe 환경 IPC 타이밍 이슈 해결)
+    if (!videoSaveFolder || typeof videoSaveFolder !== 'string') {
+      console.warn("[영상 발견] ⚠️  videoSaveFolder 설정이 없음. 프로젝트에서 복구 중...");
+
+      const currentProjectId = await getSetting("currentProjectId");
+      if (currentProjectId) {
+        const projects = await getSetting("projects");
+        if (Array.isArray(projects)) {
+          const currentProject = projects.find(p => p.id === currentProjectId);
+          if (currentProject && currentProject.paths && currentProject.paths.root) {
+            videoSaveFolder = currentProject.paths.root;
+            console.log(`[영상 발견] ✅ 프로젝트 경로 복구: ${videoSaveFolder}`);
+          }
+        }
+      }
+    }
 
     if (!videoSaveFolder || typeof videoSaveFolder !== 'string') {
       console.error("[영상 발견] ❌ videoSaveFolder 설정이 없음");
@@ -284,9 +301,26 @@ export async function discoverAvailableVideos() {
  */
 export async function discoverAvailableImages() {
   try {
-    // 설정에서 videoSaveFolder 가져오기
+    // ✅ 1단계: 설정에서 videoSaveFolder 가져오기
     const videoSaveFolderResult = await getSetting("videoSaveFolder");
     let videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
+
+    // ✅ 2단계: 설정이 없으면 프로젝트에서 경로 복구 (exe 환경 IPC 타이밍 이슈 해결)
+    if (!videoSaveFolder || typeof videoSaveFolder !== 'string') {
+      console.warn("[이미지 발견] ⚠️  videoSaveFolder 설정이 없음. 프로젝트에서 복구 중...");
+
+      const currentProjectId = await getSetting("currentProjectId");
+      if (currentProjectId) {
+        const projects = await getSetting("projects");
+        if (Array.isArray(projects)) {
+          const currentProject = projects.find(p => p.id === currentProjectId);
+          if (currentProject && currentProject.paths && currentProject.paths.root) {
+            videoSaveFolder = currentProject.paths.root;
+            console.log(`[이미지 발견] ✅ 프로젝트 경로 복구: ${videoSaveFolder}`);
+          }
+        }
+      }
+    }
 
     if (!videoSaveFolder || typeof videoSaveFolder !== 'string') {
       console.error("[이미지 발견] ❌ videoSaveFolder 설정이 없음");
