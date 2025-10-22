@@ -369,16 +369,18 @@ function App() {
                   <MediaPrepEditor />
                 </div>
 
-                <KeepAlivePane active={currentPage === "draft"}>
+                {/* MediaDownloadPage는 항상 마운트 상태 유지 (이벤트 리스너 문제 해결) */}
+                <div style={{ display: currentPage === "draft" ? "block" : "none" }}>
                   <MediaDownloadPage onDownloadingChange={setIsMediaDownloading} />
-                </KeepAlivePane>
+                </div>
 
-                <KeepAlivePane active={currentPage === "refine"}>
+                {/* MediaEditPage는 항상 마운트 상태 유지 (이벤트 리스너 문제 해결) */}
+                <div style={{ display: currentPage === "refine" ? "block" : "none" }}>
                   <MediaEditPage
                     isVideoExporting={isVideoExporting}
                     setIsVideoExporting={setIsVideoExporting}
                   />
-                </KeepAlivePane>
+                </div>
 
 
                 <KeepAlivePane active={currentPage === "settings"}>
