@@ -19,10 +19,10 @@
     "obfuscate:check": "node scripts/obfuscate.js --check",
     "obfuscate:restore": "node scripts/obfuscate.js --restore",
     "generate-icon": "node scripts/generate-icon.js",
-    "build:win": "npm run generate-icon && npm run build && npm run obfuscate && electron-builder --win && npm run obfuscate:restore",
-    "build:mac": "npm run generate-icon && npm run build && npm run obfuscate && electron-builder --mac && npm run obfuscate:restore",
-    "build:linux": "npm run generate-icon && npm run build && npm run obfuscate && electron-builder --linux && npm run obfuscate:restore",
-    "build:all": "npm run generate-icon && npm run build && npm run obfuscate && electron-builder -mwl && npm run obfuscate:restore"
+    "build:win": "npm run generate-icon && npm run build && electron-builder --win",
+    "build:mac": "npm run generate-icon && npm run build && electron-builder --mac",
+    "build:linux": "npm run generate-icon && npm run build && electron-builder --linux",
+    "build:all": "npm run generate-icon && npm run build && electron-builder -mwl"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.63.1",
