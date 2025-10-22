@@ -148,6 +148,13 @@ class ProjectManager {
       if (project) {
         store.setCurrentProjectId(projectId);
         this.currentProject = project;
+
+        // ✅ 프로젝트 로드 시 videoSaveFolder 업데이트 (exe 환경에서 경로 설정 문제 해결)
+        if (project.paths && project.paths.root) {
+          store.set('videoSaveFolder', project.paths.root);
+          console.log(`📁 videoSaveFolder 업데이트: ${project.paths.root}`);
+        }
+
         return project;
       }
 

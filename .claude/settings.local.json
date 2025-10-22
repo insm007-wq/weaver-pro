@@ -1,15 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(sed:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git checkout:*)",
-      "Bash(cat:*)",
-      "mcp__ide__getDiagnostics",
-      "Bash(npm run build:*)",
-      "Bash(cd:*)",
-      "WebFetch(domain:www.nngroup.com)"
+      "Bash(npm run generate-icon:*)",
+      "Bash(npm run build:win:*)",
+      "Bash(npm run obfuscate:restore:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []

@@ -101,6 +101,33 @@ function checkAspectRatio(width, height, targetRatio) {
 }
 
 // ---------------------------------------------------------------------------
+// 에러 메시지 새니타이제이션 (프로바이더 정보 제거)
+// ---------------------------------------------------------------------------
+function sanitizeErrorMessage(errorMessage) {
+  if (!errorMessage || typeof errorMessage !== 'string') return '처리 중 오류가 발생했습니다.';
+
+  // 프로바이더 이름 제거
+  let sanitized = errorMessage
+    .replace(/Pexels/gi, '미디어 서비스')
+    .replace(/Pixabay/gi, '미디어 서비스')
+    .replace(/Replicate/gi, 'AI 서비스')
+    .replace(/Flux Schnell/gi, 'AI 모델')
+    .replace(/OpenAI/gi, 'AI 서비스')
+    .replace(/API 키가 없습니다/gi, '서비스 설정이 필요합니다')
+    .replace(/API 키가 설정되지 않았습니다/gi, '서비스 설정이 필요합니다');
+
+  // 지원 목록 제거 (예: "지원되지 않는 프로바이더입니다. 지원 목록: pexels, pixabay")
+  sanitized = sanitized.replace(/지원 목록:\s*[^\.]+/gi, '');
+
+  // 빈 메시지 방지
+  if (!sanitized.trim()) {
+    return '처리 중 오류가 발생했습니다.';
+  }
+
+  return sanitized.trim();
+}
+
+// ---------------------------------------------------------------------------
 // 비디오 필터링 및 정렬 (옵션 기반)
 // ---------------------------------------------------------------------------
 function filterAndSortVideos(videos, options = {}) {
@@ -950,14 +977,14 @@ async function downloadMediaWithFallback(keyword, provider, options = {}, onProg
       return {
         success: false,
         mediaType: "none",
-        error: `모든 방법 실패 - Pexels/Pixabay 영상·사진 없음, AI 생성 실패: ${aiResult.error}`,
+        error: sanitizeErrorMessage(`모든 방법 실패 - 미디어 검색 실패, AI 생성 실패: ${aiResult.error}`),
       };
     }
   } catch (error) {
     return {
       success: false,
       mediaType: "none",
-      error: `모든 방법 실패: ${error.message}`,
+      error: sanitizeErrorMessage(`모든 방법 실패: ${error.message}`),
     };
   }
 }
@@ -1028,7 +1055,7 @@ async function downloadVideosForKeywords(keywords, provider, options = {}, onPro
           currentIndex: i,
           mediaType: fallbackResult.mediaType,
           filename: fallbackResult.filename,
-          error: fallbackResult.success ? undefined : fallbackResult.error,
+          error: fallbackResult.success ? undefined : sanitizeErrorMessage(fallbackResult.error),
           thumbnail: fallbackResult.thumbnail, // 썸네일 정보 전달
           width: fallbackResult.width,
           height: fallbackResult.height,
@@ -1147,7 +1174,7 @@ async function downloadVideosForKeywords(keywords, provider, options = {}, onPro
           totalKeywords: keywords.length,
           currentIndex: i,
           filename: downloadResult.filename,
-          error: downloadResult.success ? undefined : downloadResult.error,
+          error: downloadResult.success ? undefined : sanitizeErrorMessage(downloadResult.error),
           videoIndex: videoIndex + 1,
           totalVideos: videos.length,
           videoSuffix,
@@ -1163,7 +1190,7 @@ async function downloadVideosForKeywords(keywords, provider, options = {}, onPro
     } catch (error) {
       console.error(`[영상 다운로드] "${keyword}" 처리 실패:`, error.message);
       failureCount++;
-      results.push({ keyword, success: false, error: error.message });
+      results.push({ keyword, success: false, error: sanitizeErrorMessage(error.message) });
 
       onProgress?.({
         keyword,
@@ -1171,7 +1198,7 @@ async function downloadVideosForKeywords(keywords, provider, options = {}, onPro
         progress: 0,
         totalKeywords: keywords.length,
         currentIndex: i,
-        error: error.message,
+        error: sanitizeErrorMessage(error.message),
       });
     }
 
@@ -1242,7 +1269,7 @@ function registerVideoDownloadIPC() {
       console.error(`[영상 다운로드 IPC] 전체 프로세스 실패 (${duration}ms):`, error.message);
       return {
         success: false,
-        error: error.message,
+        error: sanitizeErrorMessage(error.message),
         results: [],
         summary: { total: 0, success: 0, failed: 0 },
         duration,
@@ -1289,7 +1316,7 @@ function registerVideoDownloadIPC() {
       console.error("[사진 다운로드 IPC] 실패:", error.message);
       return {
         success: false,
-        error: error.message
+        error: sanitizeErrorMessage(error.message)
       };
     }
   });
@@ -1319,7 +1346,7 @@ function registerVideoDownloadIPC() {
       console.error("[영상 다운로드 IPC] 실패:", error.message);
       return {
         success: false,
-        error: error.message
+        error: sanitizeErrorMessage(error.message)
       };
     }
   });
