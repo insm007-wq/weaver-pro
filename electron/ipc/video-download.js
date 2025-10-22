@@ -308,8 +308,8 @@ async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 2
       throw new Error("cancelled");
     }
 
-    // 다운로드
-    const { buffer, size, skipped } = await new Promise((resolve, reject) => {
+    // ✅ Stream 기반 다운로드: 메모리에 전체 버퍼를 축적하지 않고 실시간으로 파일에 쓰기
+    const { size, skipped } = await new Promise((resolve, reject) => {
       const protocol = url.startsWith("https:") ? https : http;
 
       const request = protocol.get(url, (response) => {
@@ -328,18 +328,22 @@ async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 2
         // 전체 크기를 알 수 있고 이미 초과한 경우 즉시 스킵
         if (totalSize > 0 && totalSize > maxBytes) {
           request.destroy();
-          return resolve({ buffer: null, size: totalSize, skipped: true });
+          return resolve({ size: totalSize, skipped: true });
         }
 
         let downloadedSize = 0;
-        const chunks = [];
         let speedCheckTime = Date.now();
         let lastCheckSize = 0;
         let slowServerDetected = false;
 
+        // ✅ WriteStream으로 파일에 직접 쓰기 (메모리 효율)
+        const writeStream = fs.createWriteStream(filePath);
+        let writeStreamError = false;
+
         response.on("data", (chunk) => {
           // 취소 확인
           if (isCancelled()) {
+            writeStream.destroy();
             request.destroy();
             reject(new Error("cancelled"));
             return;
@@ -349,8 +353,9 @@ async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 2
 
           // 실시간 크기 체크 - 초과 시 즉시 중단
           if (downloadedSize > maxBytes) {
+            writeStream.destroy();
             request.destroy();
-            return resolve({ buffer: null, size: downloadedSize, skipped: true });
+            return resolve({ size: downloadedSize, skipped: true });
           }
 
           // ⭐ 5초마다 다운로드 속도 체크 (느린 서버 감지)
@@ -365,9 +370,9 @@ async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 2
             if (downloadedInCheck < 500 * 1024 && elapsedMs >= 5000) {
               console.warn(`[다운로드 속도 낮음] ${filename}: ${speedKBps.toFixed(1)}KB/s (< 100KB/s) → 스킵`);
               slowServerDetected = true;
+              writeStream.destroy();
               request.destroy();
               return resolve({
-                buffer: null,
                 size: downloadedSize,
                 skipped: true,
                 skipReason: `다운로드 속도 너무 느림 (${speedKBps.toFixed(1)}KB/s 이하)`
@@ -379,48 +384,83 @@ async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 2
             lastCheckSize = downloadedSize;
           }
 
-          chunks.push(chunk);
-
+          // ✅ 진행률: 다운로드 진행률만 추적 (쓰기는 자동)
           if (onProgress && totalSize > 0) {
             const progress = Math.round((downloadedSize / totalSize) * 100);
             onProgress(progress);
           }
+
+          // WriteStream에 chunk 쓰기 (backpressure 처리)
+          if (!writeStream.write(chunk)) {
+            response.pause();
+          }
+        });
+
+        writeStream.on("drain", () => {
+          response.resume();
         });
 
         response.on("end", () => {
           // 취소 확인
           if (isCancelled()) {
+            writeStream.destroy();
             reject(new Error("cancelled"));
             return;
           }
-          resolve({ buffer: Buffer.concat(chunks), size: downloadedSize, skipped: false });
+          writeStream.end();
         });
 
-        response.on("error", reject);
-      });
+        response.on("error", (err) => {
+          writeStream.destroy();
+          reject(err);
+        });
 
-      // 요청 추적
-      currentRequests.push(request);
+        // ✅ Stream 완료: 이 시점에 파일이 완전히 디스크에 쓰여짐
+        writeStream.on("finish", () => {
+          // 쓰기 스트림이 완전히 종료됨 = 파일이 디스크에 저장됨
+          resolve({ size: downloadedSize, skipped: false });
+        });
 
-      request.on("error", reject);
-      request.on("close", () => {
-        // 완료된 요청 제거
-        const index = currentRequests.indexOf(request);
-        if (index > -1) {
-          currentRequests.splice(index, 1);
-        }
-      });
+        writeStream.on("error", (err) => {
+          writeStreamError = true;
+          request.destroy();
+          reject(err);
+        });
 
-      // ⭐ 타임아웃 60초 → 15초로 단축
-      request.setTimeout(15000, () => {
-        request.destroy();
-        reject(new Error("다운로드 타임아웃 (15초)"));
+        // 요청 추적
+        currentRequests.push(request);
+
+        request.on("error", (err) => {
+          writeStream.destroy();
+          reject(err);
+        });
+
+        request.on("close", () => {
+          // 완료된 요청 제거
+          const index = currentRequests.indexOf(request);
+          if (index > -1) {
+            currentRequests.splice(index, 1);
+          }
+        });
+
+        // ⭐ 타임아웃 60초 → 15초로 단축
+        request.setTimeout(15000, () => {
+          writeStream.destroy();
+          request.destroy();
+          reject(new Error("다운로드 타임아웃 (15초)"));
+        });
       });
     });
 
     // 스킵된 경우 처리
     if (skipped) {
-      const skipReason = buffer?.skipReason || `파일 크기 초과 (${bytesToMB(size).toFixed(1)}MB > ${maxFileSize}MB)`;
+      // 부분적으로 쓰여진 파일 삭제
+      try {
+        await fs.unlink(filePath);
+      } catch {
+        // 파일이 없을 수도 있음
+      }
+      const skipReason = size ? `파일 크기 초과 (${bytesToMB(size).toFixed(1)}MB > ${maxFileSize}MB)` : "알 수 없는 이유";
       return {
         success: false,
         filename,
@@ -430,13 +470,14 @@ async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 2
       };
     }
 
-    await fs.writeFile(filePath, buffer);
+    // ✅ 파일 stat으로 최종 크기 확인 (실제 쓰여진 바이트)
+    const finalStats = await fs.stat(filePath);
 
     return {
       success: true,
       filePath,
       filename,
-      size,
+      size: finalStats.size,
       cached: false,
     };
   } catch (error) {
@@ -452,6 +493,7 @@ async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 2
 // ---------------------------------------------------------------------------
 // 안전하고 최적화된 사진 다운로드
 // - videoSaveFolder/images 경로 사용
+// - Stream 기반 쓰기 (메모리 효율)
 // ---------------------------------------------------------------------------
 async function downloadPhotoOptimized(url, filename, onProgress) {
   try {
@@ -483,8 +525,8 @@ async function downloadPhotoOptimized(url, filename, onProgress) {
       throw new Error("cancelled");
     }
 
-    // 다운로드
-    const { buffer, size } = await new Promise((resolve, reject) => {
+    // ✅ Stream 기반 다운로드: 메모리에 전체 버퍼를 축적하지 않고 실시간으로 파일에 쓰기
+    const { size } = await new Promise((resolve, reject) => {
       const protocol = url.startsWith("https:") ? https : http;
 
       const request = protocol.get(url, (response) => {
@@ -499,14 +541,17 @@ async function downloadPhotoOptimized(url, filename, onProgress) {
 
         const totalSize = parseInt(response.headers["content-length"] || "0", 10);
         let downloadedSize = 0;
-        const chunks = [];
         let speedCheckTime = Date.now();
         let lastCheckSize = 0;
         let slowServerDetected = false;
 
+        // ✅ WriteStream으로 파일에 직접 쓰기 (메모리 효율)
+        const writeStream = fs.createWriteStream(filePath);
+
         response.on("data", (chunk) => {
           // 취소 확인
           if (isCancelled()) {
+            writeStream.destroy();
             request.destroy();
             reject(new Error("cancelled"));
             return;
@@ -526,6 +571,7 @@ async function downloadPhotoOptimized(url, filename, onProgress) {
             if (downloadedInCheck < 500 * 1024 && elapsedMs >= 5000) {
               console.warn(`[사진 다운로드 속도 낮음] ${filename}: ${speedKBps.toFixed(1)}KB/s (< 100KB/s) → 스킵`);
               slowServerDetected = true;
+              writeStream.destroy();
               request.destroy();
               return reject(new Error(`다운로드 속도 너무 느림 (${speedKBps.toFixed(1)}KB/s 이하)`));
             }
@@ -535,53 +581,81 @@ async function downloadPhotoOptimized(url, filename, onProgress) {
             lastCheckSize = downloadedSize;
           }
 
-          chunks.push(chunk);
-
+          // ✅ 진행률: 다운로드 진행률만 추적 (쓰기는 자동)
           if (onProgress && totalSize > 0) {
             const progress = Math.round((downloadedSize / totalSize) * 100);
             onProgress(progress);
           }
+
+          // WriteStream에 chunk 쓰기 (backpressure 처리)
+          if (!writeStream.write(chunk)) {
+            response.pause();
+          }
+        });
+
+        writeStream.on("drain", () => {
+          response.resume();
         });
 
         response.on("end", () => {
           // 취소 확인
           if (isCancelled()) {
+            writeStream.destroy();
             reject(new Error("cancelled"));
             return;
           }
-          resolve({ buffer: Buffer.concat(chunks), size: downloadedSize });
+          writeStream.end();
         });
 
-        response.on("error", reject);
-      });
+        response.on("error", (err) => {
+          writeStream.destroy();
+          reject(err);
+        });
 
-      // 요청 추적
-      currentRequests.push(request);
+        // ✅ Stream 완료: 이 시점에 파일이 완전히 디스크에 쓰여짐
+        writeStream.on("finish", () => {
+          // 쓰기 스트림이 완전히 종료됨 = 파일이 디스크에 저장됨
+          resolve({ size: downloadedSize });
+        });
 
-      request.on("error", reject);
-      request.on("close", () => {
-        // 완료된 요청 제거
-        const index = currentRequests.indexOf(request);
-        if (index > -1) {
-          currentRequests.splice(index, 1);
-        }
-      });
+        writeStream.on("error", (err) => {
+          request.destroy();
+          reject(err);
+        });
 
-      // ⭐ 타임아웃 60초 → 15초로 단축
-      request.setTimeout(15000, () => {
-        request.destroy();
-        reject(new Error("다운로드 타임아웃 (15초)"));
+        // 요청 추적
+        currentRequests.push(request);
+
+        request.on("error", (err) => {
+          writeStream.destroy();
+          reject(err);
+        });
+
+        request.on("close", () => {
+          // 완료된 요청 제거
+          const index = currentRequests.indexOf(request);
+          if (index > -1) {
+            currentRequests.splice(index, 1);
+          }
+        });
+
+        // ⭐ 타임아웃 60초 → 15초로 단축
+        request.setTimeout(15000, () => {
+          writeStream.destroy();
+          request.destroy();
+          reject(new Error("다운로드 타임아웃 (15초)"));
+        });
       });
     });
 
-    // ✅ 원본 그대로 저장 (변환 없음)
-    await fs.writeFile(filePath, buffer);
+    // ✅ 파일 stat으로 최종 크기 확인 (실제 쓰여진 바이트)
+    const finalStats = await fs.stat(filePath);
 
     return {
       success: true,
       filePath,
       filename,
-      size,
+      size: finalStats.size,
       cached: false,
     };
   } catch (error) {
