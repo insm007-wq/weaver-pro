@@ -653,10 +653,11 @@ export default function ProjectManager() {
                 onClick={createNewProject}
                 disabled={creating || !newProjectTopic.trim()}
                 icon={creating ? <Spinner size="tiny" /> : <AddRegular />}
+                style={{ flex: 1 }}
               >
                 {creating ? "생성 중..." : "프로젝트 생성"}
               </Button>
-              <Button appearance="secondary" onClick={() => setShowCreateForm(false)}>
+              <Button appearance="secondary" onClick={() => setShowCreateForm(false)} style={{ flex: 1 }}>
                 취소
               </Button>
             </div>
