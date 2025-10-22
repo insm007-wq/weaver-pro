@@ -85,7 +85,8 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
       hasTriedLoadRef.current = true;
       const timer = setTimeout(() => {
         if (!srtConnected && !mp3Connected && !isLoading) {
-          handleInsertFromScript();
+          // 자동 로드: isAutoLoad=true (에러 메시지 없음)
+          handleInsertFromScript(true);
         }
       }, 100);
 
@@ -264,7 +265,8 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
       // 즉시 파일 로드 (setTimeout 제거하여 경합 제거)
       if (!srtConnected && !mp3Connected && !isLoading) {
         console.log("[MediaEditPage] 자동으로 파일 불러오는 중...");
-        handleInsertFromScript();
+        // 자동 로드: isAutoLoad=true (에러 메시지 없음)
+        handleInsertFromScript(true);
       }
     };
 

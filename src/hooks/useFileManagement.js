@@ -126,7 +126,8 @@ export const useFileManagement = () => {
   }, []);
 
   // 대본에서 가져오기 (ScriptVoiceGenerator에서 생성된 파일들 로드)
-  const handleInsertFromScript = useCallback(async () => {
+  // isAutoLoad: true면 자동 로드 (조용히 실패), false면 사용자 클릭 (에러 메시지 표시)
+  const handleInsertFromScript = useCallback(async (isAutoLoad = false) => {
     setIsLoading(true);
 
     try {
@@ -154,7 +155,9 @@ export const useFileManagement = () => {
 
       // 폴더가 여전히 설정되지 않았으면 에러
       if (!videoSaveFolder) {
-        showError("프로젝트 저장 폴더가 설정되지 않았습니다. 설정 탭에서 폴더를 지정해주세요.");
+        if (!isAutoLoad) {
+          showError("프로젝트 저장 폴더가 설정되지 않았습니다. 설정 탭에서 폴더를 지정해주세요.");
+        }
         return;
       }
 
@@ -184,12 +187,17 @@ export const useFileManagement = () => {
       } else if (loadedMp3) {
         showSuccess("오디오 파일을 찾았습니다. 자막 파일을 업로드해주세요.");
       } else {
-        showError(`가져올 파일이 없습니다.\n\n📍 경로: ${videoSaveFolder}\n\n대본 탭에서 먼저 대본을 생성하세요.`);
-        console.debug("[handleInsertFromScript] 디버그 정보:", debugInfo);
+        // 자동 로드면 조용히 실패, 수동 클릭이면 에러 메시지 표시
+        if (!isAutoLoad) {
+          showError(`가져올 파일이 없습니다.\n\n📍 경로: ${videoSaveFolder}\n\n대본 탭에서 먼저 대본을 생성하세요.`);
+          console.debug("[handleInsertFromScript] 디버그 정보:", debugInfo);
+        }
       }
     } catch (error) {
       console.error("[handleInsertFromScript] 전체 오류:", error);
-      showError(`파일을 가져오는 중 오류가 발생했습니다.\n\n❌ ${error.message}`);
+      if (!isAutoLoad) {
+        showError(`파일을 가져오는 중 오류가 발생했습니다.\n\n❌ ${error.message}`);
+      }
     } finally {
       setIsLoading(false);
     }

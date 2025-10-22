@@ -838,6 +838,21 @@ function register() {
       const outputFolder = path.join(videoSaveFolder, "output");
       await fsp.mkdir(outputFolder, { recursive: true });
 
+      // ✅ output 폴더의 기존 파일 삭제 (새 내보내기 시 깔끔하게)
+      try {
+        const existingFiles = await fsp.readdir(outputFolder);
+        for (const file of existingFiles) {
+          const filePath = path.join(outputFolder, file);
+          const stat = await fsp.stat(filePath);
+          if (stat.isFile()) {
+            await fsp.unlink(filePath);
+            console.log(`🗑️ 삭제됨: ${filePath}`);
+          }
+        }
+      } catch (error) {
+        console.warn(`⚠️ output 폴더 정리 중 오류: ${error.message}`);
+      }
+
       // 출력 파일명 (타임스탬프 포함)
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
       const outputPath = path.join(outputFolder, `video_${timestamp}.mp4`);
