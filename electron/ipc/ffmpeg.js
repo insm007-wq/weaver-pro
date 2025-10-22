@@ -23,6 +23,87 @@ const path = require("path");
 const fs = require("fs");
 const fsp = require("fs").promises;
 
+// ============================================================================
+// 여러 줄 균형 분할 (한국어 기준 간단 규칙)
+// ============================================================================
+function splitBalancedLines(text = "", maxLines = 2, fontSize = 52) {
+  const clean = text.replace(/\s+/g, " ").trim();
+
+  if (text.includes("\n")) {
+    const lines = text.split("\n").map(line => line.trim()).filter(line => line);
+    return lines.slice(0, maxLines);
+  }
+
+  if (maxLines === 1) {
+    return [clean];
+  }
+
+  if (clean.length <= 20) {
+    return [clean];
+  }
+
+  const charWidthPx = fontSize * 0.72;
+  const maxWidthPx = 1632;
+  const maxCharsPerLine = Math.floor(maxWidthPx / charWidthPx);
+
+  let effectiveMaxLines = maxLines;
+  const avgCharsPerLine = clean.length / maxLines;
+  if (avgCharsPerLine > maxCharsPerLine && maxLines === 2) {
+    effectiveMaxLines = 3;
+  }
+
+  if (avgCharsPerLine / effectiveMaxLines > maxCharsPerLine && effectiveMaxLines === 3) {
+    effectiveMaxLines = 4;
+  }
+
+  if (avgCharsPerLine / effectiveMaxLines > maxCharsPerLine && effectiveMaxLines === 4) {
+    effectiveMaxLines = 5;
+  }
+
+  const lines = [];
+  let remaining = clean;
+
+  for (let lineIndex = 0; lineIndex < effectiveMaxLines && remaining.length > 0; lineIndex++) {
+    const isLastLine = lineIndex === effectiveMaxLines - 1;
+
+    if (isLastLine) {
+      lines.push(remaining.trim());
+      break;
+    }
+
+    const remainingLines = effectiveMaxLines - lineIndex;
+    const targetLength = Math.ceil(remaining.length / remainingLines);
+    let cut = Math.min(targetLength, remaining.length);
+    let foundBreak = false;
+
+    const searchRange = Math.floor(targetLength * 0.2);
+    for (let offset = 0; offset <= searchRange && cut + offset < remaining.length; offset++) {
+      if (offset > 0 && cut + offset < remaining.length && /[ \-–—·,.:;!?]/.test(remaining[cut + offset])) {
+        cut = cut + offset + 1;
+        foundBreak = true;
+        break;
+      }
+      if (offset > 0 && cut - offset > 0 && /[ \-–—·,.:;!?]/.test(remaining[cut - offset])) {
+        cut = cut - offset + 1;
+        foundBreak = true;
+        break;
+      }
+    }
+
+    if (!foundBreak && cut < remaining.length) {
+      cut = targetLength;
+    }
+
+    const line = remaining.slice(0, cut).trim();
+    if (line) {
+      lines.push(line);
+    }
+    remaining = remaining.slice(cut).trim();
+  }
+
+  return lines.filter(line => line);
+}
+
 // store를 안전하게 로드
 let store = null;
 try {
@@ -150,78 +231,6 @@ function srtTimestampToSeconds(timestamp) {
  * @param {number} maxLines - 최대 줄 수
  * @returns {string[]} 분할된 줄 배열
  */
-function splitBalancedLines(text = "", maxLines = 2) {
-  const clean = text.replace(/\s+/g, " ").trim();
-
-  // 이미 줄바꿈이 있으면 그대로 사용
-  if (text.includes("\n")) {
-    const lines = text.split("\n").map(line => line.trim()).filter(line => line);
-    return lines.slice(0, maxLines);
-  }
-
-  // maxLines가 1이면 분할하지 않음
-  if (maxLines === 1) {
-    return [clean];
-  }
-
-  // 텍스트가 너무 짧으면 1줄로 반환 (20자 이하)
-  if (clean.length <= 20) {
-    return [clean];
-  }
-
-  // ✅ 자동 줄 수 조정: 텍스트가 너무 길면 줄 수 증가
-  let effectiveMaxLines = maxLines;
-  const avgCharsPerLine = clean.length / maxLines;
-  if (avgCharsPerLine > 40 && maxLines === 2) {
-    effectiveMaxLines = 3;
-  }
-
-  // effectiveMaxLines만큼 균등 분할
-  const lines = [];
-  let remaining = clean;
-
-  for (let lineIndex = 0; lineIndex < effectiveMaxLines && remaining.length > 0; lineIndex++) {
-    const isLastLine = lineIndex === effectiveMaxLines - 1;
-
-    if (isLastLine) {
-      lines.push(remaining.trim());
-      break;
-    }
-
-    const remainingLines = effectiveMaxLines - lineIndex;
-    const targetLength = Math.ceil(remaining.length / remainingLines);
-
-    let cut = Math.min(targetLength, remaining.length);
-    let foundBreak = false;
-
-    const searchRange = Math.floor(targetLength * 0.2);
-    for (let offset = 0; offset <= searchRange && cut + offset < remaining.length; offset++) {
-      if (offset > 0 && cut + offset < remaining.length && /[ \-–—·,.:;!?]/.test(remaining[cut + offset])) {
-        cut = cut + offset + 1;
-        foundBreak = true;
-        break;
-      }
-      if (offset > 0 && cut - offset > 0 && /[ \-–—·,.:;!?]/.test(remaining[cut - offset])) {
-        cut = cut - offset + 1;
-        foundBreak = true;
-        break;
-      }
-    }
-
-    if (!foundBreak && cut < remaining.length) {
-      cut = targetLength;
-    }
-
-    const line = remaining.slice(0, cut).trim();
-    if (line) {
-      lines.push(line);
-    }
-    remaining = remaining.slice(cut).trim();
-  }
-
-  return lines.filter(line => line);
-}
-
 // SRT 파일 파싱 함수
 /**
  * SRT 자막 파일 파싱
@@ -295,6 +304,7 @@ function createDrawtextFilterAdvanced(subtitle, settings, textFilePath, videoWid
     useOutline = true,
     useShadow = false,
     finePositionOffset = 0,
+    maxWidth = 85,
   } = settings;
 
   // 폰트 파일 경로 매핑 (동적 경로 사용)
@@ -1567,8 +1577,12 @@ async function generateSrtFromScenes(scenes, srtPath) {
       };
 
       // ✅ 텍스트를 maxLines에 맞게 처리 (프론트엔드와 동일한 로직 사용)
+      // fontSize를 포함해서 전달 (폰트 크기에 따른 픽셀 기반 줄바꿈)
       let text = scene.text || "";
-      const lines = splitBalancedLines(text, subtitleSettings.maxLines);
+      const lines = splitBalancedLines(text, subtitleSettings.maxLines, subtitleSettings.fontSize);
+      console.log(`[SRT 생성] 원본 텍스트: "${text}" (${text.length}글자)`);
+      console.log(`[SRT 생성] fontSize: ${subtitleSettings.fontSize}, maxLines: ${subtitleSettings.maxLines}`);
+      console.log(`[SRT 생성] 분할 결과: ${lines.length}줄`, lines);
       text = lines.join("\n");
 
       srtContent += `${i + 1}\n`;

@@ -32,12 +32,31 @@ const VideoPreview = memo(function VideoPreview({
   // 전역 자막 설정 관리
   const [subtitleSettings, setSubtitleSettings] = useState(null);
 
+  // 프리뷰 컨테이너 크기 측정 (동적 SCALE_FACTOR 계산용)
+  const previewContainerRef = useRef(null);
+  const [previewWidth, setPreviewWidth] = useState(0);
+
   // 시간 포맷 헬퍼
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
+
+  // 프리뷰 컨테이너 크기 측정 (동적 스케일 팩터 계산용)
+  useEffect(() => {
+    const measureContainer = () => {
+      if (previewContainerRef.current) {
+        const rect = previewContainerRef.current.getBoundingClientRect();
+        setPreviewWidth(rect.width);
+      }
+    };
+
+    measureContainer();
+    window.addEventListener("resize", measureContainer);
+
+    return () => window.removeEventListener("resize", measureContainer);
+  }, []);
 
   // 전역 자막 설정 로드
   useEffect(() => {
@@ -743,9 +762,9 @@ const VideoPreview = memo(function VideoPreview({
     } = subtitleSettings;
 
     // 프리뷰 크기 비율 계산 (1920x1080 기준 -> 프리뷰 크기로 스케일링)
-    // 프리뷰 컨테이너의 실제 크기를 알 수 없으므로 상대적인 비율 사용
-    // 일반적으로 프리뷰는 실제 크기의 40-50% 정도
-    const SCALE_FACTOR = 0.3; // 프리뷰 화면 비율 (실제 1920x1080의 30%)
+    // 실제 프리뷰 컨테이너 크기를 기반으로 동적 계산
+    // previewWidth가 0이면 기본값 0.3 사용 (초기 로드 시)
+    const SCALE_FACTOR = previewWidth > 0 ? previewWidth / 1920 : 0.3;
 
     const scaledFontSize = fontSize * SCALE_FACTOR;
     const scaledOutlineWidth = outlineWidth * SCALE_FACTOR;
@@ -838,7 +857,7 @@ const VideoPreview = memo(function VideoPreview({
             border: useBackground ? "1px solid rgba(255, 255, 255, 0.1)" : "none",
           }}
         >
-          {splitBalancedLines(selectedScene.text, maxLines).map((line, i) => (
+          {splitBalancedLines(selectedScene.text, maxLines, fontSize).map((line, i) => (
             <div key={i} style={{
               whiteSpace: "nowrap",
               overflow: "visible"
@@ -861,6 +880,7 @@ const VideoPreview = memo(function VideoPreview({
     >
       {/* 프리뷰 영역 - 16:9 비율 */}
       <div
+        ref={previewContainerRef}
         style={{
           width: "100%",
           aspectRatio: "16 / 9",
