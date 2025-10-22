@@ -123,11 +123,6 @@ const BottomFixedBar = memo(({
     }
   }, [onClose]);
 
-  // 닫힌 상태면 숨김
-  if (isClosed) {
-    return null;
-  }
-
   // 기본 보더 색상 설정 (메모이제이션)
   const finalBorderColor = useMemo(() => {
     return borderColor || (isComplete ? tokens.colorPaletteGreenBorder2 : COLORS.LOADING_DOT);
@@ -160,6 +155,11 @@ const BottomFixedBar = memo(({
     return isExpanded ? `slideDown ${ANIMATIONS.EXPAND_DURATION} ${ANIMATIONS.EASE_OUT}`
                       : `slideUp ${ANIMATIONS.COLLAPSE_DURATION} ${ANIMATIONS.EASE_OUT}`;
   }, [isExpanded]);
+
+  // 닫힌 상태면 렌더링하지 않음 (hooks 호출 후에 처리)
+  if (isClosed) {
+    return null;
+  }
 
   return (
     <>
