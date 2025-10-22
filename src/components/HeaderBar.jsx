@@ -20,8 +20,8 @@ const useStyles = makeStyles({
   resetButton_style1: {
     minWidth: "140px",
     color: "#E81B23",
-    fontWeight: tokens.fontWeightSemibold,
-    fontSize: tokens.fontSizeBase400,
+    fontWeight: tokens.fontWeightRegular,
+    fontSize: tokens.fontSizeBase300,
     transition: "all 0.2s ease",
     "&:hover": {
       color: "#C91220",
@@ -39,8 +39,8 @@ const useStyles = makeStyles({
   resetButton_style2: {
     minWidth: "140px",
     color: "#D81118",
-    fontWeight: tokens.fontWeightSemibold,
-    fontSize: tokens.fontSizeBase400,
+    fontWeight: tokens.fontWeightRegular,
+    fontSize: tokens.fontSizeBase300,
     transition: "all 0.2s ease",
     "&:hover": {
       color: "#B00D13",
@@ -58,8 +58,8 @@ const useStyles = makeStyles({
   resetButton_style3: {
     minWidth: "140px",
     color: "#CC0F16",
-    fontWeight: tokens.fontWeightSemibold,
-    fontSize: tokens.fontSizeBase400,
+    fontWeight: tokens.fontWeightRegular,
+    fontSize: tokens.fontSizeBase300,
     transition: "all 0.2s ease",
     "&:hover": {
       color: "#B00A11",
@@ -77,8 +77,8 @@ const useStyles = makeStyles({
   resetButton_style4: {
     minWidth: "140px",
     color: "#B80914",
-    fontWeight: tokens.fontWeightSemibold,
-    fontSize: tokens.fontSizeBase400,
+    fontWeight: tokens.fontWeightRegular,
+    fontSize: tokens.fontSizeBase300,
     transition: "all 0.2s ease",
     "&:hover": {
       color: "#9A0710",
@@ -121,11 +121,11 @@ export default function HeaderBar({ onOpenSettings }) {
         aria-label="초기화"
         title="프로젝트 전체 초기화"
         className={resetButtonClassName}
-        size="large"
+        style={{ minWidth: "120px", fontSize: "14px" }}
       >
         초기화
       </Button>
-      <Button appearance="subtle" icon={<SettingsRegular />} onClick={onOpenSettings} aria-label="설정" style={{ minWidth: "120px" }}>
+      <Button appearance="subtle" icon={<SettingsRegular />} onClick={onOpenSettings} aria-label="설정" style={{ minWidth: "120px", fontSize: "14px" }}>
         설정
       </Button>
     </header>
