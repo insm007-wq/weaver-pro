@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useEffect, Suspense, lazy, memo } from "react";
+import { useCallback, useMemo, useState, useEffect, Suspense, lazy, memo, useRef } from "react";
 import { makeStyles, shorthands, tokens, Card, CardHeader, Body1, Title1, Title2, Subtitle1, Text, mergeClasses, Button } from "@fluentui/react-components";
 import KeepAlivePane from "./components/common/KeepAlivePane";
 import { LoadingSpinner, GlobalToast } from "./components/common";
@@ -103,6 +103,10 @@ function App() {
   const [isMediaDownloading, setIsMediaDownloading] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(null); // null: 로딩 중, false: 미동의, true: 동의
   const [hasProject, setHasProject] = useState(true); // 프로젝트 존재 여부
+
+  // 이벤트 리스너 등록 여부 추적 (중복 방지)
+  const eventListenersRef = useRef({});
+
   const canOpenWithoutProject = true;
   const styles = useStyles();
   const fontStyles = useFontOverrideStyles();
@@ -112,16 +116,22 @@ function App() {
     const checkTermsAcceptance = async () => {
       try {
         console.log("🔍 [App.jsx] 약관 동의 여부 확인 중...");
-        console.log("🔍 [App.jsx] window.electron:", window.electron);
-        console.log("🔍 [App.jsx] window.electron.store:", window.electron?.store);
-        const accepted = await window.electron?.store?.getTermsAccepted();
-        console.log("🔍 [App.jsx] 약관 동의 상태:", accepted);
-        setTermsAccepted(accepted || false);
+
+        if (!window.electron?.store?.getTermsAccepted) {
+          console.warn("⚠️ [App.jsx] window.electron.store.getTermsAccepted를 사용할 수 없습니다");
+          setTermsAccepted(false);
+          return;
+        }
+
+        const accepted = await window.electron.store.getTermsAccepted();
+        console.log("✅ [App.jsx] 약관 동의 상태:", accepted);
+        setTermsAccepted(accepted === true ? true : false);
       } catch (error) {
         console.error("❌ [App.jsx] 약관 동의 여부 확인 실패:", error);
         setTermsAccepted(false);
       }
     };
+
     checkTermsAcceptance();
   }, []);
 
@@ -129,17 +139,24 @@ function App() {
   useEffect(() => {
     const checkProjectExists = async () => {
       try {
-        const result = await window.api?.invoke?.("project:list");
+        if (!window.api?.invoke) {
+          console.warn("⚠️ [App.jsx] window.api.invoke를 사용할 수 없습니다");
+          setHasProject(false);
+          return;
+        }
+
+        const result = await window.api.invoke("project:list");
+
         if (result?.success) {
           const projects = Array.isArray(result.data?.projects)
             ? result.data.projects
             : Array.isArray(result.projects)
             ? result.projects
             : [];
-          // 프로젝트가 1개 이상 존재하면 true
           setHasProject(projects.length > 0);
           console.log("📊 [App.jsx] 프로젝트 존재 여부:", projects.length > 0, `(${projects.length}개)`);
         } else {
+          console.warn("⚠️ [App.jsx] 프로젝트 목록 조회 실패:", result?.error);
           setHasProject(false);
         }
       } catch (error) {
@@ -167,7 +184,14 @@ function App() {
     const handleProjectDeleted = async () => {
       console.log("🗑️ [App.jsx] 프로젝트 삭제됨 - hasProject 상태 갱신");
       try {
-        const result = await window.api?.invoke?.("project:list");
+        if (!window.api?.invoke) {
+          console.warn("⚠️ [App.jsx] window.api.invoke를 사용할 수 없습니다");
+          setHasProject(false);
+          return;
+        }
+
+        const result = await window.api.invoke("project:list");
+
         if (result?.success) {
           const projects = Array.isArray(result.data?.projects)
             ? result.data.projects
@@ -176,6 +200,9 @@ function App() {
             : [];
           setHasProject(projects.length > 0);
           console.log("📊 [App.jsx] 프로젝트 존재 여부 갱신:", projects.length > 0, `(${projects.length}개)`);
+        } else {
+          console.warn("⚠️ [App.jsx] 프로젝트 목록 갱신 실패:", result?.error);
+          setHasProject(false);
         }
       } catch (error) {
         console.error("❌ [App.jsx] 프로젝트 상태 갱신 실패:", error);
@@ -183,33 +210,50 @@ function App() {
       }
     };
 
+    if (eventListenersRef.current["project:deleted"]) {
+      return; // 이미 등록됨
+    }
+
     window.addEventListener("project:deleted", handleProjectDeleted);
-    return () => window.removeEventListener("project:deleted", handleProjectDeleted);
+    eventListenersRef.current["project:deleted"] = true;
+
+    return () => {
+      window.removeEventListener("project:deleted", handleProjectDeleted);
+      delete eventListenersRef.current["project:deleted"];
+    };
   }, []);
 
-  const handleAcceptTerms = async () => {
+  const handleAcceptTerms = useCallback(async () => {
     try {
       console.log("💾 [App.jsx] 약관 동의 저장 시도...");
-      const result = await window.electron?.store?.setTermsAccepted(true);
-      console.log("💾 [App.jsx] 약관 동의 저장 결과:", result);
+
+      if (!window.electron?.store?.setTermsAccepted) {
+        console.error("❌ [App.jsx] window.electron.store.setTermsAccepted를 사용할 수 없습니다");
+        return;
+      }
+
+      await window.electron.store.setTermsAccepted(true);
+      console.log("✅ [App.jsx] 약관 동의 저장 완료");
       setTermsAccepted(true);
     } catch (error) {
       console.error("❌ [App.jsx] 약관 동의 저장 실패:", error);
     }
-  };
+  }, []);
 
-  // 디버깅: 상태 변경 확인
-  useEffect(() => {
-    console.log("🔴 App.jsx - isScriptGenerating:", isScriptGenerating);
-  }, [isScriptGenerating]);
 
+  // 콜백 함수들 (메모이제이션으로 자식 컴포넌트 불필요한 리렌더링 방지)
   const handleCreateProject = useCallback((name) => {
     setProjectName(name);
     setCurrentPage("script");
   }, []);
-  
-  const handleSelectMenu = useCallback((key) => setCurrentPage(key), []);
-  const handleOpenSettings = useCallback(() => setCurrentPage("settings"), []);
+
+  const handleSelectMenu = useCallback((key) => {
+    setCurrentPage(key);
+  }, []);
+
+  const handleOpenSettings = useCallback(() => {
+    setCurrentPage("settings");
+  }, []);
 
   // 메모이제이션된 계산값들
   const shouldShowProjectInit = useMemo(() => 
@@ -219,69 +263,73 @@ function App() {
 
   const isHomePage = useMemo(() => currentPage === null, [currentPage]);
 
+  // 파일 다운로드 이벤트 리스너
   useEffect(() => {
-    if (!window.__autoPlaceQueue) window.__autoPlaceQueue = [];
-    const off = window.api?.onFileDownloaded?.((payload) => {
+    if (eventListenersRef.current["onFileDownloaded"]) {
+      return; // 이미 등록됨
+    }
+
+    if (!window.__autoPlaceQueue) {
+      window.__autoPlaceQueue = [];
+    }
+
+    let unsubscribe;
+    try {
+      if (window.api?.onFileDownloaded) {
+        unsubscribe = window.api.onFileDownloaded((payload) => {
+          try {
+            if (payload?.path) {
+              window.__autoPlaceQueue.push(payload);
+            }
+          } catch (error) {
+            console.error("❌ [App.jsx] 파일 다운로드 큐 추가 실패:", error);
+          }
+        });
+        eventListenersRef.current["onFileDownloaded"] = true;
+      }
+    } catch (error) {
+      console.error("❌ [App.jsx] 파일 다운로드 리스너 등록 실패:", error);
+    }
+
+    return () => {
       try {
-        if (payload?.path) window.__autoPlaceQueue.push(payload);
-      } catch {}
+        if (unsubscribe) {
+          unsubscribe();
+          delete eventListenersRef.current["onFileDownloaded"];
+        }
+      } catch (error) {
+        console.error("❌ [App.jsx] 파일 다운로드 리스너 제거 실패:", error);
+      }
+    };
+  }, []);
+
+  // 페이지 네비게이션 이벤트 리스너 (통합 관리)
+  useEffect(() => {
+    const navigationEventMap = {
+      'navigate-to-download': 'draft',
+      'navigate-to-refine': 'refine',
+      'navigate-to-assemble': 'assemble',
+    };
+
+    const handlers = {};
+
+    // 이벤트 리스너 등록
+    Object.entries(navigationEventMap).forEach(([eventName, pageKey]) => {
+      handlers[eventName] = () => {
+        setCurrentPage(pageKey);
+      };
+      window.addEventListener(eventName, handlers[eventName]);
+      eventListenersRef.current[eventName] = true;
     });
+
+    // 정리 함수
     return () => {
-      try {
-        off && off();
-      } catch {}
-    };
-  }, []);
-
-  // 미디어 다운로드 페이지로 이동하는 커스텀 이벤트 리스너
-  useEffect(() => {
-    const handleNavigateToDownload = () => {
-      setCurrentPage('draft');
-    };
-
-    window.addEventListener('navigate-to-download', handleNavigateToDownload);
-
-    return () => {
-      window.removeEventListener('navigate-to-download', handleNavigateToDownload);
-    };
-  }, []);
-
-  // 영상 완성 페이지로 이동하는 커스텀 이벤트 리스너
-  useEffect(() => {
-    const handleNavigateToRefine = () => {
-      setCurrentPage('refine');
-    };
-
-    window.addEventListener('navigate-to-refine', handleNavigateToRefine);
-
-    return () => {
-      window.removeEventListener('navigate-to-refine', handleNavigateToRefine);
-    };
-  }, []);
-
-  // 미디어 준비 페이지로 이동하는 커스텀 이벤트 리스너
-  useEffect(() => {
-    const handleNavigateToAssemble = () => {
-      setCurrentPage('assemble');
-    };
-
-    window.addEventListener('navigate-to-assemble', handleNavigateToAssemble);
-
-    return () => {
-      window.removeEventListener('navigate-to-assemble', handleNavigateToAssemble);
-    };
-  }, []);
-
-  // 미디어 다운로드 페이지로 이동하는 커스텀 이벤트 리스너
-  useEffect(() => {
-    const handleNavigateToDownload = () => {
-      setCurrentPage('draft');
-    };
-
-    window.addEventListener('navigate-to-download', handleNavigateToDownload);
-
-    return () => {
-      window.removeEventListener('navigate-to-download', handleNavigateToDownload);
+      Object.entries(navigationEventMap).forEach(([eventName]) => {
+        if (eventListenersRef.current[eventName]) {
+          window.removeEventListener(eventName, handlers[eventName]);
+          delete eventListenersRef.current[eventName];
+        }
+      });
     };
   }, []);
 
@@ -301,14 +349,16 @@ function App() {
 
   return (
     <div className={mergeClasses(styles.root, fontStyles.globalFont)}>
-      <Suspense fallback={<MemoizedLoadingFallback label="헤더 로딩 중..." />}>
+      {/* 헤더 영역 - 독립적인 Suspense */}
+      <Suspense fallback={<div className={styles.header} />}>
         <div className={styles.header}>
           <HeaderBar onOpenSettings={handleOpenSettings} />
         </div>
       </Suspense>
 
       <div className={styles.body}>
-        <Suspense fallback={<MemoizedLoadingFallback />}>
+        {/* 사이드바 - 독립적인 Suspense */}
+        <Suspense fallback={<div style={{ width: "240px" }} />}>
           <Sidebar
             onSelectMenu={handleSelectMenu}
             isScriptGenerating={isScriptGenerating}
@@ -318,12 +368,14 @@ function App() {
           />
         </Suspense>
 
+        {/* 메인 컨텐츠 영역 */}
         <main className={styles.main}>
           <Suspense fallback={<MemoizedLoadingFallback />}>
             {shouldShowProjectInit ? (
               <ProjectInit onCreate={handleCreateProject} />
             ) : (
               <>
+                {/* 홈 페이지 - KeepAlivePane으로 상태 보존 */}
                 <KeepAlivePane active={isHomePage}>
                   <Card className={styles.welcomeCard}>
                     <CardHeader
@@ -356,10 +408,12 @@ function App() {
                   </Card>
                 </KeepAlivePane>
 
+                {/* 썸네일 생성기 페이지 - KeepAlivePane 유지 */}
                 <KeepAlivePane active={currentPage === "thumbnail"}>
                   <ThumbnailGenerator />
                 </KeepAlivePane>
 
+                {/* 대본/음성 생성 페이지 - KeepAlivePane 유지 */}
                 <KeepAlivePane active={currentPage === "script"}>
                   <ScriptVoiceGenerator onGeneratingChange={setIsScriptGenerating} />
                 </KeepAlivePane>
@@ -383,10 +437,12 @@ function App() {
                 </div>
 
 
+                {/* 설정 페이지 - KeepAlivePane 유지 (상태 보존) */}
                 <KeepAlivePane active={currentPage === "settings"}>
                   <SettingsPage onBack={() => setCurrentPage(null)} />
                 </KeepAlivePane>
 
+                {/* 프로젝트 관리 페이지 - KeepAlivePane 유지 (상태 보존) */}
                 <KeepAlivePane active={currentPage === "projects"}>
                   <ProjectManager />
                 </KeepAlivePane>
@@ -396,7 +452,7 @@ function App() {
         </main>
       </div>
 
-      {/* 프로젝트 없을 때 하단 고정바 */}
+      {/* 프로젝트 없을 때 하단 고정바 - 프로젝트 생성 유도 */}
       {!hasProject && (
         <div
           style={{
@@ -412,7 +468,6 @@ function App() {
             animation: "slideInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) both",
           }}
         >
-          {/* 고정바 콘텐츠 */}
           <div
             style={{
               padding: `${tokens.spacingVerticalL} ${tokens.spacingHorizontalXXL}`,
@@ -423,9 +478,8 @@ function App() {
               cursor: "pointer",
             }}
           >
-            {/* 왼쪽: 상태 정보 */}
+            {/* 상태 정보 */}
             <div style={{ display: "flex", alignItems: "center", gap: tokens.spacingHorizontalM, flex: 1 }}>
-              {/* 상태 아이콘 */}
               <div
                 style={{
                   width: 10,
@@ -435,7 +489,6 @@ function App() {
                   animation: "pulse 2s infinite",
                 }}
               />
-              {/* 상태 텍스트 (깜빡임 애니메이션) */}
               <Text
                 size={300}
                 weight="semibold"
@@ -447,7 +500,7 @@ function App() {
               </Text>
             </div>
 
-            {/* 오른쪽: 액션 버튼 */}
+            {/* 액션 버튼 */}
             <Button
               appearance="primary"
               onClick={() => setCurrentPage("projects")}
