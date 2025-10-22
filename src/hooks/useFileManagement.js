@@ -227,6 +227,9 @@ export const useFileManagement = () => {
 
     // 영상 완성 페이지도 초기화
     window.dispatchEvent(new CustomEvent("reset-media-edit"));
+
+    // 초기화 완료 알림
+    showSuccess("프로젝트가 초기화되었습니다! 🔄");
   }, []);
 
   return {
