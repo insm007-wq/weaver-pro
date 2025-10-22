@@ -266,7 +266,6 @@ function MediaDownloadPage({ onDownloadingChange }) {
           await window.api.setSetting({ key: "extractedKeywords", value: [] });
         }
         window.dispatchEvent(new CustomEvent("reset-keyword-extraction"));
-        showSuccess("초기화 완료");
       } catch (error) {
         console.error("초기화 실패:", error);
         showError("초기화 중 오류 발생");
