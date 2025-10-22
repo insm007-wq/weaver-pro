@@ -62,10 +62,31 @@ const DEFAULT_PROJECT_SETTINGS = {
 };
 
 /**
+ * 프로젝트 주제 길이 제한
+ * Windows 최대 경로 길이: 260자
+ * 프로젝트 경로 기본 구조를 고려하여 안전한 제한값 설정
+ */
+const MAX_PROJECT_TOPIC_LENGTH = 50;
+
+/**
  * 자동 생성될 폴더 구조 상수
  * @type {string[]}
  */
-const FOLDER_STRUCTURE = ["scripts/", "audio/", "images/", "output/", "temp/"];
+const FOLDER_STRUCTURE = ["scripts/", "audio/", "images/", "video/", "output/", "temp/"];
+
+/**
+ * 프로젝트 전체 경로에서 루트 폴더 경로만 추출
+ * @param {string} fullPath - 프로젝트 전체 경로 (예: C:\Projects\MyProject)
+ * @returns {string} 루트 폴더 경로 (예: C:\Projects)
+ */
+const getProjectRootPath = (fullPath) => {
+  if (!fullPath) return "";
+  const separatorIndex = Math.max(
+    fullPath.lastIndexOf('\\'),
+    fullPath.lastIndexOf('/')
+  );
+  return fullPath.substring(0, separatorIndex);
+};
 
 /**
  * ProjectManager 컴포넌트 - 프로젝트 생성 및 관리
@@ -100,6 +121,17 @@ export default function ProjectManager() {
   const [projectToDelete, setProjectToDelete] = useState(null);
 
   /**
+   * 프로젝트 주제 입력 필터 - 폴더명으로 사용 불가능한 문자 제거 및 길이 제한
+   */
+  const handleProjectTopicChange = useCallback((value) => {
+    // 길이 제한 (50자)
+    let filtered = value.substring(0, MAX_PROJECT_TOPIC_LENGTH);
+    // Windows 폴더명 금지 문자 제거: < > : " / \ | ? *
+    filtered = filtered.replace(/[<>:"/\\|?*]/g, '');
+    setNewProjectTopic(filtered);
+  }, []);
+
+  /**
    * 컴포넌트 마운트 시 초기 데이터 로드
    */
   useEffect(() => {
@@ -109,10 +141,12 @@ export default function ProjectManager() {
   }, []);
 
   /**
-   * 설정 수정 사항 감지 및 저장 버튼 활성화 상태 업데이트 (성능 최적화)
+   * 설정 수정 사항 감지 및 저장 버튼 활성화 상태 업데이트 (성능 최적화 - 필드 비교 사용)
    */
   const isModifiedMemo = useMemo(() => {
-    return JSON.stringify(settings) !== JSON.stringify(originalSettings);
+    return settings.projectRootFolder !== originalSettings.projectRootFolder ||
+           settings.defaultProjectName !== originalSettings.defaultProjectName ||
+           settings.videoSaveFolder !== originalSettings.videoSaveFolder;
   }, [settings, originalSettings]);
 
   useEffect(() => {
@@ -125,6 +159,8 @@ export default function ProjectManager() {
   const refreshProjectData = useCallback(async () => {
     try {
       await Promise.all([loadProjects(), loadCurrentProject()]);
+      // 프로젝트 삭제 후 설정이 백엔드에서 업데이트되었으므로 최신 설정 다시 로드
+      await loadSettings();
     } catch (error) {
       console.error("프로젝트 데이터 새로고침 실패:", error);
       // 에러가 발생해도 앱이 죽지 않도록 처리
@@ -233,14 +269,7 @@ export default function ProjectManager() {
         // 현재 프로젝트가 있으면 설정 업데이트
         if (projects.length > 0) {
           const currentProj = projects[0]; // 가장 최신 프로젝트
-
-          // 프로젝트 루트 폴더 경로 추출
-          const projectRootPath = currentProj.paths.root.substring(
-            0,
-            currentProj.paths.root.lastIndexOf('\\') !== -1
-              ? currentProj.paths.root.lastIndexOf('\\')
-              : currentProj.paths.root.lastIndexOf('/')
-          );
+          const projectRootPath = getProjectRootPath(currentProj.paths.root);
 
           // 설정 업데이트
           const newSettings = {
@@ -301,22 +330,25 @@ export default function ProjectManager() {
   };
 
   /**
-   * 현재 설정된 프로젝트 설정을 전역 설정에 저장
+   * 현재 설정된 프로젝트 설정을 전역 설정에 저장 (병렬화 - 성능 개선)
    */
   const saveSettings = async () => {
     try {
-      await window.api.setSetting({
-        key: "projectRootFolder",
-        value: settings.projectRootFolder,
-      });
-      await window.api.setSetting({
-        key: "defaultProjectName",
-        value: settings.defaultProjectName,
-      });
-      await window.api.setSetting({
-        key: "videoSaveFolder",
-        value: settings.videoSaveFolder,
-      });
+      // 모든 설정을 병렬로 저장 (순차 처리 대신)
+      await Promise.all([
+        window.api.setSetting({
+          key: "projectRootFolder",
+          value: settings.projectRootFolder,
+        }),
+        window.api.setSetting({
+          key: "defaultProjectName",
+          value: settings.defaultProjectName,
+        }),
+        window.api.setSetting({
+          key: "videoSaveFolder",
+          value: settings.videoSaveFolder,
+        }),
+      ]);
 
       setOriginalSettings(settings);
 
@@ -361,10 +393,42 @@ export default function ProjectManager() {
    * 새로운 프로젝트를 생성하고 필요한 폴더 구조를 자동 생성
    */
   const createNewProject = async () => {
-    if (!newProjectTopic.trim()) {
+    const trimmedTopic = newProjectTopic.trim();
+
+    if (!trimmedTopic) {
       showGlobalToast({
         type: "error",
         text: "프로젝트 주제를 입력해주세요.",
+      });
+      return;
+    }
+
+    // 길이 검사 (50자 제한)
+    if (trimmedTopic.length > MAX_PROJECT_TOPIC_LENGTH) {
+      showGlobalToast({
+        type: "error",
+        text: `프로젝트 주제는 ${MAX_PROJECT_TOPIC_LENGTH}자 이하여야 합니다. (현재: ${trimmedTopic.length}자)`,
+      });
+      return;
+    }
+
+    // 폴더명으로 사용 불가능한 문자 검사
+    // Windows 폴더명 금지 문자: < > : " / \ | ? *
+    const invalidCharsRegex = /[<>:"/\\|?*]/;
+    if (invalidCharsRegex.test(trimmedTopic)) {
+      showGlobalToast({
+        type: "error",
+        text: "다음 문자는 사용할 수 없습니다: < > : \" / \\ | ? *",
+      });
+      return;
+    }
+
+    // 예약어 검사 (Windows 예약어)
+    const reservedNames = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'];
+    if (reservedNames.includes(trimmedTopic.toUpperCase())) {
+      showGlobalToast({
+        type: "error",
+        text: `"${trimmedTopic}"은(는) Windows 예약어입니다. 다른 이름을 사용해주세요.`,
       });
       return;
     }
@@ -387,17 +451,11 @@ export default function ProjectManager() {
         // 프로젝트 생성 완료 이벤트 발생 (App.jsx에서 감지)
         window.dispatchEvent(new CustomEvent("project:created"));
 
-        // 프로젝트 생성 후 경로 자동 저장
+        // 프로젝트 생성 후 경로 자동 저장 (백엔드에서도 자동 저장되므로 UI만 업데이트)
         try {
           const createdProject = result.project;
           if (createdProject?.topic && createdProject?.paths?.root) {
-            // 프로젝트 루트 폴더 경로 추출 (프로젝트 폴더의 부모 디렉토리)
-            const projectRootPath = createdProject.paths.root.substring(
-              0,
-              createdProject.paths.root.lastIndexOf('\\') !== -1
-                ? createdProject.paths.root.lastIndexOf('\\')
-                : createdProject.paths.root.lastIndexOf('/')
-            );
+            const projectRootPath = getProjectRootPath(createdProject.paths.root);
 
             // 설정 상태 업데이트
             const newSettings = {
@@ -406,23 +464,9 @@ export default function ProjectManager() {
               videoSaveFolder: createdProject.paths.root,
             };
             setSettings(newSettings);
-
-            // 즉시 저장 (저장 버튼 없이)
-            await window.api.setSetting({
-              key: "projectRootFolder",
-              value: projectRootPath,
-            });
-            await window.api.setSetting({
-              key: "defaultProjectName",
-              value: createdProject.topic,
-            });
-            await window.api.setSetting({
-              key: "videoSaveFolder",
-              value: createdProject.paths.root,
-            });
-
             setOriginalSettings(newSettings);
-            console.log("✅ 프로젝트 모든 경로 자동 저장 완료");
+
+            console.log("✅ 프로젝트 설정 상태 업데이트 완료 (백엔드에서 자동 저장됨)");
           }
         } catch (saveError) {
           console.warn("프로젝트 경로 자동 저장 중 경고:", saveError.message);
@@ -469,19 +513,6 @@ export default function ProjectManager() {
       const result = await api.invoke("project:delete", projectId);
 
       if (result.success) {
-        // 삭제된 프로젝트가 선택된 프로젝트라면 안전하게 초기화
-        if (selectedProject?.id === projectId) {
-          setSelectedProject(null);
-          // 안전한 설정 복원
-          if (originalSettings?.defaultProjectName) {
-            setSettings((prev) => ({
-              ...prev,
-              defaultProjectName: originalSettings.defaultProjectName,
-              videoSaveFolder: originalSettings.videoSaveFolder || "",
-            }));
-          }
-        }
-
         showGlobalToast({
           type: "success",
           text: "프로젝트가 삭제되었습니다.",
@@ -490,28 +521,13 @@ export default function ProjectManager() {
         // 프로젝트 삭제 완료 이벤트 발생 (App.jsx에서 감지)
         window.dispatchEvent(new CustomEvent("project:deleted"));
 
+        // 프로젝트 데이터 새로고침 후 설정 자동 반영
         await refreshProjectData();
 
-        // 포커스 강제 리셋 - 여러 시점에서 시도
-        const resetFocus = () => {
-          try {
-            if (document.activeElement && document.activeElement !== document.body) {
-              document.activeElement.blur();
-            }
-            document.body.setAttribute('tabindex', '-1');
-            document.body.focus();
-            document.body.blur();
-            document.body.removeAttribute('tabindex');
-          } catch (e) {
-            console.error('포커스 리셋 오류:', e);
-          }
-        };
-
-        // 여러 번, 다른 타이밍에 포커스 리셋 시도
-        setTimeout(resetFocus, 0);
-        setTimeout(resetFocus, 50);
-        setTimeout(resetFocus, 100);
-        setTimeout(resetFocus, 200);
+        // 포커스 리셋 (한 번만 시도, 최소 딜레이)
+        setTimeout(() => {
+          document.activeElement?.blur?.();
+        }, 100);
       } else {
         console.error("프로젝트 삭제 실패:", result.message);
         showGlobalToast({
@@ -612,6 +628,7 @@ export default function ProjectManager() {
               }
               setShowCreateForm(!showCreateForm);
             }}
+            style={{ minWidth: "200px" }}
           >
             새 프로젝트
           </Button>
@@ -622,7 +639,7 @@ export default function ProjectManager() {
             <Field label="프로젝트 주제" required>
               <Input
                 value={newProjectTopic}
-                onChange={(_, data) => setNewProjectTopic(data.value)}
+                onChange={(_, data) => handleProjectTopicChange(data.value)}
                 placeholder="예: 유튜브 마케팅 전략, 요리 레시피 소개 등"
                 contentBefore={<DocumentRegular />}
                 disabled={creating}
@@ -636,10 +653,11 @@ export default function ProjectManager() {
                 onClick={createNewProject}
                 disabled={creating || !newProjectTopic.trim()}
                 icon={creating ? <Spinner size="tiny" /> : <AddRegular />}
+                style={{ flex: 1 }}
               >
                 {creating ? "생성 중..." : "프로젝트 생성"}
               </Button>
-              <Button appearance="secondary" onClick={() => setShowCreateForm(false)}>
+              <Button appearance="secondary" onClick={() => setShowCreateForm(false)} style={{ flex: 1 }}>
                 취소
               </Button>
             </div>
@@ -690,33 +708,11 @@ export default function ProjectManager() {
                       ? `2px solid ${tokens.colorBrandStroke1}`
                       : `1px solid ${tokens.colorNeutralStroke2}`,
                 }}
-                onClick={async () => {
+                onClick={() => {
                   setSelectedProject(project);
-                  // 안전한 프로젝트 선택 처리
-                  if (project?.topic && project?.paths?.root) {
-                    setSettings((prev) => ({
-                      ...prev,
-                      defaultProjectName: project.topic,
-                      videoSaveFolder: project.paths.root,
-                    }));
-
-                    // 안전한 전역 이벤트 발생
-                    dispatchProjectSettingsUpdate(settings?.projectRootFolder, project.topic);
-                  }
-
-                  // 백엔드에 프로젝트 로드 요청하여 currentProject 설정
-                  try {
-                    if (project?.id && window?.api?.invoke) {
-                      const result = await window.api.invoke('project:load', project.id);
-                      if (result?.success) {
-                        console.log('✅ 프로젝트 로드 성공:', project.id);
-                      } else {
-                        console.error('❌ 프로젝트 로드 실패:', result?.message);
-                      }
-                    }
-                  } catch (error) {
-                    console.error('❌ 프로젝트 로드 오류:', error);
-                  }
+                  // 프로젝트 선택 시 백엔드의 현재 프로젝트로 설정 (폴더 열기 시에만 로드)
+                  // 프로젝트 경로 설정의 "기본 프로젝트 이름"은 현재 활성 프로젝트만 표시하도록 변경
+                  // 따라서 선택 시 settings 업데이트 없음 (UI 혼동 방지)
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -804,25 +800,25 @@ export default function ProjectManager() {
           weight="semibold"
           style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: tokens.spacingVerticalM }}
         >
-          <FolderRegular /> 프로젝트 경로 설정
+          <FolderRegular /> 현재 프로젝트 경로
         </Text>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: itemGap, marginBottom: tokens.spacingVerticalL }}>
-          <Field label="프로젝트 루트 폴더" hint="모든 프로젝트가 생성될 기본 폴더입니다.">
+          <Field label="프로젝트 루트 폴더" hint="모든 프로젝트가 저장되는 기본 폴더입니다.">
             <Input
               value={settings.projectRootFolder}
               contentBefore={<FolderRegular style={{ color: tokens.colorBrandForeground1 }} />}
-              placeholder="예: /Users/username/Documents/WeaverPro (Mac) 또는 C:\\WeaverPro (Windows)"
+              placeholder="예: C:\\WeaverPro"
               disabled={true}
               input={{ style: { color: tokens.colorBrandForeground1 } }}
             />
           </Field>
 
-          <Field label="기본 프로젝트 이름" hint="프로젝트 목록에서 선택하면 자동으로 업데이트됩니다.">
+          <Field label="현재 활성 프로젝트" hint="현재 작업 중인 프로젝트명입니다.">
             <Input
-              value={settings.defaultProjectName}
-              contentBefore={<DocumentRegular style={{ color: tokens.colorBrandForeground1 }} />}
-              placeholder="프로젝트 이름을 입력하세요"
+              value={currentProject?.topic || settings.defaultProjectName || "활성 프로젝트 없음"}
+              contentBefore={<CheckmarkCircleRegular style={{ color: tokens.colorBrandForeground1 }} />}
+              placeholder="프로젝트 선택 후 표시됩니다"
               disabled={true}
               input={{ style: { color: tokens.colorBrandForeground1 } }}
             />
@@ -853,13 +849,15 @@ export default function ProjectManager() {
             <Caption1 style={{ color: tokens.colorNeutralForeground3, lineHeight: 1.4, fontFamily: "monospace" }}>
               📁 {settings.projectRootFolder}
               <br />
-              └── 📁 {selectedProject?.topic || settings?.defaultProjectName || "Unknown"}/
+              └── 📁 {currentProject?.topic || settings.defaultProjectName || "프로젝트명"}/
               <br />
               &nbsp;&nbsp;&nbsp;&nbsp;├── 📁 scripts/ (대본 파일)
               <br />
               &nbsp;&nbsp;&nbsp;&nbsp;├── 📁 audio/ (음성 파일)
               <br />
               &nbsp;&nbsp;&nbsp;&nbsp;├── 📁 images/ (이미지 파일)
+              <br />
+              &nbsp;&nbsp;&nbsp;&nbsp;├── 📁 video/ (다운로드된 영상)
               <br />
               &nbsp;&nbsp;&nbsp;&nbsp;├── 📁 output/ (최종 영상)
               <br />

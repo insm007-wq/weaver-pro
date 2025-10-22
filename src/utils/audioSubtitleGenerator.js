@@ -28,40 +28,91 @@
  * @param {string} outputPath - 파일 출력 경로 (선택사항)
  */
 export async function generateAudioAndSubtitles(scriptData, mode = "script_mode", options, outputPath = null) {
-  const { form, voices, setFullVideoState, api, toast, addLog, abortSignal } = options;
+  const { form, voices, setFullVideoState, api, toast, addLog, abortSignal, abortFlagRef } = options;
 
   // TTS 실제 duration 데이터를 저장할 변수
   let ttsDurations = null;
 
-  // 컴포넌트 마운트 상태 추적 (탭 전환 시 안전성)
-  let isMounted = true;
+  // 생성 중단 플래그 (글로벌 abort 플래그 사용)
+  let shouldAbort = false;
 
-  // 중단 체크 함수
-  const checkAborted = () => {
+  // 글로벌 abort 플래그 확인 함수
+  const checkGlobalAbort = () => {
+    if (abortFlagRef?.current?.shouldAbort) {
+      shouldAbort = true;
+      return true;
+    }
+    return false;
+  };
+
+  // 중단 체크 함수 (글로벌 abort 플래그 우선 확인)
+  const checkAborted = (reason = '') => {
+    // 🛑 글로벌 abort 플래그 우선 확인 (가장 빠른 중단)
+    if (checkGlobalAbort()) {
+      throw new Error("작업이 취소되었습니다.");
+    }
+
+    // 로컬 중단 플래그 확인
+    if (shouldAbort) {
+      throw new Error("작업이 취소되었습니다.");
+    }
+
+    // AbortSignal 확인
     if (abortSignal?.aborted) {
+      shouldAbort = true;
       throw new Error("작업이 취소되었습니다.");
     }
   };
 
-  // 안전한 상태 업데이트 함수
-  const safeSetState = (updater) => {
-    if (isMounted && setFullVideoState) {
+  // 안전한 상태 업데이트 함수 (글로벌 abort 플래그로 완전히 차단)
+  // 🛑 로그를 유지하면서 진행률 및 선택적으로 다른 필드 업데이트
+  const safeSetState = (updates) => {
+    // 🛑 글로벌 abort 플래그 확인 (가장 우선)
+    if (abortFlagRef?.current?.shouldAbort) {
+      return;
+    }
+
+    // abort 상태면 상태 업데이트 차단
+    if (shouldAbort) {
+      return;
+    }
+
+    if (setFullVideoState) {
       try {
-        setFullVideoState(updater);
+        // 🛑 로그를 보존하면서 진행률 및 선택적 필드 업데이트
+        setFullVideoState((prev) => {
+          // 진행률 병합 (로그, currentStep 등은 유지)
+          const newProgress = { ...prev.progress };
+          if (updates.progress) {
+            Object.assign(newProgress, updates.progress);
+          }
+
+          return {
+            ...prev,
+            // progress 선택적 업데이트
+            ...(updates.progress && { progress: newProgress }),
+            // currentStep 선택적 업데이트
+            ...(updates.currentStep && { currentStep: updates.currentStep }),
+            // 나머지 필드는 업데이트하지 않음 (로그 유지)
+          };
+        });
       } catch (err) {
-        console.warn("상태 업데이트 실패 (컴포넌트 언마운트됨):", err);
+        console.error("상태 업데이트 실패:", err);
       }
     }
   };
 
   try {
-    checkAborted(); // 시작 전 체크
+    // 🛑 진입 초기 가장 먼저 abort 확인 (이 시점에 취소되었으면 즉시 반환)
+    checkAborted('함수 진입 초기');
 
-    // 2단계: 음성 생성 시작
-    safeSetState(prev => ({
-      ...prev,
-      progress: { ...prev.progress, audio: 25 }
-    }));
+    // 📊 음성 생성 진행률 업데이트 (currentStep은 useScriptGenerator에서 이미 설정됨)
+    safeSetState({
+      progress: { audio: 25 }
+    });
+
+    // 🛑 상태 업데이트 후 다시 abort 확인
+    checkAborted('상태 업데이트 후');
 
     // videoSaveFolder에 직접 음성 파일 저장
     let audioFolderPath = null;
@@ -70,7 +121,9 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       const videoSaveFolder = videoSaveFolderResult?.value || videoSaveFolderResult;
       if (videoSaveFolder) {
         audioFolderPath = videoSaveFolder;
-        addLog(`📁 음성 파일 저장 위치: ${audioFolderPath}`);
+        if (addLog) {
+          addLog(`📁 음성 파일 저장 위치: ${audioFolderPath}`);
+        }
       }
     } catch (pathError) {
       console.warn("videoSaveFolder 가져오기 실패:", pathError);
@@ -96,10 +149,9 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
     try {
       ttsProgressListener = (data) => {
         const { current, total, progress } = data;
-        safeSetState((prev) => ({
-          ...prev,
-          progress: { ...prev.progress, audio: progress },
-        }));
+        safeSetState({
+          progress: { audio: progress }
+        });
 
         if (addLog) {
           addLog(`🎤 음성 생성 진행률: ${current + 1}/${total} (${progress}%)`);
@@ -127,7 +179,10 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
       console.warn("TTS 리스너 설정 실패:", listenerError);
     }
 
-    checkAborted(); // TTS 호출 전 체크
+    checkAborted('TTS 호출 전'); // TTS 호출 전 체크
+
+    // 약간의 딜레이로 상태 동기화 보장
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     let audioResult;
     try {
@@ -141,7 +196,7 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
         timeout: timeoutMs
       });
 
-      checkAborted(); // TTS 완료 후 체크
+      checkAborted('TTS 완료 후'); // TTS 완료 후 체크
     } finally {
       // 리스너들 제거
       try {
@@ -158,12 +213,27 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
 
     if (audioResult && audioResult.data && audioResult.data.ok) {
       // 음성 생성 완료
-      safeSetState(prev => ({
-        ...prev,
-        progress: { ...prev.progress, audio: 75 }
-      }));
+      safeSetState({
+        progress: { audio: 75 }
+      });
 
       const audioFiles = audioResult.data.audioFiles;
+
+      // 📋 관리자 페이지에 TTS 작업 로그 기록
+      if (window.api?.logActivity) {
+        window.api.logActivity({
+          type: "tts",
+          title: "음성 합성",
+          detail: `${sceneCount}개 장면 (${form.ttsEngine}) - ${audioFiles?.length || 0}개 파일 생성`,
+          status: "success",
+          metadata: {
+            sceneCount: sceneCount,
+            fileCount: audioFiles?.length || 0,
+            engine: form.ttsEngine,
+            voice: form.voice
+          }
+        });
+      }
 
       // TTS 실제 duration 데이터 저장 (자막 생성에 사용)
       ttsDurations = audioFiles.map(file => ({
@@ -248,30 +318,27 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
                   addLog(`✅ 음성 파일 저장: ${fileName} → ${savedPath}`);
                 }
               } else {
-                console.error(`❌ 음성 파일 저장 성공했지만 경로가 유효하지 않음: ${fileName}, path: ${savedPath}`);
+                console.error(`음성 파일 저장 성공했지만 경로가 유효하지 않음: ${fileName}, path: ${savedPath}`);
                 if (addLog) {
-                  addLog(`❌ 음성 파일 저장 성공했지만 경로가 유효하지 않음: ${fileName}`, "error");
+                  addLog(`음성 파일 저장 성공했지만 경로가 유효하지 않음: ${fileName}`, "error");
                 }
               }
             } else {
-              console.error(`❌ 음성 파일 저장 실패: ${fileName}`, saveResult);
+              console.error(`음성 파일 저장 실패: ${fileName}`, saveResult);
               if (addLog) {
-                addLog(`❌ 음성 파일 저장 실패: ${fileName} - ${saveResult.message || '알 수 없는 오류'}`, "error");
+                addLog(`음성 파일 저장 실패: ${fileName} - ${saveResult.message || '알 수 없는 오류'}`, "error");
               }
             }
           } catch (error) {
-            console.error(`❌ 음성 파일 ${fileName} 저장 오류:`, error);
+            console.error(`음성 파일 ${fileName} 저장 오류:`, error);
             if (addLog) {
-              addLog(`❌ 음성 파일 ${fileName} 저장 오류: ${error.message}`, "error");
+              addLog(`음성 파일 ${fileName} 저장 오류: ${error.message}`, "error");
             }
           }
         }
       } else {
-        console.warn("⚠️ audioFiles가 비어있거나 유효하지 않음");
-        console.warn("⚠️ audioFiles:", audioFiles);
-        console.warn("⚠️ audioFiles 조건:", audioFiles && audioFiles.length > 0);
         if (addLog) {
-          addLog(`⚠️ 저장할 음성 파일이 없습니다`, "warning");
+          addLog(`저장할 음성 파일이 없습니다`, "warning");
         }
       }
 
@@ -282,10 +349,22 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
         }
       }
     } else {
-      console.error("❌ === TTS 결과 조건 실패 ===");
-      console.error("❌ audioResult && audioResult.data && audioResult.data.ok 조건이 실패했습니다");
-      console.error("❌ audioResult:", audioResult);
-      console.error("❌ 개별 파일 저장을 건너뜁니다");
+      console.error("TTS 응답이 올바르지 않습니다");
+
+      // 📋 관리자 페이지에 TTS 실패 로그 기록
+      if (window.api?.logActivity) {
+        window.api.logActivity({
+          type: "tts",
+          title: "음성 합성",
+          detail: `${sceneCount}개 장면 (${form.ttsEngine}) - 생성 실패`,
+          status: "error",
+          metadata: {
+            sceneCount: sceneCount,
+            engine: form.ttsEngine,
+            error: audioResult?.data?.error || "알 수 없는 오류"
+          }
+        });
+      }
 
       if (addLog) {
         addLog(`❌ TTS 결과 처리 실패 - 조건 체크 실패`, "error");
@@ -299,38 +378,79 @@ export async function generateAudioAndSubtitles(scriptData, mode = "script_mode"
 
     // 자막 생성 (script_mode에서만, TTS duration 데이터 사용)
     if (mode === "script_mode" && ttsDurations && ttsDurations.length > 0) {
-      checkAborted(); // 자막 생성 전 체크
+      checkAborted('자막 생성 전'); // 자막 생성 전 체크
 
-      safeSetState(prev => ({
-        ...prev,
-        progress: { ...prev.progress, subtitle: 0 }
-      }));
+      safeSetState({
+        progress: { subtitle: 0 }
+      });
+
+      // 상태 동기화 딜레이
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       await generateSubtitleFile(scriptData, mode, { api, toast, setFullVideoState, addLog }, ttsDurations);
 
-      safeSetState(prev => ({
-        ...prev,
-        progress: { ...prev.progress, subtitle: 100 }
-      }));
+      checkAborted('자막 생성 후'); // 자막 생성 후도 체크
+
+      safeSetState({
+        progress: { subtitle: 100 }
+      });
     }
 
-    // 모든 단계 완료 - 모드별 메시지
-    handleCompletionByMode(mode, { setFullVideoState, toast, addLog });
+    // 🛑 모든 단계 완료 - currentStep을 'completed'로 설정
+    // 🛑 abort 플래그 최종 확인 (이 시점에 취소되었으면 상태 업데이트 스킵)
+    checkGlobalAbort();
+
+    if (!shouldAbort && !abortFlagRef?.current?.shouldAbort) {
+      // 진행률 100%로 업데이트
+      safeSetState({
+        progress: { audio: 100, subtitle: 100 }
+      });
+
+      // ✅ 완료 상태 설정 (currentStep: 'completed')
+      // 🛑 abort 플래그 재확인 - 완료 상태 설정 직전 확인
+      if (!abortFlagRef?.current?.shouldAbort && setFullVideoState) {
+        console.log("✅ [generateAudioAndSubtitles] 완료 상태 설정 중...");
+        setFullVideoState((prev) => ({
+          ...prev,
+          currentStep: 'completed',
+          logs: [
+            ...(prev.logs || []),
+            {
+              timestamp: new Date().toLocaleTimeString(),
+              message: '✅ 대본 생성이 완료되었습니다!',
+              type: 'success'
+            }
+          ],
+        }));
+        console.log("✅ [generateAudioAndSubtitles] 완료 상태 설정 완료!");
+      }
+
+      // 추가 로그
+      if (addLog) {
+        addLog("🎉 모든 작업이 완료되었습니다!");
+        addLog("📂 생성된 파일들을 확인해보세요.");
+      }
+    }
 
   } catch (error) {
-    console.error("음성/자막 생성 오류:", error);
 
-    // 오류 발생 시 상태 초기화
-    safeSetState(prev => ({
-      ...prev,
-      isGenerating: false,
-      currentStep: "error"
-    }));
+    // 🛑 abort 플래그 최종 확인 (취소된 경우 상태 업데이트 스킵)
+    const isCancelled = shouldAbort || abortFlagRef?.current?.shouldAbort;
+
+    // 오류 발생 시 상태 초기화 (단, 취소된 경우면 스킵)
+    if (!isCancelled && !shouldAbort) {
+      safeSetState({
+        isGenerating: false,
+        currentStep: "error"
+      });
+    }
 
     throw error;
   } finally {
-    // 함수 종료 시 마운트 상태 해제 (탭 전환 후 상태 업데이트 방지)
-    isMounted = false;
+    // 이미 abort되었거나 글로벌 abort 플래그가 설정된 경우만 shouldAbort = true
+    if (abortFlagRef?.current?.shouldAbort) {
+      shouldAbort = true;
+    }
   }
 }
 
@@ -405,29 +525,54 @@ async function generateSubtitleFile(scriptData, mode, { api, toast, setFullVideo
             addLog("✅ SRT 자막 파일 생성 완료!");
             addLog("📁 파일명: subtitle.srt");
           }
-        } else {
-          if (addLog) {
-            addLog(`❌ SRT 파일 쓰기 실패: ${writeResult.message}`, "error");
+
+          // 📋 관리자 페이지에 자막 생성 성공 로그 기록
+          if (window.api?.logActivity) {
+            const sceneCount = scriptData.scenes?.length || 0;
+            window.api.logActivity({
+              type: "subtitle",
+              title: "자막 생성",
+              detail: `${sceneCount}개 장면 - SRT 자막 파일 생성 완료`,
+              status: "success",
+              metadata: {
+                sceneCount: sceneCount,
+                fileName: srtFileName,
+                filePath: srtFilePath
+              }
+            });
           }
-          console.error("❌ 파일 쓰기 실패:", writeResult.message);
+        } else {
           console.error(`SRT 파일 쓰기 실패: ${writeResult.message}`);
+          if (addLog) {
+            addLog(`SRT 파일 쓰기 실패: ${writeResult.message}`, "error");
+          }
+
+          // 📋 관리자 페이지에 자막 생성 실패 로그 기록
+          if (window.api?.logActivity) {
+            const sceneCount = scriptData.scenes?.length || 0;
+            window.api.logActivity({
+              type: "subtitle",
+              title: "자막 생성",
+              detail: `${sceneCount}개 장면 - 자막 파일 저장 실패: ${writeResult.message}`,
+              status: "error",
+              metadata: {
+                sceneCount: sceneCount,
+                error: writeResult.message
+              }
+            });
+          }
         }
       } else {
-        console.error("❌ scripts 폴더 경로 생성 실패");
-        console.error(`자막 경로 생성 실패`);
+        console.error("자막 경로 생성 실패");
       }
     } else {
-      console.warn("⚠️ SRT 변환 결과가 없음:", srtResult);
-
       if (srtResult?.success === false) {
-        console.error("❌ SRT 변환 실패:", srtResult.error || srtResult.message);
         console.error(`SRT 변환 실패: ${srtResult.error || srtResult.message || '알 수 없는 오류'}`);
       } else {
         console.warn("SRT 자막을 생성할 수 없습니다. 대본 데이터를 확인해주세요.");
       }
     }
   } catch (error) {
-    console.error("❌ SRT 자막 생성 오류:", error);
     console.error(`SRT 자막 생성 오류: ${error.message}`);
   }
 }
@@ -444,7 +589,7 @@ function handleCompletionByMode(mode, { setFullVideoState, toast, addLog }) {
       ...prev,
       isGenerating: false,
       currentStep: "completed",
-      progress: { ...prev.progress, subtitle: 100 }
+      progress: { ...prev.progress, subtitle: 100, audio: 100 }
     }));
   }
 

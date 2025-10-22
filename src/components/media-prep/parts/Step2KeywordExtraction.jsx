@@ -5,10 +5,12 @@ import { PrimaryButton } from "../../common";
 
 /**
  * 키워드 배지 리스트 컴포넌트
+ * - 최대 50개 키워드 표시
+ * - 더보기 버튼으로 추가 키워드 표시
  */
-const KeywordBadgeList = memo(({ assets }) => {
+const KeywordBadgeList = memo(({ assets = [] }) => {
   const [showAll, setShowAll] = React.useState(false);
-  const maxDisplay = 50;
+  const MAX_DISPLAY = 50;
 
   const badgeStyle = useMemo(
     () => ({
@@ -31,30 +33,39 @@ const KeywordBadgeList = memo(({ assets }) => {
   );
 
   const displayItems = useMemo(() => {
-    const displayCount = showAll ? assets.length : maxDisplay;
+    if (!assets?.length) return [];
+
+    const displayCount = showAll ? assets.length : MAX_DISPLAY;
     const items = assets.slice(0, displayCount).map((asset, index) => (
-      <Badge key={asset.id || `keyword-${index}`} appearance="tint" color="brand" size="small" style={badgeStyle}>
+      <Badge
+        key={asset.id || `keyword-${index}`}
+        appearance="tint"
+        color="brand"
+        size="small"
+        style={badgeStyle}
+      >
         {asset.keyword || `키워드 ${index + 1}`}
       </Badge>
     ));
 
-    if (assets.length > maxDisplay && !showAll) {
+    // 더보기 버튼
+    if (assets.length > MAX_DISPLAY && !showAll) {
       items.push(
         <Badge
-          key="more"
+          key="more-btn"
           appearance="outline"
           color="neutral"
           size="small"
           style={{ ...badgeStyle, fontWeight: 500, cursor: "pointer" }}
           onClick={() => setShowAll(true)}
         >
-          +{assets.length - maxDisplay}개 더
+          +{assets.length - MAX_DISPLAY}개 더
         </Badge>
       );
     }
 
     return items;
-  }, [assets, maxDisplay, badgeStyle, showAll]);
+  }, [assets, badgeStyle, showAll]);
 
   return (
     <div
@@ -84,6 +95,7 @@ const Step2KeywordExtraction = memo(
     // Keyword extraction props
     srtConnected,
     isExtracting,
+    isGeneratingAudio = false,
     handleExtractKeywords,
     assets,
     scenes,
@@ -185,10 +197,14 @@ const Step2KeywordExtraction = memo(
             <PrimaryButton
               size="medium"
               style={{ height: 40, minWidth: 280, maxWidth: 480, alignSelf: "center" }}
-              disabled={!srtConnected || isExtracting}
+              disabled={!srtConnected || isExtracting || isGeneratingAudio}
               onClick={() => handleExtractKeywords(safeScenes)}
             >
-              {isExtracting ? "키워드 추출 중..." : "🤖 키워드 추출 시작"}
+              {isGeneratingAudio
+                ? "🎵 음성 생성 중..."
+                : isExtracting
+                  ? "키워드 추출 중..."
+                  : "🤖 키워드 추출 시작"}
             </PrimaryButton>
 
             {/* 결과 영역 */}
@@ -206,7 +222,19 @@ const Step2KeywordExtraction = memo(
                 boxShadow: "inset 0 1px 2px rgba(0,0,0,0.06)",
               }}
             >
-              {safeAssets.length > 0 ? (
+              {isGeneratingAudio ? (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: tokens.spacingVerticalM,
+                    alignItems: "center",
+                  }}
+                >
+                  <Spinner size="medium" />
+                  <Body2 style={{ color: tokens.colorBrandForeground1 }}>🎵 수동 모드 음원을 생성하고 있습니다...</Body2>
+                </div>
+              ) : safeAssets.length > 0 ? (
                 <div style={{ textAlign: "center", width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
                   <div
                     style={{
@@ -343,7 +371,7 @@ const Step2KeywordExtraction = memo(
                     }}
                   >
                     {srtConnected
-                      ? "키워드 추출 버튼을 눌러 영상 소스 검색을 시작하세요"
+                      ? "🤖 키워드 추출 시작 버튼을 눌러 자동 분석을 시작하세요"
                       : "SRT 파일을 먼저 업로드해야 키워드 추출이 가능합니다"}
                   </Body2>
                   <Caption1
@@ -354,7 +382,7 @@ const Step2KeywordExtraction = memo(
                       textAlign: "center",
                     }}
                   >
-                    추출된 키워드를 기반으로 영상 제작에 필요한 소스를 자동으로 검색 및 추천합니다.
+                    AI가 자막을 분석하여 필요한 영상 소스를 자동으로 검색하고 추천합니다.
                   </Caption1>
                 </div>
               )}

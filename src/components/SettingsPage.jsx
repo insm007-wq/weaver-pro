@@ -21,10 +21,12 @@ import {
   BrainCircuitRegular,
   SubtitlesRegular,
   ChevronLeftRegular,
+  ShieldRegular,
 } from "@fluentui/react-icons";
 import AdminPasswordDialog from "./settings/parts/AdminPasswordDialog";
 
 // lazy tabs
+const AdminTab = lazy(() => import("./settings/tabs/AdminTab"));
 const DefaultsTab = lazy(() => import("./settings/tabs/DefaultsTab"));
 const ApiTab = lazy(() => import("./settings/tabs/ApiTab"));
 const PromptTab = lazy(() => import("./settings/tabs/PromptTab"));
@@ -97,6 +99,7 @@ const useStyles = makeStyles({
 
 // 전체 탭 정의 (관리자 전용 탭 포함)
 const allTabs = [
+  { key: "admin", name: "관리자", icon: <ShieldRegular />, Comp: AdminTab, description: "시스템 관리 및 모니터링", adminOnly: true },
   { key: "api", name: "API 설정", icon: <KeyRegular />, Comp: ApiTab, description: "외부 서비스 API 키 및 설정", adminOnly: true },
   { key: "defaults", name: "기본값", icon: <SettingsRegular />, Comp: DefaultsTab, description: "애플리케이션 기본 설정", adminOnly: true },
   { key: "prompt", name: "프롬프트", icon: <BrainCircuitRegular />, Comp: PromptTab, description: "AI 프롬프트 템플릿 관리", adminOnly: false },
@@ -166,7 +169,16 @@ export default function SettingsPage({ onBack }) {
   // 인증 성공 핸들러
   const handleAdminSuccess = () => {
     setIsAdminMode(true);
-    setSelectedTab("api"); // API 탭으로 자동 전환
+    setSelectedTab("admin"); // 관리자 탭으로 자동 전환
+  };
+
+  // 더블클릭으로 관리자 모드 해제
+  const handleTitleDoubleClick = () => {
+    if (isAdminMode) {
+      setIsAdminMode(false);
+      setClickCount(0);
+      setSelectedTab("prompt"); // 일반 사용자 첫 탭으로 돌아가기
+    }
   };
 
   return (
@@ -182,6 +194,7 @@ export default function SettingsPage({ onBack }) {
         <div
           className={headerStyles.pageTitleWithIcon}
           onClick={handleTitleClick}
+          onDoubleClick={handleTitleDoubleClick}
           style={{
             cursor: "pointer",
             userSelect: "none",

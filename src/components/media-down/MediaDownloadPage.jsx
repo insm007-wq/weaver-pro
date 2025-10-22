@@ -210,6 +210,11 @@ function MediaDownloadPage({ onDownloadingChange }) {
 
   // 초기 로드
   useEffect(() => {
+    // 프로그램 시작 시 다운로드 목록 초기화
+    setDownloadedVideos([]);
+    setDownloadProgress({});
+    resetDownloadState();
+
     loadKeywordsFromJSON();
     loadDownloadHistory();
 
@@ -236,7 +241,7 @@ function MediaDownloadPage({ onDownloadingChange }) {
       window.removeEventListener("focus", handleFocus);
       clearCountdownTimer();
     };
-  }, [loadKeywordsFromJSON, loadDownloadHistory, clearCountdownTimer]);
+  }, [loadKeywordsFromJSON, loadDownloadHistory, clearCountdownTimer, resetDownloadState]);
 
   // 다운로드 상태 변경을 부모에게 알림
   useEffect(() => {
@@ -261,7 +266,6 @@ function MediaDownloadPage({ onDownloadingChange }) {
           await window.api.setSetting({ key: "extractedKeywords", value: [] });
         }
         window.dispatchEvent(new CustomEvent("reset-keyword-extraction"));
-        showSuccess("초기화 완료");
       } catch (error) {
         console.error("초기화 실패:", error);
         showError("초기화 중 오류 발생");
@@ -432,6 +436,8 @@ function MediaDownloadPage({ onDownloadingChange }) {
       if (!cancelledRef.current) {
         if (result.success) {
           showSuccess(`다운로드 완료: ${result.summary.success}/${result.summary.total}개 성공`);
+          // 미디어 다운로드 완료 이벤트 발생 (영상 완성 탭에서 자동 할당 트리거)
+          window.dispatchEvent(new CustomEvent("media-download-completed"));
         } else {
           showError(`다운로드 실패: ${result.error}`);
         }
@@ -848,7 +854,20 @@ function MediaDownloadPage({ onDownloadingChange }) {
           }
           progress={downloadProgressPercent}
           nextStepButton={
-            !isDownloading && downloadedVideos.length > 0 ? { text: "➡️ 다음 단계: 영상 완성", eventName: "navigate-to-refine" } : undefined
+            !isDownloading && downloadedVideos.length > 0
+              ? {
+                  text: "➡️ 다음 단계: 영상 완성",
+                  eventName: "navigate-to-refine",
+                  onClick: async () => {
+                    try {
+                      // 페이지 전환 전에 이벤트 먼저 발생 (타이밍 경합 제거)
+                      window.dispatchEvent(new CustomEvent("auto-load-project-files"));
+                    } catch (error) {
+                      console.error("자동 로드 이벤트 발생 실패:", error);
+                    }
+                  }
+                }
+              : undefined
           }
           expandedContent={
             isDownloading ? (

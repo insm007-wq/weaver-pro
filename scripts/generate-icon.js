@@ -1,5 +1,6 @@
 // Windows용 .ico 파일 생성 스크립트
 const sharp = require('sharp');
+const { imagesToIco } = require('png-to-ico');
 const fs = require('fs');
 const path = require('path');
 
@@ -31,11 +32,22 @@ async function generateIcons() {
       console.log(`✅ icon_${size}x${size}.png 생성 완료`);
     }
 
-    // Windows용 icon.ico (256x256 PNG 복사 - electron-builder가 자동 변환)
+    // Windows용 icon.ico (PNG를 ICO 형식으로 변환)
     const icon256 = path.join(buildDir, 'icon_256x256.png');
     const icoPath = path.join(buildDir, 'icon.ico');
-    fs.copyFileSync(icon256, icoPath);
-    console.log('✅ icon.ico 생성 완료 (electron-builder가 자동 변환)');
+
+    try {
+      // imagesToIco는 이미지 버퍼의 배열을 기대함
+      const imageBuffer = fs.readFileSync(icon256);
+      const buf = await imagesToIco([imageBuffer]);
+      fs.writeFileSync(icoPath, buf);
+      console.log('✅ icon.ico 생성 완료 (png-to-ico 변환)');
+    } catch (icoError) {
+      console.warn('⚠️  ICO 변환 실패:', icoError.message);
+      // 폴백: 256x256 PNG를 ico로 복사 (비권장하지만 작동할 수 있음)
+      fs.copyFileSync(icon256, icoPath);
+      console.log('⚠️  폴백: PNG 파일을 ico 확장자로 복사');
+    }
 
     // macOS용 icon.icns (512x512 PNG 복사)
     const icon512 = path.join(buildDir, 'icon_512x512.png');
@@ -49,7 +61,7 @@ async function generateIcons() {
     console.log('📁 생성된 파일들:');
     console.log('  - build/icon.png (512x512)');
     console.log('  - build/icon_*.png (16~512 다양한 크기)');
-    console.log('  - build/icon.ico (Windows용 - electron-builder 자동 변환)');
+    console.log('  - build/icon.ico (Windows용 - png-to-ico 변환)');
     console.log('  - build/icon.icns (macOS용)');
 
   } catch (error) {

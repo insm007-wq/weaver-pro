@@ -34,7 +34,8 @@ export function calcCPL(text = "") {
 
 // 여러 줄 균형 분할 (한국어 기준 간단 규칙)
 // maxLines: 최대 줄 수 (기본값 2)
-export function splitBalancedLines(text = "", maxLines = 2) {
+// fontSize: 폰트 크기 (기본값 52, 픽셀 너비 계산용)
+export function splitBalancedLines(text = "", maxLines = 2, fontSize = 52) {
   const clean = text.replace(/\s+/g, " ").trim();
 
   // 이미 줄바꿈이 있으면 그대로 사용
@@ -54,11 +55,28 @@ export function splitBalancedLines(text = "", maxLines = 2) {
     return [clean];
   }
 
-  // ✅ 자동 줄 수 조정: 텍스트가 너무 길면 줄 수 증가
+  // ✅ 자동 줄 수 조정: 폰트 크기를 고려한 픽셀 기반 계산
+  // 한글 문자당 평균 너비: fontSize * 0.72 (실제 측정값 기반)
+  // 85% maxWidth 기준: 1920 * 0.85 = 1632px
+  const charWidthPx = fontSize * 0.72;
+  const maxWidthPx = 1632; // 1920 * 0.85
+  const maxCharsPerLine = Math.floor(maxWidthPx / charWidthPx);
+
   let effectiveMaxLines = maxLines;
   const avgCharsPerLine = clean.length / maxLines;
-  if (avgCharsPerLine > 40 && maxLines === 2) {
+  // 개별 줄의 최대 글자 수 체크: 한 줄이 maxCharsPerLine을 초과하면 3줄로
+  if (avgCharsPerLine > maxCharsPerLine && maxLines === 2) {
     effectiveMaxLines = 3;
+  }
+
+  // 추가 체크: 3줄로도 부족하면 4줄로
+  if (avgCharsPerLine / effectiveMaxLines > maxCharsPerLine && effectiveMaxLines === 3) {
+    effectiveMaxLines = 4;
+  }
+
+  // 추가 체크: 4줄로도 부족하면 5줄로
+  if (avgCharsPerLine / effectiveMaxLines > maxCharsPerLine && effectiveMaxLines === 4) {
+    effectiveMaxLines = 5;
   }
 
   // effectiveMaxLines만큼 균등 분할

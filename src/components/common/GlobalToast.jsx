@@ -106,6 +106,9 @@ class ToastManager {
       toast.type = 'info';
     }
 
+    // info 타입은 표시하지 않음
+    if (toast.type === 'info') return;
+
     if (this.setter && !this.isProcessing) {
       this.isProcessing = true;
       this.setter(toast);
@@ -197,11 +200,8 @@ export default function GlobalToast() {
   useEffect(() => {
     if (!toast || !isVisible) return;
 
-    // 타입에 따라 표시 시간 조정
-    let duration = 3000; // 기본 3초 (success, info)
-    if (toast.type === 'error' || toast.type === 'warning') {
-      duration = 5000; // error와 warning은 5초
-    }
+    // 타입에 관계없이 모두 3초
+    const duration = 3000;
 
     autoHideTimerRef.current = setTimeout(() => {
       handleClose();

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useState, memo } from "react";
+import React, { useRef, useEffect, useCallback, useState, memo, useMemo } from "react";
 import { Text, Button, Card, Badge } from "@fluentui/react-components";
 import {
   PlayRegular,
@@ -6,6 +6,7 @@ import {
   CheckmarkCircleRegular,
 } from "@fluentui/react-icons";
 import { splitBalancedLines } from "../../refine/utils/metrics";
+import { checkFileExists } from "../../../utils/fileManager";
 
 const VideoPreview = memo(function VideoPreview({
   selectedScene,
@@ -31,18 +32,37 @@ const VideoPreview = memo(function VideoPreview({
   // 전역 자막 설정 관리
   const [subtitleSettings, setSubtitleSettings] = useState(null);
 
-  // 시간 포맷 헬퍼
-  const formatTime = (seconds) => {
+  // 프리뷰 컨테이너 크기 측정 (동적 SCALE_FACTOR 계산용)
+  const previewContainerRef = useRef(null);
+  const [previewWidth, setPreviewWidth] = useState(0);
+
+  // 시간 포맷 헬퍼 (메모이제이션)
+  const formatTime = useCallback((seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
+  }, []);
+
+  // 프리뷰 컨테이너 크기 측정 (동적 스케일 팩터 계산용)
+  useEffect(() => {
+    const measureContainer = () => {
+      if (previewContainerRef.current) {
+        const rect = previewContainerRef.current.getBoundingClientRect();
+        setPreviewWidth(rect.width);
+      }
+    };
+
+    measureContainer();
+    window.addEventListener("resize", measureContainer);
+
+    return () => window.removeEventListener("resize", measureContainer);
+  }, []);
 
   // 전역 자막 설정 로드
   useEffect(() => {
     const loadSubtitleSettings = async () => {
       try {
-        const settings = await window.api.getSetting("subtitleSettings");
+        const settings = await window.api?.getSetting("subtitleSettings");
 
         if (settings) {
           setSubtitleSettings(settings);
@@ -77,7 +97,9 @@ const VideoPreview = memo(function VideoPreview({
           setSubtitleSettings(defaultSettings);
         }
       } catch (error) {
-        console.error("자막 설정 로드 실패:", error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error("자막 설정 로드 실패:", error);
+        }
         setSubtitleSettings({
           enableSubtitles: true, // ✅ 자막 사용 (기본값)
           fontFamily: "noto-sans",
@@ -109,7 +131,7 @@ const VideoPreview = memo(function VideoPreview({
 
     loadSubtitleSettings();
 
-    // 설정 변경 이벤트 리스너
+    // 설정 변경 이벤트 리스너 (메모이제이션)
     const handleSettingsChanged = () => {
       loadSubtitleSettings();
     };
@@ -139,7 +161,9 @@ const VideoPreview = memo(function VideoPreview({
       if (video && video.readyState >= 2) {
         playPromises.push(
           video.play().catch((error) => {
-            console.error("[비디오 재생] 재생 실패:", error);
+            if (process.env.NODE_ENV === 'development') {
+              console.error("[비디오 재생] 재생 실패:", error);
+            }
           })
         );
       }
@@ -147,7 +171,9 @@ const VideoPreview = memo(function VideoPreview({
       if (audio && audio.readyState >= 2) {
         playPromises.push(
           audio.play().catch((error) => {
-            console.error("[TTS 재생] 재생 실패:", error);
+            if (process.env.NODE_ENV === 'development') {
+              console.error("[TTS 재생] 재생 실패:", error);
+            }
           })
         );
       }
@@ -162,7 +188,9 @@ const VideoPreview = memo(function VideoPreview({
         if (audio) audio.pause();
         setIsPlaying(false);
       } catch (error) {
-        console.error("[재생] 일시정지 실패:", error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error("[재생] 일시정지 실패:", error);
+        }
       }
     }
   }, []); // videoRef와 audioRef는 ref이므로 의존성 배열에서 제외 가능
@@ -200,7 +228,7 @@ const VideoPreview = memo(function VideoPreview({
     setIsDragging(true);
 
     const clientX = event.clientX || (event.touches && event.touches[0].clientX);
-    const newTime = calculateTimeFromPosition(clientX, progressBarRef.current);
+    const newTime = calculateTimeFromPosition(clientX, progressBarRef?.current);
     if (newTime !== null) {
       setDragTime(newTime);
     }
@@ -239,7 +267,7 @@ const VideoPreview = memo(function VideoPreview({
     if (isDragging) return; // 드래그 중에는 클릭 무시
 
     const clientX = event.clientX || (event.touches && event.touches[0].clientX);
-    const newTime = calculateTimeFromPosition(clientX, progressBarRef.current);
+    const newTime = calculateTimeFromPosition(clientX, progressBarRef?.current);
 
     if (newTime !== null) {
       setCurrentTime(newTime);
@@ -293,19 +321,6 @@ const VideoPreview = memo(function VideoPreview({
     };
   }, [ttsAudioUrl]);
 
-  // 오디오 duration이 로드되면 비디오 duration과 비교
-  // 비디오와 오디오 duration 비교 (디버깅 시 필요하면 주석 해제)
-  // useEffect(() => {
-  //   if (audioDuration > 0 && videoDuration > 0) {
-  //     if (videoDuration < audioDuration) {
-  //       console.log(`[비디오 루프] 비디오(${videoDuration.toFixed(2)}초)가 오디오(${audioDuration.toFixed(2)}초)보다 짧아 ${Math.ceil(audioDuration / videoDuration)}회 루프됩니다`);
-  //     } else if (videoDuration > audioDuration) {
-  //       console.log(`[비디오 재생] 비디오(${videoDuration.toFixed(2)}초)가 오디오(${audioDuration.toFixed(2)}초)보다 길어 ${(videoDuration - audioDuration).toFixed(2)}초에서 정지됩니다`);
-  //     } else {
-  //       console.log(`[비디오 재생] 비디오와 오디오 길이가 동일합니다 (${audioDuration.toFixed(2)}초)`);
-  //     }
-  //   }
-  // }, [audioDuration, videoDuration]);
 
   // 비디오 URL이 변경되면 이벤트 리스너 설정
   useEffect(() => {
@@ -333,12 +348,16 @@ const VideoPreview = memo(function VideoPreview({
               if (audio && audio.readyState >= 2 && audio.paused) {
                 audio.currentTime = 0;
                 audio.play().catch((error) => {
-                  console.error("[TTS 재생] 오디오 재생 실패:", error);
+                  if (process.env.NODE_ENV === 'development') {
+                    console.error("[TTS 재생] 오디오 재생 실패:", error);
+                  }
                 });
               }
             })
             .catch((error) => {
-              console.error("[비디오 재생] 자동 재생 실패:", error);
+              if (process.env.NODE_ENV === 'development') {
+                console.error("[비디오 재생] 자동 재생 실패:", error);
+              }
             });
         }
       };
@@ -441,7 +460,7 @@ const VideoPreview = memo(function VideoPreview({
 
       try {
         // 파일 존재 여부 확인
-        const pathCheck = await window.api?.checkPathExists?.(selectedScene.audioPath);
+        const pathCheck = await checkFileExists(selectedScene.audioPath);
 
         if (!isMounted) return; // 컴포넌트가 언마운트되었으면 중단
 
@@ -489,7 +508,9 @@ const VideoPreview = memo(function VideoPreview({
                 }
               }
             } catch (retryError) {
-              console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 재시도 실패:`, retryError);
+              if (process.env.NODE_ENV === 'development') {
+                console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 재시도 실패:`, retryError);
+              }
             }
           }, 100);
 
@@ -502,7 +523,9 @@ const VideoPreview = memo(function VideoPreview({
         }
       } catch (error) {
         if (isMounted) {
-          console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 로딩 실패:`, error);
+          if (process.env.NODE_ENV === 'development') {
+            console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 로딩 실패:`, error);
+          }
           setTtsAudioUrl(null);
           setHasAudio(false);
         }
@@ -551,7 +574,9 @@ const VideoPreview = memo(function VideoPreview({
     if (video && !video.paused) {
       audio.currentTime = video.currentTime;
       audio.play().catch((error) => {
-        console.error(`[TTS 오디오] 동기화 재생 실패:`, error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error(`[TTS 오디오] 동기화 재생 실패:`, error);
+        }
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -592,13 +617,15 @@ const VideoPreview = memo(function VideoPreview({
       }
     }
 
-    console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 재생 오류:`, {
-      message: errorMessage,
-      src: audio.src,
-      error: error,
-      readyState: audio.readyState,
-      networkState: audio.networkState
-    });
+    if (process.env.NODE_ENV === 'development') {
+      console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 재생 오류:`, {
+        message: errorMessage,
+        src: audio.src,
+        error: error,
+        readyState: audio.readyState,
+        networkState: audio.networkState
+      });
+    }
 
     // blob URL이 만료된 경우 자동으로 재생성 시도
     if (error && error.code === error.MEDIA_ERR_SRC_NOT_SUPPORTED && selectedScene?.audioPath) {
@@ -617,7 +644,9 @@ const VideoPreview = memo(function VideoPreview({
           return; // 재생성 성공하면 초기화하지 않음
         }
       } catch (retryError) {
-        console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 재생성 실패:`, retryError);
+        if (process.env.NODE_ENV === 'development') {
+          console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 재생성 실패:`, retryError);
+        }
       }
     }
 
@@ -677,7 +706,9 @@ const VideoPreview = memo(function VideoPreview({
         setCurrentTime(0);
         playPromises.push(
           video.play().catch((error) => {
-            console.error("[씬 선택] 비디오 자동 재생 실패:", error);
+            if (process.env.NODE_ENV === 'development') {
+              console.error("[씬 선택] 비디오 자동 재생 실패:", error);
+            }
           })
         );
       }
@@ -687,7 +718,9 @@ const VideoPreview = memo(function VideoPreview({
         audio.currentTime = 0;
         playPromises.push(
           audio.play().catch((error) => {
-            console.error("[씬 선택] 오디오 자동 재생 실패:", error);
+            if (process.env.NODE_ENV === 'development') {
+              console.error("[씬 선택] 오디오 자동 재생 실패:", error);
+            }
           })
         );
       }
@@ -706,8 +739,8 @@ const VideoPreview = memo(function VideoPreview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSceneIndex]); // videoRef는 ref이므로 의존성에서 제외
 
-  // 자막 오버레이 렌더링 헬퍼 함수
-  const renderSubtitleOverlay = () => {
+  // 자막 오버레이 렌더링 헬퍼 함수 (메모이제이션: 불필요한 재계산 방지)
+  const renderSubtitleOverlay = useMemo(() => () => {
     if (!selectedScene?.text || !subtitleSettings) return null;
 
     // enableSubtitles가 false면 자막 렌더링하지 않음
@@ -742,9 +775,9 @@ const VideoPreview = memo(function VideoPreview({
     } = subtitleSettings;
 
     // 프리뷰 크기 비율 계산 (1920x1080 기준 -> 프리뷰 크기로 스케일링)
-    // 프리뷰 컨테이너의 실제 크기를 알 수 없으므로 상대적인 비율 사용
-    // 일반적으로 프리뷰는 실제 크기의 40-50% 정도
-    const SCALE_FACTOR = 0.3; // 프리뷰 화면 비율 (실제 1920x1080의 30%)
+    // 실제 프리뷰 컨테이너 크기를 기반으로 동적 계산
+    // previewWidth가 0이면 기본값 0.3 사용 (초기 로드 시)
+    const SCALE_FACTOR = previewWidth > 0 ? previewWidth / 1920 : 0.3;
 
     const scaledFontSize = fontSize * SCALE_FACTOR;
     const scaledOutlineWidth = outlineWidth * SCALE_FACTOR;
@@ -837,7 +870,7 @@ const VideoPreview = memo(function VideoPreview({
             border: useBackground ? "1px solid rgba(255, 255, 255, 0.1)" : "none",
           }}
         >
-          {splitBalancedLines(selectedScene.text, maxLines).map((line, i) => (
+          {splitBalancedLines(selectedScene.text, maxLines, fontSize).map((line, i) => (
             <div key={i} style={{
               whiteSpace: "nowrap",
               overflow: "visible"
@@ -846,7 +879,7 @@ const VideoPreview = memo(function VideoPreview({
         </div>
       </div>
     );
-  };
+  }, [selectedScene?.text, subtitleSettings, previewWidth, selectedSceneIndex]);
 
   return (
     <Card
@@ -860,6 +893,7 @@ const VideoPreview = memo(function VideoPreview({
     >
       {/* 프리뷰 영역 - 16:9 비율 */}
       <div
+        ref={previewContainerRef}
         style={{
           width: "100%",
           aspectRatio: "16 / 9",
@@ -895,11 +929,15 @@ const VideoPreview = memo(function VideoPreview({
                   playsInline
                   onClick={handleVideoToggle}
                   onError={(e) => {
-                    console.error("[비디오 재생] 오류:", e);
-                    console.error("[비디오 재생] 비디오 URL:", videoUrl);
+                    if (process.env.NODE_ENV === 'development') {
+                      console.error("[비디오 재생] 오류:", e);
+                      console.error("[비디오 재생] 비디오 URL:", videoUrl);
+                    }
                   }}
                   onLoadedData={() => {
-                    console.log("[비디오 재생] 로드됨:", videoUrl);
+                    if (process.env.NODE_ENV === 'development') {
+                      console.log("[비디오 재생] 로드됨:", videoUrl);
+                    }
                   }}
                 />
                 {/* 자막 오버레이 */}

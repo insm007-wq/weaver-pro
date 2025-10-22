@@ -20,6 +20,15 @@ if (!store.has('projectRootFolder')) {
   console.log(`✅ 기본 projectRootFolder 설정됨 (${process.platform}): ${defaultPath}`);
 }
 
+// videoSaveFolder 초기화 (프로젝트가 없을 때 기본값으로 설정)
+if (!store.has('videoSaveFolder')) {
+  const defaultPath = getDefaultProjectRoot();
+  // Documents/Weaver Pro 또는 홈디렉토리/Weaver Pro 형태로 설정
+  const videoFolder = path.join(defaultPath, 'Weaver Pro');
+  store.set('videoSaveFolder', videoFolder);
+  console.log(`✅ 기본 videoSaveFolder 설정됨: ${videoFolder}`);
+}
+
 if (!store.has('defaultProjectName')) {
   store.set('defaultProjectName', 'default');
   console.log("✅ 기본 defaultProjectName 설정됨");

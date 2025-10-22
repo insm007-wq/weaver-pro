@@ -15,7 +15,7 @@ import {
 import { ensureSceneDefaults } from "../../../utils/scenes";
 import { assignVideosToScenes, assignMediaToScenes, assignVideosWithDownload, assignImagesToMissingScenes, assignVideosToMissingScenes, assignPhotosToMissingScenes, assignPrioritizedMediaToMissingScenes } from "../../../services/videoAssignment";
 import { showError, showSuccess, showInfo } from "../../common/GlobalToast";
-import { isVideoFile, isImageFile } from "../../../utils/fileHelpers";
+import { isVideoFile, isImageFile } from "../../../utils/fileManager";
 import BottomFixedBar from "../../common/BottomFixedBar";
 
 function SceneList({
@@ -24,6 +24,7 @@ function SceneList({
   selectedSceneIndex,
   onSceneSelect,
   projectTtsSettings, // 프로젝트에 저장된 TTS 설정
+  isVideoExporting = false, // 영상 렌더링 중 여부
 }) {
   // 내부 편집 상태 관리
   const [editingSceneIndex, setEditingSceneIndex] = useState(-1);
@@ -403,14 +404,19 @@ function SceneList({
   const handleSceneDoubleClick = useCallback((index, event) => {
     event.stopPropagation();
 
-    // 영상 생성/할당 중일 때는 편집 불가
+    // 영상 렌더링/생성/할당 중일 때는 편집 불가
+    if (isVideoExporting) {
+      showInfo("영상 생성 중에는 씬을 편집할 수 없습니다.");
+      return;
+    }
+
     if (isAssigning || mediaGenerationState.isActive || videoAssignState.isActive) {
       showInfo("미디어 처리 중에는 씬을 편집할 수 없습니다.");
       return;
     }
 
     handleStartEditText(index);
-  }, [handleStartEditText, isAssigning, mediaGenerationState.isActive, videoAssignState.isActive]);
+  }, [handleStartEditText, isAssigning, mediaGenerationState.isActive, videoAssignState.isActive, isVideoExporting]);
 
   // 실시간 텍스트 변경 핸들러 (VREW 스타일)
   const handleTextChange = useCallback(async (newText) => {
@@ -912,7 +918,12 @@ function SceneList({
   const handleContextMenu = useCallback((event, index) => {
     event.preventDefault();
 
-    // 영상 생성/할당 중일 때는 컨텍스트 메뉴 불가
+    // 영상 렌더링/생성/할당 중일 때는 컨텍스트 메뉴 불가
+    if (isVideoExporting) {
+      showInfo("영상 생성 중에는 씬을 편집할 수 없습니다.");
+      return;
+    }
+
     if (isAssigning || mediaGenerationState.isActive || videoAssignState.isActive) {
       showInfo("미디어 처리 중에는 씬을 편집할 수 없습니다.");
       return;
@@ -921,7 +932,7 @@ function SceneList({
     setContextMenuSceneIndex(index);
     setContextMenuPosition({ x: event.clientX, y: event.clientY });
     setIsContextMenuOpen(true);
-  }, [isAssigning, mediaGenerationState.isActive, videoAssignState.isActive]);
+  }, [isAssigning, mediaGenerationState.isActive, videoAssignState.isActive, isVideoExporting]);
 
   // 미디어 교체 핸들러들
   const handleReplaceWithVideo = useCallback(async () => {
@@ -1030,6 +1041,12 @@ function SceneList({
     setDragOverSceneIndex(-1);
     setIsDragging(false);
 
+    // 영상 렌더링 중에는 드래그 앤 드롭 불가
+    if (isVideoExporting) {
+      showInfo("영상 생성 중에는 파일을 드롭할 수 없습니다.");
+      return;
+    }
+
     const files = e.dataTransfer.files;
     if (!files || files.length === 0) {
       showError("드롭된 파일이 없습니다.");
@@ -1085,7 +1102,7 @@ function SceneList({
       console.error("[드래그 앤 드롭] 파일 처리 오류:", error);
       showError("파일 처리 중 오류가 발생했습니다.");
     }
-  }, [scenes, setScenes]);
+  }, [scenes, setScenes, isVideoExporting]);
 
   // 컨텍스트 메뉴 외부 클릭시 닫기
   useEffect(() => {
@@ -1215,7 +1232,8 @@ function SceneList({
             size="small"
             icon={<ImageRegular />}
             onClick={handleAutoAssignImagesOnly}
-            disabled={mediaGenerationState.isActive || videoAssignState.isActive || isAssigning || scenes.length === 0}
+            disabled={isVideoExporting || mediaGenerationState.isActive || videoAssignState.isActive || isAssigning || scenes.length === 0}
+            title={isVideoExporting ? "영상 생성 중에는 사용할 수 없습니다" : ""}
           >
             {mediaGenerationState.isActive ? "할당 중..." : "AI 이미지 할당"}
           </Button>
@@ -1224,7 +1242,8 @@ function SceneList({
             size="small"
             icon={<ImageRegular />}
             onClick={handleAssignPhotos}
-            disabled={videoAssignState.isActive || mediaGenerationState.isActive || isAssigning || scenes.length === 0}
+            disabled={isVideoExporting || videoAssignState.isActive || mediaGenerationState.isActive || isAssigning || scenes.length === 0}
+            title={isVideoExporting ? "영상 생성 중에는 사용할 수 없습니다" : ""}
           >
             {isAssigning ? "할당 중..." : "사진 할당"}
           </Button>
@@ -1233,7 +1252,8 @@ function SceneList({
             size="small"
             icon={<VideoRegular />}
             onClick={handleAssignVideos}
-            disabled={videoAssignState.isActive || mediaGenerationState.isActive || isAssigning || scenes.length === 0}
+            disabled={isVideoExporting || videoAssignState.isActive || mediaGenerationState.isActive || isAssigning || scenes.length === 0}
+            title={isVideoExporting ? "영상 생성 중에는 사용할 수 없습니다" : ""}
           >
             {isAssigning ? "할당 중..." : "영상 할당"}
           </Button>
@@ -1279,6 +1299,8 @@ function SceneList({
                     border: `2px solid ${
                       isDragOver
                         ? "#00bcf2"
+                        : isVideoExporting
+                        ? "#d0d0d0"
                         : isEditing
                         ? "#ff6b35"
                         : isSelected
@@ -1287,17 +1309,23 @@ function SceneList({
                     }`,
                     backgroundColor: isDragOver
                       ? "#e8f7ff"
+                      : isVideoExporting
+                      ? "rgba(230, 230, 230, 0.3)"
                       : isEditing
                       ? "#fff4f1"
                       : isSelected
                       ? "#f3f9ff"
                       : "transparent",
-                    cursor: isEditing ? "default" : "pointer",
+                    cursor: isEditing ? "text" : "pointer",
                     transition: "all 0.2s ease",
                     position: "relative",
+                    opacity: isVideoExporting ? 0.85 : 1,
                     ...(isDragOver && {
                       transform: "scale(1.02)",
                       boxShadow: "0 4px 12px rgba(0, 188, 242, 0.3)",
+                    }),
+                    ...(isVideoExporting && {
+                      boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.05)",
                     }),
                   }}
                   onClick={isEditing ? undefined : () => onSceneSelect(index)}

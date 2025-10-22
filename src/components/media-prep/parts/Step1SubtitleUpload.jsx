@@ -1,33 +1,60 @@
-import React, { memo, useMemo } from "react";
-import { tokens, Text, Card, Button } from "@fluentui/react-components";
-import { ArrowRight24Regular, LinkSquare24Regular, DismissCircle24Regular } from "@fluentui/react-icons";
+import React, { memo, useMemo, useState, useEffect } from "react";
+import { tokens, Text, Card, Button, Spinner } from "@fluentui/react-components";
+import { ArrowRight24Regular } from "@fluentui/react-icons";
 import FileSelection from "./FileSelection";
+import VoiceSelector from "../../common/VoiceSelector";
 
 /**
- * 1단계: 파일 업로드
+ * 1단계: 자막 업로드
+ * - 자막 파일 선택 및 업로드
+ * - 대본에서 자동 삽입
+ * - 음성 선택 (수동 모드일 때만)
  */
-const Step1FileUpload = memo(
+const Step1SubtitleUpload = memo(
   ({
     // FileSelection props
     srtConnected,
     srtFilePath,
-    scenes,
-    totalDur,
+    srtSource = null,
+    scenes = [],
+    totalDur = 0,
     getFileInfo,
     openSrtPicker,
     srtInputRef,
     handleSrtUpload,
     srtInputId,
     handleInsertFromScript,
-    handleReset,
     // Step navigation
     onNext,
     canProceed,
+    // Voice settings
+    voices = [],
+    voiceLoading = false,
+    voiceError = null,
+    form = {},
+    onChange = () => {},
+    setForm = () => {},
+    onPreviewVoice = () => {},
+    onStopVoice = () => {},
+    onRetryVoiceLoad = () => {},
+    isGeneratingAudio = false,
   }) => {
+    // 음성 생성 UI 표시 여부 (수동 모드일 때만)
+    const [showVoiceUI, setShowVoiceUI] = useState(false);
+
     // 다음 단계 진행 가능 여부 (SRT 파일이 업로드되어야 함)
-    const isReadyToNext = useMemo(() => {
-      return srtConnected && scenes.length > 0;
-    }, [srtConnected, scenes.length]);
+    const isReadyToNext = useMemo(
+      () => srtConnected && scenes.length > 0,
+      [srtConnected, scenes.length]
+    );
+
+    // SRT 수동 삽입 시만 음성 UI 자동 표시
+    useEffect(() => {
+      setShowVoiceUI(
+        srtConnected && scenes.length > 0 && srtSource === "manual"
+      );
+    }, [srtConnected, scenes.length, srtSource]);
+
 
     return (
       <div
@@ -74,8 +101,27 @@ const Step1FileUpload = memo(
           handleSrtUpload={handleSrtUpload}
           srtInputId={srtInputId}
           handleInsertFromScript={handleInsertFromScript}
-          handleReset={handleReset}
         />
+
+        {/* 음성 선택 섹션 (SRT 삽입 후 자동 표시) */}
+        {showVoiceUI && (
+          <VoiceSelector
+            form={form}
+            voices={voices}
+            voiceLoading={voiceLoading}
+            voiceError={voiceError}
+            onChange={onChange}
+            setForm={setForm}
+            onPreviewVoice={onPreviewVoice}
+            onStopVoice={onStopVoice}
+            onRetryVoiceLoad={onRetryVoiceLoad}
+            disabled={isGeneratingAudio}
+            showPreview={true}
+            title="음성 선택"
+            description="업로드된 SRT 자막에 사용할 나레이션 목소리를 선택합니다."
+            isGeneratingAudio={isGeneratingAudio}
+          />
+        )}
 
         {/* 다음 단계 버튼 */}
         <div
@@ -123,25 +169,23 @@ const Step1FileUpload = memo(
           )}
         </div>
 
-        <style>
-          {`
-            @keyframes fadeIn {
-              from {
-                opacity: 0;
-                transform: translateY(20px);
-              }
-              to {
-                opacity: 1;
-                transform: translateY(0);
-              }
+        <style>{`
+          @keyframes fadeIn {
+            from {
+              opacity: 0;
+              transform: translateY(20px);
             }
-          `}
-        </style>
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+        `}</style>
       </div>
     );
   }
 );
 
-Step1FileUpload.displayName = "Step1FileUpload";
+Step1SubtitleUpload.displayName = "Step1SubtitleUpload";
 
-export default Step1FileUpload;
+export default Step1SubtitleUpload;

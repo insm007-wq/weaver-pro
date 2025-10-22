@@ -50,13 +50,14 @@ export const useWizardStep = ({ totalSteps = 3, initialStep = 1, onStepChange } 
   // 특정 단계로 이동
   const goToStep = useCallback(
     (step) => {
-      if (isValidStep(step) && step !== currentStep) {
+      if (isValidStep(step)) {
         setIsTransitioning(true);
+        // 400ms로 애니메이션 시간 조정 (부드러운 전환)
         setTimeout(() => {
           setCurrentStep(step);
           setIsTransitioning(false);
           onStepChange?.(step);
-        }, 300);
+        }, 400);
       }
     },
     [currentStep, isValidStep, onStepChange]

@@ -16,7 +16,6 @@ export const DURATION_OPTIONS = [
   { key: 10, text: "10분 (긴편)" },
   { key: 15, text: "15분 (중간편)" },
   { key: 20, text: "20분 (장편)" },
-  { key: 30, text: "30분 (초장편)" },
 ];
 
 // 영상 길이별 최적 장면 수를 자동 계산하여 제공하므로 MAX_SCENE_OPTIONS는 사용하지 않음

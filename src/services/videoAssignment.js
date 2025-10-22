@@ -7,6 +7,7 @@
 // ============================================================================
 
 import { getSetting } from "../utils/ipcSafe";
+import { checkFileExists } from "../utils/fileManager";
 
 /**
  * 한국어-영어 키워드 매핑 (VREW 스타일)
@@ -215,12 +216,7 @@ export async function discoverAvailableVideos() {
     const videoPath = `${videoSaveFolder}/video`;
 
     // 디렉토리 존재 확인
-    if (!window?.api?.checkPathExists) {
-      console.error("[영상 발견] API 없음");
-      return [];
-    }
-
-    const dirExists = await window.api.checkPathExists(videoPath);
+    const dirExists = await checkFileExists(videoPath);
     if (!dirExists?.exists) {
       console.error("[영상 발견] 디렉토리 없음:", videoPath);
       return [];
@@ -299,12 +295,7 @@ export async function discoverAvailableImages() {
     const imagesPath = `${videoSaveFolder}/images`;
 
     // 디렉토리 존재 확인
-    if (!window?.api?.checkPathExists) {
-      console.error("[이미지 발견] API 없음");
-      return { photos: [], aiImages: [] };
-    }
-
-    const dirExists = await window.api.checkPathExists(imagesPath);
+    const dirExists = await checkFileExists(imagesPath);
     if (!dirExists?.exists) {
       console.warn("[이미지 발견] 디렉토리 없음:", imagesPath);
       return { photos: [], aiImages: [] };
@@ -543,7 +534,7 @@ export async function generateImageForScene(scene, sceneIndex, options = {}) {
 
     // images 폴더 존재 확인 및 생성
     try {
-      const folderExists = await window.api.checkPathExists(imagesFolder);
+      const folderExists = await checkFileExists(imagesFolder);
       if (!folderExists?.exists) {
         await window.api.invoke("fs:mkDirRecursive", { dirPath: imagesFolder });
       }
@@ -592,6 +583,21 @@ export async function generateImageForScene(scene, sceneIndex, options = {}) {
 
     if (!generateResult?.ok || !generateResult?.images || generateResult.images.length === 0) {
       console.error(`[이미지 생성] 씬 ${sceneIndex + 1}: 생성 실패`);
+
+      // 📋 관리자 페이지에 이미지 API 생성 실패 로그 기록
+      if (window.api?.logActivity) {
+        window.api.logActivity({
+          type: "image",
+          title: "이미지 생성",
+          detail: `씬 ${sceneIndex + 1} - Replicate API 호출 실패`,
+          status: "error",
+          metadata: {
+            sceneIndex: sceneIndex,
+            error: "API 응답 없음"
+          }
+        });
+      }
+
       return null;
     }
 
@@ -642,6 +648,22 @@ export async function generateImageForScene(scene, sceneIndex, options = {}) {
 
       const savedImagePath = saveResult.data.path;
 
+      // 📋 관리자 페이지에 이미지 생성 성공 로그 기록
+      if (window.api?.logActivity) {
+        window.api.logActivity({
+          type: "image",
+          title: "이미지 생성",
+          detail: `씬 ${sceneIndex + 1} - 키워드: "${topKeywords}"`,
+          status: "success",
+          metadata: {
+            sceneIndex: sceneIndex,
+            keywords: topKeywords,
+            filePath: savedImagePath,
+            provider: 'replicate-flux'
+          }
+        });
+      }
+
       // 6. asset 객체 반환
       return {
         type: 'image',
@@ -653,6 +675,21 @@ export async function generateImageForScene(scene, sceneIndex, options = {}) {
     } catch (saveError) {
       console.error(`[이미지 생성] 씬 ${sceneIndex + 1}: 이미지 저장 실패 ❌ -`, saveError);
       console.error(`[이미지 생성] 씬 ${sceneIndex + 1}: 에러 상세:`, saveError.message, saveError.stack);
+
+      // 📋 관리자 페이지에 이미지 생성 실패 로그 기록
+      if (window.api?.logActivity) {
+        window.api.logActivity({
+          type: "image",
+          title: "이미지 생성",
+          detail: `씬 ${sceneIndex + 1} - 이미지 저장 실패: ${saveError.message}`,
+          status: "error",
+          metadata: {
+            sceneIndex: sceneIndex,
+            error: saveError.message
+          }
+        });
+      }
+
       return null;
     }
 

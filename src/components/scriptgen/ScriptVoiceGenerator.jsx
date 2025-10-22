@@ -8,7 +8,7 @@ import { PageErrorBoundary } from "../common/ErrorBoundary";
 import ModeSelector from "./parts/ModeSelector";
 import ActionCard from "./parts/ActionCard";
 import BasicSettingsCard from "./parts/BasicSettingsCard";
-import VoiceSettingsCard from "./parts/VoiceSettingsCard";
+import VoiceSelector from "../common/VoiceSelector";
 import ResultsSidebar from "./parts/ResultsSidebar";
 import BottomFixedBar from "../common/BottomFixedBar";
 
@@ -186,7 +186,7 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
         />
 
         {/* 3행: 음성 설정 (1열) */}
-        <VoiceSettingsCard
+        <VoiceSelector
           form={form}
           voices={voices}
           voiceLoading={voiceLoading}
@@ -197,17 +197,21 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
           onRetryVoiceLoad={retryVoiceLoad}
           setForm={setForm}
           disabled={fullVideoState.isGenerating}
+          showPreview={true}
+          title="음성 설정"
+          description="목소리를 선택해 나레이션 톤을 맞춰요. (TTS 엔진과 말하기 속도는 설정에서 변경)"
         />
 
       </div>
 
       {/* 하단 고정 미니 진행바 */}
-      {(fullVideoState?.isGenerating || isLoading || doc) && (
+      {(fullVideoState?.isGenerating || isLoading || fullVideoState?.currentStep === "completed") && (
         <BottomFixedBar
-          isComplete={["complete", "completed"].includes(fullVideoState?.currentStep)}
+          key={`bottombar-${fullVideoState?.currentStep}`}
+          isComplete={fullVideoState?.currentStep === "completed"}
           isLoading={fullVideoState?.isGenerating || isLoading}
           statusText={
-            ["complete", "completed"].includes(fullVideoState?.currentStep)
+            fullVideoState?.currentStep === "completed"
               ? "✅ 대본 생성 완료"
               : `🎬 ${
                   {

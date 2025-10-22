@@ -306,6 +306,9 @@ async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 2
 
         let downloadedSize = 0;
         const chunks = [];
+        let speedCheckTime = Date.now();
+        let lastCheckSize = 0;
+        let slowServerDetected = false;
 
         response.on("data", (chunk) => {
           // 취소 확인
@@ -321,6 +324,32 @@ async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 2
           if (downloadedSize > maxBytes) {
             request.destroy();
             return resolve({ buffer: null, size: downloadedSize, skipped: true });
+          }
+
+          // ⭐ 5초마다 다운로드 속도 체크 (느린 서버 감지)
+          const now = Date.now();
+          const elapsedMs = now - speedCheckTime;
+
+          if (elapsedMs >= 5000 && !slowServerDetected) {
+            const downloadedInCheck = downloadedSize - lastCheckSize;
+            const speedKBps = downloadedInCheck / (elapsedMs / 1000) / 1024; // KB/s
+
+            // 5초에 500KB 미만 = 100KB/s 이하 = 느린 서버
+            if (downloadedInCheck < 500 * 1024 && elapsedMs >= 5000) {
+              console.warn(`[다운로드 속도 낮음] ${filename}: ${speedKBps.toFixed(1)}KB/s (< 100KB/s) → 스킵`);
+              slowServerDetected = true;
+              request.destroy();
+              return resolve({
+                buffer: null,
+                size: downloadedSize,
+                skipped: true,
+                skipReason: `다운로드 속도 너무 느림 (${speedKBps.toFixed(1)}KB/s 이하)`
+              });
+            }
+
+            // 속도 체크 리셋
+            speedCheckTime = now;
+            lastCheckSize = downloadedSize;
           }
 
           chunks.push(chunk);
@@ -355,18 +384,20 @@ async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 2
         }
       });
 
-      request.setTimeout(60000, () => {
+      // ⭐ 타임아웃 60초 → 15초로 단축
+      request.setTimeout(15000, () => {
         request.destroy();
-        reject(new Error("다운로드 타임아웃 (60초)"));
+        reject(new Error("다운로드 타임아웃 (15초)"));
       });
     });
 
     // 스킵된 경우 처리
     if (skipped) {
+      const skipReason = buffer?.skipReason || `파일 크기 초과 (${bytesToMB(size).toFixed(1)}MB > ${maxFileSize}MB)`;
       return {
         success: false,
         filename,
-        error: `파일 크기 초과 (${bytesToMB(size).toFixed(1)}MB > ${maxFileSize}MB)`,
+        error: skipReason,
         skipped: true,
         size,
       };
@@ -442,6 +473,9 @@ async function downloadPhotoOptimized(url, filename, onProgress) {
         const totalSize = parseInt(response.headers["content-length"] || "0", 10);
         let downloadedSize = 0;
         const chunks = [];
+        let speedCheckTime = Date.now();
+        let lastCheckSize = 0;
+        let slowServerDetected = false;
 
         response.on("data", (chunk) => {
           // 취소 확인
@@ -452,6 +486,28 @@ async function downloadPhotoOptimized(url, filename, onProgress) {
           }
 
           downloadedSize += chunk.length;
+
+          // ⭐ 5초마다 다운로드 속도 체크 (느린 서버 감지)
+          const now = Date.now();
+          const elapsedMs = now - speedCheckTime;
+
+          if (elapsedMs >= 5000 && !slowServerDetected) {
+            const downloadedInCheck = downloadedSize - lastCheckSize;
+            const speedKBps = downloadedInCheck / (elapsedMs / 1000) / 1024; // KB/s
+
+            // 5초에 500KB 미만 = 100KB/s 이하 = 느린 서버
+            if (downloadedInCheck < 500 * 1024 && elapsedMs >= 5000) {
+              console.warn(`[사진 다운로드 속도 낮음] ${filename}: ${speedKBps.toFixed(1)}KB/s (< 100KB/s) → 스킵`);
+              slowServerDetected = true;
+              request.destroy();
+              return reject(new Error(`다운로드 속도 너무 느림 (${speedKBps.toFixed(1)}KB/s 이하)`));
+            }
+
+            // 속도 체크 리셋
+            speedCheckTime = now;
+            lastCheckSize = downloadedSize;
+          }
+
           chunks.push(chunk);
 
           if (onProgress && totalSize > 0) {
@@ -484,9 +540,10 @@ async function downloadPhotoOptimized(url, filename, onProgress) {
         }
       });
 
-      request.setTimeout(60000, () => {
+      // ⭐ 타임아웃 60초 → 15초로 단축
+      request.setTimeout(15000, () => {
         request.destroy();
-        reject(new Error("다운로드 타임아웃 (60초)"));
+        reject(new Error("다운로드 타임아웃 (15초)"));
       });
     });
 
