@@ -9,7 +9,7 @@
 const { getSecret } = require("../../services/secrets");
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-const DEFAULT_MODEL = "claude-3-5-sonnet-latest";
+const DEFAULT_MODEL = "claude-sonnet-4-5-20250929";
 const MAX_TOKENS = 8192;
 const TTS_SAFE_CHAR_LIMIT = 1450;
 
