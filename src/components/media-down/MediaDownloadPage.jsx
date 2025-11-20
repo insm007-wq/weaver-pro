@@ -304,7 +304,25 @@ function MediaDownloadPage({ onDownloadingChange }) {
 
     // video, images 폴더 비우기
     try {
-      const videoSaveFolder = await window.api.getSetting("videoSaveFolder");
+      // ✅ 1단계: 설정에서 경로 가져오기
+      let videoSaveFolder = await window.api.getSetting("videoSaveFolder");
+
+      // ✅ 2단계: 설정이 없으면 프로젝트에서 경로 복구 (exe 환경 IPC 타이밍 이슈 해결)
+      if (!videoSaveFolder) {
+        console.warn("[startDownload] videoSaveFolder 설정이 없음. 프로젝트에서 복구 중...");
+        const currentProjectId = await window.api.getSetting("currentProjectId");
+        if (currentProjectId) {
+          const projects = await window.api.getSetting("projects");
+          if (Array.isArray(projects)) {
+            const currentProject = projects.find(p => p.id === currentProjectId);
+            if (currentProject && currentProject.paths && currentProject.paths.root) {
+              videoSaveFolder = currentProject.paths.root;
+              console.log(`✅ [startDownload] 프로젝트 경로 복구: ${videoSaveFolder}`);
+            }
+          }
+        }
+      }
+
       if (videoSaveFolder) {
         await Promise.all([
           window.api.invoke("files:clearDirectory", { dirPath: `${videoSaveFolder}/video` }),

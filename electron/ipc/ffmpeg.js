@@ -838,6 +838,21 @@ function register() {
       const outputFolder = path.join(videoSaveFolder, "output");
       await fsp.mkdir(outputFolder, { recursive: true });
 
+      // ✅ output 폴더의 기존 파일 삭제 (새 내보내기 시 깔끔하게)
+      try {
+        const existingFiles = await fsp.readdir(outputFolder);
+        for (const file of existingFiles) {
+          const filePath = path.join(outputFolder, file);
+          const stat = await fsp.stat(filePath);
+          if (stat.isFile()) {
+            await fsp.unlink(filePath);
+            console.log(`🗑️ 삭제됨: ${filePath}`);
+          }
+        }
+      } catch (error) {
+        console.warn(`⚠️ output 폴더 정리 중 오류: ${error.message}`);
+      }
+
       // 출력 파일명 (타임스탬프 포함)
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
       const outputPath = path.join(outputFolder, `video_${timestamp}.mp4`);
@@ -1441,6 +1456,7 @@ exit $?`;
     let out = "",
       err = "",
       completed = false;
+    let totalDurationSec = null; // 전체 비디오 지속시간 (진행률 계산용)
     const timer = setTimeout(() => {
       if (!completed) {
         try {
@@ -1460,13 +1476,34 @@ exit $?`;
       err += s;
       if (err.length > 10000) err = err.slice(-5000);
       if (progressCallback) {
+        // Duration 추출 (한 번만)
+        if (!totalDurationSec) {
+          const durationMatch = /Duration: (\d{2}):(\d{2}):(\d{2})/i.exec(s);
+          if (durationMatch) {
+            const h = parseInt(durationMatch[1], 10);
+            const mi = parseInt(durationMatch[2], 10);
+            const se = parseInt(durationMatch[3], 10);
+            totalDurationSec = h * 3600 + mi * 60 + se;
+          }
+        }
+
+        // Progress 추출
         const m = /time=(\d{2}):(\d{2}):(\d{2})/i.exec(s);
         if (m) {
           const h = parseInt(m[1], 10),
             mi = parseInt(m[2], 10),
             se = parseInt(m[3], 10);
           const cur = h * 3600 + mi * 60 + se;
-          const est = Math.max(0, Math.min(100, Math.round((cur / 1000) * 100)));
+
+          // 총 지속시간이 있으면 정확한 진행률 계산, 없으면 추정값 사용
+          let est;
+          if (totalDurationSec && totalDurationSec > 0) {
+            est = Math.max(0, Math.min(100, Math.round((cur / totalDurationSec) * 100)));
+          } else {
+            // Fallback: 기본값 1000초 가정
+            est = Math.max(0, Math.min(100, Math.round((cur / 1000) * 100)));
+          }
+
           progressCallback(est);
         }
       }
@@ -1540,6 +1577,7 @@ function runFFmpegDirect(args, progressCallback, isCheck) {
     let out = "",
       err = "",
       completed = false;
+    let totalDurationSec = null; // 전체 비디오 지속시간 (진행률 계산용)
     const timer = setTimeout(() => {
       if (!completed) {
         try {
@@ -1558,13 +1596,34 @@ function runFFmpegDirect(args, progressCallback, isCheck) {
       err += s;
       if (err.length > 10000) err = err.slice(-5000);
       if (progressCallback && !isCheck) {
+        // Duration 추출 (한 번만)
+        if (!totalDurationSec) {
+          const durationMatch = /Duration: (\d{2}):(\d{2}):(\d{2})/i.exec(s);
+          if (durationMatch) {
+            const h = parseInt(durationMatch[1], 10);
+            const mi = parseInt(durationMatch[2], 10);
+            const se = parseInt(durationMatch[3], 10);
+            totalDurationSec = h * 3600 + mi * 60 + se;
+          }
+        }
+
+        // Progress 추출
         const m = /time=(\d{2}):(\d{2}):(\d{2})/i.exec(s);
         if (m) {
           const h = parseInt(m[1], 10),
             mi = parseInt(m[2], 10),
             se = parseInt(m[3], 10);
           const cur = h * 3600 + mi * 60 + se;
-          const est = Math.max(0, Math.min(100, Math.round((cur / 1000) * 100)));
+
+          // 총 지속시간이 있으면 정확한 진행률 계산, 없으면 추정값 사용
+          let est;
+          if (totalDurationSec && totalDurationSec > 0) {
+            est = Math.max(0, Math.min(100, Math.round((cur / totalDurationSec) * 100)));
+          } else {
+            // Fallback: 기본값 1000초 가정하되, 더 정확한 추정 제공
+            est = Math.max(0, Math.min(100, Math.round((cur / 1000) * 100)));
+          }
+
           progressCallback(est);
         }
       }
@@ -1830,16 +1889,37 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
 
       await new Promise((resolve, reject) => {
         const proc = spawn(ffmpegPath, videoArgs, { windowsHide: true });
+        // 클립 생성 중 취소 처리를 위해 currentFfmpegProcess에 저장
+        const previousProcess = currentFfmpegProcess;
+        currentFfmpegProcess = proc;
+
         let stderr = "";
         proc.stderr.on("data", (d) => {
           stderr += d.toString();
           if (stderr.length > 10000) stderr = stderr.slice(-5000);
         });
         proc.on("close", (code) => {
-          if (code === 0) resolve();
-          else reject(new Error(`비디오 클립 ${i + 1} 생성 실패\n${stderr.slice(-1000)}`));
+          // 프로세스 복원
+          if (currentFfmpegProcess === proc) {
+            currentFfmpegProcess = previousProcess;
+          }
+
+          // 취소되었으면 거부
+          if (isExportCancelled) {
+            reject(new Error("cancelled"));
+          } else if (code === 0) {
+            resolve();
+          } else {
+            reject(new Error(`비디오 클립 ${i + 1} 생성 실패\n${stderr.slice(-1000)}`));
+          }
         });
-        proc.on("error", (err) => reject(err));
+        proc.on("error", (err) => {
+          // 프로세스 복원
+          if (currentFfmpegProcess === proc) {
+            currentFfmpegProcess = previousProcess;
+          }
+          reject(err);
+        });
       });
 
       videoClips.push(videoClipOut);
@@ -1895,16 +1975,37 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
 
       await new Promise((resolve, reject) => {
         const proc = spawn(ffmpegPath, imageArgs, { windowsHide: true });
+        // 클립 생성 중 취소 처리를 위해 currentFfmpegProcess에 저장
+        const previousProcess = currentFfmpegProcess;
+        currentFfmpegProcess = proc;
+
         let stderr = "";
         proc.stderr.on("data", (d) => {
           stderr += d.toString();
           if (stderr.length > 10000) stderr = stderr.slice(-5000);
         });
         proc.on("close", (code) => {
-          if (code === 0) resolve();
-          else reject(new Error(`이미지 클립 ${i + 1} 생성 실패\n${stderr.slice(-1000)}`));
+          // 프로세스 복원
+          if (currentFfmpegProcess === proc) {
+            currentFfmpegProcess = previousProcess;
+          }
+
+          // 취소되었으면 거부
+          if (isExportCancelled) {
+            reject(new Error("cancelled"));
+          } else if (code === 0) {
+            resolve();
+          } else {
+            reject(new Error(`이미지 클립 ${i + 1} 생성 실패\n${stderr.slice(-1000)}`));
+          }
         });
-        proc.on("error", (err) => reject(err));
+        proc.on("error", (err) => {
+          // 프로세스 복원
+          if (currentFfmpegProcess === proc) {
+            currentFfmpegProcess = previousProcess;
+          }
+          reject(err);
+        });
       });
 
       videoClips.push(imageClipOut);

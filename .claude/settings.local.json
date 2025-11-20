@@ -1,15 +1,21 @@
 {
   "permissions": {
     "allow": [
-      "Bash(sed:*)",
+      "Bash(npm run generate-icon:*)",
+      "Bash(npm run build:win:*)",
+      "Bash(npm run obfuscate:restore:*)",
+      "Bash(dir:*)",
+      "Bash(node scripts/generate-icon.js:*)",
+      "Bash(npm info:*)",
+      "Bash(findstr:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git checkout:*)",
-      "Bash(cat:*)",
-      "mcp__ide__getDiagnostics",
-      "Bash(npm run build:*)",
-      "Bash(cd:*)",
-      "WebFetch(domain:www.nngroup.com)"
+      "Bash(npm install)",
+      "Bash(git push:*)",
+      "Bash(powershell -Command \"Get-ChildItem ''HKCU:\\Software\\Microsoft\\Credential Manager\\LocalCache\\Identity'' -ErrorAction SilentlyContinue | Where-Object { $_PSChildName -like ''*ContentWeaverPro*'' } | Remove-Item -Force -ErrorAction SilentlyContinue; Write-Host ''✅ ContentWeaverPro 자격증명 삭제 완료 (또는 삭제할 항목 없음)''\")",
+      "Bash(node scripts/clear-keytar.js:*)",
+      "Bash(npm run encrypt-keys:*)",
+      "Bash(explorer \"D:\\project\\weaver-pro\\dist_electron\")"
     ],
     "deny": [],
     "ask": []

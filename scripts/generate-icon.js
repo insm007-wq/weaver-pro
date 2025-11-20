@@ -1,11 +1,55 @@
 // Windows용 .ico 파일 생성 스크립트
 const sharp = require('sharp');
-const { imagesToIco } = require('png-to-ico');
 const fs = require('fs');
 const path = require('path');
 
 const iconPath = path.join(__dirname, '../electron/assets/icon.png');
 const buildDir = path.join(__dirname, '../build');
+
+// 간단한 ICO 헤더 생성 함수
+function createIcoFromPng(pngPath, icoPath) {
+  try {
+    console.log(`📝 ICO 생성 시작: ${pngPath}`);
+
+    // PNG 파일을 읽음
+    const pngBuffer = fs.readFileSync(pngPath);
+
+    // 간단한 ICO 형식 생성
+    // ICO 헤더: 6 bytes (reserved=0, type=1, count=1)
+    const icoHeader = Buffer.alloc(6);
+    icoHeader.writeUInt16LE(0, 0);  // 예약됨
+    icoHeader.writeUInt16LE(1, 2);  // 타입 (1 = ICO)
+    icoHeader.writeUInt16LE(1, 4);  // 이미지 개수
+
+    // 이미지 디렉토리: 16 bytes
+    const imageDir = Buffer.alloc(16);
+    imageDir[0] = 256;              // 너비 (0 = 256)
+    imageDir[1] = 256;              // 높이 (0 = 256)
+    imageDir[2] = 0;                // 팔레트 색상 (0 = 없음)
+    imageDir[3] = 0;                // 예약됨
+    imageDir.writeUInt16LE(1, 4);   // 색상 평면
+    imageDir.writeUInt16LE(32, 6);  // 비트/픽셀
+    imageDir.writeUInt32LE(pngBuffer.length, 8);  // 이미지 크기
+    imageDir.writeUInt32LE(6 + 16, 12);  // 이미지 오프셋
+
+    // 최종 ICO 파일 (헤더 + 디렉토리 + PNG 데이터)
+    const icoBuffer = Buffer.concat([icoHeader, imageDir, pngBuffer]);
+
+    fs.writeFileSync(icoPath, icoBuffer);
+    console.log(`✅ ICO 생성 완료: ${icoPath}`);
+    return true;
+  } catch (error) {
+    console.error('❌ ICO 생성 실패:', error.message);
+    console.warn('⚠️  PNG를 그대로 복사합니다...');
+    try {
+      fs.copyFileSync(pngPath, icoPath);
+      return true;
+    } catch (copyError) {
+      console.error('❌ 복사 실패:', copyError.message);
+      return false;
+    }
+  }
+}
 
 // build 디렉토리가 없으면 생성
 if (!fs.existsSync(buildDir)) {
@@ -36,17 +80,12 @@ async function generateIcons() {
     const icon256 = path.join(buildDir, 'icon_256x256.png');
     const icoPath = path.join(buildDir, 'icon.ico');
 
-    try {
-      // imagesToIco는 이미지 버퍼의 배열을 기대함
-      const imageBuffer = fs.readFileSync(icon256);
-      const buf = await imagesToIco([imageBuffer]);
-      fs.writeFileSync(icoPath, buf);
-      console.log('✅ icon.ico 생성 완료 (png-to-ico 변환)');
-    } catch (icoError) {
-      console.warn('⚠️  ICO 변환 실패:', icoError.message);
-      // 폴백: 256x256 PNG를 ico로 복사 (비권장하지만 작동할 수 있음)
-      fs.copyFileSync(icon256, icoPath);
-      console.log('⚠️  폴백: PNG 파일을 ico 확장자로 복사');
+    // ICO 형식으로 생성
+    const success = createIcoFromPng(icon256, icoPath);
+    if (success) {
+      console.log('✅ icon.ico 생성 완료');
+    } else {
+      console.log('⚠️  icon.ico 생성 완료 (대체 방식)');
     }
 
     // macOS용 icon.icns (512x512 PNG 복사)

@@ -126,16 +126,50 @@ export const useFileManagement = () => {
   }, []);
 
   // 대본에서 가져오기 (ScriptVoiceGenerator에서 생성된 파일들 로드)
-  const handleInsertFromScript = useCallback(async () => {
+  // isAutoLoad: true면 자동 로드 (조용히 실패), false면 사용자 클릭 (에러 메시지 표시)
+  const handleInsertFromScript = useCallback(async (isAutoLoad = false) => {
     setIsLoading(true);
 
     try {
-      // videoSaveFolder 설정에서 기본 경로 가져오기
-      const videoSaveFolder = await getSetting("videoSaveFolder");
+      // ✅ 1단계: videoSaveFolder 설정에서 가져오기
+      let videoSaveFolder = await getSetting("videoSaveFolder");
 
-      // 폴더가 설정되지 않았으면 기본값 사용
+      // ✅ 2단계: 설정이 없으면 현재 프로젝트에서 가져오기 (exe 환경에서 타이밍 이슈 해결)
       if (!videoSaveFolder) {
-        showError("프로젝트 저장 폴더가 설정되지 않았습니다. 설정 탭에서 폴더를 지정해주세요.");
+        console.warn("[handleInsertFromScript] videoSaveFolder 설정이 없음. 현재 프로젝트 확인 중...");
+
+        // 현재 프로젝트 ID 확인
+        const currentProjectId = await getSetting("currentProjectId");
+        if (currentProjectId) {
+          // 프로젝트 목록에서 현재 프로젝트 찾기
+          const projects = await getSetting("projects");
+          if (Array.isArray(projects)) {
+            const currentProject = projects.find(p => p.id === currentProjectId);
+            if (currentProject && currentProject.paths && currentProject.paths.root) {
+              videoSaveFolder = currentProject.paths.root;
+              console.log(`✅ [handleInsertFromScript] 프로젝트 경로 복구: ${videoSaveFolder}`);
+
+              // ✅ 복구된 경로를 다시 저장 (다음번 호출 시 빠르게 + EXE 환경 안정성)
+              try {
+                await setSetting({
+                  key: "videoSaveFolder",
+                  value: videoSaveFolder,
+                });
+                console.log(`💾 [handleInsertFromScript] videoSaveFolder 저장 완료: ${videoSaveFolder}`);
+              } catch (saveError) {
+                console.warn(`⚠️ [handleInsertFromScript] videoSaveFolder 저장 실패:`, saveError);
+                // 저장 실패해도 계속 진행 (이미 메모리에는 있음)
+              }
+            }
+          }
+        }
+      }
+
+      // 폴더가 여전히 설정되지 않았으면 에러
+      if (!videoSaveFolder) {
+        if (!isAutoLoad) {
+          showError("프로젝트 저장 폴더가 설정되지 않았습니다. 설정 탭에서 폴더를 지정해주세요.");
+        }
         return;
       }
 
@@ -165,12 +199,17 @@ export const useFileManagement = () => {
       } else if (loadedMp3) {
         showSuccess("오디오 파일을 찾았습니다. 자막 파일을 업로드해주세요.");
       } else {
-        showError(`가져올 파일이 없습니다.\n\n📍 경로: ${videoSaveFolder}\n\n대본 탭에서 먼저 대본을 생성하세요.`);
-        console.debug("[handleInsertFromScript] 디버그 정보:", debugInfo);
+        // 자동 로드면 조용히 실패, 수동 클릭이면 에러 메시지 표시
+        if (!isAutoLoad) {
+          showError(`가져올 파일이 없습니다.\n\n📍 경로: ${videoSaveFolder}\n\n대본 탭에서 먼저 대본을 생성하세요.`);
+          console.debug("[handleInsertFromScript] 디버그 정보:", debugInfo);
+        }
       }
     } catch (error) {
       console.error("[handleInsertFromScript] 전체 오류:", error);
-      showError(`파일을 가져오는 중 오류가 발생했습니다.\n\n❌ ${error.message}`);
+      if (!isAutoLoad) {
+        showError(`파일을 가져오는 중 오류가 발생했습니다.\n\n❌ ${error.message}`);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -200,6 +239,9 @@ export const useFileManagement = () => {
 
     // 영상 완성 페이지도 초기화
     window.dispatchEvent(new CustomEvent("reset-media-edit"));
+
+    // 초기화 완료 알림
+    showSuccess("프로젝트가 초기화되었습니다! 🔄");
   }, []);
 
   return {

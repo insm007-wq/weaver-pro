@@ -53,6 +53,7 @@ nul
 # API Keys Config
 # ========================
 electron/config.js
+electron/encrypted-keys.js
 
 # ========================
 # Obfuscation Backup
