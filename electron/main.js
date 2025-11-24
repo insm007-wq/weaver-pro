@@ -16,7 +16,7 @@ if (isDev) process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
 function safeRequire(label, loader) {
   try {
     const mod = loader();
-    console.log(`[load] ${label}: OK`);
+    if (isDev) console.log(`[load] ${label}: OK`);
     return mod;
   } catch (err) {
     console.warn(`[load] ${label}: FAIL ->`, err?.message || err);
@@ -31,9 +31,9 @@ async function tryRegister(label, mod, fnName = "register") {
     if (typeof fn === "function") {
       const r = fn();
       if (r && typeof r.then === "function") await r;
-      console.log(`[ipc] ${label}.${fnName}: OK`);
+      if (isDev) console.log(`[ipc] ${label}.${fnName}: OK`);
     } else {
-      console.log(`[ipc] ${label}: (auto-registered or no-op)`);
+      if (isDev) console.log(`[ipc] ${label}: (auto-registered or no-op)`);
     }
   } catch (err) {
     console.warn(`[ipc] ${label}: FAILED ->`, err?.message || err);
@@ -225,7 +225,7 @@ if (!gotLock) {
     /* -----------------------------------------------------------------------
      * 기본 설정 초기화 (IPC 등록 완료 후)
      * -------------------------------------------------------------------- */
-    console.log("[main] Initializing default settings...");
+    if (isDev) console.log("[main] Initializing default settings...");
     if (settingsModule && settingsModule.initializeDefaultSettings) {
       settingsModule.initializeDefaultSettings();
     } else {
@@ -235,11 +235,23 @@ if (!gotLock) {
     /* -----------------------------------------------------------------------
      * API 키 기본값 초기화 (첫 실행 시 자동 설정)
      * -------------------------------------------------------------------- */
-    console.log("[main] Initializing default API keys...");
+    if (isDev) console.log("[main] Initializing default API keys...");
     const secrets = safeRequire("services/secrets", () => require("./services/secrets"));
     if (secrets && secrets.initializeDefaultKeys) {
-      await secrets.initializeDefaultKeys();
-      console.log("[main] Default API keys initialization completed");
+      try {
+        const initResult = await secrets.initializeDefaultKeys();
+
+        if (initResult && initResult.success) {
+          if (isDev) console.log("[main] ✅ Default API keys initialization completed successfully");
+        } else if (initResult && initResult.failed && initResult.failed.length > 0) {
+          console.warn(`[main] ⚠️ Some API keys failed to initialize: ${initResult.failed.join(', ')}`);
+          if (isDev) console.warn("[main] The app will continue, but some features may not work");
+          if (isDev) console.warn("[main] Users can manually configure API keys in settings");
+        }
+      } catch (error) {
+        console.error("[main] ❌ Failed to initialize API keys:", error.message);
+        if (isDev) console.error("[main] The app will continue, but some features may not work");
+      }
     } else {
       console.warn("[main] secrets.initializeDefaultKeys not available");
     }
@@ -262,8 +274,10 @@ if (!gotLock) {
       });
     }
     } catch (error) {
-      console.error("[main] CRITICAL ERROR during initialization:", error);
-      console.error("[main] Stack trace:", error.stack);
+      console.error("[main] CRITICAL ERROR during initialization:", error.message);
+      if (isDev) {
+        console.error("[main] Stack trace:", error.stack);
+      }
       // 에러가 발생해도 창을 띄우도록 시도
       try {
         createMainWindow();

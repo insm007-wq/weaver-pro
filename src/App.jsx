@@ -4,6 +4,8 @@ import KeepAlivePane from "./components/common/KeepAlivePane";
 import { LoadingSpinner, GlobalToast } from "./components/common";
 import { useFontOverrideStyles } from "./styles/commonStyles";
 
+const isDev = process.env.NODE_ENV === "development";
+
 const Sidebar = lazy(() => import("./components/Sidebar"));
 const ProjectInit = lazy(() => import("./components/ProjectInit"));
 const SettingsPage = lazy(() => import("./components/SettingsPage"));
@@ -115,7 +117,7 @@ function App() {
   useEffect(() => {
     const checkTermsAcceptance = async () => {
       try {
-        console.log("🔍 [App.jsx] 약관 동의 여부 확인 중...");
+        if (isDev) console.log("🔍 [App.jsx] 약관 동의 여부 확인 중...");
 
         if (!window.electron?.store?.getTermsAccepted) {
           console.warn("⚠️ [App.jsx] window.electron.store.getTermsAccepted를 사용할 수 없습니다");
@@ -124,7 +126,7 @@ function App() {
         }
 
         const accepted = await window.electron.store.getTermsAccepted();
-        console.log("✅ [App.jsx] 약관 동의 상태:", accepted);
+        if (isDev) console.log("✅ [App.jsx] 약관 동의 상태:", accepted);
         setTermsAccepted(accepted === true ? true : false);
       } catch (error) {
         console.error("❌ [App.jsx] 약관 동의 여부 확인 실패:", error);
@@ -154,7 +156,7 @@ function App() {
             ? result.projects
             : [];
           setHasProject(projects.length > 0);
-          console.log("📊 [App.jsx] 프로젝트 존재 여부:", projects.length > 0, `(${projects.length}개)`);
+          if (isDev) console.log("📊 [App.jsx] 프로젝트 존재 여부:", projects.length > 0, `(${projects.length}개)`);
         } else {
           console.warn("⚠️ [App.jsx] 프로젝트 목록 조회 실패:", result?.error);
           setHasProject(false);
@@ -171,7 +173,7 @@ function App() {
   // 프로젝트 생성 완료 이벤트 리스너
   useEffect(() => {
     const handleProjectCreated = () => {
-      console.log("✅ [App.jsx] 프로젝트 생성됨 - 탭 활성화");
+      if (isDev) console.log("✅ [App.jsx] 프로젝트 생성됨 - 탭 활성화");
       setHasProject(true);
     };
 
@@ -182,7 +184,7 @@ function App() {
   // 프로젝트 삭제 완료 이벤트 리스너
   useEffect(() => {
     const handleProjectDeleted = async () => {
-      console.log("🗑️ [App.jsx] 프로젝트 삭제됨 - hasProject 상태 갱신");
+      if (isDev) console.log("🗑️ [App.jsx] 프로젝트 삭제됨 - hasProject 상태 갱신");
       try {
         if (!window.api?.invoke) {
           console.warn("⚠️ [App.jsx] window.api.invoke를 사용할 수 없습니다");
@@ -199,7 +201,7 @@ function App() {
             ? result.projects
             : [];
           setHasProject(projects.length > 0);
-          console.log("📊 [App.jsx] 프로젝트 존재 여부 갱신:", projects.length > 0, `(${projects.length}개)`);
+          if (isDev) console.log("📊 [App.jsx] 프로젝트 존재 여부 갱신:", projects.length > 0, `(${projects.length}개)`);
         } else {
           console.warn("⚠️ [App.jsx] 프로젝트 목록 갱신 실패:", result?.error);
           setHasProject(false);
@@ -225,7 +227,7 @@ function App() {
 
   const handleAcceptTerms = useCallback(async () => {
     try {
-      console.log("💾 [App.jsx] 약관 동의 저장 시도...");
+      if (isDev) console.log("💾 [App.jsx] 약관 동의 저장 시도...");
 
       if (!window.electron?.store?.setTermsAccepted) {
         console.error("❌ [App.jsx] window.electron.store.setTermsAccepted를 사용할 수 없습니다");
@@ -233,7 +235,7 @@ function App() {
       }
 
       await window.electron.store.setTermsAccepted(true);
-      console.log("✅ [App.jsx] 약관 동의 저장 완료");
+      if (isDev) console.log("✅ [App.jsx] 약관 동의 저장 완료");
       setTermsAccepted(true);
     } catch (error) {
       console.error("❌ [App.jsx] 약관 동의 저장 실패:", error);

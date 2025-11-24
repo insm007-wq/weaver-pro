@@ -428,7 +428,7 @@ export default function Sidebar({ onSelectMenu, isScriptGenerating = false, isVi
           <div className={styles.footer}>
             <div className={styles.footerContent}>
               <Text size={200} weight="medium">
-                Version 1.0.0
+                Version 1.0.7
               </Text>
               <Caption1 color="subtle">
                 © 2025 Weaver Pro

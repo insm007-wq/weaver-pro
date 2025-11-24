@@ -15,7 +15,11 @@
       "Bash(powershell -Command \"Get-ChildItem ''HKCU:\\Software\\Microsoft\\Credential Manager\\LocalCache\\Identity'' -ErrorAction SilentlyContinue | Where-Object { $_PSChildName -like ''*ContentWeaverPro*'' } | Remove-Item -Force -ErrorAction SilentlyContinue; Write-Host ''✅ ContentWeaverPro 자격증명 삭제 완료 (또는 삭제할 항목 없음)''\")",
       "Bash(node scripts/clear-keytar.js:*)",
       "Bash(npm run encrypt-keys:*)",
-      "Bash(explorer \"D:\\project\\weaver-pro\\dist_electron\")"
+      "Bash(explorer \"D:\\project\\weaver-pro\\dist_electron\")",
+      "Bash(cat:*)",
+      "Bash(nul)",
+      "Bash(cd:*)",
+      "Bash(powershell -Command \"Get-ChildItem ''HKCU:\\Software\\Microsoft\\Credential Manager\\LocalCache\\Identity'' -ErrorAction SilentlyContinue | Where-Object { $_PSChildName -like ''*ContentWeaverPro*'' } | Remove-Item -Force -ErrorAction SilentlyContinue; Write-Host ''✅ Keytar 초기화 완료''\")"
     ],
     "deny": [],
     "ask": []
