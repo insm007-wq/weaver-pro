@@ -1,6 +1,6 @@
 {
   "name": "weaver-pro",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "main": "electron/main.js",
   "scripts": {
     "predev": "node scripts/obfuscate.js --check",
