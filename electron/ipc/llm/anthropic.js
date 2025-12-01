@@ -386,18 +386,24 @@ async function generateLongFormScript({ topic, style, duration, referenceText, c
   const allScenes = [];
   let currentSceneNumber = 1;
 
+  // ✅ 장편 대본 청크용 CPM 배율 증가 (기존: 320 → 346 CPM, 8% 증가)
+  // 계산: 각 청크 5분 × 346 CPM × 1.25배 = 2,163자 기대 → 실제 1,838자 (85% 효율)
+  // 20분 기준: 4청크 × 1,838자 ≈ 7,352자 ≈ 18분 ✅
+  const chunkCpmMin = Math.round(cpmMin * 1.08); // 320 → 346
+  const chunkCpmMax = Math.round(cpmMax * 1.08); // 400 → 432
+
   for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
     const startTime = Date.now();
     const isLastChunk = chunkIndex === chunkCount - 1;
     const chunkDuration = isLastChunk ? duration - (chunkIndex * CHUNK_DURATION) : CHUNK_DURATION;
 
-    console.log(`📝 청크 ${chunkIndex + 1}/${chunkCount} 생성 시작 (${chunkDuration}분)`);
+    console.log(`📝 청크 ${chunkIndex + 1}/${chunkCount} 생성 시작 (${chunkDuration}분, CPM: ${chunkCpmMin}-${chunkCpmMax})`);
 
     const chunkTopic = chunkIndex === 0
       ? `${topic} (전체 ${duration}분 중 ${chunkIndex + 1}/${chunkCount} 파트)`
       : `${topic} (전체 ${duration}분 중 ${chunkIndex + 1}/${chunkCount} 파트 - 이전 내용에서 자연스럽게 이어지도록)`;
 
-    const prompt = await _buildPrompt(chunkTopic, chunkDuration, style, customPrompt, referenceText, cpmMin, cpmMax);
+    const prompt = await _buildPrompt(chunkTopic, chunkDuration, style, customPrompt, referenceText, chunkCpmMin, chunkCpmMax);
 
     const targetSceneCount = Math.round((chunkDuration * 60) / 8);
     const minSceneCount = Math.max(3, Math.floor(targetSceneCount * 0.9));
