@@ -228,7 +228,7 @@ async function callAnthropicAPI(apiKey, prompt, minSceneCount = 5, isLongForm = 
       }
 
       // 타임아웃 설정 (여유있게 증가)
-      const timeoutMs = isLongForm ? 180000 : 90000;  // 장편: 3분, 단편: 1.5분
+      const timeoutMs = isLongForm ? 240000 : 180000;  // 장편: 4분, 단편: 3분
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -387,8 +387,11 @@ async function generateLongFormScript({ topic, style, duration, referenceText, c
   let currentSceneNumber = 1;
 
   for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
+    const startTime = Date.now();
     const isLastChunk = chunkIndex === chunkCount - 1;
     const chunkDuration = isLastChunk ? duration - (chunkIndex * CHUNK_DURATION) : CHUNK_DURATION;
+
+    console.log(`📝 청크 ${chunkIndex + 1}/${chunkCount} 생성 시작 (${chunkDuration}분)`);
 
     const chunkTopic = chunkIndex === 0
       ? `${topic} (전체 ${duration}분 중 ${chunkIndex + 1}/${chunkCount} 파트)`
@@ -430,6 +433,9 @@ async function generateLongFormScript({ topic, style, duration, referenceText, c
     });
 
     allScenes.push(...chunkScenes);
+
+    const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`✅ 청크 ${chunkIndex + 1}/${chunkCount} 완료 (${elapsedSec}초 소요, ${chunkScenes.length}개 장면)`);
 
     // 청크 완료 시 진행률 전송 (UI 업데이트)
     if (event && event.sender) {

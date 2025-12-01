@@ -98,12 +98,14 @@ export function useScriptGeneration() {
 
         const getTimeoutForDuration = (minutes) => {
           // 장편은 청크로 나눠 생성하므로 충분한 시간 필요
-          if (minutes >= 90) return 900000;  // 90분+: 15분
-          if (minutes >= 60) return 720000;  // 60분+: 12분
-          if (minutes >= 30) return 600000;  // 30분+: 10분
-          if (minutes >= 20) return 360000;  // 20분+: 6분
-          if (minutes >= 10) return 240000;  // 10분+: 4분
-          return 120000;                      // 10분 미만: 2분
+          // 계산식: (청크 개수 × 청크당 최대 시간 5분) + 여유분
+          // 단편: API 타임아웃 90초 × 재시도 3회 + 백오프 = 최대 5분
+          if (minutes >= 90) return 2700000;  // 90분+: 45분 (18청크 × 2.5분)
+          if (minutes >= 60) return 1800000;  // 60분+: 30분 (12청크 × 2.5분)
+          if (minutes >= 30) return 1200000;  // 30분+: 20분 (6청크 × 3분)
+          if (minutes >= 20) return 1200000;  // 20분+: 20분 (4청크 × 5분) ✅
+          if (minutes >= 10) return 480000;   // 10분+: 8분 (단일 생성 + 재시도) ✅
+          return 360000;                       // 10분 미만: 6분 (재시도 여유) ✅
         };
 
         const timeoutMs = getTimeoutForDuration(form.durationMin);

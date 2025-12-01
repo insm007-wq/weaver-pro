@@ -867,6 +867,8 @@ function register() {
       let totalAudioDurationMs = 0;
 
       // ✅ 1. 개별 오디오 파일 수집 및 길이 측정
+      const missingAudioFiles = [];
+
       for (let i = 0; i < scenes.length; i++) {
         const sceneNum = i + 1;
         const fileName = `scene-${String(sceneNum).padStart(3, "0")}.mp3`;
@@ -882,9 +884,23 @@ function register() {
             totalAudioDurationMs += 3000; // 기본값 3초
           }
         } else {
-          console.warn(`⚠️ 씬 ${sceneNum} 오디오 파일 없음: ${filePath}`);
+          const errorMsg = `씬 ${sceneNum} 오디오 파일 누락: ${filePath}`;
+          console.error(`❌ ${errorMsg}`);
+          missingAudioFiles.push({ sceneNum, fileName, expectedPath: filePath });
           totalAudioDurationMs += 3000; // 기본값 3초
         }
+      }
+
+      // 오디오 파일 누락 시 명확한 오류 메시지
+      if (missingAudioFiles.length > 0) {
+        const errorDetails = missingAudioFiles
+          .map(f => `- 씬 ${f.sceneNum}: ${f.fileName}`)
+          .join('\n');
+        throw new Error(
+          `TTS 오디오 파일이 완전히 생성되지 않았습니다.\n\n` +
+          `누락된 파일 (${missingAudioFiles.length}개):\n${errorDetails}\n\n` +
+          `대본 생성이 중단되었을 수 있습니다. 대본을 다시 생성해주세요.`
+        );
       }
 
       if (audioFiles.length === 0) {
