@@ -1,10 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState, memo, useMemo } from "react";
 import { Text, Button, Card, Badge } from "@fluentui/react-components";
-import {
-  PlayRegular,
-  PauseRegular,
-  CheckmarkCircleRegular,
-} from "@fluentui/react-icons";
+import { PlayRegular, PauseRegular, CheckmarkCircleRegular } from "@fluentui/react-icons";
 import { splitBalancedLines } from "../../refine/utils/metrics";
 import { checkFileExists } from "../../../utils/fileManager";
 
@@ -97,7 +93,7 @@ const VideoPreview = memo(function VideoPreview({
           setSubtitleSettings(defaultSettings);
         }
       } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
+        if (process.env.NODE_ENV === "development") {
           console.error("자막 설정 로드 실패:", error);
         }
         setSubtitleSettings({
@@ -152,7 +148,7 @@ const VideoPreview = memo(function VideoPreview({
       return;
     }
 
-    const shouldPlay = video ? video.paused : (audio ? audio.paused : true);
+    const shouldPlay = video ? video.paused : audio ? audio.paused : true;
 
     if (shouldPlay) {
       // 재생 시작
@@ -161,7 +157,7 @@ const VideoPreview = memo(function VideoPreview({
       if (video && video.readyState >= 2) {
         playPromises.push(
           video.play().catch((error) => {
-            if (process.env.NODE_ENV === 'development') {
+            if (process.env.NODE_ENV === "development") {
               console.error("[비디오 재생] 재생 실패:", error);
             }
           })
@@ -171,7 +167,7 @@ const VideoPreview = memo(function VideoPreview({
       if (audio && audio.readyState >= 2) {
         playPromises.push(
           audio.play().catch((error) => {
-            if (process.env.NODE_ENV === 'development') {
+            if (process.env.NODE_ENV === "development") {
               console.error("[TTS 재생] 재생 실패:", error);
             }
           })
@@ -188,7 +184,7 @@ const VideoPreview = memo(function VideoPreview({
         if (audio) audio.pause();
         setIsPlaying(false);
       } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
+        if (process.env.NODE_ENV === "development") {
           console.error("[재생] 일시정지 실패:", error);
         }
       }
@@ -196,52 +192,64 @@ const VideoPreview = memo(function VideoPreview({
   }, []); // videoRef와 audioRef는 ref이므로 의존성 배열에서 제외 가능
 
   // 부드러운 시간 계산 헬퍼 (음성 duration 기준)
-  const calculateTimeFromPosition = useCallback((clientX, progressBarElement) => {
-    if (!progressBarElement || audioDuration <= 0) return null;
+  const calculateTimeFromPosition = useCallback(
+    (clientX, progressBarElement) => {
+      if (!progressBarElement || audioDuration <= 0) return null;
 
-    const rect = progressBarElement.getBoundingClientRect();
-    const clickX = clientX - rect.left;
-    const percentage = Math.max(0, Math.min(1, clickX / rect.width));
+      const rect = progressBarElement.getBoundingClientRect();
+      const clickX = clientX - rect.left;
+      const percentage = Math.max(0, Math.min(1, clickX / rect.width));
 
-    const newTime = audioDuration * percentage;
+      const newTime = audioDuration * percentage;
 
-    return Math.max(0, Math.min(audioDuration, newTime));
-  }, [audioDuration]);
+      return Math.max(0, Math.min(audioDuration, newTime));
+    },
+    [audioDuration]
+  );
 
   // 최적화된 드래그 업데이트
-  const updateDragTime = useCallback((clientX, progressBarElement) => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
+  const updateDragTime = useCallback(
+    (clientX, progressBarElement) => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
 
-    animationFrameRef.current = requestAnimationFrame(() => {
-      const newTime = calculateTimeFromPosition(clientX, progressBarElement);
+      animationFrameRef.current = requestAnimationFrame(() => {
+        const newTime = calculateTimeFromPosition(clientX, progressBarElement);
+        if (newTime !== null) {
+          setDragTime(newTime);
+        }
+      });
+    },
+    [calculateTimeFromPosition]
+  );
+
+  // 마우스 다운 핸들러 (드래그 시작)
+  const handleMouseDown = useCallback(
+    (event) => {
+      event.preventDefault();
+      setIsDragging(true);
+
+      const clientX = event.clientX || (event.touches && event.touches[0].clientX);
+      const newTime = calculateTimeFromPosition(clientX, progressBarRef?.current);
       if (newTime !== null) {
         setDragTime(newTime);
       }
-    });
-  }, [calculateTimeFromPosition]);
-
-  // 마우스 다운 핸들러 (드래그 시작)
-  const handleMouseDown = useCallback((event) => {
-    event.preventDefault();
-    setIsDragging(true);
-
-    const clientX = event.clientX || (event.touches && event.touches[0].clientX);
-    const newTime = calculateTimeFromPosition(clientX, progressBarRef?.current);
-    if (newTime !== null) {
-      setDragTime(newTime);
-    }
-  }, [calculateTimeFromPosition]);
+    },
+    [calculateTimeFromPosition]
+  );
 
   // 마우스 무브 핸들러 (드래그 중)
-  const handleMouseMove = useCallback((event) => {
-    if (!isDragging) return;
+  const handleMouseMove = useCallback(
+    (event) => {
+      if (!isDragging) return;
 
-    event.preventDefault();
-    const clientX = event.clientX || (event.touches && event.touches[0].clientX);
-    updateDragTime(clientX, progressBarRef.current);
-  }, [isDragging, updateDragTime]);
+      event.preventDefault();
+      const clientX = event.clientX || (event.touches && event.touches[0].clientX);
+      updateDragTime(clientX, progressBarRef.current);
+    },
+    [isDragging, updateDragTime]
+  );
 
   // 마우스 업 핸들러 (드래그 종료)
   const handleMouseUp = useCallback(() => {
@@ -263,34 +271,37 @@ const VideoPreview = memo(function VideoPreview({
   }, [isDragging, dragTime]); // ref는 의존성에서 제외
 
   // 클릭 핸들러 (빠른 탐색)
-  const handleClick = useCallback((event) => {
-    if (isDragging) return; // 드래그 중에는 클릭 무시
+  const handleClick = useCallback(
+    (event) => {
+      if (isDragging) return; // 드래그 중에는 클릭 무시
 
-    const clientX = event.clientX || (event.touches && event.touches[0].clientX);
-    const newTime = calculateTimeFromPosition(clientX, progressBarRef?.current);
+      const clientX = event.clientX || (event.touches && event.touches[0].clientX);
+      const newTime = calculateTimeFromPosition(clientX, progressBarRef?.current);
 
-    if (newTime !== null) {
-      setCurrentTime(newTime);
-      const video = videoRef?.current;
-      const audio = audioRef?.current;
-      if (video) video.currentTime = newTime;
-      if (audio) audio.currentTime = newTime;
-    }
-  }, [isDragging, calculateTimeFromPosition]); // ref는 의존성에서 제외
+      if (newTime !== null) {
+        setCurrentTime(newTime);
+        const video = videoRef?.current;
+        const audio = audioRef?.current;
+        if (video) video.currentTime = newTime;
+        if (audio) audio.currentTime = newTime;
+      }
+    },
+    [isDragging, calculateTimeFromPosition]
+  ); // ref는 의존성에서 제외
 
   // 전역 마우스 이벤트 리스너 (드래그 중 마우스가 요소 밖으로 나가도 추적)
   useEffect(() => {
     if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.addEventListener('touchmove', handleMouseMove);
-      document.addEventListener('touchend', handleMouseUp);
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.addEventListener("touchmove", handleMouseMove);
+      document.addEventListener("touchend", handleMouseUp);
 
       return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-        document.removeEventListener('touchmove', handleMouseMove);
-        document.removeEventListener('touchend', handleMouseUp);
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+        document.removeEventListener("touchmove", handleMouseMove);
+        document.removeEventListener("touchend", handleMouseUp);
       };
     }
   }, [isDragging, handleMouseMove, handleMouseUp]);
@@ -311,7 +322,7 @@ const VideoPreview = memo(function VideoPreview({
       }
 
       // blob URL 정리 (메모리 누수 방지)
-      if (ttsAudioUrl && ttsAudioUrl.startsWith('blob:')) {
+      if (ttsAudioUrl && ttsAudioUrl.startsWith("blob:")) {
         try {
           URL.revokeObjectURL(ttsAudioUrl);
         } catch (e) {
@@ -320,7 +331,6 @@ const VideoPreview = memo(function VideoPreview({
       }
     };
   }, [ttsAudioUrl]);
-
 
   // 비디오 URL이 변경되면 이벤트 리스너 설정
   useEffect(() => {
@@ -339,7 +349,8 @@ const VideoPreview = memo(function VideoPreview({
 
         // 비디오 자동 재생
         if (video.readyState >= 2) {
-          video.play()
+          video
+            .play()
             .then(() => {
               setIsPlaying(true);
 
@@ -348,14 +359,14 @@ const VideoPreview = memo(function VideoPreview({
               if (audio && audio.readyState >= 2 && audio.paused) {
                 audio.currentTime = 0;
                 audio.play().catch((error) => {
-                  if (process.env.NODE_ENV === 'development') {
+                  if (process.env.NODE_ENV === "development") {
                     console.error("[TTS 재생] 오디오 재생 실패:", error);
                   }
                 });
               }
             })
             .catch((error) => {
-              if (process.env.NODE_ENV === 'development') {
+              if (process.env.NODE_ENV === "development") {
                 console.error("[비디오 재생] 자동 재생 실패:", error);
               }
             });
@@ -485,7 +496,7 @@ const VideoPreview = memo(function VideoPreview({
 
         if (!isMounted) return; // 컴포넌트가 언마운트되었으면 중단
 
-        if (!audioUrl || typeof audioUrl !== 'string' || !audioUrl.startsWith('blob:')) {
+        if (!audioUrl || typeof audioUrl !== "string" || !audioUrl.startsWith("blob:")) {
           // 재시도: 캐시 제거 후 다시 시도
           if (window.api?.revokeVideoUrl) {
             window.api.revokeVideoUrl(selectedScene.audioPath);
@@ -498,7 +509,7 @@ const VideoPreview = memo(function VideoPreview({
             try {
               const retryUrl = await window.api?.videoPathToUrl?.(selectedScene.audioPath, { cache: false });
 
-              if (retryUrl && retryUrl.startsWith('blob:') && isMounted) {
+              if (retryUrl && retryUrl.startsWith("blob:") && isMounted) {
                 setTtsAudioUrl(retryUrl);
                 setHasAudio(true);
               } else {
@@ -508,7 +519,7 @@ const VideoPreview = memo(function VideoPreview({
                 }
               }
             } catch (retryError) {
-              if (process.env.NODE_ENV === 'development') {
+              if (process.env.NODE_ENV === "development") {
                 console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 재시도 실패:`, retryError);
               }
             }
@@ -523,7 +534,7 @@ const VideoPreview = memo(function VideoPreview({
         }
       } catch (error) {
         if (isMounted) {
-          if (process.env.NODE_ENV === 'development') {
+          if (process.env.NODE_ENV === "development") {
             console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 로딩 실패:`, error);
           }
           setTtsAudioUrl(null);
@@ -561,112 +572,123 @@ const VideoPreview = memo(function VideoPreview({
     }
   }, [ttsAudioUrl]);
 
-
   // 오디오 이벤트 핸들러들 (메모이제이션)
-  const handleAudioLoadedData = useCallback((e) => {
-    const audio = e.target;
-    if (audio.duration && isFinite(audio.duration)) {
-      setAudioDuration(audio.duration);
-    }
+  const handleAudioLoadedData = useCallback(
+    (e) => {
+      const audio = e.target;
+      if (audio.duration && isFinite(audio.duration)) {
+        setAudioDuration(audio.duration);
+      }
 
-    // 비디오가 이미 재생 중이면 오디오도 함께 재생
-    const video = videoRef?.current;
-    if (video && !video.paused) {
-      audio.currentTime = video.currentTime;
-      audio.play().catch((error) => {
-        if (process.env.NODE_ENV === 'development') {
-          console.error(`[TTS 오디오] 동기화 재생 실패:`, error);
-        }
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSceneIndex]); // videoRef는 ref이므로 의존성에서 제외
+      // 비디오가 이미 재생 중이면 오디오도 함께 재생
+      const video = videoRef?.current;
+      if (video && !video.paused) {
+        audio.currentTime = video.currentTime;
+        audio.play().catch((error) => {
+          if (process.env.NODE_ENV === "development") {
+            console.error(`[TTS 오디오] 동기화 재생 실패:`, error);
+          }
+        });
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [selectedSceneIndex]
+  ); // videoRef는 ref이므로 의존성에서 제외
 
-  const handleAudioLoadedMetadata = useCallback((e) => {
-    const audio = e.target;
-    if (audio.duration && isFinite(audio.duration)) {
-      setAudioDuration(audio.duration);
-    }
-  }, [selectedSceneIndex]);
+  const handleAudioLoadedMetadata = useCallback(
+    (e) => {
+      const audio = e.target;
+      if (audio.duration && isFinite(audio.duration)) {
+        setAudioDuration(audio.duration);
+      }
+    },
+    [selectedSceneIndex]
+  );
 
   const handleAudioCanPlay = useCallback(() => {
     // 재생 준비 완료 (로그 불필요)
   }, [selectedSceneIndex]);
 
-  const handleAudioError = useCallback(async (e) => {
-    const audio = e.target;
-    const error = audio.error;
+  const handleAudioError = useCallback(
+    async (e) => {
+      const audio = e.target;
+      const error = audio.error;
 
-    let errorMessage = "알 수 없는 오류";
-    if (error) {
-      switch (error.code) {
-        case error.MEDIA_ERR_ABORTED:
-          errorMessage = "오디오 로드가 중단되었습니다";
-          break;
-        case error.MEDIA_ERR_NETWORK:
-          errorMessage = "네트워크 오류로 오디오를 로드할 수 없습니다";
-          break;
-        case error.MEDIA_ERR_DECODE:
-          errorMessage = "오디오 디코딩 오류";
-          break;
-        case error.MEDIA_ERR_SRC_NOT_SUPPORTED:
-          errorMessage = "오디오 형식이 지원되지 않거나 파일을 찾을 수 없습니다";
-          break;
-        default:
-          errorMessage = `오류 코드: ${error.code}`;
-      }
-    }
-
-    if (process.env.NODE_ENV === 'development') {
-      console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 재생 오류:`, {
-        message: errorMessage,
-        src: audio.src,
-        error: error,
-        readyState: audio.readyState,
-        networkState: audio.networkState
-      });
-    }
-
-    // blob URL이 만료된 경우 자동으로 재생성 시도
-    if (error && error.code === error.MEDIA_ERR_SRC_NOT_SUPPORTED && selectedScene?.audioPath) {
-      try {
-        // 캐시 제거
-        if (window.api?.revokeVideoUrl) {
-          window.api.revokeVideoUrl(selectedScene.audioPath);
-        }
-
-        // 새로운 blob URL 생성
-        const newAudioUrl = await window.api?.videoPathToUrl?.(selectedScene.audioPath, { cache: false });
-
-        if (newAudioUrl && newAudioUrl.startsWith('blob:')) {
-          setTtsAudioUrl(newAudioUrl);
-          setHasAudio(true);
-          return; // 재생성 성공하면 초기화하지 않음
-        }
-      } catch (retryError) {
-        if (process.env.NODE_ENV === 'development') {
-          console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 재생성 실패:`, retryError);
+      let errorMessage = "알 수 없는 오류";
+      if (error) {
+        switch (error.code) {
+          case error.MEDIA_ERR_ABORTED:
+            errorMessage = "오디오 로드가 중단되었습니다";
+            break;
+          case error.MEDIA_ERR_NETWORK:
+            errorMessage = "네트워크 오류로 오디오를 로드할 수 없습니다";
+            break;
+          case error.MEDIA_ERR_DECODE:
+            errorMessage = "오디오 디코딩 오류";
+            break;
+          case error.MEDIA_ERR_SRC_NOT_SUPPORTED:
+            errorMessage = "오디오 형식이 지원되지 않거나 파일을 찾을 수 없습니다";
+            break;
+          default:
+            errorMessage = `오류 코드: ${error.code}`;
         }
       }
-    }
 
-    // 오디오 상태 초기화
-    setHasAudio(false);
-    setAudioDuration(0);
-  }, [selectedSceneIndex, selectedScene]);
+      if (process.env.NODE_ENV === "development") {
+        console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 재생 오류:`, {
+          message: errorMessage,
+          src: audio.src,
+          error: error,
+          readyState: audio.readyState,
+          networkState: audio.networkState,
+        });
+      }
 
-  const handleAudioTimeUpdate = useCallback((e) => {
-    const audio = e.target;
-    const audioCurrentTime = audio.currentTime;
+      // blob URL이 만료된 경우 자동으로 재생성 시도
+      if (error && error.code === error.MEDIA_ERR_SRC_NOT_SUPPORTED && selectedScene?.audioPath) {
+        try {
+          // 캐시 제거
+          if (window.api?.revokeVideoUrl) {
+            window.api.revokeVideoUrl(selectedScene.audioPath);
+          }
 
-    // 비디오가 있으면 비디오와 오디오 중 더 진행된 시간 사용
-    const video = videoRef?.current;
-    const videoCurrentTime = video && !video.paused ? video.currentTime : 0;
-    const maxTime = Math.max(videoCurrentTime, audioCurrentTime);
+          // 새로운 blob URL 생성
+          const newAudioUrl = await window.api?.videoPathToUrl?.(selectedScene.audioPath, { cache: false });
 
-    setCurrentTime(maxTime);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSceneIndex]); // videoRef는 ref이므로 의존성에서 제외
+          if (newAudioUrl && newAudioUrl.startsWith("blob:")) {
+            setTtsAudioUrl(newAudioUrl);
+            setHasAudio(true);
+            return; // 재생성 성공하면 초기화하지 않음
+          }
+        } catch (retryError) {
+          if (process.env.NODE_ENV === "development") {
+            console.error(`[TTS 오디오] 씬 ${selectedSceneIndex + 1} 재생성 실패:`, retryError);
+          }
+        }
+      }
+
+      // 오디오 상태 초기화
+      setHasAudio(false);
+      setAudioDuration(0);
+    },
+    [selectedSceneIndex, selectedScene]
+  );
+
+  const handleAudioTimeUpdate = useCallback(
+    (e) => {
+      const audio = e.target;
+      const audioCurrentTime = audio.currentTime;
+
+      // 비디오가 있으면 비디오와 오디오 중 더 진행된 시간 사용
+      const video = videoRef?.current;
+      const videoCurrentTime = video && !video.paused ? video.currentTime : 0;
+      const maxTime = Math.max(videoCurrentTime, audioCurrentTime);
+
+      setCurrentTime(maxTime);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [selectedSceneIndex]
+  ); // videoRef는 ref이므로 의존성에서 제외
 
   const handleAudioEnded = useCallback(() => {
     // 오디오가 끝나면 비디오도 정지
@@ -706,7 +728,7 @@ const VideoPreview = memo(function VideoPreview({
         setCurrentTime(0);
         playPromises.push(
           video.play().catch((error) => {
-            if (process.env.NODE_ENV === 'development') {
+            if (process.env.NODE_ENV === "development") {
               console.error("[씬 선택] 비디오 자동 재생 실패:", error);
             }
           })
@@ -718,7 +740,7 @@ const VideoPreview = memo(function VideoPreview({
         audio.currentTime = 0;
         playPromises.push(
           audio.play().catch((error) => {
-            if (process.env.NODE_ENV === 'development') {
+            if (process.env.NODE_ENV === "development") {
               console.error("[씬 선택] 오디오 자동 재생 실패:", error);
             }
           })
@@ -740,146 +762,154 @@ const VideoPreview = memo(function VideoPreview({
   }, [selectedSceneIndex]); // videoRef는 ref이므로 의존성에서 제외
 
   // 자막 오버레이 렌더링 헬퍼 함수 (메모이제이션: 불필요한 재계산 방지)
-  const renderSubtitleOverlay = useMemo(() => () => {
-    if (!selectedScene?.text || !subtitleSettings) return null;
+  const renderSubtitleOverlay = useMemo(
+    () => () => {
+      if (!selectedScene?.text || !subtitleSettings) return null;
 
-    // enableSubtitles가 false면 자막 렌더링하지 않음
-    if (subtitleSettings.enableSubtitles === false) {
-      return null;
-    }
-
-    // 전역 설정 값 추출
-    const {
-      fontSize = 24,
-      position = "bottom",
-      horizontalAlign = "center",
-      useOutline = true,
-      outlineWidth = 2,
-      useShadow = false,
-      verticalPadding = 40,
-      maxLines = 2,
-      fontFamily = "noto-sans",
-      fontWeight = 600,
-      lineHeight = 1.4,
-      letterSpacing = 0,
-      textColor = "#FFFFFF",
-      backgroundColor = "#000000",
-      backgroundOpacity = 80,
-      outlineColor = "#000000",
-      shadowColor = "#000000",
-      shadowOffset = 2,
-      shadowBlur = 4,
-      useBackground = true,
-      backgroundRadius = 8,
-      maxWidth = 80,
-    } = subtitleSettings;
-
-    // 프리뷰 크기 비율 계산 (1920x1080 기준 -> 프리뷰 크기로 스케일링)
-    // 실제 프리뷰 컨테이너 크기를 기반으로 동적 계산
-    // previewWidth가 0이면 기본값 0.3 사용 (초기 로드 시)
-    const SCALE_FACTOR = previewWidth > 0 ? previewWidth / 1920 : 0.3;
-
-    const scaledFontSize = fontSize * SCALE_FACTOR;
-    const scaledOutlineWidth = outlineWidth * SCALE_FACTOR;
-    const scaledShadowOffset = shadowOffset * SCALE_FACTOR;
-    const scaledShadowBlur = shadowBlur * SCALE_FACTOR;
-    const scaledVerticalPadding = verticalPadding * SCALE_FACTOR;
-    const scaledBackgroundRadius = backgroundRadius * SCALE_FACTOR;
-    const scaledLetterSpacing = letterSpacing * SCALE_FACTOR;
-
-    // 폰트 패밀리 매핑
-    const fontFamilyMap = {
-      "noto-sans": "'Noto Sans KR', sans-serif",
-      "malgun-gothic": "'Malgun Gothic', sans-serif",
-      "apple-sd-gothic": "'Apple SD Gothic Neo', sans-serif",
-      "nanumgothic": "'Nanum Gothic', sans-serif",
-      "arial": "Arial, sans-serif",
-      "helvetica": "Helvetica, sans-serif",
-      "roboto": "'Roboto', sans-serif"
-    };
-    const fontFamilyStyle = fontFamilyMap[fontFamily] || "'Noto Sans KR', sans-serif";
-
-    // 외곽선 스타일 (사용자 설정 색상 적용 + 스케일링)
-    const textShadowParts = [];
-    if (useOutline && scaledOutlineWidth > 0) {
-      // 8방향 외곽선 효과
-      for (let angle = 0; angle < 360; angle += 45) {
-        const x = Math.cos((angle * Math.PI) / 180) * scaledOutlineWidth;
-        const y = Math.sin((angle * Math.PI) / 180) * scaledOutlineWidth;
-        textShadowParts.push(`${x}px ${y}px 0 ${outlineColor}`);
+      // enableSubtitles가 false면 자막 렌더링하지 않음
+      if (subtitleSettings.enableSubtitles === false) {
+        return null;
       }
-    }
-    if (useShadow) {
-      textShadowParts.push(`${scaledShadowOffset}px ${scaledShadowOffset}px ${scaledShadowBlur}px ${shadowColor}`);
-    }
-    const textShadow = textShadowParts.length > 0 ? textShadowParts.join(", ") : "none";
 
-    // 배경색 스타일 (투명도 적용)
-    const bgOpacity = backgroundOpacity / 100;
-    const bgColorRgb = backgroundColor.match(/\w\w/g)?.map(x => parseInt(x, 16)) || [0, 0, 0];
-    const backgroundColorStyle = useBackground
-      ? `rgba(${bgColorRgb[0]}, ${bgColorRgb[1]}, ${bgColorRgb[2]}, ${bgOpacity})`
-      : "transparent";
+      // 전역 설정 값 추출
+      const {
+        fontSize = 24,
+        position = "bottom",
+        horizontalAlign = "center",
+        useOutline = true,
+        outlineWidth = 2,
+        useShadow = false,
+        verticalPadding = 40,
+        maxLines = 2,
+        fontFamily = "noto-sans",
+        fontWeight = 600,
+        lineHeight = 1.4,
+        letterSpacing = 0,
+        textColor = "#FFFFFF",
+        backgroundColor = "#000000",
+        backgroundOpacity = 80,
+        outlineColor = "#000000",
+        shadowColor = "#000000",
+        shadowOffset = 2,
+        shadowBlur = 4,
+        useBackground = true,
+        backgroundRadius = 8,
+        maxWidth = 80,
+      } = subtitleSettings;
 
-    // 위치 계산 (스케일링 적용)
-    const positionStyle = {};
-    if (position === "bottom") {
-      positionStyle.bottom = `${scaledVerticalPadding}px`;
-    } else if (position === "top") {
-      positionStyle.top = `${scaledVerticalPadding}px`;
-    } else {
-      positionStyle.top = "50%";
-      positionStyle.transform = horizontalAlign === "center" ? "translate(-50%, -50%)" : "translateY(-50%)";
-    }
+      // 프리뷰 크기 비율 계산 (1920x1080 기준 -> 프리뷰 크기로 스케일링)
+      // 실제 프리뷰 컨테이너 크기를 기반으로 동적 계산
+      // previewWidth가 0이면 기본값 0.3 사용 (초기 로드 시)
+      const SCALE_FACTOR = previewWidth > 0 ? previewWidth / 1920 : 0.3;
 
-    // 정렬 스타일
-    const textAlignStyle = horizontalAlign === "left" ? "left" : horizontalAlign === "right" ? "right" : "center";
-    const leftStyle = horizontalAlign === "center" ? "50%" : horizontalAlign === "right" ? "auto" : "0";
-    const rightStyle = horizontalAlign === "right" ? "0" : "auto";
-    const transformStyle = horizontalAlign === "center" ? "translateX(-50%)" : "";
+      const scaledFontSize = fontSize * SCALE_FACTOR;
+      const scaledOutlineWidth = outlineWidth * SCALE_FACTOR;
+      const scaledShadowOffset = shadowOffset * SCALE_FACTOR;
+      const scaledShadowBlur = shadowBlur * SCALE_FACTOR;
+      const scaledVerticalPadding = verticalPadding * SCALE_FACTOR;
+      const scaledBackgroundRadius = backgroundRadius * SCALE_FACTOR;
+      const scaledLetterSpacing = letterSpacing * SCALE_FACTOR;
 
-    return (
-      <div
-        style={{
-          position: "absolute",
-          ...positionStyle,
-          left: leftStyle,
-          right: rightStyle,
-          transform: transformStyle,
-          pointerEvents: "none",
-          display: "flex",
-          justifyContent: textAlignStyle,
-          maxWidth: `${maxWidth}%`,
-        }}
-      >
+      // 폰트 패밀리 매핑
+      const fontFamilyMap = {
+        "noto-sans": "'Noto Sans KR', sans-serif",
+        "malgun-gothic": "'Malgun Gothic', sans-serif",
+        "apple-sd-gothic": "'Apple SD Gothic Neo', sans-serif",
+        nanumgothic: "'Nanum Gothic', sans-serif",
+        arial: "Arial, sans-serif",
+        helvetica: "Helvetica, sans-serif",
+        roboto: "'Roboto', sans-serif",
+      };
+      const fontFamilyStyle = fontFamilyMap[fontFamily] || "'Noto Sans KR', sans-serif";
+
+      // 외곽선 스타일 (사용자 설정 색상 적용 + 스케일링)
+      const textShadowParts = [];
+      if (useOutline && scaledOutlineWidth > 0) {
+        // 8방향 외곽선 효과
+        for (let angle = 0; angle < 360; angle += 45) {
+          const x = Math.cos((angle * Math.PI) / 180) * scaledOutlineWidth;
+          const y = Math.sin((angle * Math.PI) / 180) * scaledOutlineWidth;
+          textShadowParts.push(`${x}px ${y}px 0 ${outlineColor}`);
+        }
+      }
+      if (useShadow) {
+        textShadowParts.push(`${scaledShadowOffset}px ${scaledShadowOffset}px ${scaledShadowBlur}px ${shadowColor}`);
+      }
+      const textShadow = textShadowParts.length > 0 ? textShadowParts.join(", ") : "none";
+
+      // 배경색 스타일 (투명도 적용)
+      const bgOpacity = backgroundOpacity / 100;
+      const bgColorRgb = backgroundColor.match(/\w\w/g)?.map((x) => parseInt(x, 16)) || [0, 0, 0];
+      const backgroundColorStyle = useBackground
+        ? `rgba(${bgColorRgb[0]}, ${bgColorRgb[1]}, ${bgColorRgb[2]}, ${bgOpacity})`
+        : "transparent";
+
+      // 위치 계산 (스케일링 적용)
+      const positionStyle = {};
+      if (position === "bottom") {
+        positionStyle.bottom = `${scaledVerticalPadding}px`;
+      } else if (position === "top") {
+        positionStyle.top = `${scaledVerticalPadding}px`;
+      } else {
+        positionStyle.top = "50%";
+        positionStyle.transform = horizontalAlign === "center" ? "translate(-50%, -50%)" : "translateY(-50%)";
+      }
+
+      // 정렬 스타일
+      const textAlignStyle = horizontalAlign === "left" ? "left" : horizontalAlign === "right" ? "right" : "center";
+      const leftStyle = horizontalAlign === "center" ? "50%" : horizontalAlign === "right" ? "auto" : "0";
+      const rightStyle = horizontalAlign === "right" ? "0" : "auto";
+      const transformStyle = horizontalAlign === "center" ? "translateX(-50%)" : "";
+
+      return (
         <div
           style={{
-            color: textColor,
-            fontFamily: fontFamilyStyle,
-            fontSize: `${scaledFontSize}px`,
-            fontWeight,
-            textAlign: textAlignStyle,
-            textShadow,
-            lineHeight,
-            letterSpacing: `${scaledLetterSpacing}px`,
-            backgroundColor: backgroundColorStyle,
-            padding: useBackground ? `${8 * SCALE_FACTOR}px ${12 * SCALE_FACTOR}px` : "0",
-            borderRadius: useBackground ? `${scaledBackgroundRadius}px` : "0",
-            backdropFilter: useBackground ? "blur(8px)" : "none",
-            boxShadow: useBackground ? "0 4px 16px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)" : "none",
-            border: useBackground ? "1px solid rgba(255, 255, 255, 0.1)" : "none",
+            position: "absolute",
+            ...positionStyle,
+            left: leftStyle,
+            right: rightStyle,
+            transform: transformStyle,
+            pointerEvents: "none",
+            display: "flex",
+            justifyContent: textAlignStyle,
+            maxWidth: `${maxWidth}%`,
           }}
         >
-          {splitBalancedLines(selectedScene.text, maxLines, fontSize).map((line, i) => (
-            <div key={i} style={{
-              whiteSpace: "nowrap",
-              overflow: "visible"
-            }}>{line}</div>
-          ))}
+          <div
+            style={{
+              color: textColor,
+              fontFamily: fontFamilyStyle,
+              fontSize: `${scaledFontSize}px`,
+              fontWeight,
+              textAlign: textAlignStyle,
+              textShadow,
+              lineHeight,
+              letterSpacing: `${scaledLetterSpacing}px`,
+              backgroundColor: backgroundColorStyle,
+              padding: useBackground ? `${8 * SCALE_FACTOR}px ${12 * SCALE_FACTOR}px` : "0",
+              borderRadius: useBackground ? `${scaledBackgroundRadius}px` : "0",
+              backdropFilter: useBackground ? "blur(8px)" : "none",
+              boxShadow: useBackground ? "0 4px 16px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)" : "none",
+              border: useBackground ? "1px solid rgba(255, 255, 255, 0.1)" : "none",
+            }}
+          >
+            {splitBalancedLines(selectedScene.text, maxLines, fontSize).map((line, i) => (
+              <div
+                key={i}
+                style={{
+                  whiteSpace: "nowrap",
+                  overflow: "visible",
+                }}
+              >
+                {line}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
-    );
-  }, [selectedScene?.text, subtitleSettings, previewWidth, selectedSceneIndex]);
+      );
+    },
+    [selectedScene?.text, subtitleSettings, previewWidth, selectedSceneIndex]
+  );
 
   return (
     <Card
@@ -929,13 +959,13 @@ const VideoPreview = memo(function VideoPreview({
                   playsInline
                   onClick={handleVideoToggle}
                   onError={(e) => {
-                    if (process.env.NODE_ENV === 'development') {
+                    if (process.env.NODE_ENV === "development") {
                       console.error("[비디오 재생] 오류:", e);
                       console.error("[비디오 재생] 비디오 URL:", videoUrl);
                     }
                   }}
                   onLoadedData={() => {
-                    if (process.env.NODE_ENV === 'development') {
+                    if (process.env.NODE_ENV === "development") {
                       console.log("[비디오 재생] 로드됨:", videoUrl);
                     }
                   }}
@@ -970,10 +1000,7 @@ const VideoPreview = memo(function VideoPreview({
               </div>
             ) : selectedScene.asset.type === "image" ? (
               // 이미지 표시 (자막 오버레이 포함, 음성 재생/정지 가능)
-              <div
-                style={{ position: "relative", width: "100%", height: "100%", cursor: "pointer" }}
-                onClick={handleVideoToggle}
-              >
+              <div style={{ position: "relative", width: "100%", height: "100%", cursor: "pointer" }} onClick={handleVideoToggle}>
                 <img
                   src={videoUrl}
                   style={{
@@ -1023,25 +1050,29 @@ const VideoPreview = memo(function VideoPreview({
           ) : (
             // 텍스트 기반 프리뷰 (비디오가 없거나 이미지인 경우)
             <div style={{ textAlign: "center", color: "white", padding: 32 }}>
-              <div style={{
-                background: "linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%)",
-                borderRadius: "16px",
-                padding: "24px",
-                border: "1px solid rgba(255, 255, 255, 0.1)",
-                backdropFilter: "blur(8px)",
-                marginBottom: "24px"
-              }}>
+              <div
+                style={{
+                  background: "linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%)",
+                  borderRadius: "16px",
+                  padding: "24px",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  backdropFilter: "blur(8px)",
+                  marginBottom: "24px",
+                }}
+              >
                 <Text style={{ fontSize: 22, fontWeight: "600", marginBottom: 16, display: "block", color: "#f0f0f0" }}>
                   🎬 씬 {selectedSceneIndex + 1}
                 </Text>
-                <Text style={{
-                  fontSize: 17,
-                  opacity: 0.95,
-                  display: "block",
-                  lineHeight: "1.6",
-                  color: "#e0e0e0",
-                  fontWeight: "400"
-                }}>
+                <Text
+                  style={{
+                    fontSize: 17,
+                    opacity: 0.95,
+                    display: "block",
+                    lineHeight: "1.6",
+                    color: "#e0e0e0",
+                    fontWeight: "400",
+                  }}
+                >
                   {selectedScene.text}
                 </Text>
               </div>
@@ -1071,28 +1102,34 @@ const VideoPreview = memo(function VideoPreview({
           )
         ) : (
           <div style={{ textAlign: "center", padding: 32 }}>
-            <div style={{
-              background: "linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%)",
-              borderRadius: "16px",
-              padding: "32px",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-              backdropFilter: "blur(8px)",
-            }}>
-              <Text style={{
-                color: "#e0e0e0",
-                fontSize: 18,
-                fontWeight: "500",
-                opacity: 0.8,
-                display: "block",
-                marginBottom: "8px"
-              }}>
+            <div
+              style={{
+                background: "linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%)",
+                borderRadius: "16px",
+                padding: "32px",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                backdropFilter: "blur(8px)",
+              }}
+            >
+              <Text
+                style={{
+                  color: "#e0e0e0",
+                  fontSize: 18,
+                  fontWeight: "500",
+                  opacity: 0.8,
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
                 🎭 프리뷰 대기 중
               </Text>
-              <Text style={{
-                color: "#c0c0c0",
-                fontSize: 14,
-                opacity: 0.6
-              }}>
+              <Text
+                style={{
+                  color: "#c0c0c0",
+                  fontSize: 14,
+                  opacity: 0.6,
+                }}
+              >
                 좌측에서 씬을 선택해주세요
               </Text>
             </div>
@@ -1153,9 +1190,7 @@ const VideoPreview = memo(function VideoPreview({
           >
             <div
               style={{
-                width: audioDuration > 0
-                  ? `${Math.min(100, ((dragTime !== null ? dragTime : currentTime) / audioDuration) * 100)}%`
-                  : "0%",
+                width: audioDuration > 0 ? `${Math.min(100, ((dragTime !== null ? dragTime : currentTime) / audioDuration) * 100)}%` : "0%",
                 height: "100%",
                 background: "linear-gradient(90deg, #0078d4 0%, #005a9e 100%)",
                 borderRadius: 4,
@@ -1175,9 +1210,7 @@ const VideoPreview = memo(function VideoPreview({
                   backgroundColor: isDragging ? "#005a9e" : "#0078d4",
                   borderRadius: "50%",
                   border: "2px solid white",
-                  boxShadow: isDragging
-                    ? "0 4px 8px rgba(0,0,0,0.3)"
-                    : "0 2px 4px rgba(0,0,0,0.2)",
+                  boxShadow: isDragging ? "0 4px 8px rgba(0,0,0,0.3)" : "0 2px 4px rgba(0,0,0,0.2)",
                   transition: isDragging ? "none" : "all 0.15s ease",
                   cursor: isDragging ? "grabbing" : "grab",
                   zIndex: isDragging ? 10 : 5,

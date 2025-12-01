@@ -106,6 +106,17 @@ function register() {
       return { success: false, message: error.message };
     }
   });
+
+  // 프로젝트 설정 저장 확인 (electron-store 비동기 타이밍 이슈 해결)
+  ipcMain.handle('project:ensureSettingsSaved', async (event, { projectId, timeoutMs = 5000 }) => {
+    try {
+      const projectManager = getProjectManager();
+      const success = await projectManager.ensureProjectSettingsSaved(projectId, timeoutMs);
+      return { success, message: success ? '프로젝트 설정 저장 확인 완료' : '프로젝트 설정 저장 확인 시간 초과' };
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  });
 }
 
 module.exports = { register };

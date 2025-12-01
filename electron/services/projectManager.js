@@ -377,6 +377,30 @@ class ProjectManager {
     return this.currentProject;
   }
 
+  // 프로젝트 설정이 완전히 저장되었는지 확인하는 함수 (electron-store 비동기 타이밍 이슈 해결)
+  async ensureProjectSettingsSaved(projectId, timeoutMs = 5000) {
+    const startTime = Date.now();
+    const interval = 100;
+
+    console.log(`⏳ 프로젝트 설정 저장 확인 시작 (projectId: ${projectId}, timeout: ${timeoutMs}ms)`);
+
+    while (Date.now() - startTime < timeoutMs) {
+      const videoSaveFolder = store.get('videoSaveFolder');
+      const projects = store.get('projects', []);
+      const project = projects.find(p => p.id === projectId);
+
+      if (videoSaveFolder && project && project.paths && project.paths.root) {
+        console.log(`✅ 프로젝트 설정 저장 확인 완료 (${Date.now() - startTime}ms 소요)`);
+        return true;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, interval));
+    }
+
+    console.warn(`⚠️ 프로젝트 설정 저장 확인 시간 초과 (${timeoutMs}ms)`);
+    return false;
+  }
+
   // 기존 폴더 기반 프로젝트들을 설정 파일로 마이그레이션
   async migrateExistingProjects() {
     try {

@@ -461,6 +461,7 @@ contextBridge.exposeInMainWorld("electron", {
     openOutputFolder: () => ipcRenderer.invoke("project:openOutputFolder"),
     getFilePath: ({ category, filename }) => ipcRenderer.invoke("project:getFilePath", { category, filename }),
     update: (updates) => ipcRenderer.invoke("project:update", updates),
+    ensureSettingsSaved: (projectId, timeoutMs) => ipcRenderer.invoke("project:ensureSettingsSaved", { projectId, timeoutMs }),
   },
 
   // FFmpeg 영상 합성
