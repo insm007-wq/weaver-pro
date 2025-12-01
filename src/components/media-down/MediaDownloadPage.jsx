@@ -878,6 +878,13 @@ function MediaDownloadPage({ onDownloadingChange }) {
                   eventName: "navigate-to-refine",
                   onClick: async () => {
                     try {
+                      console.log("🔄 영상 편집으로 이동 시작 - 프로젝트 설정 동기화 대기 중...");
+
+                      // ✅ ResultsSidebar와 동일한 대기 로직: IPC 채널 동기화 대기 (50ms)
+                      await new Promise(resolve => setTimeout(resolve, 50));
+
+                      console.log("✅ 설정 동기화 완료 - auto-load-project-files 이벤트 발생");
+
                       // 페이지 전환 전에 이벤트 먼저 발생 (타이밍 경합 제거)
                       window.dispatchEvent(new CustomEvent("auto-load-project-files"));
                     } catch (error) {

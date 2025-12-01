@@ -27,7 +27,7 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
   const handleSafeChange = useCallback(
     (field, value, options = {}) => {
       const result = validateAndSanitizeText(value, {
-        maxLength: field === "topic" ? 80 : field === "referenceScript" ? 10000 : 100,
+        maxLength: field === "topic" ? 80 : field === "referenceScript" ? 15000 : 100,
         allowEmpty: true,
         fieldName: field,
         ...options,
@@ -293,7 +293,7 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
                 rows={6}
                 resize="none"
                 disabled={disabled}
-                maxLength={10000}
+                maxLength={15000}
                 style={{
                   ...styles.textareaContainer,
                   borderColor: validationErrors.referenceScript?.length > 0 ? tokens.colorPaletteRedBorder2 : styles.textareaContainer.borderColor,
