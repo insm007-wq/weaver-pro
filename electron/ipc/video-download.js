@@ -50,12 +50,26 @@ function isCancelled() {
 // ---------------------------------------------------------------------------
 // 공통 유틸
 // ---------------------------------------------------------------------------
-function assertVideoSaveFolder() {
-  const videoSaveFolder = store.get("videoSaveFolder"); // ✅ this 유지
-  if (!videoSaveFolder || typeof videoSaveFolder !== "string" || videoSaveFolder.trim() === "") {
-    throw new Error("영상 저장 폴더가 설정되지 않았습니다. 설정 > 기본 설정에서 영상 저장 폴더를 지정해주세요.");
+async function assertVideoSaveFolder() {
+  // ✅ ResultsSidebar와 동일한 재시도 로직: 최대 5초 대기 (AI 이미지 생성 타이밍 이슈 해결)
+  let retries = 50; // 50회 × 100ms = 5초
+  let videoSaveFolder = null;
+
+  while (retries > 0) {
+    videoSaveFolder = store.get("videoSaveFolder");
+
+    if (videoSaveFolder && typeof videoSaveFolder === "string" && videoSaveFolder.trim() !== "") {
+      console.log("✅ [assertVideoSaveFolder] 확인 완료:", videoSaveFolder);
+      return videoSaveFolder;
+    }
+
+    console.log(`⏳ [assertVideoSaveFolder] videoSaveFolder 대기 중... (남은 시도: ${retries})`);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    retries--;
   }
-  return videoSaveFolder;
+
+  console.error("❌ [assertVideoSaveFolder] 5초 재시도 후에도 설정을 찾을 수 없음");
+  throw new Error("영상 저장 폴더가 설정되지 않았습니다. 설정 > 기본 설정에서 영상 저장 폴더를 지정해주세요.");
 }
 
 // ---------------------------------------------------------------------------
@@ -280,7 +294,7 @@ async function searchPixabayVideos(apiKey, query, perPage = 3, options = {}) {
 // ---------------------------------------------------------------------------
 async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 20) {
   try {
-    const videoSaveFolder = assertVideoSaveFolder();
+    const videoSaveFolder = await assertVideoSaveFolder();
     const videoPath = path.join(videoSaveFolder, "video");
     const filePath = path.join(videoPath, filename);
 
@@ -467,7 +481,7 @@ async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 2
 // ---------------------------------------------------------------------------
 async function downloadPhotoOptimized(url, filename, onProgress) {
   try {
-    const videoSaveFolder = assertVideoSaveFolder();
+    const videoSaveFolder = await assertVideoSaveFolder();
     const imagesPath = path.join(videoSaveFolder, "images");
     const filePath = path.join(imagesPath, filename);
 
@@ -1023,7 +1037,7 @@ async function downloadVideosForKeywords(keywords, provider, options = {}, onPro
     throw new Error(`지원되지 않는 프로바이더입니다. 지원 목록: ${supportedList}`);
   }
 
-  assertVideoSaveFolder(); // 미리 검증
+  await assertVideoSaveFolder(); // 미리 검증
 
   const providerInfo = SUPPORTED_PROVIDERS[provider];
   const apiKey = await getSecret(providerInfo.apiKeyName); // ✅ keytar에서 API 키 조회
