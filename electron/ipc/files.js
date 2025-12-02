@@ -303,42 +303,62 @@ ipcMain.handle("files:writeUrl", async (_evt, { url, filePath }) => {
 ipcMain.handle("files:writeBuffer", async (_evt, { buffer, filePath }) => {
   try {
     if (!buffer) {
-      return { success: false, message: "buffer_required" };
+      return { success: false, message: "버퍼가 제공되지 않았습니다." };
     }
     if (!filePath || typeof filePath !== "string") {
-      return { success: false, message: "filePath_required" };
+      return { success: false, message: "파일 경로가 제공되지 않았습니다." };
     }
 
+    // ✅ Windows 경로 정규화 (UTF-8 처리)
+    const normalizedPath = path.normalize(filePath);
+    const dir = path.dirname(normalizedPath);
+
     // 디렉토리 생성
-    const dir = path.dirname(filePath);
     ensureDirSync(dir);
 
     // 버퍼를 파일로 저장
     const bufferData = toBuffer(buffer);
-    await fs.promises.writeFile(filePath, bufferData);
+    await fs.promises.writeFile(normalizedPath, bufferData);
 
     // 파일이 실제로 생성되었는지 확인
-    const exists = fs.existsSync(filePath);
+    const exists = fs.existsSync(normalizedPath);
 
     if (!exists) {
-      return { success: false, message: "file_not_created" };
+      return { success: false, message: "파일이 생성되지 않았습니다." };
     }
 
     return {
       success: true,
       data: {
         ok: true,
-        path: filePath
+        path: normalizedPath // ✅ 정규화된 경로 반환
       }
     };
   } catch (error) {
     console.error("❌ files:writeBuffer 실패:", error);
+    console.error("❌ 경로:", filePath);
+    console.error("❌ 에러 상세:", {
+      message: error.message,
+      code: error.code,
+      errno: error.errno
+    });
+
+    // ✅ 한글 오류 메시지로 변환
+    let userMessage = "파일 저장 중 오류가 발생했습니다.";
+    if (error.code === "EACCES") {
+      userMessage = "파일 접근 권한이 없습니다.";
+    } else if (error.code === "ENOENT") {
+      userMessage = "경로가 올바르지 않습니다.";
+    } else if (error.code === "ENOTDIR") {
+      userMessage = "상위 디렉토리가 존재하지 않습니다.";
+    }
+
     return {
       success: false,
-      message: error.message,
+      message: userMessage,
       data: {
         ok: false,
-        message: error.message
+        message: userMessage
       }
     };
   }
