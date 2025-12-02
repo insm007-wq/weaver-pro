@@ -1,8 +1,21 @@
 import React, { memo, useMemo, useCallback, useEffect, useRef } from "react";
-import { Card, Text, tokens } from "@fluentui/react-components";
+import { Card, Text, tokens, Button } from "@fluentui/react-components";
+import { PlayRegular } from "@fluentui/react-icons";
 import { MODE_CONFIGS } from "../../../constants/modeConstants";
 
-const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, compact = false, globalSettings, setGlobalSettings, api }) => {
+const ModeSelector = memo(({
+  selectedMode,
+  onModeChange,
+  form,
+  isGenerating,
+  compact = false,
+  globalSettings,
+  setGlobalSettings,
+  api,
+  onGenerate = null,
+  isCancelling = false,
+  onCancel = null,
+}) => {
   // 안전한 폼 데이터 처리
   const safeForm = useMemo(
     () => ({
@@ -413,14 +426,32 @@ const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, com
         })}
       </div>
 
-      {/* 선택된 모드 요약 */}
-      {selectedMode && (
-        <div style={styles.summaryContainer}>
-          <Text size={300} style={{ color: tokens.colorNeutralForeground2 }}>
-            선택됨: <strong>{MODE_CONFIGS[selectedMode]?.title}</strong>
-          </Text>
+      {/* 생성 버튼 */}
+      {selectedMode && onGenerate && (
+        <div style={{ marginTop: tokens.spacingVerticalM }}>
+          <Button
+            appearance={isCancelling ? "secondary" : isGenerating ? "secondary" : "primary"}
+            icon={isCancelling ? null : isGenerating ? null : <PlayRegular />}
+            onClick={() => {
+              if (isGenerating) {
+                onCancel?.();
+              } else {
+                onGenerate();
+              }
+            }}
+            disabled={isCancelling || (!isGenerating && !form?.topic?.trim() && !form?.referenceScript?.trim())}
+            style={{
+              width: "100%",
+              padding: "12px 20px",
+              fontSize: "14px",
+              fontWeight: "bold",
+            }}
+          >
+            {isCancelling ? "⏳ 취소 중..." : isGenerating ? "⏹ 생성 중지" : selectedMode === "shorts_mode" ? "⚡ 쇼츠 생성 시작" : "📝 대본 생성 시작"}
+          </Button>
         </div>
       )}
+
     </Card>
   );
 });

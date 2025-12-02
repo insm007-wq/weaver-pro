@@ -1,19 +1,18 @@
 import React, { useState, useCallback, useEffect } from "react";
-import { Text, tokens, Button, Card } from "@fluentui/react-components";
+import { Text, tokens } from "@fluentui/react-components";
 import { useHeaderStyles, useContainerStyles } from "../../styles/commonStyles";
-import { DocumentEditRegular, VideoRegular, EyeRegular } from "@fluentui/react-icons";
+import { DocumentEditRegular } from "@fluentui/react-icons";
 import { PageErrorBoundary } from "../common/ErrorBoundary";
 
 // 컴포넌트 imports
 import ModeSelector from "./parts/ModeSelector";
-import ActionCard from "./parts/ActionCard";
 import BasicSettingsCard from "./parts/BasicSettingsCard";
 import VoiceSelector from "../common/VoiceSelector";
-import ResultsSidebar from "./parts/ResultsSidebar";
 import BottomFixedBar from "../common/BottomFixedBar";
 
 // 훅 imports
 import { useScriptGeneration } from "../../hooks/useScriptGeneration";
+import { useScriptGenerator } from "../../hooks/useScriptGenerator";
 import { useVoiceSettings } from "../../hooks/useVoiceSettings";
 import { usePromptSettings } from "../../hooks/usePromptSettings";
 import { useApi } from "../../hooks/useApi";
@@ -52,11 +51,26 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
   const { promptNames, promptLoading } = usePromptSettings();
   const { doc, setDoc, isLoading, error, setIsLoading, setError, runGenerate, chunkProgress } = useScriptGeneration();
   const { voices, voiceLoading, voiceError, previewVoice, stopVoice, retryVoiceLoad } = useVoiceSettings(form);
+  const { runScriptMode, cancelGeneration, isCancelling } = useScriptGenerator();
 
   // 폼 변경 핸들러
   const onChange = useCallback((k, v) => {
     setForm((p) => ({ ...p, [k]: v }));
   }, []);
+
+  // 생성 시작 핸들러
+  const handleGenerate = useCallback(async () => {
+    await runScriptMode(form, {
+      form,
+      voices,
+      api,
+      runGenerate,
+      setError,
+      setIsLoading,
+      setDoc,
+      setFullVideoState,
+    });
+  }, [runScriptMode, form, voices, api, runGenerate, setError, setIsLoading, setDoc, setFullVideoState]);
 
   // 상태 초기화 헬퍼
   const resetFullVideoState = useCallback(
@@ -185,6 +199,15 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
           globalSettings={globalSettings}
           setGlobalSettings={setGlobalSettings}
           api={api}
+          onGenerate={handleGenerate}
+          isCancelling={isCancelling}
+          onCancel={() => {
+            cancelGeneration({
+              setFullVideoState,
+              setIsLoading,
+              setDoc,
+            });
+          }}
         />
 
         {/* 1행: 기본 설정 (1열) */}
@@ -196,16 +219,6 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
           setForm={setForm}
           disabled={fullVideoState.isGenerating}
           selectedMode={selectedMode}
-          isGenerating={fullVideoState.isGenerating}
-          fullVideoState={fullVideoState}
-          voices={voices}
-          api={api}
-          runGenerate={runGenerate}
-          setError={setError}
-          setIsLoading={setIsLoading}
-          setDoc={setDoc}
-          setFullVideoState={setFullVideoState}
-          chunkProgress={chunkProgress}
         />
 
         {/* 3행: 음성 설정 (1열) */}
