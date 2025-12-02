@@ -164,7 +164,7 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: tokens.spacingVerticalL,
+          gap: tokens.spacingVerticalM,
           width: "100%",
           maxWidth: "100%",
           overflowX: "hidden",

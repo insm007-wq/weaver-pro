@@ -99,7 +99,6 @@ const ModeSelector = memo(({
         border: `1px solid ${tokens.colorNeutralStroke2}`,
         borderRadius: 16,
         padding: "12px 16px",
-        marginBottom: tokens.spacingVerticalL,
       },
       gridContainer: {
         display: "grid",
