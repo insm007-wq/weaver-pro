@@ -126,6 +126,18 @@ const ActionCard = memo(
           outputFormat: "대본 텍스트 + 음성 파일 + SRT 자막",
           onGenerate: handleStartGeneration,
         },
+        shorts_mode: {
+          title: "⚡ 쇼츠 생성 (빠른 모드)",
+          description: "",
+          buttonText: "⚡ 쇼츠 생성 시작",
+          loadingText: "쇼츠 대본 생성 중",
+          completedText: "✅ 쇼츠 생성 완료",
+          icon: DocumentEditRegular,
+          gradient: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+          estimatedTime: "1-2분",
+          outputFormat: "쇼츠 대본 + 음성 파일 + SRT 자막",
+          onGenerate: handleStartGeneration,
+        },
       }),
       [handleStartGeneration]
     );

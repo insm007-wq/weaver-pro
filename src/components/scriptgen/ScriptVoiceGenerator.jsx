@@ -187,24 +187,7 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
           api={api}
         />
 
-        {/* 1행: 실행 버튼 (1열) */}
-        <ActionCard
-          selectedMode={selectedMode}
-          form={form}
-          isLoading={isLoading}
-          fullVideoState={fullVideoState}
-          setFullVideoState={setFullVideoState}
-          voices={voices}
-          api={api}
-          runGenerate={runGenerate}
-          setError={setError}
-          setIsLoading={setIsLoading}
-          setDoc={setDoc}
-          chunkProgress={chunkProgress}
-          centered={true}
-        />
-
-        {/* 2행: 기본 설정 (1열) */}
+        {/* 1행: 기본 설정 (1열) */}
         <BasicSettingsCard
           form={form}
           onChange={onChange}
@@ -213,6 +196,16 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
           setForm={setForm}
           disabled={fullVideoState.isGenerating}
           selectedMode={selectedMode}
+          isGenerating={fullVideoState.isGenerating}
+          fullVideoState={fullVideoState}
+          voices={voices}
+          api={api}
+          runGenerate={runGenerate}
+          setError={setError}
+          setIsLoading={setIsLoading}
+          setDoc={setDoc}
+          setFullVideoState={setFullVideoState}
+          chunkProgress={chunkProgress}
         />
 
         {/* 3행: 음성 설정 (1열) */}

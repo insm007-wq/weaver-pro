@@ -1,14 +1,37 @@
 import { memo, useMemo, useState, useCallback, useEffect } from "react";
-import { Card, Text, Field, Input, Dropdown, Option, Spinner, Switch, Textarea, tokens } from "@fluentui/react-components";
-import { SettingsRegular } from "@fluentui/react-icons";
+import { Card, Text, Field, Input, Dropdown, Option, Spinner, Switch, Textarea, tokens, Button } from "@fluentui/react-components";
+import { SettingsRegular, PlayRegular } from "@fluentui/react-icons";
 import { STYLE_OPTIONS, DURATION_OPTIONS, SHORTS_STYLE_OPTIONS, SHORTS_DURATION_OPTIONS } from "../../../constants/scriptSettings";
 import { validateAndSanitizeText } from "../../../utils/sanitizer";
+import { useScriptGenerator } from "../../../hooks/useScriptGenerator";
 
 /**
  * 기본 설정 카드 (UI만 개선)
  */
-const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, setForm, disabled = false, selectedMode = "script_mode" }) => {
+const BasicSettingsCard = memo(({
+  form,
+  onChange,
+  promptNames,
+  promptLoading,
+  setForm,
+  disabled = false,
+  selectedMode = "script_mode",
+  isGenerating = false,
+  onGenerate = null,
+  fullVideoState = {},
+  voices = [],
+  api = null,
+  runGenerate = null,
+  setError = null,
+  setIsLoading = null,
+  setDoc = null,
+  setFullVideoState = null,
+  chunkProgress = null,
+}) => {
   const [validationErrors, setValidationErrors] = useState({});
+
+  // 대본 생성 훅
+  const { runScriptMode, cancelGeneration, isCancelling } = useScriptGenerator();
 
   // 안전한 폼 데이터 처리
   const safeForm = useMemo(
@@ -22,6 +45,49 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
     }),
     [form?.topic, form?.style, form?.durationMin, form?.promptName, form?.showReferenceScript, form?.referenceScript]
   );
+
+  // 유효성 검사 메모화
+  const validationState = useMemo(() => {
+    const hasValidTopic = safeForm.topic.trim();
+    const hasValidReference = safeForm.referenceScript.trim() && safeForm.referenceScript.trim().length >= 50;
+    const isReferenceOnlyMode = hasValidReference && !hasValidTopic;
+
+    const errors = [];
+    if (!hasValidTopic && !hasValidReference) {
+      errors.push("• 영상 주제 입력 또는 레퍼런스 대본 입력 (50자 이상)");
+    }
+    if (!isReferenceOnlyMode && !safeForm.promptName) {
+      errors.push("• 대본 생성 프롬프트 선택");
+    }
+
+    return {
+      hasValidTopic,
+      hasValidReference,
+      isReferenceOnlyMode,
+      errors,
+    };
+  }, [safeForm.topic, safeForm.referenceScript, safeForm.promptName]);
+
+  const isDisabled = useMemo(
+    () => isGenerating || validationState.errors.length > 0 || disabled,
+    [isGenerating, validationState.errors.length, disabled]
+  );
+
+  // 생성 시작 핸들러
+  const handleStartGeneration = useCallback(async () => {
+    if (isDisabled) return;
+
+    await runScriptMode(form, {
+      form,
+      voices,
+      api,
+      runGenerate,
+      setError,
+      setIsLoading,
+      setDoc,
+      setFullVideoState,
+    });
+  }, [isDisabled, runScriptMode, form, voices, api, runGenerate, setError, setIsLoading, setDoc, setFullVideoState]);
 
   // 안전한 입력 처리 함수 메모화
   const handleSafeChange = useCallback(
@@ -353,6 +419,82 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
             </Field>
           )}
         </div>
+      </div>
+
+      {/* 생성 버튼 영역 */}
+      <div style={{ marginTop: tokens.spacingVerticalM, paddingTop: tokens.spacingVerticalS, borderTop: `1px solid ${tokens.colorNeutralStroke2}` }}>
+        <Button
+          appearance={isCancelling ? "secondary" : isGenerating && fullVideoState.currentStep !== "completed" ? "secondary" : "primary"}
+          icon={isCancelling ? <Spinner size="tiny" /> : isGenerating && fullVideoState.currentStep !== "completed" ? null : <PlayRegular />}
+          onClick={() => {
+            // 생성 중이면 중지, 아니면 생성 시작
+            if (isGenerating && fullVideoState.currentStep !== "completed") {
+              cancelGeneration({
+                setFullVideoState,
+                setIsLoading,
+                setDoc,
+              });
+            } else {
+              // 생성 시작
+              handleStartGeneration();
+            }
+          }}
+          disabled={isCancelling || (!isGenerating && isDisabled)}
+          style={{
+            width: "100%",
+            padding: "12px 20px",
+            fontSize: "14px",
+            fontWeight: "bold",
+          }}
+        >
+          {isCancelling ? (
+            "⏳ 취소 중..."
+          ) : isGenerating && fullVideoState.currentStep !== "completed" ? (
+            "⏹ 생성 중지"
+          ) : (
+            <span>
+              {fullVideoState.currentStep === "completed"
+                ? "🔄 새 대본 생성"
+                : selectedMode === "shorts_mode"
+                ? "⚡ 쇼츠 생성 시작"
+                : "📝 대본 생성 시작"}
+            </span>
+          )}
+        </Button>
+
+        {/* 생성 중 진행 상황 텍스트 */}
+        {isGenerating && fullVideoState.currentStep !== "completed" && (
+          <Text size={200} style={{ color: tokens.colorNeutralForeground3, textAlign: "center", marginTop: tokens.spacingVerticalS, display: "block" }}>
+            {chunkProgress
+              ? `청크 ${chunkProgress.current}/${chunkProgress.total} 생성 중... (${chunkProgress.progress}%)`
+              : fullVideoState.currentStep
+              ? `🎬 ${
+                  {
+                    script: "대본 생성",
+                    audio: "음성 합성",
+                    subtitle: "자막 생성",
+                    idle: "대기",
+                  }[fullVideoState.currentStep] || fullVideoState.currentStep
+                } 진행 중...`
+              : "생성 중..."}
+          </Text>
+        )}
+
+        {/* 에러/완료 메시지 */}
+        {fullVideoState.error ? (
+          <Text size={200} style={{ color: tokens.colorPaletteRedForeground1, marginTop: tokens.spacingVerticalS, display: "block" }}>
+            ❌ 오류: {fullVideoState.error}
+          </Text>
+        ) : fullVideoState.currentStep === "completed" ? (
+          <Text size={200} style={{ color: tokens.colorPaletteGreenForeground1, marginTop: tokens.spacingVerticalS, display: "block" }}>
+            ✅ 대본 생성이 완료되었습니다!
+          </Text>
+        ) : isDisabled && validationState.errors.length > 0 ? (
+          <Text size={200} style={{ marginTop: tokens.spacingVerticalS, display: "block" }}>
+            <span style={{ color: tokens.colorPaletteRedForeground1, fontWeight: 600 }}>💡 필수 입력:</span>
+            <span style={{ color: tokens.colorNeutralForeground3 }}> {validationState.errors.join(", ")}</span>
+          </Text>
+        ) : null}
       </div>
     </Card>
   );
