@@ -444,6 +444,15 @@ const ModeSelector = memo(({
               padding: "12px 20px",
               fontSize: "14px",
               fontWeight: "bold",
+              background: isCancelling
+                ? "transparent"
+                : isGenerating
+                  ? `linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)`
+                  : `linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)`,
+              border: "none",
+              color: isCancelling ? tokens.colorNeutralForeground2 : "white",
+              boxShadow: isGenerating ? "0 4px 12px rgba(0,0,0,0.1)" : "0 2px 8px rgba(0,0,0,0.15)",
+              transition: "all 200ms ease-out",
             }}
           >
             {isCancelling ? "⏳ 취소 중..." : isGenerating ? "⏹ 생성 중지" : selectedMode === "shorts_mode" ? "⚡ 쇼츠 생성 시작" : "📝 대본 생성 시작"}
