@@ -971,7 +971,8 @@ function register() {
       });
 
       if (result.success) {
-        return { success: true, outputPath };
+        // ✅ composeVideoFromScenes에서 반환한 최종 경로 사용 (한글 경로 처리 완료됨)
+        return { success: true, outputPath: result.outputPath || outputPath };
       } else {
         throw new Error(result.error || "비디오 합성 실패");
       }
@@ -1082,6 +1083,14 @@ function execCollect(bin, args) {
 // FFmpeg 명령어 구성
 // ----------------------------------------------------------------------------
 async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitlePath, sceneDurationsMs, options, onMakeClipProgress }) {
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`[FFmpeg] Building command`);
+  console.log(`   Images: ${imageFiles?.length || 0}`);
+  console.log(`   Audio files: ${audioFiles?.length || 0}`);
+  console.log(`   Output: ${outputPath}`);
+  console.log(`   Subtitle: ${subtitlePath || 'none'}`);
+  console.log(`${'='.repeat(80)}\n`);
+
   // ✅ 상수 먼저 정의 (hoisting 문제 해결)
   const MIN_CLIP_DURATION = 0.25; // 최소 클립 길이
 
@@ -1185,6 +1194,13 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
       clipOut,
     ];
 
+    // ✅ Clip generation command logging
+    console.log(`\n--- Creating clip ${i + 1}/${N} ---`);
+    console.log(`Image: ${path.basename(img)}`);
+    console.log(`Duration: ${durSec.toFixed(2)}s`);
+    console.log(`Command:\n  ffmpeg ${clipArgs.join(' \\\n    ')}`);
+    console.log(`---\n`);
+
     try {
       await new Promise((resolve, reject) => {
         const proc = spawn(ffmpegPath, clipArgs, { windowsHide: true });
@@ -1204,9 +1220,10 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
 
         proc.stderr.on("data", (data) => {
           stderr += data.toString();
-          // 메모리 최적화: 버퍼가 너무 커지면 앞부분 제거
-          if (stderr.length > 10000) {
-            stderr = stderr.slice(-5000);
+          // ✅ stderr 전체 유지 (오류 디버깅을 위해)
+          // 메모리 제한: 50000자 (약 50KB)까지 허용
+          if (stderr.length > 50000) {
+            stderr = stderr.slice(-50000);
           }
         });
 
@@ -1218,7 +1235,13 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
           if (code === 0) {
             resolve();
           } else {
-            reject(new Error(`클립 ${i + 1} 생성 실패 (코드: ${code})\n${stderr.slice(-500)}`));
+            // ✅ Log full stderr
+            console.error(`[ERROR] Clip ${i + 1} failed (code: ${code})`);
+            console.error(`\n=== FFmpeg stderr (${stderr.length} chars) ===`);
+            console.error(stderr);
+            console.error(`=== stderr end ===\n`);
+
+            reject(new Error(`Clip ${i + 1} failed (code: ${code})\n\nError:\n${stderr}`));
           }
         });
 
@@ -1306,6 +1329,14 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
     finalVideoLabel = "[v]";
   }
 
+  // ✅ Final concat command logging
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`[FFmpeg] Final concat command`);
+  console.log(`   Input clips: ${videoClips.length}`);
+  console.log(`   Filter_complex length: ${filterComplex.length} chars`);
+  console.log(`\n[Filter_complex]:\n${filterComplex}\n`);
+  console.log(`${'='.repeat(80)}\n`);
+
   // ✅ filter_complex가 길면 파일로 저장
   if (filterComplex.length > 3000) {
     const filterScriptPath = path.join(tempDir, `filter_${Date.now()}.txt`);
@@ -1387,13 +1418,9 @@ function runFFmpegViaShellScript(args, progressCallback = null) {
         // 큰따옴표를 이스케이프
         escaped = escaped.replace(/"/g, '""');
 
-        // 공백이나 특수문자가 있으면 큰따옴표로 감싸기
-        if (escaped.includes(" ") || escaped.includes("&") || escaped.includes("|") ||
-            escaped.includes("<") || escaped.includes(">") || escaped.includes("^") ||
-            escaped.includes("(") || escaped.includes(")")) {
-          return `"${escaped}"`;
-        }
-        return escaped;
+        // ✅ 모든 인자를 기본적으로 큰따옴표로 감싸기 (경로 안전성)
+        // 특히 공백이나 특수문자가 있을 때 필수
+        return `"${escaped}"`;
       });
 
       // setlocal DisableDelayedExpansion으로 !도 안전하게 처리
@@ -1408,7 +1435,7 @@ function runFFmpegViaShellScript(args, progressCallback = null) {
 
       scriptContent = `@echo off
 setlocal DisableDelayedExpansion
-chcp 65001 >nul 2>&1
+chcp 65001 >nul 2>&1 ^
 "${ffmpegPath}" ^
 ${argsLines}
 endlocal
@@ -1452,12 +1479,20 @@ exit $?`;
 
     try {
       // 스크립트 파일 작성
-      await fsp.writeFile(scriptPath, scriptContent, "utf8");
+      // Windows: UTF-16LE (배치 파일 기본 인코딩), Mac/Linux: UTF-8
+      const encoding = isWindows ? "utf16le" : "utf8";
+      await fsp.writeFile(scriptPath, scriptContent, encoding);
 
       // Mac/Linux는 실행 권한 부여
       if (!isWindows) {
         await fsp.chmod(scriptPath, 0o755);
       }
+
+      // ✅ FFmpeg script execution logging (English only)
+      console.log(`\n${'='.repeat(80)}`);
+      console.log(`[FFmpeg] Running script: ${scriptPath}`);
+      console.log(`\n[Script Content]:\n${scriptContent}\n`);
+      console.log(`${'='.repeat(80)}\n`);
     } catch (error) {
       console.error("❌ 스크립트 파일 생성 실패:", error);
       return resolve({ success: false, error: `스크립트 파일 생성 실패: ${error.message}` });
@@ -1535,6 +1570,14 @@ exit $?`;
         currentFfmpegProcess = null;
       }
 
+      // ✅ FFmpeg 종료 코드 로깅 (스크립트 실행)
+      console.log(`[FFmpeg Exit Code (script): ${code}]`);
+      if (code === 0 || err.length > 100) {
+        console.log(`\n=== FFmpeg stderr (${err.length} chars) ===`);
+        console.log(err);
+        console.log(`=== stderr end ===\n`);
+      }
+
       // 스크립트 파일 삭제
       try {
         await fsp.unlink(scriptPath);
@@ -1548,8 +1591,10 @@ exit $?`;
         if (isExportCancelled) {
           resolve({ success: false, error: "cancelled" });
         } else {
-          console.error(`❌ FFmpeg 실행 실패 (코드: ${code})`);
-          console.error(`stderr (전체 ${err.length}자):\n${err.slice(-3000)}`);
+          console.error(`[ERROR] FFmpeg failed (code: ${code})`);
+          console.error(`\n=== FFmpeg stderr (${err.length} chars) ===`);
+          console.error(err);  // Full output
+          console.error(`=== stderr end ===\n`);
           resolve({ success: false, error: err || `FFmpeg exited with code ${code}` });
         }
       }
@@ -1654,14 +1699,24 @@ function runFFmpegDirect(args, progressCallback, isCheck) {
         currentFfmpegProcess = null;
       }
 
+      // ✅ FFmpeg 종료 코드와 stderr 로깅 (모든 경우)
+      console.log(`[FFmpeg Exit Code: ${code}]`);
+      if (!isCheck && (code === 0 || err.length > 100)) {
+        console.log(`\n=== FFmpeg stderr (${err.length} chars) ===`);
+        console.log(err);
+        console.log(`=== stderr end ===\n`);
+      }
+
       if (code === 0 || isCheck) {
         resolve({ success: code === 0, output: out || err, duration: extractDuration(err), size: 0 });
       } else {
         if (isExportCancelled) {
           resolve({ success: false, error: "cancelled" });
         } else {
-          console.error(`❌ FFmpeg 실행 실패 (코드: ${code})`);
-          console.error(`stderr:\n${err.slice(-1000)}`);
+          console.error(`[ERROR] FFmpeg failed (code: ${code})`);
+          console.error(`\n=== FFmpeg stderr (${err.length} chars) ===`);
+          console.error(err);  // Full output
+          console.error(`=== stderr end ===\n`);
           resolve({ success: false, error: err || `FFmpeg exited with code ${code}` });
         }
       }
@@ -1912,7 +1967,8 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
         let stderr = "";
         proc.stderr.on("data", (d) => {
           stderr += d.toString();
-          if (stderr.length > 10000) stderr = stderr.slice(-5000);
+          // ✅ stderr 전체 유지 (50KB까지)
+          if (stderr.length > 50000) stderr = stderr.slice(-50000);
         });
         proc.on("close", (code) => {
           // 프로세스 복원
@@ -1926,7 +1982,13 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
           } else if (code === 0) {
             resolve();
           } else {
-            reject(new Error(`비디오 클립 ${i + 1} 생성 실패\n${stderr.slice(-1000)}`));
+            // Log full stderr
+            console.error(`[ERROR] Video clip ${i + 1} failed (code: ${code})`);
+            console.error(`\n=== FFmpeg stderr (${stderr.length} chars) ===`);
+            console.error(stderr);
+            console.error(`=== stderr end ===\n`);
+
+            reject(new Error(`Video clip ${i + 1} failed (code: ${code})\n\nError:\n${stderr}`));
           }
         });
         proc.on("error", (err) => {
@@ -1998,7 +2060,8 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
         let stderr = "";
         proc.stderr.on("data", (d) => {
           stderr += d.toString();
-          if (stderr.length > 10000) stderr = stderr.slice(-5000);
+          // ✅ stderr 전체 유지 (50KB까지)
+          if (stderr.length > 50000) stderr = stderr.slice(-50000);
         });
         proc.on("close", (code) => {
           // 프로세스 복원
@@ -2012,7 +2075,13 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
           } else if (code === 0) {
             resolve();
           } else {
-            reject(new Error(`이미지 클립 ${i + 1} 생성 실패\n${stderr.slice(-1000)}`));
+            // Log full stderr
+            console.error(`[ERROR] Image clip ${i + 1} failed (code: ${code})`);
+            console.error(`\n=== FFmpeg stderr (${stderr.length} chars) ===`);
+            console.error(stderr);
+            console.error(`=== stderr end ===\n`);
+
+            reject(new Error(`Image clip ${i + 1} failed (code: ${code})\n\nError:\n${stderr}`));
           }
         });
         proc.on("error", (err) => {
@@ -2143,7 +2212,23 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
     finalArgs.push("-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2");
   }
 
-  finalArgs.push(outputPath);
+  // ✅ 한글 경로 처리: 임시 경로 사용 후 최종 경로로 이동
+  let finalOutputPath = outputPath;
+  let tempOutputPath = outputPath;
+
+  // 한글이 포함되어 있으면 임시 경로 사용
+  if (/[㄀-ㅎ|ㅏ-ㅣ|가-힣]/.test(outputPath)) {
+    tempOutputPath = path.join(tempDir, `video_${Date.now()}.mp4`);
+    console.log(`⚠️ 한글 경로 감지, 임시 경로 사용: ${tempOutputPath}`);
+    console.log(`   최종 경로: ${finalOutputPath}`);
+  }
+
+  finalArgs.push(tempOutputPath);
+
+  // ✅ FFmpeg 명령어 로깅
+  console.log(`🎬 FFmpeg 실행 시작...`);
+  console.log(`   Output: ${tempOutputPath}`);
+  console.log(`   Args: ${finalArgs.length}개 인자`);
 
   const result = await runFFmpeg(finalArgs, (progress) => {
     if (event?.sender) {
@@ -2152,8 +2237,64 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
     }
   });
 
+  // ✅ FFmpeg 실행 결과 상세 로깅
+  console.log(`🎬 FFmpeg 실행 완료`);
+  console.log(`   Success: ${result.success}`);
+  if (result.output) {
+    console.log(`   Output: ${result.output.substring(0, 500)}...`);
+  }
+  if (result.error) {
+    console.log(`   Error: ${result.error}`);
+  }
+
+  // ✅ FFmpeg 성공 후 파일 생성 확인
+  if (result.success) {
+    const fileExists = fs.existsSync(tempOutputPath);
+    console.log(`   File exists: ${fileExists} (${tempOutputPath})`);
+
+    if (!fileExists) {
+      console.error(`❌ FFmpeg 성공했으나 파일 없음: ${tempOutputPath}`);
+
+      // 임시 폴더 확인
+      try {
+        const tempDirContents = fs.readdirSync(tempDir);
+        console.log(`   Temp dir 내용 (${tempDirContents.length}개):`, tempDirContents.slice(0, 10));
+      } catch (e) {
+        console.error(`   Temp dir 읽기 실패: ${e.message}`);
+      }
+
+      return { success: false, error: "FFmpeg 실행 완료했으나 파일이 생성되지 않았습니다." };
+    }
+
+    // 임시 경로 사용 시 최종 경로로 이동
+    if (tempOutputPath !== finalOutputPath) {
+      try {
+        await fsp.mkdir(path.dirname(finalOutputPath), { recursive: true });
+        await fsp.rename(tempOutputPath, finalOutputPath);
+        console.log(`✅ 파일 이동 완료: ${tempOutputPath} → ${finalOutputPath}`);
+      } catch (moveError) {
+        console.error(`❌ 파일 이동 실패: ${moveError.message}`);
+        // 이동 실패 시 복사 시도
+        try {
+          await fsp.mkdir(path.dirname(finalOutputPath), { recursive: true });
+          await fsp.copyFile(tempOutputPath, finalOutputPath);
+          await fsp.unlink(tempOutputPath);
+          console.log(`✅ 파일 복사로 완료: ${tempOutputPath} → ${finalOutputPath}`);
+        } catch (copyError) {
+          console.error(`❌ 파일 복사도 실패: ${copyError.message}`);
+          return { success: false, error: `파일 이동/복사 실패: ${copyError.message}` };
+        }
+      }
+    }
+  }
+
   if (result.success && event?.sender) {
     event.sender.send("ffmpeg:progress", 100);
+  }
+
+  // ✅ 최종 경로를 반환 결과에 추가
+  if (result.success) {
+    result.outputPath = finalOutputPath;
   }
 
   return result;
