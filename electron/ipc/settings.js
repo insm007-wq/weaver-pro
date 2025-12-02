@@ -290,7 +290,7 @@ let isCreatingDefaultPrompts = false;
 
 // 기본 프롬프트 생성 함수
 function createDefaultPrompts() {
-  const { DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT, DEFAULT_TEMPLATE } = require("../constants/defaultPrompts");
+  const { DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT, DEFAULT_TEMPLATE, DEFAULT_SHORTS_PROMPT } = require("../constants/defaultPrompts");
   const now = Date.now();
 
   return [
@@ -317,6 +317,15 @@ function createDefaultPrompts() {
       name: "기본 프롬프트",
       category: "thumbnail",
       content: DEFAULT_TEMPLATE,
+      isDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generatePromptId(),
+      name: "기본 프롬프트",
+      category: "shorts",
+      content: DEFAULT_SHORTS_PROMPT,
       isDefault: true,
       createdAt: now,
       updatedAt: now,
@@ -549,7 +558,7 @@ ipcMain.handle("prompts:getByCategory", async (_e, category) => {
 
 /* ===== 이름 기준 페어 조회/저장/삭제 (원자적 동작) ===== */
 
-// 이름으로 script/reference/thumbnail 각각 최신 1개 반환 (없으면 null)
+// 이름으로 script/reference/thumbnail/shorts 각각 최신 1개 반환 (없으면 null)
 ipcMain.handle("prompts:getPairByName", async (_e, name) => {
   try {
     const nm = (name || "").trim();
@@ -567,7 +576,8 @@ ipcMain.handle("prompts:getPairByName", async (_e, name) => {
       data: {
         script: pick("script"),
         reference: pick("reference"),
-        thumbnail: pick("thumbnail")
+        thumbnail: pick("thumbnail"),
+        shorts: pick("shorts")
       }
     };
   } catch (e) {
@@ -575,10 +585,10 @@ ipcMain.handle("prompts:getPairByName", async (_e, name) => {
   }
 });
 
-// 세 카테고리(script/reference/thumbnail)를 한 번에 저장/생성해서 원자적으로 반영
+// 네 카테고리(script/reference/thumbnail/shorts)를 한 번에 저장/생성해서 원자적으로 반영
 ipcMain.handle("prompts:savePair", async (_e, payload) => {
   try {
-    const { name, scriptContent, referenceContent, thumbnailContent } = payload || {};
+    const { name, scriptContent, referenceContent, thumbnailContent, shortsContent } = payload || {};
     const nm = (name || "").trim();
     if (!nm) return { ok: false, message: "name is required" };
 
@@ -613,12 +623,13 @@ ipcMain.handle("prompts:savePair", async (_e, payload) => {
     const s = upsert("script", scriptContent);
     const r = upsert("reference", referenceContent);
     const t = upsert("thumbnail", thumbnailContent);
+    const sh = upsert("shorts", shortsContent);
 
     prompts = dedupePrompts(prompts);
     store.set("prompts", prompts);
     broadcastChanged({ key: "prompts", value: prompts });
 
-    return { ok: true, data: { script: s || null, reference: r || null, thumbnail: t || null } };
+    return { ok: true, data: { script: s || null, reference: r || null, thumbnail: t || null, shorts: sh || null } };
   } catch (e) {
     return { ok: false, message: String(e?.message || e) };
   }

@@ -75,10 +75,26 @@ function validateScript(data) {
 // ============================================================
 // Vrew 스타일 프롬프트 빌더
 // ============================================================
-function buildPrompt({ topic, style, duration, referenceText, cpmMin, cpmMax, isShorts = false }) {
+function buildPrompt({ topic, style, duration, referenceText, cpmMin, cpmMax, isShorts = false, customPrompt = null }) {
   const totalSeconds = duration * 60;
 
-  // 쇼츠 모드인 경우 다른 로직 적용
+  // 쇼츠 모드 + 사용자 정의 프롬프트가 있으면 우선 사용
+  if ((isShorts || duration <= 1) && customPrompt && customPrompt.trim()) {
+    const secondsPerScene = duration <= 0.5 ? 5 : 8;
+    const targetSceneCount = Math.round(totalSeconds / secondsPerScene);
+    const minSceneCount = Math.max(2, Math.floor(targetSceneCount * 0.8));
+    const maxSceneCount = Math.ceil(targetSceneCount * 1.3);
+
+    return customPrompt
+      .replace(/\{topic\}/g, topic || "(미지정)")
+      .replace(/\{style\}/g, style || "바이럴")
+      .replace(/\{seconds\}/g, totalSeconds)
+      .replace(/\{minSceneCount\}/g, minSceneCount)
+      .replace(/\{maxSceneCount\}/g, maxSceneCount)
+      .replace(/\{targetSceneCount\}/g, targetSceneCount);
+  }
+
+  // 쇼츠 모드인 경우 다른 로직 적용 (기본 프롬프트 폴백)
   if (isShorts || duration <= 1) {
     const secondsPerScene = duration <= 0.5 ? 5 : 8; // 30초 이하: 5초, 그 외: 8초
     const targetSceneCount = Math.round(totalSeconds / secondsPerScene);
