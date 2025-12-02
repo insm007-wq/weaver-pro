@@ -85,13 +85,13 @@ const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, com
         background: tokens.colorNeutralBackground1,
         border: `1px solid ${tokens.colorNeutralStroke2}`,
         borderRadius: 16,
-        padding: tokens.spacingVerticalL,
+        padding: "12px 16px",
         marginBottom: tokens.spacingVerticalL,
       },
       gridContainer: {
         display: "grid",
         gridTemplateColumns: "1fr 1fr",
-        gap: tokens.spacingHorizontalL,
+        gap: "8px",
       },
       summaryContainer: {
         marginTop: tokens.spacingVerticalM,
@@ -272,11 +272,11 @@ const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, com
   // 기본 모드 렌더링 (기존 코드 유지)
   return (
     <Card style={styles.defaultCard}>
-      <div style={{ marginBottom: tokens.spacingVerticalM }}>
-        <Text size={500} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
+      <div style={{ marginBottom: "8px" }}>
+        <Text size={400} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
           🎯 생성 모드 선택
         </Text>
-        <Text size={300} style={{ color: tokens.colorNeutralForeground3, marginTop: 4, display: "block" }}>
+        <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 2, display: "block" }}>
           원하는 콘텐츠 생성 방식을 선택하세요
         </Text>
       </div>
@@ -295,7 +295,7 @@ const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, com
                 background: isSelected ? mode.gradient : tokens.colorNeutralBackground2,
                 border: isSelected ? "2px solid transparent" : `2px solid ${tokens.colorNeutralStroke2}`,
                 borderRadius: 12,
-                padding: tokens.spacingVerticalM,
+                padding: "10px 12px",
                 cursor: isDisabled ? "not-allowed" : status === "generating" ? "not-allowed" : "pointer",
                 transform: isSelected ? "translateY(-2px)" : "none",
                 boxShadow: isSelected ? "0 8px 24px rgba(0,0,0,0.15)" : "0 2px 8px rgba(0,0,0,0.08)",
@@ -326,42 +326,42 @@ const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, com
                 </div>
 
                 <Text
-                  size={400}
+                  size={300}
                   weight="semibold"
                   style={{
                     color: "inherit",
                     display: "block",
-                    marginBottom: 4,
+                    marginBottom: 2,
                   }}
                 >
                   {mode.title}
                 </Text>
 
                 <Text
-                  size={200}
+                  size={100}
                   style={{
                     color: isSelected ? "rgba(255,255,255,0.9)" : tokens.colorNeutralForeground3,
                     display: "block",
-                    marginBottom: tokens.spacingVerticalS,
+                    marginBottom: "4px",
                   }}
                 >
                   {mode.subtitle}
                 </Text>
 
                 <Text
-                  size={200}
+                  size={100}
                   style={{
                     color: isSelected ? "rgba(255,255,255,0.8)" : tokens.colorNeutralForeground2,
                     lineHeight: 1.4,
                     display: "block",
-                    marginBottom: tokens.spacingVerticalS,
+                    marginBottom: "4px",
                   }}
                 >
                   {mode.description}
                 </Text>
 
                 {/* 단계 표시 */}
-                <div style={{ marginBottom: tokens.spacingVerticalS }}>
+                <div style={{ marginBottom: "4px" }}>
                   <div
                     style={{
                       display: "flex",

@@ -158,6 +158,35 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
           position: "relative",
         }}
       >
+        {/* 0행: 모드 선택 (1열) */}
+        <ModeSelector
+          selectedMode={selectedMode}
+          onModeChange={(newMode) => {
+            setSelectedMode(newMode);
+            // 쇼츠 모드로 전환 시 기본값 설정
+            if (newMode === "shorts_mode") {
+              setForm(prev => ({
+                ...prev,
+                durationMin: 0.5, // 기본 30초
+                style: "viral", // 기본 바이럴 스타일
+              }));
+            } else {
+              // 일반 모드로 전환 시 기본값 복원
+              setForm(prev => ({
+                ...prev,
+                durationMin: 3, // 기본 3분
+                style: "informative", // 기본 정보 전달형
+              }));
+            }
+          }}
+          form={form}
+          isGenerating={fullVideoState.isGenerating}
+          compact={false}
+          globalSettings={globalSettings}
+          setGlobalSettings={setGlobalSettings}
+          api={api}
+        />
+
         {/* 1행: 실행 버튼 (1열) */}
         <ActionCard
           selectedMode={selectedMode}
@@ -183,6 +212,7 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
           promptLoading={promptLoading}
           setForm={setForm}
           disabled={fullVideoState.isGenerating}
+          selectedMode={selectedMode}
         />
 
         {/* 3행: 음성 설정 (1열) */}

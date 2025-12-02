@@ -1,4 +1,4 @@
-import { DocumentEditRegular } from "@fluentui/react-icons";
+import { DocumentEditRegular, VideoRegular } from "@fluentui/react-icons";
 
 // 공통 모드 상수
 export const MODE_CONFIGS = {
@@ -17,6 +17,22 @@ export const MODE_CONFIGS = {
     buttonText: "📝 대본 생성 시작",
     loadingText: "대본 생성 중...",
     outputFormat: "대본 텍스트 + 음성 파일 + SRT 자막"
+  },
+  shorts_mode: {
+    key: "shorts_mode",
+    title: "⚡ 쇼츠 생성",
+    subtitle: "15~60초 짧은 영상",
+    fullTitle: "⚡ 쇼츠 생성 (빠른 모드)",
+    description: "바이럴 쇼츠를 위한 짧고 강렬한 대본 생성",
+    fullDescription: "AI 쇼츠 대본 생성 → 음성 합성 → 자막 생성으로 빠르게 쇼츠 제작",
+    steps: ["쇼츠 대본", "음성 합성", "자막 생성"],
+    icon: VideoRegular,
+    color: "danger",
+    gradient: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+    estimatedTime: "1-2분",
+    buttonText: "⚡ 쇼츠 생성 시작",
+    loadingText: "쇼츠 대본 생성 중...",
+    outputFormat: "쇼츠 대본 + 음성 파일 + SRT 자막"
   }
 };
 

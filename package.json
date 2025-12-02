@@ -96,7 +96,7 @@
           ]
         }
       ],
-      "icon": "build/icon_256x256.png",
+      "icon": "build/icon.ico",
       "signAndEditExecutable": false
     },
     "mac": {

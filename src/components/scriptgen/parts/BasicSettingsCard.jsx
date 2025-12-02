@@ -1,13 +1,13 @@
 import { memo, useMemo, useState, useCallback, useEffect } from "react";
 import { Card, Text, Field, Input, Dropdown, Option, Spinner, Switch, Textarea, tokens } from "@fluentui/react-components";
 import { SettingsRegular } from "@fluentui/react-icons";
-import { STYLE_OPTIONS, DURATION_OPTIONS } from "../../../constants/scriptSettings";
+import { STYLE_OPTIONS, DURATION_OPTIONS, SHORTS_STYLE_OPTIONS, SHORTS_DURATION_OPTIONS } from "../../../constants/scriptSettings";
 import { validateAndSanitizeText } from "../../../utils/sanitizer";
 
 /**
  * 기본 설정 카드 (UI만 개선)
  */
-const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, setForm, disabled = false }) => {
+const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, setForm, disabled = false, selectedMode = "script_mode" }) => {
   const [validationErrors, setValidationErrors] = useState({});
 
   // 안전한 폼 데이터 처리
@@ -167,52 +167,70 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
         </div>
 
         {/* 스타일 선택 */}
-        <Field
-          label={
-            <Text size={300} weight="semibold">
-              스타일
-            </Text>
-          }
-        >
-          <Dropdown
-            value={STYLE_OPTIONS.find((s) => s.key === safeForm.style)?.text || "스타일 선택"}
-            selectedOptions={[safeForm.style]}
-            onOptionSelect={(_, d) => onChange("style", d.optionValue)}
-            size="medium" // 🔧 large → medium
-            style={{ minHeight: 36 }} // 🔧 시각 높이 맞춤
-            disabled={disabled}
-          >
-            {STYLE_OPTIONS.map((style) => (
-              <Option key={style.key} value={style.key}>
-                {style.text}
-              </Option>
-            ))}
-          </Dropdown>
-        </Field>
+        {(() => {
+          const isShortMode = selectedMode === "shorts_mode";
+          const styleOptions = isShortMode ? SHORTS_STYLE_OPTIONS : STYLE_OPTIONS;
+          return (
+            <Field
+              label={
+                <Text size={300} weight="semibold">
+                  {isShortMode ? "쇼츠 스타일" : "스타일"}
+                </Text>
+              }
+            >
+              <Dropdown
+                value={styleOptions.find((s) => s.key === safeForm.style)?.text || "스타일 선택"}
+                selectedOptions={[safeForm.style]}
+                onOptionSelect={(_, d) => onChange("style", d.optionValue)}
+                size="medium"
+                style={{ minHeight: 36 }}
+                disabled={disabled}
+              >
+                {styleOptions.map((style) => (
+                  <Option key={style.key} value={style.key} text={style.desc ? `${style.text} - ${style.desc}` : style.text}>
+                    {style.text}
+                  </Option>
+                ))}
+              </Dropdown>
+            </Field>
+          );
+        })()}
 
         {/* 예상 길이 */}
-        <Field
-          label={
-            <Text size={300} weight="semibold">
-              예상 길이
-            </Text>
-          }
-        >
-          <Dropdown
-            value={DURATION_OPTIONS.find((d) => d.key === safeForm.durationMin)?.text || "길이 선택"}
-            selectedOptions={[safeForm.durationMin?.toString()]}
-            onOptionSelect={(_, d) => onChange("durationMin", parseInt(d.optionValue))}
-            size="medium" // 🔧 large → medium
-            style={{ minHeight: 36 }}
-            disabled={disabled}
-          >
-            {DURATION_OPTIONS.map((duration) => (
-              <Option key={duration.key} value={duration.key.toString()}>
-                {duration.text}
-              </Option>
-            ))}
-          </Dropdown>
-        </Field>
+        {(() => {
+          const isShortMode = selectedMode === "shorts_mode";
+          const durationOptions = isShortMode ? SHORTS_DURATION_OPTIONS : DURATION_OPTIONS;
+          const parseValue = isShortMode ? parseFloat : parseInt;
+          return (
+            <Field
+              label={
+                <Text size={300} weight="semibold">
+                  {isShortMode ? "쇼츠 길이" : "예상 길이"}
+                </Text>
+              }
+            >
+              <Dropdown
+                value={durationOptions.find((d) => d.key === safeForm.durationMin)?.text || "길이 선택"}
+                selectedOptions={[safeForm.durationMin?.toString()]}
+                onOptionSelect={(_, d) => onChange("durationMin", parseValue(d.optionValue))}
+                size="medium"
+                style={{ minHeight: 36 }}
+                disabled={disabled}
+              >
+                {durationOptions.map((duration) => (
+                  <Option key={duration.key} value={duration.key.toString()}>
+                    {duration.text}
+                  </Option>
+                ))}
+              </Dropdown>
+              {isShortMode && (
+                <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
+                  💡 쇼츠는 첫 3초가 가장 중요합니다
+                </Text>
+              )}
+            </Field>
+          );
+        })()}
 
         {/* 프롬프트 선택 */}
         <Field
