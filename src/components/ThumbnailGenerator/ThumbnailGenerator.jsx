@@ -41,7 +41,7 @@ const useStyles = makeStyles({
   container: {
     maxWidth: "1400px",
     ...shorthands.margin("0", "auto"),
-    ...shorthands.padding(tokens.spacingVerticalXL, tokens.spacingHorizontalL),
+    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalL),
     display: "flex",
     flexDirection: "column",
     ...shorthands.gap(tokens.spacingVerticalL),

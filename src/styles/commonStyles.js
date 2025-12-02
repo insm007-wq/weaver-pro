@@ -26,7 +26,7 @@ export const useContainerStyles = makeStyles({
   container: {
     maxWidth: "1400px",
     margin: "0 auto",
-    padding: `${tokens.spacingVerticalXXL} ${tokens.spacingHorizontalL}`,
+    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalL}`,
     display: "flex",
     flexDirection: "column",
     gap: tokens.spacingVerticalL,
