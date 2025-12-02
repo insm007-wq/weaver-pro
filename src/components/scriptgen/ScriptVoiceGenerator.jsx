@@ -69,8 +69,9 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
       setIsLoading,
       setDoc,
       setFullVideoState,
+      selectedMode,
     });
-  }, [runScriptMode, form, voices, api, runGenerate, setError, setIsLoading, setDoc, setFullVideoState]);
+  }, [runScriptMode, form, voices, api, runGenerate, setError, setIsLoading, setDoc, setFullVideoState, selectedMode]);
 
   // 상태 초기화 헬퍼
   const resetFullVideoState = useCallback(

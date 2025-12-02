@@ -40,12 +40,21 @@ export function useScriptGeneration() {
   }, []);
 
   const getSelectedPromptContent = useCallback(
-    async (promptName) => {
+    async (promptName, selectedMode = "script_mode") => {
       try {
         const res = await api.invoke("prompts:getPairByName", promptName);
         if ((res?.ok || res?.success) && res.data) {
+          // 모드에 따라 category 선택
+          const scriptCategory = selectedMode === "shorts_mode" ? "shorts" : "script";
+          const selectedPrompt = res.data[scriptCategory];
+
+          // 쇼츠 프롬프트가 없으면 일반 프롬프트로 fallback
+          if (!selectedPrompt?.content && selectedMode === "shorts_mode") {
+            console.warn(`⚠️ 쇼츠 프롬프트가 없어 일반 프롬프트를 사용합니다: ${promptName}`);
+          }
+
           return {
-            script: res.data.script?.content || "",
+            script: selectedPrompt?.content || res.data.script?.content || "",
             reference: res.data.reference?.content || "",
           };
         }
@@ -58,7 +67,7 @@ export function useScriptGeneration() {
   );
 
   const runGenerate = useCallback(
-    async (form, toast = null) => {
+    async (form, toast = null, selectedMode = "script_mode") => {
       setError("");
       setIsLoading(true);
       setChunkProgress(null); // 진행률 초기화
@@ -78,7 +87,7 @@ export function useScriptGeneration() {
 
         let promptContent = { script: "", reference: "" };
         if (form.promptName) {
-          promptContent = await getSelectedPromptContent(form.promptName);
+          promptContent = await getSelectedPromptContent(form.promptName, selectedMode);
         }
 
         const selectedEngine = AI_ENGINE_OPTIONS.find((engine) => engine.key === finalEngine);
