@@ -14,7 +14,7 @@ import {
   Spinner,
   Divider,
 } from "@fluentui/react-components";
-import { useHeaderStyles } from "../styles/commonStyles";
+import { useHeaderStyles, useContainerStyles } from "../styles/commonStyles";
 import {
   SettingsRegular,
   KeyRegular,
@@ -22,11 +22,8 @@ import {
   SubtitlesRegular,
   ChevronLeftRegular,
   ShieldRegular,
-  ArrowResetRegular,
-  InfoRegular,
 } from "@fluentui/react-icons";
 import AdminPasswordDialog from "./settings/parts/AdminPasswordDialog";
-import { showGlobalToast } from "./common";
 
 // lazy tabs
 const AdminTab = lazy(() => import("./settings/tabs/AdminTab"));
@@ -36,30 +33,6 @@ const PromptTab = lazy(() => import("./settings/tabs/PromptTab"));
 const SubtitleTab = lazy(() => import("./settings/tabs/SubtitleTab"));
 
 const useStyles = makeStyles({
-  root: {
-    maxWidth: "1200px",
-    ...shorthands.margin("0", "auto"),
-    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalL),
-  },
-
-  pageHeader: {
-    ...shorthands.margin(0, 0, tokens.spacingVerticalL),
-  },
-  pageTitle: {
-    display: "flex",
-    alignItems: "center",
-    columnGap: tokens.spacingHorizontalM,
-  },
-  pageDesc: {
-    color: tokens.colorNeutralForeground3,
-    marginTop: tokens.spacingVerticalXS,
-    fontSize: tokens.fontSizeBase300,
-  },
-  hairline: {
-    ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke2),
-    marginTop: tokens.spacingVerticalM,
-  },
-
   mainCard: {
     backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
@@ -112,6 +85,7 @@ const allTabs = [
 export default function SettingsPage({ onBack }) {
   const styles = useStyles();
   const headerStyles = useHeaderStyles();
+  const containerStyles = useContainerStyles();
 
   // 관리자 모드 상태
   const [isAdminMode, setIsAdminMode] = useState(() => {
@@ -120,7 +94,6 @@ export default function SettingsPage({ onBack }) {
   });
   const [clickCount, setClickCount] = useState(0);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
-  const [showHeaderActions, setShowHeaderActions] = useState(false);
   const clickTimerRef = useRef(null);
 
   // 관리자 모드에 따라 탭 필터링
@@ -186,7 +159,7 @@ export default function SettingsPage({ onBack }) {
   };
 
   return (
-    <div ref={containerRef} className={styles.root} style={fixedWidthPx ? { width: `${fixedWidthPx}px` } : undefined}>
+    <div ref={containerRef} className={containerStyles.container} style={fixedWidthPx ? { width: `${fixedWidthPx}px` } : undefined}>
       {onBack && (
         <Button appearance="subtle" icon={<ChevronLeftRegular />} onClick={onBack} className={styles.backButton} size="small">
           돌아가기
@@ -196,86 +169,36 @@ export default function SettingsPage({ onBack }) {
       {/* 페이지 헤더 */}
       <div className={headerStyles.pageHeader}>
         <div
+          className={headerStyles.pageTitleWithIcon}
+          onClick={handleTitleClick}
+          onDoubleClick={handleTitleDoubleClick}
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: tokens.spacingVerticalM
+            cursor: "pointer",
+            userSelect: "none",
+            position: "relative",
+            gap: 8
           }}
-          onMouseEnter={() => setShowHeaderActions(true)}
-          onMouseLeave={() => setShowHeaderActions(false)}
         >
-          <div
-            className={headerStyles.pageTitleWithIcon}
-            onClick={handleTitleClick}
-            onDoubleClick={handleTitleDoubleClick}
-            style={{
-              cursor: "pointer",
-              userSelect: "none",
-              position: "relative",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8
-            }}
-          >
-            <SettingsRegular />
-            전역 설정
-            {clickCount >= 10 && (
-              <span
-                style={{
-                  fontSize: "12px",
-                  color: tokens.colorBrandForeground1,
-                  fontWeight: 600,
-                  backgroundColor: tokens.colorBrandBackground2,
-                  padding: "2px 8px",
-                  borderRadius: "12px",
-                  marginLeft: 8
-                }}
-              >
-                {clickCount}/12
-              </span>
-            )}
-          </div>
-
-          {/* 헤더 액션 버튼 - hover 시 표시 */}
-          {showHeaderActions && (
-            <div style={{ display: "flex", gap: tokens.spacingHorizontalS }}>
-              <Button
-                size="small"
-                appearance="subtle"
-                icon={<ArrowResetRegular />}
-                title="설정 초기화"
-                onClick={() => {
-                  if (window.confirm("모든 설정을 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) {
-                    window.api?.invoke("prompts:reset").then(() => {
-                      showGlobalToast({
-                        type: "success",
-                        text: "설정이 초기화되었습니다."
-                      });
-                    }).catch(() => {
-                      showGlobalToast({
-                        type: "error",
-                        text: "설정 초기화 중 오류가 발생했습니다."
-                      });
-                    });
-                  }
-                }}
-              >
-                초기화
-              </Button>
-              <Button
-                size="small"
-                appearance="subtle"
-                icon={<InfoRegular />}
-                title="설정 정보"
-              >
-                정보
-              </Button>
-            </div>
+          <SettingsRegular />
+          전역 설정
+          {clickCount >= 10 && (
+            <span
+              style={{
+                fontSize: "12px",
+                color: tokens.colorBrandForeground1,
+                fontWeight: 600,
+                backgroundColor: tokens.colorBrandBackground2,
+                padding: "2px 8px",
+                borderRadius: "12px",
+                marginLeft: 8
+              }}
+            >
+              {clickCount}/12
+            </span>
           )}
         </div>
         <div className={headerStyles.pageDescription}>애플리케이션 전반의 설정을 관리합니다.</div>
-        <div className={styles.hairline} />
+        <div className={headerStyles.divider} />
       </div>
 
       {/* 본문 카드 */}

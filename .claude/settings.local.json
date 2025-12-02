@@ -12,7 +12,8 @@
       "Bash(node scripts/clear-keytar.js:*)",
       "Bash(dir:*)",
       "Bash(findstr:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(taskkill:*)"
     ],
     "deny": [],
     "ask": []
