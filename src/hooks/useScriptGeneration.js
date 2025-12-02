@@ -88,6 +88,9 @@ export function useScriptGeneration() {
         let promptContent = { script: "", reference: "" };
         if (form.promptName) {
           promptContent = await getSelectedPromptContent(form.promptName, selectedMode);
+          console.log(`🔍 [프론트엔드] 프롬프트 로드: ${form.promptName} (모드: ${selectedMode})`);
+          console.log(`   스크립트 프롬프트 길이: ${promptContent.script?.length || 0}자`);
+          console.log(`   스크립트 처음 200자: ${promptContent.script?.substring(0, 200) || "(없음)"}`);
         }
 
         const selectedEngine = AI_ENGINE_OPTIONS.find((engine) => engine.key === finalEngine);
@@ -105,6 +108,13 @@ export function useScriptGeneration() {
           cpmMax: form.cpmMax || 400,
           isShorts: selectedMode === "shorts_mode", // 🎯 쇼츠 모드 플래그 추가
         };
+
+        console.log(`\n🚀 [프론트엔드] API 호출 payload:`)
+        console.log(`   topic: "${payload.topic}"`);
+        console.log(`   style: "${payload.style}"`);
+        console.log(`   duration: ${payload.duration}`);
+        console.log(`   isShorts: ${payload.isShorts}`);
+        console.log(`   prompt 길이: ${payload.prompt?.length || 0}자\n`);
 
         const getTimeoutForDuration = (minutes) => {
           // 장편은 청크로 나눠 생성하므로 충분한 시간 필요

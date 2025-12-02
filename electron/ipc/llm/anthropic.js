@@ -439,11 +439,11 @@ async function callAnthropic(params, event = null) {
 
   const prompt = await _buildPrompt(topic, duration, style, params.prompt, referenceText, cpmMin, cpmMax, isShorts);
 
-  // 🔍 생성된 프롬프트 로깅 (처음 500자만)
-  console.log("📄 생성된 프롬프트 (처음 500자):");
-  console.log("---");
-  console.log(prompt.substring(0, 500));
-  console.log("---\n");
+  // 🔍 생성된 프롬프트 로깅 (전체 내용)
+  console.log("📄 생성된 프롬프트 (전체):");
+  console.log("========== 프롬프트 시작 ==========");
+  console.log(prompt);
+  console.log("========== 프롬프트 끝 ==========\n");
 
   let lastError = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
