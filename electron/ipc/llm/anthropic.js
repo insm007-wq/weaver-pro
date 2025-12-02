@@ -387,6 +387,7 @@ async function callAnthropic(params, event = null) {
     referenceText = "",
     cpmMin = 320,
     cpmMax = 360,
+    isShorts = false, // 🎯 쇼츠 모드 플래그 받기
   } = params;
 
   const isLongForm = duration >= 20;
@@ -401,6 +402,7 @@ async function callAnthropic(params, event = null) {
       cpmMin,
       cpmMax,
       customPrompt: params.prompt,
+      isShorts, // 🎯 장편에도 전달
       event  // 진행률 전송을 위해 event 전달
     });
   }
@@ -413,7 +415,7 @@ async function callAnthropic(params, event = null) {
   const apiKey = await getSecret("anthropicKey");
   if (!apiKey) throw new Error("Anthropic API Key가 설정되지 않았습니다.");
 
-  const prompt = await _buildPrompt(topic, duration, style, params.prompt, referenceText, cpmMin, cpmMax);
+  const prompt = await _buildPrompt(topic, duration, style, params.prompt, referenceText, cpmMin, cpmMax, isShorts);
 
   let lastError = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
@@ -456,7 +458,7 @@ async function callAnthropic(params, event = null) {
 // ============================================================
 // 장편 대본 생성 (청크 방식)
 // ============================================================
-async function generateLongFormScript({ topic, style, duration, referenceText, cpmMin, cpmMax, customPrompt, event = null }) {
+async function generateLongFormScript({ topic, style, duration, referenceText, cpmMin, cpmMax, customPrompt, isShorts = false, event = null }) {
   const CHUNK_DURATION = 5; // 5분씩 청크
   const chunkCount = Math.ceil(duration / CHUNK_DURATION);
 
@@ -483,7 +485,7 @@ async function generateLongFormScript({ topic, style, duration, referenceText, c
       ? `${topic} (전체 ${duration}분 중 ${chunkIndex + 1}/${chunkCount} 파트)`
       : `${topic} (전체 ${duration}분 중 ${chunkIndex + 1}/${chunkCount} 파트 - 이전 내용에서 자연스럽게 이어지도록)`;
 
-    const prompt = await _buildPrompt(chunkTopic, chunkDuration, style, customPrompt, referenceText, chunkCpmMin, chunkCpmMax);
+    const prompt = await _buildPrompt(chunkTopic, chunkDuration, style, customPrompt, referenceText, chunkCpmMin, chunkCpmMax, isShorts);
 
     const targetSceneCount = Math.round((chunkDuration * 60) / 8);
     const minSceneCount = Math.max(3, Math.floor(targetSceneCount * 0.9));

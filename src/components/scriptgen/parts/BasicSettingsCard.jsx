@@ -113,12 +113,42 @@ const BasicSettingsCard = memo(({
     []
   );
 
+  // 모드별 필터링된 프롬프트
+  const filteredPromptNames = useMemo(() => {
+    if (selectedMode === "shorts_mode") {
+      // 쇼츠 모드: "쇼츠" 또는 "shorts"가 포함된 프롬프트를 우선적으로 찾기
+      const shortsPrompts = promptNames.filter(
+        (name) =>
+          name.toLowerCase().includes("쇼츠") ||
+          name.toLowerCase().includes("shorts") ||
+          name.toLowerCase().includes("short")
+      );
+      // 쇼츠 프롬프트가 있으면 그것만, 없으면 모든 프롬프트 표시
+      return shortsPrompts.length > 0 ? shortsPrompts : promptNames;
+    }
+    // 일반 모드: 모든 프롬프트
+    return promptNames;
+  }, [promptNames, selectedMode]);
+
   // 프롬프트 자동 선택 로직 추가
   useEffect(() => {
-    if (promptNames.length > 0 && !safeForm.promptName) {
-      setForm((prev) => ({ ...prev, promptName: promptNames[0] }));
+    if (filteredPromptNames.length > 0 && !safeForm.promptName) {
+      // 쇼츠 모드에서 쇼츠 프롬프트 우선 선택
+      let selectedPrompt = filteredPromptNames[0];
+      if (selectedMode === "shorts_mode") {
+        const shortsPrompt = filteredPromptNames.find(
+          (name) =>
+            name.toLowerCase().includes("쇼츠") ||
+            name.toLowerCase().includes("shorts") ||
+            name.toLowerCase().includes("short")
+        );
+        if (shortsPrompt) {
+          selectedPrompt = shortsPrompt;
+        }
+      }
+      setForm((prev) => ({ ...prev, promptName: selectedPrompt }));
     }
-  }, [promptNames, safeForm.promptName, setForm]);
+  }, [filteredPromptNames, safeForm.promptName, setForm, selectedMode]);
 
   return (
     <Card style={styles.cardContainer}>
@@ -232,11 +262,6 @@ const BasicSettingsCard = memo(({
                   </Option>
                 ))}
               </Dropdown>
-              {isShortMode && (
-                <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 4 }}>
-                  💡 쇼츠는 첫 3초가 가장 중요합니다
-                </Text>
-              )}
             </Field>
           );
         })()}
@@ -245,7 +270,7 @@ const BasicSettingsCard = memo(({
         <Field
           label={
             <Text size={300} weight="semibold">
-              대본 생성 프롬프트
+              {selectedMode === "shorts_mode" ? "🎬 쇼츠 대본 생성" : "📝 대본 생성 프롬프트"}
             </Text>
           }
         >
@@ -254,10 +279,10 @@ const BasicSettingsCard = memo(({
             selectedOptions={safeForm.promptName ? [safeForm.promptName] : []}
             onOptionSelect={(_, d) => onChange("promptName", d.optionValue)}
             size="medium" // 🔧 large → medium
-            disabled={disabled || !!promptLoading || promptNames.length === 0}
+            disabled={disabled || !!promptLoading || filteredPromptNames.length === 0}
             style={{ minHeight: 36 }}
           >
-            {promptNames.map((name) => (
+            {filteredPromptNames.map((name) => (
               <Option key={name} value={name}>
                 {name}
               </Option>
@@ -273,10 +298,6 @@ const BasicSettingsCard = memo(({
                   불러오는 중...
                 </Text>
               </div>
-            ) : promptNames.length === 0 ? (
-              <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                설정에서 프롬프트를 저장하세요
-              </Text>
             ) : null}
           </div>
         </Field>

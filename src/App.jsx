@@ -10,7 +10,6 @@ const Sidebar = lazy(() => import("./components/Sidebar"));
 const ProjectInit = lazy(() => import("./components/ProjectInit"));
 const SettingsPage = lazy(() => import("./components/SettingsPage"));
 const ProjectManager = lazy(() => import("./components/ProjectManager"));
-const HeaderBar = lazy(() => import("./components/HeaderBar"));
 const ThumbnailGenerator = lazy(() => import("./components/ThumbnailGenerator/ThumbnailGenerator"));
 const ScriptVoiceGenerator = lazy(() => import("./components/scriptgen/ScriptVoiceGenerator"));
 const MediaPrepEditor = lazy(() => import("./components/media-prep/MediaPrepEditor"));
@@ -24,10 +23,6 @@ const useStyles = makeStyles({
     minHeight: "100vh",
     flexDirection: "column",
     backgroundColor: tokens.colorNeutralBackground1,
-  },
-  header: {
-    backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke1),
   },
   body: {
     display: "flex",
@@ -351,13 +346,6 @@ function App() {
 
   return (
     <div className={mergeClasses(styles.root, fontStyles.globalFont)}>
-      {/* 헤더 영역 - 독립적인 Suspense */}
-      <Suspense fallback={<div className={styles.header} />}>
-        <div className={styles.header}>
-          <HeaderBar onOpenSettings={handleOpenSettings} />
-        </div>
-      </Suspense>
-
       <div className={styles.body}>
         {/* 사이드바 - 독립적인 Suspense */}
         <Suspense fallback={<div style={{ width: "240px" }} />}>

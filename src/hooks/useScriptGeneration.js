@@ -103,6 +103,7 @@ export function useScriptGeneration() {
           referenceText: form.referenceScript,
           cpmMin: form.cpmMin || 300,
           cpmMax: form.cpmMax || 400,
+          isShorts: selectedMode === "shorts_mode", // 🎯 쇼츠 모드 플래그 추가
         };
 
         const getTimeoutForDuration = (minutes) => {
