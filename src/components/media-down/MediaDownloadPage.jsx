@@ -16,9 +16,22 @@ import { PageErrorBoundary } from "../common/ErrorBoundary";
 import { showError, showSuccess } from "../common/GlobalToast";
 import BottomFixedBar from "../common/BottomFixedBar";
 import { tokens } from "@fluentui/react-components";
+import { MODE_CONFIGS } from "../../constants/modeConstants";
 
 // 로컬 이미지 캐시
 const imageCache = new Map();
+
+// 모드별 다운로드 설정 프리셋
+const MODE_DOWNLOAD_PRESETS = {
+  script_mode: {
+    aspectRatio: "16:9",
+    minResolution: "1080p",
+  },
+  shorts_mode: {
+    aspectRatio: "9:16",
+    minResolution: "1080p",
+  }
+};
 
 // 썸네일 이미지 컴포넌트 (로컬 파일 → base64 변환)
 const ThumbnailImage = React.memo(({ src, alt, style, fallbackText = "IMAGE" }) => {
@@ -124,6 +137,10 @@ function MediaDownloadPage({ onDownloadingChange }) {
   const headerStyles = useHeaderStyles();
   const containerStyles = useContainerStyles();
 
+  // 현재 작업 모드 가져오기 (기본값)
+  const currentMode = sessionStorage.getItem('currentMode') || 'script_mode';
+  const defaultPreset = MODE_DOWNLOAD_PRESETS[currentMode];
+
   // 상태
   const [keywords, setKeywords] = useState([]);
   const [selectedKeywords, setSelectedKeywords] = useState(new Set());
@@ -131,11 +148,12 @@ function MediaDownloadPage({ onDownloadingChange }) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState({});
   const [downloadedVideos, setDownloadedVideos] = useState([]);
+  const [selectedMode, setSelectedMode] = useState(currentMode);  // ✅ 사용자 선택 모드
   const [downloadOptions, setDownloadOptions] = useState({
     videosPerKeyword: 2,
     maxFileSize: 20,
-    minResolution: "1080p",
-    aspectRatio: "16:9",
+    minResolution: defaultPreset.minResolution,    // ✅ 모드별 해상도
+    aspectRatio: defaultPreset.aspectRatio,        // ✅ 모드별 비율
   });
   const [keywordsLoaded, setKeywordsLoaded] = useState(false);
   const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState(null);
@@ -732,6 +750,51 @@ function MediaDownloadPage({ onDownloadingChange }) {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
+            {/* 영상 모드 선택 (NEW - 가장 상단) */}
+            <div style={{ display: "grid", gridTemplateColumns: "140px minmax(0,1fr)", alignItems: "center", columnGap: 12 }}>
+              <Text size={300} weight="medium">
+                영상 모드
+              </Text>
+              <div style={{ minWidth: 0, width: "100%" }}>
+                <Dropdown
+                  value={selectedMode === "shorts_mode" ? "쇼츠 (9:16 세로)" : "일반 영상 (16:9 가로)"}
+                  selectedOptions={[selectedMode]}
+                  onOptionSelect={(_, data) => {
+                    const newMode = data.optionValue;
+                    const preset = MODE_DOWNLOAD_PRESETS[newMode];
+
+                    setSelectedMode(newMode);
+                    setDownloadOptions((prev) => ({
+                      ...prev,
+                      aspectRatio: preset.aspectRatio,      // 자동 설정
+                      minResolution: preset.minResolution,  // 자동 설정
+                    }));
+                  }}
+                  style={{ width: "100%" }}
+                  disabled={isDownloading}
+                >
+                  <Option value="script_mode">일반 영상 (16:9 가로)</Option>
+                  <Option value="shorts_mode">쇼츠 (9:16 세로)</Option>
+                </Dropdown>
+              </div>
+            </div>
+
+            {/* 설명 텍스트 추가 */}
+            <div style={{
+              gridColumn: "1 / -1",
+              padding: "8px 12px",
+              background: "#f8fafc",
+              borderRadius: 6,
+              border: "1px solid #e0e7ff",
+              marginBottom: 0
+            }}>
+              <Text size={200} style={{ color: "#4f46e5", lineHeight: 1.4 }}>
+                💡 {selectedMode === "shorts_mode"
+                  ? "쇼츠 모드: 9:16 세로 비율 영상을 다운로드합니다. 유튜브 쇼츠, 틱톡, 인스타그램 릴스에 최적화됩니다."
+                  : "일반 모드: 16:9 가로 비율 영상을 다운로드합니다. 일반 유튜브 영상, 블로그 등에 적합합니다."}
+              </Text>
+            </div>
+
             {/* 영상 개수 */}
             <div style={{ display: "grid", gridTemplateColumns: "140px minmax(0,1fr)", alignItems: "center", columnGap: 12 }}>
               <Text size={300} weight="medium">
@@ -795,6 +858,10 @@ function MediaDownloadPage({ onDownloadingChange }) {
                   <Option value="1080p">1080p (FHD)</Option>
                   <Option value="1440p">1440p (QHD)</Option>
                 </Dropdown>
+                {/* 자동 설정 안내 */}
+                <Text size={100} style={{ color: "#9ca3af", marginTop: 4, display: "block" }}>
+                  * 영상 모드 변경 시 자동으로 추천값이 설정됩니다
+                </Text>
               </div>
             </div>
 
@@ -816,6 +883,10 @@ function MediaDownloadPage({ onDownloadingChange }) {
                   <Option value="1:1">1:1 (정사각형)</Option>
                   <Option value="9:16">9:16 (세로)</Option>
                 </Dropdown>
+                {/* 자동 설정 안내 */}
+                <Text size={100} style={{ color: "#9ca3af", marginTop: 4, display: "block" }}>
+                  * 영상 모드 변경 시 자동으로 추천값이 설정됩니다
+                </Text>
               </div>
             </div>
 
@@ -837,6 +908,9 @@ function MediaDownloadPage({ onDownloadingChange }) {
                 <Text size={200} weight="semibold">
                   <span style={{ color: "#0078d4" }}>현재</span> 선택 요약
                 </Text>
+                <Badge appearance="filled" color={selectedMode === "shorts_mode" ? "warning" : "brand"} size="small">
+                  {selectedMode === "shorts_mode" ? "🎬 쇼츠 모드" : "📺 일반 모드"}
+                </Badge>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 <Badge appearance="tint" color="brand">
@@ -853,7 +927,9 @@ function MediaDownloadPage({ onDownloadingChange }) {
                 </Badge>
               </div>
               <Text size={100} style={{ color: "#7a869a" }}>
-                팁: 1080p + 16:9는 대부분의 가로형 콘텐츠에 적합하고, 용량은 10–20MB가 품질·속도 균형이 좋아요.
+                팁: {selectedMode === "shorts_mode"
+                  ? "쇼츠는 9:16 세로 비율이 최적입니다. 현재 설정은 모드에 맞게 자동 선택되었으며, 필요시 수동 변경도 가능합니다."
+                  : "일반 영상은 16:9 가로 비율이 최적입니다. 용량은 10-20MB가 품질과 속도의 균형이 좋습니다."}
               </Text>
             </div>
           </div>

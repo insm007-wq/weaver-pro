@@ -661,7 +661,7 @@ function extractKeywordsFromText(text) {
   return words;
 }
 
-async function generateAndDownloadAIImage(keyword, onProgress) {
+async function generateAndDownloadAIImage(keyword, onProgress, options = {}) {
   try {
     // Replicate API 키 가져오기
     const replicateKey = await getSecret("replicateKey");
@@ -697,13 +697,16 @@ async function generateAndDownloadAIImage(keyword, onProgress) {
     // Replicate 클라이언트 생성
     const replicate = createReplicate(replicateKey);
 
+    // ✅ 모드별 aspectRatio 설정 (쇼츠: 9:16, 일반: 16:9)
+    const aspectRatio = options.aspectRatio || "16:9";
+
     // 이미지 생성 요청
     let prediction = await replicate.predictions.create({
       version: versionId,
       input: {
         prompt: finalPrompt,
         num_outputs: 1,
-        aspect_ratio: "16:9",
+        aspect_ratio: aspectRatio,
       },
     });
 
@@ -920,7 +923,8 @@ async function downloadMediaWithFallback(keyword, provider, options = {}, onProg
         apiKey: pexelsKey,
         query: keyword,
         perPage: 1,
-        targetRes: { w: 1920, h: 1080 }
+        targetRes: { w: 1920, h: 1080 },
+        options // ✅ options 전달 (aspectRatio 필터링 포함)
       });
 
       if (photos && photos.length > 0) {
@@ -962,7 +966,8 @@ async function downloadMediaWithFallback(keyword, provider, options = {}, onProg
         apiKey: pixabayKey,
         query: keyword,
         perPage: 1,
-        targetRes: { w: 1920, h: 1080 }
+        targetRes: { w: 1920, h: 1080 },
+        options // ✅ options 전달 (aspectRatio 필터링 포함)
       });
 
       if (photos && photos.length > 0) {
@@ -1000,7 +1005,7 @@ async function downloadMediaWithFallback(keyword, provider, options = {}, onProg
 
     const aiResult = await generateAndDownloadAIImage(keyword, (progress) => {
       onProgress?.({ keyword, status: "generating", mediaType: "ai", step: 5, progress });
-    });
+    }, options); // ✅ options 전달 (aspectRatio 포함)
 
     if (aiResult.success) {
       return {
