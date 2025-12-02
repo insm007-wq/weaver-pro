@@ -788,10 +788,10 @@ function MediaDownloadPage({ onDownloadingChange }) {
               border: "1px solid #e0e7ff",
               marginBottom: 0
             }}>
-              <Text size={200} style={{ color: "#4f46e5", lineHeight: 1.4 }}>
+              <Text size={200} style={{ color: "#4f46e5", lineHeight: 1.2 }}>
                 💡 {selectedMode === "shorts_mode"
-                  ? "쇼츠 모드: 9:16 세로 비율 영상을 다운로드합니다. 유튜브 쇼츠, 틱톡, 인스타그램 릴스에 최적화됩니다."
-                  : "일반 모드: 16:9 가로 비율 영상을 다운로드합니다. 일반 유튜브 영상, 블로그 등에 적합합니다."}
+                  ? "쇼츠: 9:16 세로 비율 (유튜브 쇼츠, 틱톡, 릴스 최적)"
+                  : "일반: 16:9 가로 비율 (유튜브, 블로그 등)"}
               </Text>
             </div>
 
@@ -928,8 +928,8 @@ function MediaDownloadPage({ onDownloadingChange }) {
               </div>
               <Text size={100} style={{ color: "#7a869a" }}>
                 팁: {selectedMode === "shorts_mode"
-                  ? "쇼츠는 9:16 세로 비율이 최적입니다. 현재 설정은 모드에 맞게 자동 선택되었으며, 필요시 수동 변경도 가능합니다."
-                  : "일반 영상은 16:9 가로 비율이 최적입니다. 용량은 10-20MB가 품질과 속도의 균형이 좋습니다."}
+                  ? "9:16 세로 비율로 자동 설정되었습니다. 필요시 수동 변경 가능합니다."
+                  : "16:9 가로 비율로 자동 설정되었습니다. 10-20MB가 품질과 속도의 최적 균형입니다."}
               </Text>
             </div>
           </div>
