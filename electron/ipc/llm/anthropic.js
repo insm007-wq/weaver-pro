@@ -78,13 +78,8 @@ function validateScript(data) {
 function buildPrompt({ topic, style, duration, referenceText, cpmMin, cpmMax, isShorts = false, customPrompt = null }) {
   const totalSeconds = duration * 60;
 
-  // 🔍 buildPrompt 진입 로깅
-  console.log("\n[buildPrompt 진입]");
-  console.log(`  isShorts: ${isShorts}, duration: ${duration}, customPrompt: ${customPrompt ? "있음" : "없음"}`);
-
   // 쇼츠 모드 + 사용자 정의 프롬프트가 있으면 우선 사용
   if ((isShorts || duration <= 1) && customPrompt && customPrompt.trim()) {
-    console.log("  → 쇼츠 + 커스텀 프롬프트 경로 사용");
     const secondsPerScene = duration <= 0.5 ? 5 : 8;
     const targetSceneCount = Math.round(totalSeconds / secondsPerScene);
     const minSceneCount = Math.max(2, Math.floor(targetSceneCount * 0.8));
@@ -101,7 +96,6 @@ function buildPrompt({ topic, style, duration, referenceText, cpmMin, cpmMax, is
 
   // 쇼츠 모드인 경우 다른 로직 적용 (기본 프롬프트 폴백)
   if (isShorts || duration <= 1) {
-    console.log("  → 쇼츠 기본 프롬프트 경로 사용");
     const secondsPerScene = duration <= 0.5 ? 5 : 8; // 30초 이하: 5초, 그 외: 8초
     const targetSceneCount = Math.round(totalSeconds / secondsPerScene);
     const minSceneCount = Math.max(2, Math.floor(targetSceneCount * 0.8)); // 최소 2개
@@ -110,8 +104,6 @@ function buildPrompt({ topic, style, duration, referenceText, cpmMin, cpmMax, is
     // 쇼츠는 장당 더 적은 글자수 (빠른 템포)
     const expectedMinChars = Math.round(totalSeconds * 3); // 초당 3자
     const expectedMaxChars = Math.round(totalSeconds * 5); // 초당 5자
-
-    console.log(`  쇼츠 프롬프트: ${totalSeconds}초, 장면 ${minSceneCount}-${maxSceneCount}개, 주제="${topic}", 스타일="${style}"`);
 
     const shortsPrompt = `다음 조건에 맞는 ${totalSeconds}초 길이의 쇼츠 영상 대본을 작성해주세요.
 
@@ -163,12 +155,10 @@ function buildPrompt({ topic, style, duration, referenceText, cpmMin, cpmMax, is
   }
 
   // 일반 대본 로직
-  console.log("  → 일반 대본 프롬프트 경로 사용");
   const secondsPerScene = 8;
   const targetSceneCount = Math.round(totalSeconds / secondsPerScene);
   const minSceneCount = Math.max(3, Math.floor(targetSceneCount * 0.9));
   const maxSceneCount = Math.ceil(targetSceneCount * 1.3); // 최대 30% 더 허용
-  console.log(`  일반 프롬프트: ${totalSeconds}초, 장면 ${minSceneCount}-${maxSceneCount}개, 주제="${topic}", 스타일="${style}"`);
 
   // 최소 글자수 설정 (장편/단편 구분)
   const isLongForm = duration >= 20; // 20분 이상은 장편
@@ -400,22 +390,10 @@ async function callAnthropic(params, event = null) {
     isShorts = false, // 🎯 쇼츠 모드 플래그 받기
   } = params;
 
-  // 🔍 파라미터 로깅
-  console.log("\n========== 📋 LLM 대본 생성 파라미터 ==========");
-  console.log(`📌 주제(topic): "${topic}"`);
-  console.log(`🎨 스타일(style): "${style}"`);
-  console.log(`⏱️ 길이(duration): ${duration}분`);
-  console.log(`🎬 쇼츠 모드(isShorts): ${isShorts}`);
-  console.log(`📝 커스텀 프롬프트: ${params.prompt ? "있음" : "없음"}`);
-  console.log(`📖 레퍼런스: ${referenceText ? "있음" : "없음"}`);
-  console.log(`📊 CPM: ${cpmMin}-${cpmMax}`);
-  console.log("==========================================\n");
-
   const isLongForm = duration >= 20;
 
   // 장편(20분 이상)은 청크로 나눠서 생성
   if (isLongForm) {
-    console.log("🔗 장편 모드 감지 - generateLongFormScript 호출");
     return await generateLongFormScript({
       topic,
       style,
@@ -439,12 +417,6 @@ async function callAnthropic(params, event = null) {
 
   const prompt = await _buildPrompt(topic, duration, style, params.prompt, referenceText, cpmMin, cpmMax, isShorts);
 
-  // 🔍 생성된 프롬프트 로깅 (전체 내용)
-  console.log("📄 생성된 프롬프트 (전체):");
-  console.log("========== 프롬프트 시작 ==========");
-  console.log(prompt);
-  console.log("========== 프롬프트 끝 ==========\n");
-
   let lastError = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
@@ -465,17 +437,6 @@ async function callAnthropic(params, event = null) {
         console.warn(`⚠️ 글자 수 부족: ${totalChars}자 < ${expectedMinCharsCheck}자`);
         throw new Error(`글자 수 부족: ${totalChars} < ${expectedMinCharsCheck}, 재시도`);
       }
-
-      // 🔍 생성된 대본 로깅
-      console.log("\n========== ✅ 생성된 대본 ==========");
-      console.log(`📚 제목: ${parsedData.title || topic || "AI 생성 대본"}`);
-      console.log(`📊 장면 수: ${normalizedScenes.length}개`);
-      console.log(`📝 총 글자: ${totalChars}자`);
-      console.log(`\n장면 목록:`);
-      normalizedScenes.forEach((scene, idx) => {
-        console.log(`  [장면 ${idx + 1}] (${scene.duration}초) ${scene.text}`);
-      });
-      console.log("====================================\n");
 
       return {
         success: true,
