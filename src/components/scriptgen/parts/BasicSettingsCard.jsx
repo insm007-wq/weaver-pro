@@ -302,10 +302,14 @@ const BasicSettingsCard = memo(({
           </div>
         </Field>
 
-        {/* 레퍼런스 대본 (선택) - 전체 너비 */}
+        {/* 레퍼런스 대본 (선택) - 전체 너비 / 쇼츠 모드에서 비활성화 */}
         <div style={styles.referenceContainer}>
           <div style={styles.switchContainer}>
-            <Switch checked={safeForm.showReferenceScript} onChange={(_, data) => onChange("showReferenceScript", data.checked)} disabled={disabled} />
+            <Switch
+              checked={safeForm.showReferenceScript}
+              onChange={(_, data) => onChange("showReferenceScript", data.checked)}
+              disabled={disabled || selectedMode === "shorts_mode"} // ✅ 쇼츠 모드에서 비활성화
+            />
             <Text
               size={300}
               weight="semibold"
@@ -313,9 +317,11 @@ const BasicSettingsCard = memo(({
                 cursor: "default",
                 userSelect: "none",
                 pointerEvents: "none",
+                opacity: selectedMode === "shorts_mode" ? 0.5 : 1, // ✅ 쇼츠 모드에서 회색 표시
               }}
             >
               레퍼런스 대본 (선택사항)
+              {selectedMode === "shorts_mode" && " - 쇼츠 모드에서는 사용 불가"}
             </Text>
           </div>
 
@@ -340,7 +346,7 @@ const BasicSettingsCard = memo(({
                 placeholder="예시: '안녕하세요! 오늘은 맛있는 요리를 만들어볼게요. 먼저 재료를 준비해주세요...'"
                 rows={6}
                 resize="none"
-                disabled={disabled}
+                disabled={disabled || selectedMode === "shorts_mode"} // ✅ 쇼츠 모드에서 비활성화
                 maxLength={15000}
                 style={{
                   ...styles.textareaContainer,
