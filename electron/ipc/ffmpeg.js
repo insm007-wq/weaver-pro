@@ -1796,9 +1796,14 @@ exit $?`;
     // 현재 프로세스 저장 (취소용)
     currentFfmpegProcess = proc;
 
-    let out = "",
-      err = "",
-      completed = false;
+    // ✅ 배열 버퍼링 (메모리 누수 방지)
+    const outChunks = [];
+    const errChunks = [];
+    let outLength = 0;
+    let errLength = 0;
+    const MAX_BUFFER = 100000; // 100KB까지만 보관
+
+    let completed = false;
     let totalDurationSec = null; // 전체 비디오 지속시간 (진행률 계산용)
     const timer = setTimeout(() => {
       if (!completed) {
@@ -1810,14 +1815,25 @@ exit $?`;
     }, timeoutMs);
 
     proc.stdout.on("data", (d) => {
-      out += d.toString();
-      if (out.length > 10000) out = out.slice(-5000);
+      const chunk = d.toString();
+      outChunks.push(chunk);
+      outLength += chunk.length;
+      while (outLength > MAX_BUFFER && outChunks.length > 0) {
+        const removed = outChunks.shift();
+        outLength -= removed.length;
+      }
     });
 
     proc.stderr.on("data", (d) => {
-      const s = d.toString();
-      err += s;
-      if (err.length > 10000) err = err.slice(-5000);
+      const chunk = d.toString();
+      errChunks.push(chunk);
+      errLength += chunk.length;
+      while (errLength > MAX_BUFFER && errChunks.length > 0) {
+        const removed = errChunks.shift();
+        errLength -= removed.length;
+      }
+
+      const s = chunk;  // 현재 chunk만 사용
       if (progressCallback) {
         // Duration 추출 (한 번만)
         if (!totalDurationSec) {
@@ -1861,6 +1877,10 @@ exit $?`;
       if (currentFfmpegProcess === proc) {
         currentFfmpegProcess = null;
       }
+
+      // ✅ 버퍼 결합
+      const out = outChunks.join("");
+      const err = errChunks.join("");
 
       // ✅ FFmpeg 종료 코드 로깅 (스크립트 실행)
       console.log(`[FFmpeg Exit Code (script): ${code}]`);
@@ -1927,9 +1947,14 @@ function runFFmpegDirect(args, progressCallback, isCheck) {
       currentFfmpegProcess = proc;
     }
 
-    let out = "",
-      err = "",
-      completed = false;
+    // ✅ 배열 버퍼링 (메모리 누수 방지)
+    const outChunks = [];
+    const errChunks = [];
+    let outLength = 0;
+    let errLength = 0;
+    const MAX_BUFFER = 100000; // 100KB까지만 보관
+
+    let completed = false;
     let totalDurationSec = null; // 전체 비디오 지속시간 (진행률 계산용)
     const timer = setTimeout(() => {
       if (!completed) {
@@ -1941,13 +1966,24 @@ function runFFmpegDirect(args, progressCallback, isCheck) {
     }, timeoutMs);
 
     proc.stdout.on("data", (d) => {
-      out += d.toString();
-      if (out.length > 10000) out = out.slice(-5000);
+      const chunk = d.toString();
+      outChunks.push(chunk);
+      outLength += chunk.length;
+      while (outLength > MAX_BUFFER && outChunks.length > 0) {
+        const removed = outChunks.shift();
+        outLength -= removed.length;
+      }
     });
     proc.stderr.on("data", (d) => {
-      const s = d.toString();
-      err += s;
-      if (err.length > 10000) err = err.slice(-5000);
+      const chunk = d.toString();
+      errChunks.push(chunk);
+      errLength += chunk.length;
+      while (errLength > MAX_BUFFER && errChunks.length > 0) {
+        const removed = errChunks.shift();
+        errLength -= removed.length;
+      }
+
+      const s = chunk;  // 현재 chunk만 사용
       if (progressCallback && !isCheck) {
         // Duration 추출 (한 번만)
         if (!totalDurationSec) {
@@ -1990,6 +2026,10 @@ function runFFmpegDirect(args, progressCallback, isCheck) {
       if (currentFfmpegProcess === proc) {
         currentFfmpegProcess = null;
       }
+
+      // ✅ 버퍼 결합
+      const out = outChunks.join("");
+      const err = errChunks.join("");
 
       // ✅ FFmpeg 종료 코드와 stderr 로깅 (모든 경우)
       console.log(`[FFmpeg Exit Code: ${code}]`);
