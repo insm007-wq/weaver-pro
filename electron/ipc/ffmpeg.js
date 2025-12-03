@@ -809,34 +809,54 @@ function register() {
       isExportCancelled = false;
       currentFfmpegProcess = null;
 
-      // videoSaveFolder 가져오기 (폴백 로직 포함)
-      let videoSaveFolder = store.get("videoSaveFolder");
+      // ✅ Race condition 해결: Project 설정이 완전히 저장되었는지 확인
+      const store = require('../services/store');
+      const { getProjectManager } = require('../services/projectManager');
+      const currentProjectId = store.getCurrentProjectId();
 
-      // 폴더가 설정되지 않았으면 기본값 사용
-      if (!videoSaveFolder) {
-        const os = require("os");
-        const homeDir = os.homedir();
-
-        // Windows: Documents/Weaver Pro, Mac/Linux: ~/Weaver Pro
-        const defaultFolder = process.platform === "win32"
-          ? path.join(homeDir, "Documents", "Weaver Pro")
-          : path.join(homeDir, "Weaver Pro");
-
-        videoSaveFolder = defaultFolder;
-        console.warn(`⚠️ videoSaveFolder이 설정되지 않았습니다. 기본값 사용: ${videoSaveFolder}`);
-
-        // 설정에 저장
-        try {
-          store.set("videoSaveFolder", videoSaveFolder);
-          console.log(`✅ videoSaveFolder 기본값 저장됨: ${videoSaveFolder}`);
-        } catch (error) {
-          console.warn(`⚠️ videoSaveFolder 저장 실패: ${error.message}`);
-        }
+      if (!currentProjectId) {
+        throw new Error('❌ 현재 프로젝트가 설정되지 않았습니다. 프로젝트를 먼저 선택해주세요.');
       }
 
-      // output 폴더 생성
-      const outputFolder = path.join(videoSaveFolder, "output");
-      await fsp.mkdir(outputFolder, { recursive: true });
+      const projectManager = getProjectManager();
+      const ensured = await projectManager.ensureProjectSettingsSaved(currentProjectId, 3000);
+      if (!ensured) {
+        console.warn(`⚠️ video:export - 프로젝트 설정 로드 대기 실패: ${currentProjectId}`);
+      }
+
+      // ✅ projectManager를 통한 중앙화된 경로 관리
+      let audioFolder = null;
+      let outputFolder = null;
+
+      try {
+        // output 폴더 경로 가져오기 (projectManager 사용)
+        outputFolder = await projectManager.getProjectPath('output', {
+          autoCreate: true,
+          ensureSync: false,  // 이미 ensureProjectSettingsSaved 했으므로
+          timeout: 3000
+        });
+        console.log(`📁 Output 폴더: ${outputFolder}`);
+      } catch (error) {
+        console.error(`❌ output 폴더 경로 조회 실패: ${error.message}`);
+        throw error;
+      }
+
+      try {
+        // audio 폴더 경로 가져오기 (projectManager 사용)
+        const audioBasePath = await projectManager.getProjectPath('audio', {
+          autoCreate: true,
+          ensureSync: false,
+          timeout: 3000
+        });
+        // TTS 오디오는 audio/parts 하위폴더에 있음
+        audioFolder = path.join(audioBasePath, 'parts');
+        // audio/parts 폴더 자동 생성
+        await fsp.mkdir(audioFolder, { recursive: true });
+        console.log(`📁 Audio 폴더: ${audioFolder}`);
+      } catch (error) {
+        console.error(`❌ audio 폴더 경로 조회 실패: ${error.message}`);
+        throw error;
+      }
 
       // ✅ output 폴더의 기존 파일 삭제 (새 내보내기 시 깔끔하게)
       try {
@@ -861,8 +881,6 @@ function register() {
       const srtPath = path.join(outputFolder, `subtitle_${timestamp}.srt`);
       await generateSrtFromScenes(scenes, srtPath);
 
-      // 개별 TTS 오디오 파일 경로 구성
-      const audioFolder = path.join(videoSaveFolder, "audio", "parts");
       const audioFiles = [];
       let totalAudioDurationMs = 0;
 
