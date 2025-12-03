@@ -29,10 +29,10 @@ const fsp = require("fs").promises;
 
 // 타임아웃 설정 (밀리초)
 const TIMEOUTS = {
-  FFMPEG_CHECK: 10000,              // FFmpeg 설치 확인
-  VIDEO_ENCODE: 15 * 60 * 1000,     // 비디오 인코딩 (15분)
-  CLIP_GENERATION: 30000,           // 단일 클립 생성 (30초)
-  DEFAULT_SCENE_DURATION: 3000,     // 기본 씬 지속시간 (3초)
+  FFMPEG_CHECK: 10000, // FFmpeg 설치 확인
+  VIDEO_ENCODE: 15 * 60 * 1000, // 비디오 인코딩 (15분)
+  CLIP_GENERATION: 30000, // 단일 클립 생성 (30초)
+  DEFAULT_SCENE_DURATION: 3000, // 기본 씬 지속시간 (3초)
 };
 
 // 비디오 사양
@@ -40,8 +40,8 @@ const VIDEO_SPECS = {
   WIDTH: 1920,
   HEIGHT: 1080,
   DEFAULT_FPS: 24,
-  DEFAULT_CRF: 23,                  // 기본 품질 설정
-  MIN_CLIP_DURATION: 0.25,          // 최소 클립 지속시간
+  DEFAULT_CRF: 23, // 기본 품질 설정
+  MIN_CLIP_DURATION: 0.25, // 최소 클립 지속시간
 };
 
 // 이미지 팬 효과 설정
@@ -57,18 +57,18 @@ const IMAGE_PAN = {
 
 // 자막 텍스트 분할 설정
 const TEXT_SPLIT_SETTINGS = {
-  CHAR_WIDTH_RATIO: 0.72,           // fontSize * 0.72 = 픽셀 너비
-  MAX_WIDTH_PERCENT: 0.85,          // 1920 * 0.85 = 1632px
+  CHAR_WIDTH_RATIO: 0.72, // fontSize * 0.72 = 픽셀 너비
+  MAX_WIDTH_PERCENT: 0.85, // 1920 * 0.85 = 1632px
   MAX_WIDTH_PX: 1632,
-  MIN_SHORT_TEXT: 20,               // 이 이상이면 분할 고려
-  MAX_SEARCH_RANGE_RATIO: 0.2,      // 목표 길이의 ±20% 범위 검색
+  MIN_SHORT_TEXT: 20, // 이 이상이면 분할 고려
+  MAX_SEARCH_RANGE_RATIO: 0.2, // 목표 길이의 ±20% 범위 검색
 };
 
 // 오디오 인코딩 설정
 const AUDIO_ENCODE = {
-  CODEC: 'aac',
-  BITRATE: '128k',
-  SAMPLE_RATE: '48000',
+  CODEC: "aac",
+  BITRATE: "128k",
+  SAMPLE_RATE: "48000",
   CHANNELS: 2,
 };
 
@@ -82,10 +82,10 @@ const QUALITY_PRESETS = {
 
 // 버퍼 및 메모리 설정
 const BUFFER_LIMITS = {
-  STDERR_MAX: 10000,                // 최대 stderr 버퍼 크기
-  STDERR_TRIM: 5000,                // 트림 이후 유지할 크기
-  FILTER_COMPLEX_MAX: 3000,         // 필터 복잡도 최대값
-  COMMAND_LENGTH_THRESHOLD: 6000,   // 셸 스크립트 사용 임계값
+  STDERR_MAX: 10000, // 최대 stderr 버퍼 크기
+  STDERR_TRIM: 5000, // 트림 이후 유지할 크기
+  FILTER_COMPLEX_MAX: 3000, // 필터 복잡도 최대값
+  COMMAND_LENGTH_THRESHOLD: 6000, // 셸 스크립트 사용 임계값
 };
 
 // 임시 파일 접두사
@@ -107,7 +107,7 @@ const SCRIPT_SETTINGS = {
   WINDOWS_EXT: "bat",
   UNIX_EXT: "sh",
   UNIX_PERMISSION: 0o755,
-  WINDOWS_CHARSET: 65001,           // UTF-8
+  WINDOWS_CHARSET: 65001, // UTF-8
 };
 
 // 진행률 보고 범위
@@ -118,7 +118,7 @@ const PROGRESS_RANGES = {
 };
 
 // 로그 레벨
-const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+const LOG_LEVEL = process.env.LOG_LEVEL || "info";
 const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
 
 // ============================================================================
@@ -138,18 +138,18 @@ function log(level, message, data = {}) {
   const context = {
     timestamp,
     level,
-    module: 'ffmpeg',
+    module: "ffmpeg",
     message,
-    ...data
+    ...data,
   };
 
   // 프로덕션 환경에서는 구조화된 JSON 로그만 출력
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV === "production") {
     console.log(JSON.stringify(context));
   } else {
     // 개발 환경에서는 읽기 좋은 형식으로 출력
-    const prefix = { error: '❌', warn: '⚠️', info: 'ℹ️', debug: '🔍' }[level];
-    console.log(`${prefix} [${level.toUpperCase()}] ${message}`, Object.keys(data).length > 0 ? data : '');
+    const prefix = { error: "❌", warn: "⚠️", info: "ℹ️", debug: "🔍" }[level];
+    console.log(`${prefix} [${level.toUpperCase()}] ${message}`, Object.keys(data).length > 0 ? data : "");
   }
 }
 
@@ -160,7 +160,10 @@ function splitBalancedLines(text = "", maxLines = 2, fontSize = 52) {
   const clean = text.replace(/\s+/g, " ").trim();
 
   if (text.includes("\n")) {
-    const lines = text.split("\n").map(line => line.trim()).filter(line => line);
+    const lines = text
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line);
     return lines.slice(0, maxLines);
   }
 
@@ -230,7 +233,7 @@ function splitBalancedLines(text = "", maxLines = 2, fontSize = 52) {
     remaining = remaining.slice(cut).trim();
   }
 
-  return lines.filter(line => line);
+  return lines.filter((line) => line);
 }
 
 // store를 안전하게 로드
@@ -238,7 +241,7 @@ let store = null;
 try {
   store = require("../services/store");
 } catch (error) {
-  log('warn', 'store 로드 실패', { error: error.message });
+  log("warn", "store 로드 실패", { error: error.message });
   store = { get: (key, def) => def, set: () => {} };
 }
 
@@ -451,29 +454,23 @@ function createDrawtextFilterAdvanced(subtitle, settings, textFilePath, videoWid
     roboto: path.join(fontDir, "Roboto-Regular.ttf"),
   };
 
-  let fontFile = fontMap[fontFamily] || fontMap["malgun-gothic"];
+  let fontFile = null;
 
-  // 폰트 파일 존재 확인 및 fallback
-  if (!fs.existsSync(fontFile)) {
-    console.warn(`⚠️ 폰트 파일을 찾을 수 없음: ${fontFile}`);
+  // 폰트 파일 존재 확인
+  const fontCandidates = [fontMap[fontFamily], fontMap["malgun-gothic"], fontMap["arial"]];
 
-    // Fallback 1: malgun.ttf
-    fontFile = fontMap["malgun-gothic"];
-    if (!fs.existsSync(fontFile)) {
-      console.warn(`⚠️ Malgun Gothic 폰트를 찾을 수 없음: ${fontFile}`);
-
-      // Fallback 2: arial.ttf (대부분의 Windows 시스템에 존재)
-      fontFile = fontMap["arial"];
-      if (!fs.existsSync(fontFile)) {
-        console.warn(`⚠️ Arial 폰트를 찾을 수 없음: ${fontFile}`);
-        // 경고만 하고 진행 (FFmpeg 기본 폰트 사용)
-        fontFile = "Arial"; // FFmpeg 내장 폰트 이름 사용
-      }
+  for (const candidate of fontCandidates) {
+    if (candidate && fs.existsSync(candidate)) {
+      fontFile = candidate;
+      break;
     }
   }
 
-  // FFmpeg용 경로 변환 (이스케이프 처리)
-  fontFile = fontFile.replace(/\\/g, "/").replace(/:/g, "\\:");
+  // 폰트 파일이 없으면 null (FFmpeg 기본값 사용)
+  if (fontFile) {
+    // FFmpeg용 경로 변환 (이스케이프 처리)
+    fontFile = fontFile.replace(/\\/g, "/").replace(/:/g, "\\:");
+  }
 
   // textFilePath가 전달된 경우 textfile 사용 (줄바꿈 자동 지원)
   const useTextFile = textFilePath !== null && textFilePath !== undefined;
@@ -550,9 +547,14 @@ function createDrawtextFilterAdvanced(subtitle, settings, textFilePath, videoWid
   if (useTextFile) {
     const escapedTextFile = textFilePath.replace(/\\/g, "/").replace(/:/g, "\\:");
 
-    const filter =
-      `drawtext=textfile='${escapedTextFile}'` +
-      `:fontfile='${fontFile}'` +
+    let filter = `drawtext=textfile='${escapedTextFile}'`;
+
+    // 폰트 파일이 있을 때만 포함
+    if (fontFile) {
+      filter += `:fontfile='${fontFile}'`;
+    }
+
+    filter +=
       `:fontsize=${fontSize}` +
       `:fontcolor=${textColorFFmpeg}` +
       `:x=${xExpr}` +
@@ -599,9 +601,14 @@ function createDrawtextFilterAdvanced(subtitle, settings, textFilePath, videoWid
       lineYExpr = `(h-${totalTextHeight})/2+${i * Math.round(fontSize * lineHeight)}`;
     }
 
-    const filter =
-      `drawtext=text='${escapedLine}'` +
-      `:fontfile='${fontFile}'` +
+    let filter = `drawtext=text='${escapedLine}'`;
+
+    // 폰트 파일이 있을 때만 포함
+    if (fontFile) {
+      filter += `:fontfile='${fontFile}'`;
+    }
+
+    filter +=
       `:fontsize=${fontSize}` +
       `:fontcolor=${textColorFFmpeg}` +
       `:x=${xExpr}` +
@@ -638,7 +645,7 @@ async function getAudioDuration(filePath) {
 
     return duration;
   } catch (error) {
-    log('error', '음성 파일 길이 가져오기 실패', { filePath, error: error.message });
+    log("error", "음성 파일 길이 가져오기 실패", { filePath, error: error.message });
     throw error;
   }
 }
@@ -653,7 +660,7 @@ try {
     ffmpegPath = ffmpegPath.replace("app.asar", "app.asar.unpacked");
   }
 } catch (err) {
-  log('error', 'ffmpeg-static 로드 실패, 폴백 사용', { error: err.message });
+  log("error", "ffmpeg-static 로드 실패, 폴백 사용", { error: err.message });
   // 폴백: 하드코딩된 경로 (unpacked 사용)
   const appPath = app.getAppPath();
   if (appPath.includes("app.asar")) {
@@ -722,7 +729,7 @@ async function probeDurationSecCached(filePath) {
   // 캐시 저장
   durationCache.set(filePath, {
     duration,
-    timestamp: Date.now()
+    timestamp: Date.now(),
   });
 
   return duration;
@@ -737,7 +744,7 @@ function createProcessContext(processId) {
   return {
     process: null,
     isCancelled: false,
-    createdAt: Date.now()
+    createdAt: Date.now(),
   };
 }
 
@@ -784,14 +791,14 @@ async function killProcessSafely(proc, timeout = 5000) {
       resolve(true);
     };
 
-    proc.once('exit', onExit);
-    proc.once('close', onExit);
+    proc.once("exit", onExit);
+    proc.once("close", onExit);
 
     // SIGTERM으로 정상 종료 시도
     try {
-      proc.kill('SIGTERM');
+      proc.kill("SIGTERM");
     } catch (error) {
-      console.warn('SIGTERM 전송 실패:', error.message);
+      console.warn("SIGTERM 전송 실패:", error.message);
       resolve(false);
       return;
     }
@@ -800,10 +807,10 @@ async function killProcessSafely(proc, timeout = 5000) {
     setTimeout(() => {
       if (!killed) {
         try {
-          proc.kill('SIGKILL');
-          console.warn('SIGKILL 강제 종료 실행');
+          proc.kill("SIGKILL");
+          console.warn("SIGKILL 강제 종료 실행");
         } catch (error) {
-          console.warn('SIGKILL 전송 실패:', error.message);
+          console.warn("SIGKILL 전송 실패:", error.message);
         }
 
         // SIGKILL 후 1초 더 대기
@@ -828,11 +835,7 @@ async function killProcessSafely(proc, timeout = 5000) {
  * @returns {Promise<{stdout, stderr, exitCode}>}
  */
 async function spawnFFmpegWithMonitoring(args, options = {}) {
-  const {
-    timeout = 30000,
-    onProgress = null,
-    processId = null
-  } = options;
+  const { timeout = 30000, onProgress = null, processId = null } = options;
 
   const ffmpegPath = getFfmpegPath();
   const proc = spawn(ffmpegPath, args, { windowsHide: true });
@@ -851,7 +854,7 @@ async function spawnFFmpegWithMonitoring(args, options = {}) {
   const MAX_BUFFER_LENGTH = 50000;
 
   // stdout 수집
-  proc.stdout.on('data', (data) => {
+  proc.stdout.on("data", (data) => {
     const chunk = data.toString();
     stdoutChunks.push(chunk);
     stdoutLength += chunk.length;
@@ -863,7 +866,7 @@ async function spawnFFmpegWithMonitoring(args, options = {}) {
   });
 
   // stderr 수집 및 진행률 파싱
-  proc.stderr.on('data', (data) => {
+  proc.stderr.on("data", (data) => {
     const chunk = data.toString();
     stderrChunks.push(chunk);
     stderrLength += chunk.length;
@@ -901,19 +904,19 @@ async function spawnFFmpegWithMonitoring(args, options = {}) {
         if (context.isCancelled) {
           clearInterval(cancelCheckInterval);
           killProcessSafely(proc).then(() => {
-            reject(new Error('사용자에 의해 취소됨'));
+            reject(new Error("사용자에 의해 취소됨"));
           });
         }
       }, 500);
     }
 
     // ✅ 프로세스 종료 처리
-    proc.on('close', (code) => {
+    proc.on("close", (code) => {
       clearTimeout(timer);
       if (cancelCheckInterval) clearInterval(cancelCheckInterval);
 
-      const stdout = stdoutChunks.join('');
-      const stderr = stderrChunks.join('');
+      const stdout = stdoutChunks.join("");
+      const stderr = stderrChunks.join("");
 
       if (processId) {
         cleanupProcessContext(processId);
@@ -926,7 +929,7 @@ async function spawnFFmpegWithMonitoring(args, options = {}) {
       }
     });
 
-    proc.on('error', (error) => {
+    proc.on("error", (error) => {
       clearTimeout(timer);
       if (cancelCheckInterval) clearInterval(cancelCheckInterval);
       if (processId) cleanupProcessContext(processId);
@@ -999,7 +1002,7 @@ function register() {
           throw new Error(result.error || "FFmpeg compose failed");
         }
       } catch (error) {
-        log('error', 'FFmpeg 영상 합성 실패', { error: error.message, stack: error.stack });
+        log("error", "FFmpeg 영상 합성 실패", { error: error.message, stack: error.stack });
         return { success: false, message: error.message, error: error.toString() };
       }
     }
@@ -1070,12 +1073,12 @@ function register() {
       currentFfmpegProcess = null;
 
       // ✅ Race condition 해결: Project 설정이 완전히 저장되었는지 확인
-      const store = require('../services/store');
-      const { getProjectManager } = require('../services/projectManager');
+      const store = require("../services/store");
+      const { getProjectManager } = require("../services/projectManager");
       const currentProjectId = store.getCurrentProjectId();
 
       if (!currentProjectId) {
-        throw new Error('❌ 현재 프로젝트가 설정되지 않았습니다. 프로젝트를 먼저 선택해주세요.');
+        throw new Error("❌ 현재 프로젝트가 설정되지 않았습니다. 프로젝트를 먼저 선택해주세요.");
       }
 
       const projectManager = getProjectManager();
@@ -1090,10 +1093,10 @@ function register() {
 
       try {
         // output 폴더 경로 가져오기 (projectManager 사용)
-        outputFolder = await projectManager.getProjectPath('output', {
+        outputFolder = await projectManager.getProjectPath("output", {
           autoCreate: true,
-          ensureSync: false,  // 이미 ensureProjectSettingsSaved 했으므로
-          timeout: 3000
+          ensureSync: false, // 이미 ensureProjectSettingsSaved 했으므로
+          timeout: 3000,
         });
         console.log(`📁 Output 폴더: ${outputFolder}`);
       } catch (error) {
@@ -1103,13 +1106,13 @@ function register() {
 
       try {
         // audio 폴더 경로 가져오기 (projectManager 사용)
-        const audioBasePath = await projectManager.getProjectPath('audio', {
+        const audioBasePath = await projectManager.getProjectPath("audio", {
           autoCreate: true,
           ensureSync: false,
-          timeout: 3000
+          timeout: 3000,
         });
         // TTS 오디오는 audio/parts 하위폴더에 있음
-        audioFolder = path.join(audioBasePath, 'parts');
+        audioFolder = path.join(audioBasePath, "parts");
         // audio/parts 폴더 자동 생성
         await fsp.mkdir(audioFolder, { recursive: true });
         console.log(`📁 Audio 폴더: ${audioFolder}`);
@@ -1171,13 +1174,11 @@ function register() {
 
       // 오디오 파일 누락 시 명확한 오류 메시지
       if (missingAudioFiles.length > 0) {
-        const errorDetails = missingAudioFiles
-          .map(f => `- 씬 ${f.sceneNum}: ${f.fileName}`)
-          .join('\n');
+        const errorDetails = missingAudioFiles.map((f) => `- 씬 ${f.sceneNum}: ${f.fileName}`).join("\n");
         throw new Error(
           `TTS 오디오 파일이 완전히 생성되지 않았습니다.\n\n` +
-          `누락된 파일 (${missingAudioFiles.length}개):\n${errorDetails}\n\n` +
-          `대본 생성이 중단되었을 수 있습니다. 대본을 다시 생성해주세요.`
+            `누락된 파일 (${missingAudioFiles.length}개):\n${errorDetails}\n\n` +
+            `대본 생성이 중단되었을 수 있습니다. 대본을 다시 생성해주세요.`
         );
       }
 
@@ -1333,7 +1334,9 @@ async function runConcurrent(tasks, concurrency = 3) {
 
   // 동시에 실행할 worker 수: concurrency 개수 또는 tasks 수, 둘 중 작은 값
   const workerCount = Math.min(concurrency, tasks.length);
-  const workers = Array(workerCount).fill(null).map(() => worker());
+  const workers = Array(workerCount)
+    .fill(null)
+    .map(() => worker());
 
   await Promise.all(workers);
   return results;
@@ -1341,7 +1344,7 @@ async function runConcurrent(tasks, concurrency = 3) {
 
 // ✅ 병렬로 여러 파일 삭제
 async function deleteFilesParallel(filePaths, concurrency = 5) {
-  const tasks = filePaths.map(filePath => async () => {
+  const tasks = filePaths.map((filePath) => async () => {
     try {
       await fsp.unlink(filePath);
       return { filePath, success: true };
@@ -1357,23 +1360,41 @@ async function deleteFilesParallel(filePaths, concurrency = 5) {
 // ----------------------------------------------------------------------------
 // 임시 파일 정리 함수
 // ----------------------------------------------------------------------------
+/**
+ * 임시 파일 정리 (병렬 삭제)
+ * @param {string} tempDir - 임시 디렉토리 경로
+ */
 async function cleanupTempFiles(tempDir) {
   try {
     const files = await fsp.readdir(tempDir);
-    let deletedCount = 0;
 
-    for (const file of files) {
-      if (file.startsWith("concat_") || file.startsWith("clip_") || file.startsWith("scene_")) {
-        try {
-          await fsp.unlink(path.join(tempDir, file));
-          deletedCount++;
-        } catch (error) {
-          console.warn(`임시 파일 삭제 실패: ${file}`);
-        }
-      }
+    // 삭제할 파일 필터링
+    const filesToDelete = files.filter(
+      (file) => file.startsWith("concat_") || file.startsWith("clip_") || file.startsWith("scene_")
+    );
+
+    if (filesToDelete.length === 0) {
+      return; // 삭제할 파일이 없음
     }
+
+    // ✅ 병렬 삭제 (Promise.all 사용)
+    const deletePromises = filesToDelete.map(async (file) => {
+      const filePath = path.join(tempDir, file);
+      try {
+        const stat = await fsp.stat(filePath);
+        if (stat.isFile()) {
+          await fsp.unlink(filePath);
+        }
+      } catch (error) {
+        // 개별 파일 삭제 실패는 무시하고 계속 진행
+        console.warn(`파일 삭제 실패: ${file} (${error.message})`);
+      }
+    });
+
+    await Promise.all(deletePromises);
+    console.log(`🗑️ 임시 파일 정리 완료: ${filesToDelete.length}개 파일 삭제`);
   } catch (error) {
-    console.warn(`임시 파일 정리 중 오류:`, error.message);
+    console.warn(`임시 파일 정리 중 오류: ${error.message}`);
   }
 }
 
@@ -1450,19 +1471,32 @@ async function generateImageClips(imageFiles, perSceneMs, tempDir, options, onMa
     const vfChain = `scale=2496:1404:force_original_aspect_ratio=decrease,pad=2496:1404:(ow-iw)/2:(oh-ih)/2,crop=1920:1080:288:'max(0,${panHeight}-${panPerFrame}*n)',setsar=1,format=yuv420p`;
 
     const clipArgs = [
-      "-y", "-hide_banner",
-      "-framerate", "24",
-      "-loop", "1",
-      "-i", img,
-      "-t", durSec.toFixed(3),
-      "-vf", vfChain,
-      "-c:v", "libx264",
-      "-preset", "veryfast",
-      "-crf", String(options.crf ?? 23),
-      "-r", String(options.fps ?? 24),
-      "-pix_fmt", "yuv420p",
-      "-avoid_negative_ts", "make_zero",
-      "-fflags", "+genpts+discardcorrupt",
+      "-y",
+      "-hide_banner",
+      "-framerate",
+      "24",
+      "-loop",
+      "1",
+      "-i",
+      img,
+      "-t",
+      durSec.toFixed(3),
+      "-vf",
+      vfChain,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      String(options.crf ?? 23),
+      "-r",
+      String(options.fps ?? 24),
+      "-pix_fmt",
+      "yuv420p",
+      "-avoid_negative_ts",
+      "make_zero",
+      "-fflags",
+      "+genpts+discardcorrupt",
       clipOut,
     ];
 
@@ -1473,7 +1507,7 @@ async function generateImageClips(imageFiles, perSceneMs, tempDir, options, onMa
     try {
       await spawnFFmpegWithMonitoring(clipArgs, {
         timeout: 30000,
-        processId: `clip-${i}`
+        processId: `clip-${i}`,
       });
 
       const realSec = await probeDurationSec(clipOut);
@@ -1506,13 +1540,13 @@ function setupSceneDurations(imageCount, totalAudioMs, sceneDurationsMs) {
 
 // ✅ FFmpeg 명령어 구성 (클립 생성 후 concat args만 반환)
 async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitlePath, sceneDurationsMs, options, onMakeClipProgress }) {
-  console.log(`\n${'='.repeat(80)}`);
+  console.log(`\n${"=".repeat(80)}`);
   console.log(`[FFmpeg] Building command`);
   console.log(`   Images: ${imageFiles?.length || 0}`);
   console.log(`   Audio files: ${audioFiles?.length || 0}`);
   console.log(`   Output: ${outputPath}`);
-  console.log(`   Subtitle: ${subtitlePath || 'none'}`);
-  console.log(`${'='.repeat(80)}\n`);
+  console.log(`   Subtitle: ${subtitlePath || "none"}`);
+  console.log(`${"=".repeat(80)}\n`);
 
   let tempDir;
   try {
@@ -1549,13 +1583,7 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
   const perSceneMs = setupSceneDurations(imageFiles.length, totalAudioMs, sceneDurationsMs);
 
   // 4️⃣ 클립 생성
-  const { videoClips, totalVideoSec } = await generateImageClips(
-    imageFiles,
-    perSceneMs,
-    tempDir,
-    options,
-    onMakeClipProgress
-  );
+  const { videoClips, totalVideoSec } = await generateImageClips(imageFiles, perSceneMs, tempDir, options, onMakeClipProgress);
 
   // ✅ tpad 제거: 각 씬이 정확한 길이로 생성되므로 불필요
   if (totalVideoSec < totalAudioSec - 0.5) {
@@ -1622,12 +1650,12 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
   }
 
   // ✅ Final concat command logging
-  console.log(`\n${'='.repeat(80)}`);
+  console.log(`\n${"=".repeat(80)}`);
   console.log(`[FFmpeg] Final concat command`);
   console.log(`   Input clips: ${videoClips.length}`);
   console.log(`   Filter_complex length: ${filterComplex.length} chars`);
   console.log(`\n[Filter_complex]:\n${filterComplex}\n`);
-  console.log(`${'='.repeat(80)}\n`);
+  console.log(`${"=".repeat(80)}\n`);
 
   // ✅ filter_complex가 길면 파일로 저장
   if (filterComplex.length > 3000) {
@@ -1704,30 +1732,29 @@ function runFFmpegViaShellScript(args, progressCallback = null) {
     if (isWindows) {
       // Windows: .bat 파일
       // 배치 파일에서 안전한 이스케이프
-      const escapedArgs = args.map(arg => {
+      const escapedArgs = args.map((arg) => {
         // %를 %%로 변환 (배치 파일에서 변수로 해석되지 않도록)
         let escaped = arg.replace(/%/g, "%%");
         // 큰따옴표를 이스케이프
         escaped = escaped.replace(/"/g, '""');
 
-        // ✅ 모든 인자를 기본적으로 큰따옴표로 감싸기 (경로 안전성)
-        // 특히 공백이나 특수문자가 있을 때 필수
+        // 모든 인자를 기본적으로 큰따옴표로 감싸기 (경로 안전성)
         return `"${escaped}"`;
       });
 
-      // setlocal DisableDelayedExpansion으로 !도 안전하게 처리
       // 각 인자를 별도 줄로 분리 (^ 사용하여 줄바꿈)
-      // 마지막 인자만 ^ 없이 종료
-      const argsLines = escapedArgs.map((arg, i) => {
-        if (i === escapedArgs.length - 1) {
-          return `  ${arg}`;
-        }
-        return `  ${arg} ^`;
-      }).join("\n");
+      const argsLines = escapedArgs
+        .map((arg, i) => {
+          if (i === escapedArgs.length - 1) {
+            return `  ${arg}`;
+          }
+          return `  ${arg} ^`;
+        })
+        .join("\n");
 
+      // 한글 로그 제거 (UTF-8 호환성 문제)
       scriptContent = `@echo off
 setlocal DisableDelayedExpansion
-chcp 65001 >nul 2>&1 ^
 "${ffmpegPath}" ^
 ${argsLines}
 endlocal
@@ -1739,26 +1766,24 @@ exit /b %ERRORLEVEL%`;
       // Mac/Linux: .sh 파일
       // 인자를 쉘 이스케이프
       const escapeForShell = (arg) => {
-        return arg
-          .replace(/\\/g, "\\\\")
-          .replace(/"/g, '\\"')
-          .replace(/\$/g, "\\$")
-          .replace(/`/g, "\\`");
+        return arg.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\$/g, "\\$").replace(/`/g, "\\`");
       };
 
-      const escapedArgs = args.map(arg => {
+      const escapedArgs = args.map((arg) => {
         const escaped = escapeForShell(arg);
         return `"${escaped}"`;
       });
 
       // 각 인자를 별도 줄로 분리 (\ 사용하여 줄바꿈)
       // 마지막 인자만 \ 없이 종료
-      const argsLines = escapedArgs.map((arg, i) => {
-        if (i === escapedArgs.length - 1) {
-          return `  ${arg}`;
-        }
-        return `  ${arg} \\`;
-      }).join("\n");
+      const argsLines = escapedArgs
+        .map((arg, i) => {
+          if (i === escapedArgs.length - 1) {
+            return `  ${arg}`;
+          }
+          return `  ${arg} \\`;
+        })
+        .join("\n");
 
       scriptContent = `#!/bin/sh
 "${ffmpegPath}" \\
@@ -1771,8 +1796,8 @@ exit $?`;
 
     try {
       // 스크립트 파일 작성
-      // Windows: UTF-16LE (배치 파일 기본 인코딩), Mac/Linux: UTF-8
-      const encoding = isWindows ? "utf16le" : "utf8";
+      // Windows: UTF-8 (UTF-16LE는 한글 로깅 깨짐), Mac/Linux: UTF-8
+      const encoding = "utf8";
       await fsp.writeFile(scriptPath, scriptContent, encoding);
 
       // Mac/Linux는 실행 권한 부여
@@ -1780,11 +1805,16 @@ exit $?`;
         await fsp.chmod(scriptPath, 0o755);
       }
 
-      // ✅ FFmpeg script execution logging (English only)
-      console.log(`\n${'='.repeat(80)}`);
-      console.log(`[FFmpeg] Running script: ${scriptPath}`);
-      console.log(`\n[Script Content]:\n${scriptContent}\n`);
-      console.log(`${'='.repeat(80)}\n`);
+      // 스크립트 파일 검증
+      if (!fs.existsSync(scriptPath)) {
+        throw new Error(`배치 스크립트 생성 실패: ${scriptPath}`);
+      }
+
+      // 배치 파일 검증 (오류만 출력)
+      const batchSize = fs.statSync(scriptPath).size;
+      if (batchSize === 0) {
+        throw new Error(`배치 파일이 비어있습니다: ${scriptPath}`);
+      }
     } catch (error) {
       console.error("❌ 스크립트 파일 생성 실패:", error);
       return resolve({ success: false, error: `스크립트 파일 생성 실패: ${error.message}` });
@@ -1833,7 +1863,7 @@ exit $?`;
         errLength -= removed.length;
       }
 
-      const s = chunk;  // 현재 chunk만 사용
+      const s = chunk; // 현재 chunk만 사용
       if (progressCallback) {
         // Duration 추출 (한 번만)
         if (!totalDurationSec) {
@@ -1882,12 +1912,19 @@ exit $?`;
       const out = outChunks.join("");
       const err = errChunks.join("");
 
-      // ✅ FFmpeg 종료 코드 로깅 (스크립트 실행)
-      console.log(`[FFmpeg Exit Code (script): ${code}]`);
-      if (code === 0 || err.length > 100) {
-        console.log(`\n=== FFmpeg stderr (${err.length} chars) ===`);
-        console.log(err);
-        console.log(`=== stderr end ===\n`);
+      // 오류 로그만 필터링
+      const errorLines = err
+        .split("\n")
+        .filter(
+          (line) => line.toLowerCase().includes("error") || line.toLowerCase().includes("failed") || line.toLowerCase().includes("invalid")
+        );
+
+      if (code !== 0) {
+        console.error(`\n❌ FFmpeg 실패 (code: ${code})`);
+        if (errorLines.length > 0) {
+          console.error(`오류:`);
+          errorLines.forEach((line) => console.error(`  ${line}`));
+        }
       }
 
       // 스크립트 파일 삭제
@@ -1905,7 +1942,7 @@ exit $?`;
         } else {
           console.error(`[ERROR] FFmpeg failed (code: ${code})`);
           console.error(`\n=== FFmpeg stderr (${err.length} chars) ===`);
-          console.error(err);  // Full output
+          console.error(err); // Full output
           console.error(`=== stderr end ===\n`);
           resolve({ success: false, error: err || `FFmpeg exited with code ${code}` });
         }
@@ -1983,7 +2020,7 @@ function runFFmpegDirect(args, progressCallback, isCheck) {
         errLength -= removed.length;
       }
 
-      const s = chunk;  // 현재 chunk만 사용
+      const s = chunk; // 현재 chunk만 사용
       if (progressCallback && !isCheck) {
         // Duration 추출 (한 번만)
         if (!totalDurationSec) {
@@ -2031,24 +2068,25 @@ function runFFmpegDirect(args, progressCallback, isCheck) {
       const out = outChunks.join("");
       const err = errChunks.join("");
 
-      // ✅ FFmpeg 종료 코드와 stderr 로깅 (모든 경우)
-      console.log(`[FFmpeg Exit Code: ${code}]`);
-      if (!isCheck && (code === 0 || err.length > 100)) {
-        console.log(`\n=== FFmpeg stderr (${err.length} chars) ===`);
-        console.log(err);
-        console.log(`=== stderr end ===\n`);
-      }
-
       if (code === 0 || isCheck) {
         resolve({ success: code === 0, output: out || err, duration: extractDuration(err), size: 0 });
       } else {
         if (isExportCancelled) {
           resolve({ success: false, error: "cancelled" });
         } else {
-          console.error(`[ERROR] FFmpeg failed (code: ${code})`);
-          console.error(`\n=== FFmpeg stderr (${err.length} chars) ===`);
-          console.error(err);  // Full output
-          console.error(`=== stderr end ===\n`);
+          // 오류만 필터링
+          const errorLines = err
+            .split("\n")
+            .filter(
+              (line) =>
+                line.toLowerCase().includes("error") || line.toLowerCase().includes("failed") || line.toLowerCase().includes("invalid")
+            );
+
+          console.error(`\n❌ FFmpeg 실패 (code: ${code})`);
+          if (errorLines.length > 0) {
+            console.error(`오류:`);
+            errorLines.forEach((line) => console.error(`  ${line}`));
+          }
           resolve({ success: false, error: err || `FFmpeg exited with code ${code}` });
         }
       }
@@ -2167,13 +2205,9 @@ async function generateSrtFromScenes(scenes, srtPath) {
         ).padStart(3, "0")}`;
       };
 
-      // ✅ 텍스트를 maxLines에 맞게 처리 (프론트엔드와 동일한 로직 사용)
-      // fontSize를 포함해서 전달 (폰트 크기에 따른 픽셀 기반 줄바꿈)
+      // 텍스트를 maxLines에 맞게 처리 (프론트엔드와 동일한 로직 사용)
       let text = scene.text || "";
       const lines = splitBalancedLines(text, subtitleSettings.maxLines, subtitleSettings.fontSize);
-      console.log(`[SRT 생성] 원본 텍스트: "${text}" (${text.length}글자)`);
-      console.log(`[SRT 생성] fontSize: ${subtitleSettings.fontSize}, maxLines: ${subtitleSettings.maxLines}`);
-      console.log(`[SRT 생성] 분할 결과: ${lines.length}줄`, lines);
       text = lines.join("\n");
 
       srtContent += `${i + 1}\n`;
@@ -2191,125 +2225,302 @@ async function generateSrtFromScenes(scenes, srtPath) {
   }
 }
 
-// ✅ 각 씬별 비디오/이미지 클립 생성
-async function generateClips(scenes, mediaFiles, sceneDurationsMs, tempDir, event) {
-  const videoClips = [];
-  const MIN_CLIP_DURATION = 0.25;
-  let totalVideoSec = 0;
+// ============================================================================
+// ⚡ 병렬 작업 실행 유틸리티 (Phase 1: 병렬화)
+// ============================================================================
 
-  for (let i = 0; i < scenes.length; i++) {
-    // 취소 확인
+/**
+ * 동시 실행 수를 제한하면서 여러 비동기 작업을 병렬로 실행
+ * @param {Function[]} tasks - async 함수 배열
+ * @param {number} concurrency - 동시 실행 수 (기본값: 3)
+ * @returns {Promise<any[]>} 결과 배열 (입력 순서대로)
+ */
+async function runConcurrent(tasks, concurrency = 3) {
+  const results = new Array(tasks.length);
+  const executing = [];
+
+  for (let taskIndex = 0; taskIndex < tasks.length; taskIndex++) {
+    // ✅ 취소 확인
     if (isExportCancelled) {
+      // 실행 중인 작업들 완료 대기
+      await Promise.allSettled(executing);
       throw new Error("cancelled");
     }
 
-    const scene = scenes[i];
-    const mediaPath = mediaFiles[i];
-    const durSec = Math.max(MIN_CLIP_DURATION, (sceneDurationsMs[i] || 3000) / 1000);
+    const task = tasks[taskIndex];
+    const promise = Promise.resolve()
+      .then(() => task())
+      .then((result) => {
+        // 결과를 원래 인덱스에 저장
+        results[taskIndex] = result;
+        // 완료된 작업 제거
+        executing.splice(executing.indexOf(promise), 1);
+        return result;
+      });
 
-    if (scene.asset.type === "video") {
-      // 비디오: stream_loop로 반복 재생하여 오디오 길이 맞춤
-      const videoClipOut = path.join(tempDir, `scene_${String(i).padStart(3, "0")}_${Date.now()}.mp4`);
+    executing.push(promise);
 
-      // 원본 비디오 길이 측정
-      let originalDuration = durSec;
-      try {
-        originalDuration = await probeDurationSec(mediaPath);
-      } catch (error) {
-        console.warn(`비디오 ${i + 1} 길이 측정 실패, 기본값 사용`);
-      }
-
-      // ✅ stream_loop 사용: 비디오가 짧으면 반복 재생
-      const loopCount = originalDuration > durSec ? 0 : -1;
-
-      const vfChain = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p`;
-      const videoArgs = ["-y", "-hide_banner"];
-
-      if (loopCount === -1) {
-        videoArgs.push("-stream_loop", "-1");
-      }
-
-      videoArgs.push(
-        "-i", mediaPath,
-        "-t", durSec.toFixed(3),
-        "-vf", vfChain,
-        "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-crf", "23",
-        "-r", "24",
-        "-pix_fmt", "yuv420p",
-        "-an",
-        "-avoid_negative_ts", "make_zero",
-        "-fflags", "+genpts+discardcorrupt",
-        videoClipOut
-      );
-
-      try {
-        await spawnFFmpegWithMonitoring(videoArgs, {
-          timeout: 60000,
-          processId: `compose-video-${i}`
-        });
-      } catch (error) {
-        if (error.message === "사용자에 의해 취소됨") {
-          throw new Error("cancelled");
-        }
-        console.error(`[ERROR] Video clip ${i + 1} failed: ${error.message}`);
-        throw error;
-      }
-
-      videoClips.push(videoClipOut);
-      const realSec = await probeDurationSec(videoClipOut);
-      totalVideoSec += realSec;
-    } else if (scene.asset.type === "image") {
-      // 이미지: duration 동안 패닝 효과와 함께 표시
-      const imageClipOut = path.join(tempDir, `scene_${String(i).padStart(3, "0")}_${Date.now()}.mp4`);
-
-      const totalFrames = Math.floor(durSec * 24);
-      const panHeight = 324;
-      const panPerFrame = (panHeight / totalFrames).toFixed(6);
-      const vfChain = `scale=2496:1404:force_original_aspect_ratio=decrease,pad=2496:1404:(ow-iw)/2:(oh-ih)/2,crop=1920:1080:288:'max(0,${panHeight}-${panPerFrame}*n)',setsar=1,format=yuv420p`;
-
-      const imageArgs = [
-        "-y", "-hide_banner",
-        "-framerate", "24",
-        "-loop", "1",
-        "-i", mediaPath,
-        "-t", durSec.toFixed(3),
-        "-vf", vfChain,
-        "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-crf", "23",
-        "-r", "24",
-        "-pix_fmt", "yuv420p",
-        "-avoid_negative_ts", "make_zero",
-        "-fflags", "+genpts+discardcorrupt",
-        imageClipOut,
-      ];
-
-      try {
-        await spawnFFmpegWithMonitoring(imageArgs, {
-          timeout: 60000,
-          processId: `compose-image-${i}`
-        });
-      } catch (error) {
-        if (error.message === "사용자에 의해 취소됨") {
-          throw new Error("cancelled");
-        }
-        console.error(`[ERROR] Image clip ${i + 1} failed: ${error.message}`);
-        throw error;
-      }
-
-      videoClips.push(imageClipOut);
-      const realSec = await probeDurationSec(imageClipOut);
-      totalVideoSec += realSec;
-    }
-
-    // 진행률 전송
-    if (event?.sender) {
-      const progress = Math.round(((i + 1) / scenes.length) * 50);
-      event.sender.send("ffmpeg:progress", progress);
+    // 동시 실행 수 제한
+    if (executing.length >= concurrency) {
+      await Promise.race(executing);
     }
   }
+
+  // 남은 작업 완료 대기
+  await Promise.all(executing);
+  return results;
+}
+
+// ============================================================================
+// 클립 캐시 및 생성 유틸리티 (Phase 2: 에러 복구)
+// ============================================================================
+
+// 클립 캐시 (sceneIndex -> { path, createdAt })
+const clipCache = new Map();
+
+/**
+ * 클립 캐시 키 생성
+ */
+function getClipCacheKey(sceneIndex, mediaPath, durationMs) {
+  return `${sceneIndex}_${mediaPath}_${durationMs}`;
+}
+
+/**
+ * 캐시에서 클립 조회 (파일 존재 확인)
+ */
+async function getCachedClip(cacheKey) {
+  if (clipCache.has(cacheKey)) {
+    const cached = clipCache.get(cacheKey);
+    if (fs.existsSync(cached.path)) {
+      return cached.path;
+    } else {
+      // 파일이 없으면 캐시 제거
+      clipCache.delete(cacheKey);
+    }
+  }
+  return null;
+}
+
+/**
+ * 캐시에 클립 저장
+ */
+function cacheClip(cacheKey, clipPath) {
+  clipCache.set(cacheKey, {
+    path: clipPath,
+    createdAt: Date.now(),
+  });
+}
+
+/**
+ * 단일 씬의 클립 생성 (비디오 또는 이미지)
+ * @param {Object} scene - 씬 객체
+ * @param {string} mediaPath - 미디어 파일 경로
+ * @param {number} durSec - 클립 지속시간 (초)
+ * @param {number} sceneIndex - 씬 인덱스
+ * @param {string} tempDir - 임시 디렉토리
+ * @returns {Promise<string>} 생성된 클립 파일 경로
+ */
+async function generateSingleClip(scene, mediaPath, durSec, sceneIndex, tempDir) {
+  const MIN_CLIP_DURATION = 0.25;
+  const safeDurSec = Math.max(MIN_CLIP_DURATION, durSec);
+
+  if (scene.asset.type === "video") {
+    // 비디오: stream_loop로 반복 재생하여 오디오 길이 맞춤
+    const videoClipOut = path.join(
+      tempDir,
+      `scene_${String(sceneIndex).padStart(3, "0")}_${Date.now()}.mp4`
+    );
+
+    // 원본 비디오 길이 측정
+    let originalDuration = safeDurSec;
+    try {
+      originalDuration = await probeDurationSec(mediaPath);
+    } catch (error) {
+      console.warn(`비디오 ${sceneIndex + 1} 길이 측정 실패, 기본값 사용`);
+    }
+
+    // ✅ stream_loop 사용: 비디오가 짧으면 반복 재생
+    const loopCount = originalDuration > safeDurSec ? 0 : -1;
+
+    const vfChain = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p`;
+    const videoArgs = ["-y", "-hide_banner"];
+
+    if (loopCount === -1) {
+      videoArgs.push("-stream_loop", "-1");
+    }
+
+    videoArgs.push(
+      "-i",
+      mediaPath,
+      "-t",
+      safeDurSec.toFixed(3),
+      "-vf",
+      vfChain,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "23",
+      "-r",
+      "24",
+      "-pix_fmt",
+      "yuv420p",
+      "-an",
+      "-avoid_negative_ts",
+      "make_zero",
+      "-fflags",
+      "+genpts+discardcorrupt",
+      videoClipOut
+    );
+
+    try {
+      await spawnFFmpegWithMonitoring(videoArgs, {
+        timeout: 60000,
+        processId: `compose-video-${sceneIndex}`,
+      });
+    } catch (error) {
+      if (error.message === "사용자에 의해 취소됨") {
+        throw new Error("cancelled");
+      }
+      throw error;
+    }
+
+    return videoClipOut;
+  } else if (scene.asset.type === "image") {
+    // 이미지: duration 동안 패닝 효과와 함께 표시
+    const imageClipOut = path.join(
+      tempDir,
+      `scene_${String(sceneIndex).padStart(3, "0")}_${Date.now()}.mp4`
+    );
+
+    const totalFrames = Math.floor(safeDurSec * 24);
+    const panHeight = 324;
+    const panPerFrame = (panHeight / totalFrames).toFixed(6);
+    const vfChain = `scale=2496:1404:force_original_aspect_ratio=decrease,pad=2496:1404:(ow-iw)/2:(oh-ih)/2,crop=1920:1080:288:'max(0,${panHeight}-${panPerFrame}*n)',setsar=1,format=yuv420p`;
+
+    const imageArgs = [
+      "-y",
+      "-hide_banner",
+      "-framerate",
+      "24",
+      "-loop",
+      "1",
+      "-i",
+      mediaPath,
+      "-t",
+      safeDurSec.toFixed(3),
+      "-vf",
+      vfChain,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "23",
+      "-r",
+      "24",
+      "-pix_fmt",
+      "yuv420p",
+      "-avoid_negative_ts",
+      "make_zero",
+      "-fflags",
+      "+genpts+discardcorrupt",
+      imageClipOut,
+    ];
+
+    try {
+      await spawnFFmpegWithMonitoring(imageArgs, {
+        timeout: 60000,
+        processId: `compose-image-${sceneIndex}`,
+      });
+    } catch (error) {
+      if (error.message === "사용자에 의해 취소됨") {
+        throw new Error("cancelled");
+      }
+      throw error;
+    }
+
+    return imageClipOut;
+  } else {
+    throw new Error(`지원하지 않는 씬 타입: ${scene.asset.type}`);
+  }
+}
+
+/**
+ * 재시도 로직이 포함된 클립 생성
+ */
+async function generateClipWithRetry(
+  scene,
+  mediaPath,
+  durSec,
+  sceneIndex,
+  tempDir,
+  maxRetries = 2
+) {
+  const cacheKey = getClipCacheKey(sceneIndex, mediaPath, Math.round(durSec * 1000));
+
+  // ✅ 캐시 확인
+  const cachedClip = await getCachedClip(cacheKey);
+  if (cachedClip) {
+    return cachedClip;
+  }
+
+  // 재시도 로직
+  let lastError;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const clipPath = await generateSingleClip(scene, mediaPath, durSec, sceneIndex, tempDir);
+      // 성공 시 캐시에 저장
+      cacheClip(cacheKey, clipPath);
+      return clipPath;
+    } catch (error) {
+      lastError = error;
+      if (error.message === "cancelled") {
+        throw error; // 취소는 즉시 전파
+      }
+
+      if (attempt < maxRetries - 1) {
+        console.warn(`⚠️ 씬 ${sceneIndex + 1} 클립 생성 재시도 ${attempt + 1}/${maxRetries - 1}`);
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // 1초 대기
+      }
+    }
+  }
+
+  throw lastError || new Error(`씬 ${sceneIndex + 1} 클립 생성 실패`);
+}
+
+// ✅ 각 씬별 비디오/이미지 클립 생성 (병렬화)
+async function generateClips(scenes, mediaFiles, sceneDurationsMs, tempDir, event) {
+  const CONCURRENCY = 3; // 동시 3개 클립 생성
+  let completedCount = 0;
+
+  // ✅ 모든 씬을 task로 변환
+  const tasks = scenes.map((scene, i) => async () => {
+    const mediaPath = mediaFiles[i];
+    const durSec = Math.max(0.25, (sceneDurationsMs[i] || 3000) / 1000);
+
+    // 재시도 로직이 포함된 클립 생성
+    const clipPath = await generateClipWithRetry(scene, mediaPath, durSec, i, tempDir);
+
+    // 진행률 전송
+    completedCount++;
+    if (event?.sender) {
+      const progress = Math.round((completedCount / scenes.length) * 50);
+      event.sender.send("ffmpeg:progress", progress);
+    }
+
+    // 클립의 실제 길이 측정
+    const realSec = await probeDurationSec(clipPath);
+    return { clipPath, duration: realSec };
+  });
+
+  // ✅ 병렬 실행
+  const results = await runConcurrent(tasks, CONCURRENCY);
+
+  // 결과 수집
+  const videoClips = results.map((r) => r.clipPath);
+  const totalVideoSec = results.reduce((sum, r) => sum + r.duration, 0);
 
   return { videoClips, totalVideoSec };
 }
@@ -2379,175 +2590,228 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
   await fsp.mkdir(tempDir, { recursive: true });
   await cleanupTempFiles(tempDir);
 
-  // 1️⃣ 각 씬별 비디오/이미지 클립 생성
-  const { videoClips } = await generateClips(scenes, mediaFiles, sceneDurationsMs, tempDir, event);
+  try {
+    // 1️⃣ 각 씬별 비디오/이미지 클립 생성
+    const { videoClips } = await generateClips(scenes, mediaFiles, sceneDurationsMs, tempDir, event);
 
-  if (videoClips.length === 0) {
-    throw new Error("생성된 비디오 클립이 없습니다");
-  }
-
-  // ✅ 생성된 클립 확인
-  console.log(`✅ 생성된 비디오 클립: ${videoClips.length}개`);
-  for (let i = 0; i < videoClips.length; i++) {
-    const clipExists = fs.existsSync(videoClips[i]);
-    const stats = clipExists ? fs.statSync(videoClips[i]) : null;
-    console.log(`   [${i + 1}] ${path.basename(videoClips[i])} - ${clipExists ? `✅ ${(stats.size / 1024 / 1024).toFixed(2)}MB` : '❌ 없음'}`);
-  }
-
-  // 2️⃣ 오디오 concat 파일 준비
-  const audioConcatPath = await setupAudioConcat(audioFiles, tempDir);
-
-  // 3️⃣ FFmpeg 최종 arguments 구성
-  const finalArgs = ["-y", "-hide_banner"];
-
-  // 비디오 클립들을 입력으로 추가
-  videoClips.forEach((clip) => {
-    finalArgs.push("-i", clip);
-  });
-
-  // 오디오는 concat demuxer로 추가
-  const audioInputIndex = videoClips.length;
-  if (audioConcatPath) {
-    finalArgs.push("-f", "concat", "-safe", "0", "-i", audioConcatPath);
-  }
-
-  // 4️⃣ 필터 복합체 구성
-  const { filterComplex, finalVideoLabel } = buildFinalFilterComplex(videoClips, audioFiles, srtPath);
-
-  // ✅ filter_complex가 길면 파일로 저장
-  if (filterComplex.length > 3000) {
-    const filterScriptPath = path.join(tempDir, `filter_${Date.now()}.txt`);
-    await fsp.writeFile(filterScriptPath, filterComplex, "utf8");
-    finalArgs.push("-filter_complex_script", filterScriptPath);
-    console.log(`📝 Filter complex를 파일로 저장: ${filterScriptPath} (${filterComplex.length}글자)`);
-  } else {
-    finalArgs.push("-filter_complex", filterComplex);
-    console.log(`📝 Filter complex (인라인): ${filterComplex.substring(0, 200)}...`);
-  }
-
-  // 맵핑
-  finalArgs.push("-map", finalVideoLabel);
-  if (audioConcatPath) {
-    // concat demuxer로 합쳐진 오디오 사용
-    finalArgs.push("-map", `${audioInputIndex}:a`);
-  }
-
-  finalArgs.push(
-    "-c:v",
-    "libx264",
-    "-profile:v",
-    "main",
-    "-pix_fmt",
-    "yuv420p",
-    "-preset",
-    "veryfast",
-    "-crf",
-    "23",
-    "-movflags",
-    "+faststart",
-    // ✅ 타임스탬프 안정화 + corrupt 프레임 폐기
-    "-avoid_negative_ts",
-    "make_zero",
-    "-fflags",
-    "+genpts+discardcorrupt"
-  );
-
-  if (audioConcatPath) {
-    finalArgs.push("-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2");
-  }
-
-  // ✅ 한글 경로 처리: 임시 경로 사용 후 최종 경로로 이동
-  let finalOutputPath = outputPath;
-  let tempOutputPath = outputPath;
-
-  // 한글이 포함되어 있으면 임시 경로 사용
-  if (/[㄀-ㅎ|ㅏ-ㅣ|가-힣]/.test(outputPath)) {
-    tempOutputPath = path.join(tempDir, `video_${Date.now()}.mp4`);
-    console.log(`⚠️ 한글 경로 감지, 임시 경로 사용: ${tempOutputPath}`);
-    console.log(`   최종 경로: ${finalOutputPath}`);
-  }
-
-  finalArgs.push(tempOutputPath);
-
-  // ✅ FFmpeg 명령어 로깅
-  console.log(`🎬 FFmpeg 실행 시작...`);
-  console.log(`   Output: ${tempOutputPath}`);
-  console.log(`   Args: ${finalArgs.length}개 인자`);
-  console.log(`\n=== FFmpeg 최종 명령어 ===`);
-  console.log(`ffmpeg ${finalArgs.map(a => `"${a}"`).join(' ')}`);
-  console.log(`=== 명령어 끝 ===\n`);
-
-  const result = await runFFmpeg(finalArgs, (progress) => {
-    if (event?.sender) {
-      const mapped = 50 + Math.round((progress / 100) * 50); // 50-100%
-      event.sender.send("ffmpeg:progress", Math.min(99, mapped));
+    if (videoClips.length === 0) {
+      throw new Error("생성된 비디오 클립이 없습니다");
     }
-  });
 
-  // ✅ FFmpeg 실행 결과 상세 로깅
-  console.log(`🎬 FFmpeg 실행 완료`);
-  console.log(`   Success: ${result.success}`);
-  if (result.output) {
-    console.log(`   Output (전체): ${result.output}`);
-  }
-  if (result.error) {
-    console.log(`   Error: ${result.error}`);
-  }
+    // ✅ 생성된 클립 확인
+    const missingClips = [];
+    for (let i = 0; i < videoClips.length; i++) {
+      const clipExists = fs.existsSync(videoClips[i]);
+      if (!clipExists) {
+        missingClips.push({ index: i + 1, path: videoClips[i] });
+      }
+    }
 
-  // ✅ FFmpeg 성공 후 파일 생성 확인
-  if (result.success) {
-    const fileExists = fs.existsSync(tempOutputPath);
-    console.log(`   File exists: ${fileExists} (${tempOutputPath})`);
+    // 누락된 클립 있으면 오류
+    if (missingClips.length > 0) {
+      const errorMsg = missingClips.map((c) => `- 클립 ${c.index}: ${c.path}`).join("\n");
+      throw new Error(`❌ 생성된 클립 누락 (${missingClips.length}/${videoClips.length}):\n${errorMsg}`);
+    }
 
-    if (!fileExists) {
-      console.error(`❌ FFmpeg 성공했으나 파일 없음: ${tempOutputPath}`);
-      console.error(`\n=== FFmpeg 최종 출력 (전체) ===`);
-      console.error(result.output || result.error || 'No output');
-      console.error(`=== 출력 끝 ===\n`);
+    // 2️⃣ 오디오 concat 파일 준비
+    const audioConcatPath = await setupAudioConcat(audioFiles, tempDir);
 
-      // 임시 폴더 확인
-      try {
-        const tempDirContents = fs.readdirSync(tempDir);
-        console.log(`   Temp dir 내용 (${tempDirContents.length}개):`, tempDirContents);
-      } catch (e) {
-        console.error(`   Temp dir 읽기 실패: ${e.message}`);
+    // 검증 (오류 시에만 표시)
+    if (audioConcatPath && !fs.existsSync(audioConcatPath)) {
+      throw new Error(`❌ 오디오 concat 파일 생성 실패: ${audioConcatPath}`);
+    }
+
+    // 3️⃣ FFmpeg 최종 arguments 구성
+    const finalArgs = ["-y", "-hide_banner"];
+
+    // 비디오 클립들을 입력으로 추가
+    videoClips.forEach((clip) => {
+      finalArgs.push("-i", clip);
+    });
+
+    // 오디오는 concat demuxer로 추가
+    const audioInputIndex = videoClips.length;
+    if (audioConcatPath) {
+      finalArgs.push("-f", "concat", "-safe", "0", "-i", audioConcatPath);
+    }
+
+    // 4️⃣ 필터 복합체 구성
+    const { filterComplex, finalVideoLabel } = buildFinalFilterComplex(videoClips, audioFiles, srtPath);
+
+    // filter_complex가 길면 파일로 저장
+    let filterScriptPath = null;
+    if (filterComplex.length > 3000) {
+      filterScriptPath = path.join(tempDir, `filter_${Date.now()}.txt`);
+      await fsp.writeFile(filterScriptPath, filterComplex, "utf8");
+
+      if (!fs.existsSync(filterScriptPath)) {
+        throw new Error(`❌ Filter 파일 생성 실패: ${filterScriptPath}`);
       }
 
-      return { success: false, error: "FFmpeg 실행 완료했으나 파일이 생성되지 않았습니다." };
+      finalArgs.push("-filter_complex_script", filterScriptPath);
+    } else {
+      finalArgs.push("-filter_complex", filterComplex);
     }
 
-    // 임시 경로 사용 시 최종 경로로 이동
-    if (tempOutputPath !== finalOutputPath) {
-      try {
-        await fsp.mkdir(path.dirname(finalOutputPath), { recursive: true });
-        await fsp.rename(tempOutputPath, finalOutputPath);
-        console.log(`✅ 파일 이동 완료: ${tempOutputPath} → ${finalOutputPath}`);
-      } catch (moveError) {
-        console.error(`❌ 파일 이동 실패: ${moveError.message}`);
-        // 이동 실패 시 복사 시도
-        try {
-          await fsp.mkdir(path.dirname(finalOutputPath), { recursive: true });
-          await fsp.copyFile(tempOutputPath, finalOutputPath);
-          await fsp.unlink(tempOutputPath);
-          console.log(`✅ 파일 복사로 완료: ${tempOutputPath} → ${finalOutputPath}`);
-        } catch (copyError) {
-          console.error(`❌ 파일 복사도 실패: ${copyError.message}`);
-          return { success: false, error: `파일 이동/복사 실패: ${copyError.message}` };
+    // 맵핑
+    finalArgs.push("-map", finalVideoLabel);
+    if (audioConcatPath) {
+      // concat demuxer로 합쳐진 오디오 사용
+      finalArgs.push("-map", `${audioInputIndex}:a`);
+    }
+
+    finalArgs.push(
+      "-c:v",
+      "libx264",
+      "-profile:v",
+      "main",
+      "-pix_fmt",
+      "yuv420p",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "23",
+      "-movflags",
+      "+faststart",
+      "-avoid_negative_ts",
+      "make_zero",
+      "-fflags",
+      "+genpts+discardcorrupt"
+    );
+
+    if (audioConcatPath) {
+      finalArgs.push("-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2");
+    }
+
+    // ✅ 한글 경로 처리: 임시 경로 사용 후 최종 경로로 이동
+    let finalOutputPath = outputPath;
+    let tempOutputPath = outputPath;
+
+    // 한글이 포함되어 있으면 임시 경로 사용
+    if (/[㄀-ㅎ|ㅏ-ㅣ|가-힣]/.test(outputPath)) {
+      tempOutputPath = path.join(tempDir, `video_${Date.now()}.mp4`);
+      console.log(`⚠️ 한글 경로 감지, 임시 경로 사용: ${tempOutputPath}`);
+      console.log(`   최종 경로: ${finalOutputPath}`);
+    }
+
+    finalArgs.push(tempOutputPath);
+
+    // ✅ FFmpeg 실행 전 최종 검증
+    console.log(`\n[FFmpeg 실행 전 최종 검증]`);
+    console.log(`  Output path: ${tempOutputPath}`);
+    console.log(`  Output dir exists: ${fs.existsSync(path.dirname(tempOutputPath)) ? "✅" : "❌"}`);
+
+    // 필터 스크립트 파일 검증
+    const filterScriptIdx = finalArgs.indexOf("-filter_complex_script");
+    if (filterScriptIdx !== -1) {
+      const filterPath = finalArgs[filterScriptIdx + 1];
+      console.log(`  Filter script: ${filterPath}`);
+      console.log(`  Filter script exists: ${fs.existsSync(filterPath) ? "✅" : "❌"}`);
+      if (fs.existsSync(filterPath)) {
+        const size = fs.statSync(filterPath).size;
+        console.log(`  Filter script size: ${size}bytes`);
+      }
+    }
+
+    // 모든 비디오 입력 파일 확인
+    let videoInputCount = 0;
+    for (let i = 0; i < finalArgs.length; i++) {
+      if (finalArgs[i] === "-i" && i + 1 < finalArgs.length) {
+        const inputPath = finalArgs[i + 1];
+        if (!inputPath.startsWith("-")) {
+          if (fs.existsSync(inputPath)) {
+            videoInputCount++;
+          } else {
+            console.warn(`  ❌ Input file missing: ${inputPath}`);
+          }
         }
       }
     }
-  }
+    console.log(`  Video inputs found: ${videoInputCount}개`);
+    console.log(`\n`);
 
-  if (result.success && event?.sender) {
-    event.sender.send("ffmpeg:progress", 100);
-  }
+    // FFmpeg 실행
+    const result = await runFFmpeg(finalArgs, (progress) => {
+      if (event?.sender) {
+        const mapped = 50 + Math.round((progress / 100) * 50); // 50-100%
+        event.sender.send("ffmpeg:progress", Math.min(99, mapped));
+      }
+    });
 
-  // ✅ 최종 경로를 반환 결과에 추가
-  if (result.success) {
-    result.outputPath = finalOutputPath;
-  }
+    // ✅ FFmpeg 성공 후 파일 생성 확인
+    if (result.success) {
+      const fileExists = fs.existsSync(tempOutputPath);
 
-  return result;
+      if (!fileExists) {
+        // 오류 시에만 상세 정보 출력
+        console.error(`\n❌ FFmpeg 성공했으나 파일 없음: ${tempOutputPath}`);
+        console.error(`\nFFmpeg stderr 출력:`);
+        console.error(result.output || result.error || "No output");
+
+        // 임시 폴더 확인
+        try {
+          const tempDirContents = fs.readdirSync(tempDir);
+          console.error(`\nTemp 폴더 상태:`);
+          for (const file of tempDirContents) {
+            const filePath = path.join(tempDir, file);
+            const stat = fs.statSync(filePath);
+            const size = stat.isDirectory() ? "[DIR]" : `${(stat.size / 1024 / 1024).toFixed(2)}MB`;
+            console.error(`  - ${file}: ${size}`);
+          }
+        } catch (e) {
+          console.error(`Temp dir 읽기 실패: ${e.message}`);
+        }
+
+        return { success: false, error: "FFmpeg 실행 완료했으나 파일이 생성되지 않았습니다." };
+      }
+
+      // 성공 시 간단히 표시
+      const stat = fs.statSync(tempOutputPath);
+      console.log(`✅ FFmpeg 완료: ${(stat.size / 1024 / 1024).toFixed(2)}MB`);
+
+      // 임시 경로 사용 시 최종 경로로 이동
+      if (tempOutputPath !== finalOutputPath) {
+        try {
+          await fsp.mkdir(path.dirname(finalOutputPath), { recursive: true });
+          await fsp.rename(tempOutputPath, finalOutputPath);
+          console.log(`✅ 파일 이동 완료: ${tempOutputPath} → ${finalOutputPath}`);
+        } catch (moveError) {
+          console.error(`❌ 파일 이동 실패: ${moveError.message}`);
+          // 이동 실패 시 복사 시도
+          try {
+            await fsp.mkdir(path.dirname(finalOutputPath), { recursive: true });
+            await fsp.copyFile(tempOutputPath, finalOutputPath);
+            await fsp.unlink(tempOutputPath);
+            console.log(`✅ 파일 복사로 완료: ${tempOutputPath} → ${finalOutputPath}`);
+          } catch (copyError) {
+            console.error(`❌ 파일 복사도 실패: ${copyError.message}`);
+            return { success: false, error: `파일 이동/복사 실패: ${copyError.message}` };
+          }
+        }
+      }
+    }
+
+    if (result.success && event?.sender) {
+      event.sender.send("ffmpeg:progress", 100);
+    }
+
+    // ✅ 최종 경로를 반환 결과에 추가
+    if (result.success) {
+      result.outputPath = finalOutputPath;
+    }
+
+    return result;
+  } finally {
+    // ✅ 성공/실패 관계없이 임시 파일 정리
+    if (tempDir) {
+      try {
+        await cleanupTempFiles(tempDir);
+        console.log(`🗑️ 완료 후 임시 파일 정리 완료: ${tempDir}`);
+      } catch (cleanupError) {
+        console.warn(`⚠️ 임시 파일 정리 실패: ${cleanupError.message}`);
+      }
+    }
+  }
 }
 
 module.exports = { register };
