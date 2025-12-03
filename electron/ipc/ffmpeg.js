@@ -1269,6 +1269,75 @@ function register() {
   });
 }
 
+// ✅ 병렬 작업 유틸리티 (동시 실행 수 제한)
+/**
+ * 여러 비동기 작업을 병렬로 실행 (동시 실행 수 제한)
+ * @param {Function[]} tasks - async 함수 배열
+ * @param {number} concurrency - 동시 실행 수 (기본값: 3)
+ * @returns {Promise<any[]>} - 모든 작업의 결과 배열
+ *
+ * 예시:
+ *   const tasks = [
+ *     async () => ffmpeg(clip1),
+ *     async () => ffmpeg(clip2),
+ *     async () => ffmpeg(clip3),
+ *   ];
+ *   const results = await runConcurrent(tasks, 2); // 2개씩 병렬 실행
+ */
+async function runConcurrent(tasks, concurrency = 3) {
+  if (!Array.isArray(tasks) || tasks.length === 0) {
+    return [];
+  }
+
+  const results = [];
+  const queue = [...tasks];
+  const activeTasks = new Set();
+
+  // Worker 함수: 큐에서 작업을 하나씩 꺼내서 실행
+  async function worker() {
+    while (queue.length > 0 || activeTasks.size > 0) {
+      // 현재 활성 작업이 concurrency 이상이면 기다리기
+      if (activeTasks.size >= concurrency) {
+        await Promise.race(Array.from(activeTasks));
+      }
+
+      // 큐에서 작업 꺼내기
+      if (queue.length > 0) {
+        const task = queue.shift();
+        const promise = task().then(
+          (result) => results.push(result),
+          (error) => results.push(Promise.reject(error))
+        );
+
+        activeTasks.add(promise);
+        promise.finally(() => activeTasks.delete(promise));
+      }
+    }
+  }
+
+  // 동시에 실행할 worker 수: concurrency 개수 또는 tasks 수, 둘 중 작은 값
+  const workerCount = Math.min(concurrency, tasks.length);
+  const workers = Array(workerCount).fill(null).map(() => worker());
+
+  await Promise.all(workers);
+  return results;
+}
+
+// ✅ 병렬로 여러 파일 삭제
+async function deleteFilesParallel(filePaths, concurrency = 5) {
+  const tasks = filePaths.map(filePath => async () => {
+    try {
+      await fsp.unlink(filePath);
+      return { filePath, success: true };
+    } catch (error) {
+      console.warn(`파일 삭제 실패: ${filePath}`, error.message);
+      return { filePath, success: false, error: error.message };
+    }
+  });
+
+  return runConcurrent(tasks, concurrency);
+}
+
 // ----------------------------------------------------------------------------
 // 임시 파일 정리 함수
 // ----------------------------------------------------------------------------
