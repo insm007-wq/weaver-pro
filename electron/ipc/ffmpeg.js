@@ -2039,42 +2039,12 @@ async function generateSrtFromScenes(scenes, srtPath) {
   }
 }
 
-// ----------------------------------------------------------------------------
-// 씬 기반 비디오 합성 (비디오/이미지 혼합 지원)
-// ----------------------------------------------------------------------------
-async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, outputPath, srtPath, sceneDurationsMs }) {
-  let tempDir;
-  try {
-    tempDir = path.join(app.getPath("userData"), "ffmpeg-temp");
-  } catch {
-    const os = require("os");
-    tempDir = path.join(os.tmpdir(), "weaver-pro-ffmpeg-temp");
-  }
-  await fsp.mkdir(tempDir, { recursive: true });
-  await cleanupTempFiles(tempDir);
-
+// ✅ 각 씬별 비디오/이미지 클립 생성
+async function generateClips(scenes, mediaFiles, sceneDurationsMs, tempDir, event) {
   const videoClips = [];
   const MIN_CLIP_DURATION = 0.25;
-
-  // ✅ 전체 오디오 길이 계산 (모든 오디오 파일 합산)
-  let totalAudioSec = 0;
-  if (audioFiles && audioFiles.length > 0) {
-    try {
-      for (const audioFile of audioFiles) {
-        const duration = await probeDurationSec(audioFile);
-        totalAudioSec += duration;
-      }
-    } catch (error) {
-      console.warn(`오디오 길이 측정 실패: ${error.message}`);
-      totalAudioSec = sceneDurationsMs.reduce((sum, dur) => sum + dur, 0) / 1000;
-    }
-  } else {
-    totalAudioSec = sceneDurationsMs.reduce((sum, dur) => sum + dur, 0) / 1000;
-  }
-
   let totalVideoSec = 0;
 
-  // 각 씬별로 클립 생성 (비디오는 그대로, 이미지는 duration 적용)
   for (let i = 0; i < scenes.length; i++) {
     // 취소 확인
     if (isExportCancelled) {
@@ -2098,43 +2068,27 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
       }
 
       // ✅ stream_loop 사용: 비디오가 짧으면 반복 재생
-      // loop 횟수 계산 (0-based, -1은 무한 반복)
-      let loopCount = -1; // 무한 반복 후 -t로 자르기
-      if (originalDuration > durSec) {
-        loopCount = 0; // 반복 불필요
-      }
+      const loopCount = originalDuration > durSec ? 0 : -1;
 
       const vfChain = `scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p`;
-
       const videoArgs = ["-y", "-hide_banner"];
 
-      // stream_loop 추가 (반복 필요한 경우만)
       if (loopCount === -1) {
         videoArgs.push("-stream_loop", "-1");
       }
 
       videoArgs.push(
-        "-i",
-        mediaPath,
-        "-t",
-        durSec.toFixed(3),
-        "-vf",
-        vfChain,
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "23",
-        "-r",
-        "24",
-        "-pix_fmt",
-        "yuv420p",
-        "-an", // 오디오 제거 (나중에 TTS 추가)
-        "-avoid_negative_ts",
-        "make_zero",
-        "-fflags",
-        "+genpts+discardcorrupt",
+        "-i", mediaPath,
+        "-t", durSec.toFixed(3),
+        "-vf", vfChain,
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "23",
+        "-r", "24",
+        "-pix_fmt", "yuv420p",
+        "-an",
+        "-avoid_negative_ts", "make_zero",
+        "-fflags", "+genpts+discardcorrupt",
         videoClipOut
       );
 
@@ -2152,53 +2106,31 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
       }
 
       videoClips.push(videoClipOut);
-
-      // ✅ 실제 길이 확인
       const realSec = await probeDurationSec(videoClipOut);
       totalVideoSec += realSec;
     } else if (scene.asset.type === "image") {
       // 이미지: duration 동안 패닝 효과와 함께 표시
       const imageClipOut = path.join(tempDir, `scene_${String(i).padStart(3, "0")}_${Date.now()}.mp4`);
 
-      // ✅ 이미지 패닝 효과: crop 필터로 아래에서 위로 부드럽게 이동
-      // 1. 이미지를 30% 크게 스케일 (1920*1.3=2496, 1080*1.3=1404) - 더 부드러운 패닝을 위해
-      // 2. crop 필터로 1920x1080 영역을 선택하되, y 위치를 프레임에 따라 변경
-      // n: 현재 프레임 번호 (0부터 시작)
-      // 아래(y=324)에서 시작하여 위(y=0)로 이동 - 이동 거리 3배 증가로 매우 부드럽고 역동적
       const totalFrames = Math.floor(durSec * 24);
-      const panHeight = 324; // 1404 - 1080 (30% 오버스캔)
+      const panHeight = 324;
       const panPerFrame = (panHeight / totalFrames).toFixed(6);
-      // crop의 y 파라미터를 표현식으로: max(0, 324 - (324/254)*n)
-      // max() 함수로 끝에서 멈추도록 (0 이하로 내려가지 않음)
       const vfChain = `scale=2496:1404:force_original_aspect_ratio=decrease,pad=2496:1404:(ow-iw)/2:(oh-ih)/2,crop=1920:1080:288:'max(0,${panHeight}-${panPerFrame}*n)',setsar=1,format=yuv420p`;
 
       const imageArgs = [
-        "-y",
-        "-hide_banner",
-        "-framerate",
-        "24",
-        "-loop",
-        "1",
-        "-i",
-        mediaPath,
-        "-t",
-        durSec.toFixed(3),
-        "-vf",
-        vfChain,
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "23",
-        "-r",
-        "24",
-        "-pix_fmt",
-        "yuv420p",
-        "-avoid_negative_ts",
-        "make_zero",
-        "-fflags",
-        "+genpts+discardcorrupt",
+        "-y", "-hide_banner",
+        "-framerate", "24",
+        "-loop", "1",
+        "-i", mediaPath,
+        "-t", durSec.toFixed(3),
+        "-vf", vfChain,
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "23",
+        "-r", "24",
+        "-pix_fmt", "yuv420p",
+        "-avoid_negative_ts", "make_zero",
+        "-fflags", "+genpts+discardcorrupt",
         imageClipOut,
       ];
 
@@ -2216,64 +2148,46 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
       }
 
       videoClips.push(imageClipOut);
-
-      // ✅ 실제 길이 확인
       const realSec = await probeDurationSec(imageClipOut);
       totalVideoSec += realSec;
     }
 
     // 진행률 전송
     if (event?.sender) {
-      const progress = Math.round(((i + 1) / scenes.length) * 50); // 0-50%
+      const progress = Math.round(((i + 1) / scenes.length) * 50);
       event.sender.send("ffmpeg:progress", progress);
     }
   }
 
-  if (videoClips.length === 0) {
-    throw new Error("생성된 비디오 클립이 없습니다");
+  return { videoClips, totalVideoSec };
+}
+
+// ✅ 오디오 concat 파일 설정
+async function setupAudioConcat(audioFiles, tempDir) {
+  if (!audioFiles || audioFiles.length === 0) {
+    return null;
   }
 
-  // ✅ 오디오는 concat demuxer로 안정적으로 합치기 (filter_complex는 비디오만)
-  const finalArgs = ["-y", "-hide_banner"];
+  const audioConcatPath = path.join(tempDir, `audio_concat_${Date.now()}.txt`);
+  const audioConcatContent = audioFiles
+    .map((filePath) => {
+      const escapedPath = filePath.replace(/\\/g, "/").replace(/'/g, "'\\''");
+      return `file '${escapedPath}'`;
+    })
+    .join("\n");
+  await fsp.writeFile(audioConcatPath, audioConcatContent, "utf8");
+  return audioConcatPath;
+}
 
-  // 1. 오디오 concat 파일 생성 (demuxer 방식)
-  let audioConcatPath = null;
-  if (audioFiles && audioFiles.length > 0) {
-    audioConcatPath = path.join(tempDir, `audio_concat_${Date.now()}.txt`);
-    const audioConcatContent = audioFiles
-      .map((filePath) => {
-        // Windows 경로를 슬래시로 변환하고 이스케이프
-        const escapedPath = filePath.replace(/\\/g, "/").replace(/'/g, "'\\''");
-        return `file '${escapedPath}'`;
-      })
-      .join("\n");
-    await fsp.writeFile(audioConcatPath, audioConcatContent, "utf8");
-  }
+// ✅ 최종 FFmpeg 필터 복합체 구성
+function buildFinalFilterComplex(videoClips, audioFiles, srtPath) {
+  let filterComplex = videoClips.map((_, i) => `[${i}:v]`).join("");
+  filterComplex += `concat=n=${videoClips.length}:v=1:a=0[outv]`;
 
-  // 2. 비디오 클립들을 입력으로 추가
-  videoClips.forEach((clip) => {
-    finalArgs.push("-i", clip);
-  });
-
-  // 3. 오디오는 concat demuxer로 추가
-  const audioInputIndex = videoClips.length;
-  if (audioConcatPath) {
-    finalArgs.push("-f", "concat", "-safe", "0", "-i", audioConcatPath);
-  }
-
-  // 4. filter_complex로 비디오만 concat
-  let filterInputs = videoClips.map((_, i) => `[${i}:v]`).join("");
-  let filterComplex = `${filterInputs}concat=n=${videoClips.length}:v=1:a=0[outv]`;
-
-  // ✅ ASS 자막 필터 (단순하고 안정적)
   let finalVideoLabel = "[outv]";
-
-  // ✅ 전역 자막 설정 로드 (검증 및 fallback 포함)
   const subtitleSettings = getSubtitleSettings();
 
-  // ✅ enableSubtitles가 true이고 자막 파일이 존재할 때만 자막 렌더링
   if (subtitleSettings.enableSubtitles && srtPath && fs.existsSync(srtPath)) {
-    // ✅ drawtext 필터로 자막 구현 (배경 박스 지원)
     const srtContent = fs.readFileSync(srtPath, "utf-8");
     const subtitles = parseSRT(srtContent);
 
@@ -2282,7 +2196,6 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
       const subtitle = subtitles[i];
       const nextLabel = i === subtitles.length - 1 ? "[v]" : `[st${i}]`;
 
-      // 여러 drawtext 필터로 나누기 (각 줄마다 별도 렌더링)
       const drawtextFilter = createDrawtextFilterAdvanced(subtitle, subtitleSettings, null, 1920, 1080);
       filterComplex += `;${currentLabel}${drawtextFilter}${nextLabel}`;
       currentLabel = nextLabel;
@@ -2293,6 +2206,53 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
     filterComplex += `;[outv]format=yuv420p[v]`;
     finalVideoLabel = "[v]";
   }
+
+  return { filterComplex, finalVideoLabel };
+}
+
+// ✅ 씬 기반 비디오 합성 (비디오/이미지 혼합 지원)
+// 핵심 로직:
+// 1. 각 씬별 비디오/이미지 클립 생성 → generateClips()
+// 2. 오디오 concat 파일 준비 → setupAudioConcat()
+// 3. 최종 FFmpeg 필터 복합체 구성 → buildFinalFilterComplex()
+// 4. FFmpeg 실행 및 결과 처리
+async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, outputPath, srtPath, sceneDurationsMs }) {
+  let tempDir;
+  try {
+    tempDir = path.join(app.getPath("userData"), "ffmpeg-temp");
+  } catch {
+    const os = require("os");
+    tempDir = path.join(os.tmpdir(), "weaver-pro-ffmpeg-temp");
+  }
+  await fsp.mkdir(tempDir, { recursive: true });
+  await cleanupTempFiles(tempDir);
+
+  // 1️⃣ 각 씬별 비디오/이미지 클립 생성
+  const { videoClips } = await generateClips(scenes, mediaFiles, sceneDurationsMs, tempDir, event);
+
+  if (videoClips.length === 0) {
+    throw new Error("생성된 비디오 클립이 없습니다");
+  }
+
+  // 2️⃣ 오디오 concat 파일 준비
+  const audioConcatPath = await setupAudioConcat(audioFiles, tempDir);
+
+  // 3️⃣ FFmpeg 최종 arguments 구성
+  const finalArgs = ["-y", "-hide_banner"];
+
+  // 비디오 클립들을 입력으로 추가
+  videoClips.forEach((clip) => {
+    finalArgs.push("-i", clip);
+  });
+
+  // 오디오는 concat demuxer로 추가
+  const audioInputIndex = videoClips.length;
+  if (audioConcatPath) {
+    finalArgs.push("-f", "concat", "-safe", "0", "-i", audioConcatPath);
+  }
+
+  // 4️⃣ 필터 복합체 구성
+  const { filterComplex, finalVideoLabel } = buildFinalFilterComplex(videoClips, audioFiles, srtPath);
 
   // ✅ filter_complex가 길면 파일로 저장
   if (filterComplex.length > 3000) {
