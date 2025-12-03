@@ -671,9 +671,216 @@ try {
   ffprobePath = null;
 }
 
-// 현재 실행 중인 FFmpeg 프로세스 (취소용)
-let currentFfmpegProcess = null;
-let isExportCancelled = false;
+// ✅ Process Context Map 기반 관리 (Race Condition 해결)
+// 프로세스 ID별 독립적인 context 관리로 동시 export 지원
+const runningProcesses = new Map(); // processId -> { process, isCancelled, createdAt }
+
+/**
+ * 프로세스 context 생성
+ * @param {string} processId - 프로세스 ID
+ * @returns {Object} context
+ */
+function createProcessContext(processId) {
+  return {
+    process: null,
+    isCancelled: false,
+    createdAt: Date.now()
+  };
+}
+
+/**
+ * 프로세스 context 획득 (없으면 생성)
+ * @param {string} processId - 프로세스 ID
+ * @returns {Object} context
+ */
+function getProcessContext(processId) {
+  if (!runningProcesses.has(processId)) {
+    runningProcesses.set(processId, createProcessContext(processId));
+  }
+  return runningProcesses.get(processId);
+}
+
+/**
+ * 프로세스 context 정리
+ * @param {string} processId - 프로세스 ID
+ */
+function cleanupProcessContext(processId) {
+  runningProcesses.delete(processId);
+}
+
+/**
+ * ✅ 안전한 프로세스 종료
+ * - SIGTERM으로 정상 종료 시도
+ * - 타임아웃 후 SIGKILL로 강제 종료
+ * - Orphan 프로세스 방지
+ * @param {ChildProcess} proc - 자식 프로세스
+ * @param {number} timeout - SIGKILL 대기 시간 (ms)
+ * @returns {Promise<boolean>} - 종료 성공 여부
+ */
+async function killProcessSafely(proc, timeout = 5000) {
+  if (!proc || proc.killed) {
+    return true;
+  }
+
+  return new Promise((resolve) => {
+    let killed = false;
+
+    // 종료 이벤트 리스너
+    const onExit = () => {
+      killed = true;
+      resolve(true);
+    };
+
+    proc.once('exit', onExit);
+    proc.once('close', onExit);
+
+    // SIGTERM으로 정상 종료 시도
+    try {
+      proc.kill('SIGTERM');
+    } catch (error) {
+      console.warn('SIGTERM 전송 실패:', error.message);
+      resolve(false);
+      return;
+    }
+
+    // 타임아웃 후 SIGKILL로 강제 종료
+    setTimeout(() => {
+      if (!killed) {
+        try {
+          proc.kill('SIGKILL');
+          console.warn('SIGKILL 강제 종료 실행');
+        } catch (error) {
+          console.warn('SIGKILL 전송 실패:', error.message);
+        }
+
+        // SIGKILL 후 1초 더 대기
+        setTimeout(() => {
+          resolve(killed);
+        }, 1000);
+      }
+    }, timeout);
+  });
+}
+
+/**
+ * ✅ FFmpeg 프로세스를 spawn하고 진행률을 모니터링
+ * - 3개 중복 spawn 패턴을 통합한 유틸리티
+ * - 자동 context 관리 및 취소 처리
+ * - 메모리 효율적인 버퍼링
+ * @param {string[]} args - FFmpeg 명령 인자
+ * @param {Object} options - 옵션
+ * @param {number} options.timeout - 타임아웃 (ms, 기본 30000)
+ * @param {Function} options.onProgress - 진행률 콜백 (현재 시간)
+ * @param {string} options.processId - 프로세스 ID (취소용)
+ * @returns {Promise<{stdout, stderr, exitCode}>}
+ */
+async function spawnFFmpegWithMonitoring(args, options = {}) {
+  const {
+    timeout = 30000,
+    onProgress = null,
+    processId = null
+  } = options;
+
+  const ffmpegPath = getFfmpegPath();
+  const proc = spawn(ffmpegPath, args, { windowsHide: true });
+
+  // Process context 관리
+  if (processId) {
+    const context = getProcessContext(processId);
+    context.process = proc;
+  }
+
+  // ✅ 메모리 효율적인 버퍼링
+  const stdoutChunks = [];
+  const stderrChunks = [];
+  let stdoutLength = 0;
+  let stderrLength = 0;
+  const MAX_BUFFER_LENGTH = 50000;
+
+  // stdout 수집
+  proc.stdout.on('data', (data) => {
+    const chunk = data.toString();
+    stdoutChunks.push(chunk);
+    stdoutLength += chunk.length;
+
+    while (stdoutLength > MAX_BUFFER_LENGTH && stdoutChunks.length > 0) {
+      const removed = stdoutChunks.shift();
+      stdoutLength -= removed.length;
+    }
+  });
+
+  // stderr 수집 및 진행률 파싱
+  proc.stderr.on('data', (data) => {
+    const chunk = data.toString();
+    stderrChunks.push(chunk);
+    stderrLength += chunk.length;
+
+    while (stderrLength > MAX_BUFFER_LENGTH && stderrChunks.length > 0) {
+      const removed = stderrChunks.shift();
+      stderrLength -= removed.length;
+    }
+
+    // ✅ 진행률 콜백 (time=HH:MM:SS.ms 파싱)
+    if (onProgress) {
+      const timeMatch = /time=(\d+):(\d+):(\d+\.\d+)/.exec(chunk);
+      if (timeMatch) {
+        const hours = parseInt(timeMatch[1]);
+        const minutes = parseInt(timeMatch[2]);
+        const seconds = parseFloat(timeMatch[3]);
+        const currentTimeSec = hours * 3600 + minutes * 60 + seconds;
+        onProgress(currentTimeSec);
+      }
+    }
+  });
+
+  return new Promise((resolve, reject) => {
+    // ✅ 타임아웃 설정
+    const timer = setTimeout(async () => {
+      await killProcessSafely(proc);
+      reject(new Error(`FFmpeg 타임아웃 (${timeout}ms)`));
+    }, timeout);
+
+    // ✅ 주기적 취소 체크 (processId 사용 시)
+    let cancelCheckInterval = null;
+    if (processId) {
+      cancelCheckInterval = setInterval(() => {
+        const context = getProcessContext(processId);
+        if (context.isCancelled) {
+          clearInterval(cancelCheckInterval);
+          killProcessSafely(proc).then(() => {
+            reject(new Error('사용자에 의해 취소됨'));
+          });
+        }
+      }, 500);
+    }
+
+    // ✅ 프로세스 종료 처리
+    proc.on('close', (code) => {
+      clearTimeout(timer);
+      if (cancelCheckInterval) clearInterval(cancelCheckInterval);
+
+      const stdout = stdoutChunks.join('');
+      const stderr = stderrChunks.join('');
+
+      if (processId) {
+        cleanupProcessContext(processId);
+      }
+
+      if (code === 0) {
+        resolve({ stdout, stderr, exitCode: code });
+      } else {
+        reject(new Error(`FFmpeg 종료 코드 ${code}\n${stderr.slice(-1000)}`));
+      }
+    });
+
+    proc.on('error', (error) => {
+      clearTimeout(timer);
+      if (cancelCheckInterval) clearInterval(cancelCheckInterval);
+      if (processId) cleanupProcessContext(processId);
+      reject(error);
+    });
+  });
+}
 
 // ----------------------------------------------------------------------------
 // 등록
@@ -1222,7 +1429,11 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
     try {
       await new Promise((resolve, reject) => {
         const proc = spawn(ffmpegPath, clipArgs, { windowsHide: true });
-        let stderr = "";
+
+        // ✅ 메모리 누수 방지: 배열 버퍼링 사용
+        const stderrChunks = [];
+        let stderrLength = 0;
+        const MAX_STDERR_LENGTH = 50000;
         let completed = false;
 
         // 타임아웃 설정 (30초)
@@ -1237,11 +1448,14 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
         }, 30000);
 
         proc.stderr.on("data", (data) => {
-          stderr += data.toString();
-          // ✅ stderr 전체 유지 (오류 디버깅을 위해)
-          // 메모리 제한: 50000자 (약 50KB)까지 허용
-          if (stderr.length > 50000) {
-            stderr = stderr.slice(-50000);
+          const chunk = data.toString();
+          stderrChunks.push(chunk);
+          stderrLength += chunk.length;
+
+          // ✅ 메모리 효율적인 버퍼 관리
+          while (stderrLength > MAX_STDERR_LENGTH && stderrChunks.length > 0) {
+            const removed = stderrChunks.shift();
+            stderrLength -= removed.length;
           }
         });
 
@@ -1249,6 +1463,8 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
           if (completed) return;
           completed = true;
           clearTimeout(timeout);
+
+          const stderr = stderrChunks.join('');  // ✅ 배열 결합
 
           if (code === 0) {
             resolve();
@@ -1982,17 +2198,29 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
         const previousProcess = currentFfmpegProcess;
         currentFfmpegProcess = proc;
 
-        let stderr = "";
+        // ✅ 메모리 누수 방지: 배열 버퍼링 사용
+        const stderrChunks = [];
+        let stderrLength = 0;
+        const MAX_STDERR_LENGTH = 50000;
+
         proc.stderr.on("data", (d) => {
-          stderr += d.toString();
-          // ✅ stderr 전체 유지 (50KB까지)
-          if (stderr.length > 50000) stderr = stderr.slice(-50000);
+          const chunk = d.toString();
+          stderrChunks.push(chunk);
+          stderrLength += chunk.length;
+
+          // ✅ 메모리 효율적인 버퍼 관리
+          while (stderrLength > MAX_STDERR_LENGTH && stderrChunks.length > 0) {
+            const removed = stderrChunks.shift();
+            stderrLength -= removed.length;
+          }
         });
         proc.on("close", (code) => {
           // 프로세스 복원
           if (currentFfmpegProcess === proc) {
             currentFfmpegProcess = previousProcess;
           }
+
+          const stderr = stderrChunks.join('');  // ✅ 배열 결합
 
           // 취소되었으면 거부
           if (isExportCancelled) {
@@ -2075,17 +2303,29 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
         const previousProcess = currentFfmpegProcess;
         currentFfmpegProcess = proc;
 
-        let stderr = "";
+        // ✅ 메모리 누수 방지: 배열 버퍼링 사용
+        const stderrChunks = [];
+        let stderrLength = 0;
+        const MAX_STDERR_LENGTH = 50000;
+
         proc.stderr.on("data", (d) => {
-          stderr += d.toString();
-          // ✅ stderr 전체 유지 (50KB까지)
-          if (stderr.length > 50000) stderr = stderr.slice(-50000);
+          const chunk = d.toString();
+          stderrChunks.push(chunk);
+          stderrLength += chunk.length;
+
+          // ✅ 메모리 효율적인 버퍼 관리
+          while (stderrLength > MAX_STDERR_LENGTH && stderrChunks.length > 0) {
+            const removed = stderrChunks.shift();
+            stderrLength -= removed.length;
+          }
         });
         proc.on("close", (code) => {
           // 프로세스 복원
           if (currentFfmpegProcess === proc) {
             currentFfmpegProcess = previousProcess;
           }
+
+          const stderr = stderrChunks.join('');  // ✅ 배열 결합
 
           // 취소되었으면 거부
           if (isExportCancelled) {
