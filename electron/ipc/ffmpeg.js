@@ -671,6 +671,22 @@ try {
   ffprobePath = null;
 }
 
+/**
+ * FFmpeg 경로 반환
+ * @returns {string} - FFmpeg 실행 파일 경로
+ */
+function getFfmpegPath() {
+  return ffmpegPath;
+}
+
+/**
+ * FFprobe 경로 반환
+ * @returns {string|null} - FFprobe 실행 파일 경로
+ */
+function getFfprobePath() {
+  return ffprobePath;
+}
+
 // ✅ Process Context Map 기반 관리 (Race Condition 해결)
 // 프로세스 ID별 독립적인 context 관리로 동시 export 지원
 const runningProcesses = new Map(); // processId -> { process, isCancelled, createdAt }
