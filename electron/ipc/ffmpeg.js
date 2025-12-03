@@ -2346,6 +2346,14 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
     throw new Error("생성된 비디오 클립이 없습니다");
   }
 
+  // ✅ 생성된 클립 확인
+  console.log(`✅ 생성된 비디오 클립: ${videoClips.length}개`);
+  for (let i = 0; i < videoClips.length; i++) {
+    const clipExists = fs.existsSync(videoClips[i]);
+    const stats = clipExists ? fs.statSync(videoClips[i]) : null;
+    console.log(`   [${i + 1}] ${path.basename(videoClips[i])} - ${clipExists ? `✅ ${(stats.size / 1024 / 1024).toFixed(2)}MB` : '❌ 없음'}`);
+  }
+
   // 2️⃣ 오디오 concat 파일 준비
   const audioConcatPath = await setupAudioConcat(audioFiles, tempDir);
 
@@ -2371,8 +2379,10 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
     const filterScriptPath = path.join(tempDir, `filter_${Date.now()}.txt`);
     await fsp.writeFile(filterScriptPath, filterComplex, "utf8");
     finalArgs.push("-filter_complex_script", filterScriptPath);
+    console.log(`📝 Filter complex를 파일로 저장: ${filterScriptPath} (${filterComplex.length}글자)`);
   } else {
     finalArgs.push("-filter_complex", filterComplex);
+    console.log(`📝 Filter complex (인라인): ${filterComplex.substring(0, 200)}...`);
   }
 
   // 맵핑
@@ -2423,6 +2433,9 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
   console.log(`🎬 FFmpeg 실행 시작...`);
   console.log(`   Output: ${tempOutputPath}`);
   console.log(`   Args: ${finalArgs.length}개 인자`);
+  console.log(`\n=== FFmpeg 최종 명령어 ===`);
+  console.log(`ffmpeg ${finalArgs.map(a => `"${a}"`).join(' ')}`);
+  console.log(`=== 명령어 끝 ===\n`);
 
   const result = await runFFmpeg(finalArgs, (progress) => {
     if (event?.sender) {
@@ -2435,7 +2448,7 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
   console.log(`🎬 FFmpeg 실행 완료`);
   console.log(`   Success: ${result.success}`);
   if (result.output) {
-    console.log(`   Output: ${result.output.substring(0, 500)}...`);
+    console.log(`   Output (전체): ${result.output}`);
   }
   if (result.error) {
     console.log(`   Error: ${result.error}`);
@@ -2448,11 +2461,14 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
 
     if (!fileExists) {
       console.error(`❌ FFmpeg 성공했으나 파일 없음: ${tempOutputPath}`);
+      console.error(`\n=== FFmpeg 최종 출력 (전체) ===`);
+      console.error(result.output || result.error || 'No output');
+      console.error(`=== 출력 끝 ===\n`);
 
       // 임시 폴더 확인
       try {
         const tempDirContents = fs.readdirSync(tempDir);
-        console.log(`   Temp dir 내용 (${tempDirContents.length}개):`, tempDirContents.slice(0, 10));
+        console.log(`   Temp dir 내용 (${tempDirContents.length}개):`, tempDirContents);
       } catch (e) {
         console.error(`   Temp dir 읽기 실패: ${e.message}`);
       }
