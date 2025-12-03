@@ -708,11 +708,16 @@ export default function ProjectManager() {
                       ? `2px solid ${tokens.colorBrandStroke1}`
                       : `1px solid ${tokens.colorNeutralStroke2}`,
                 }}
-                onClick={() => {
+                onClick={async () => {
                   setSelectedProject(project);
-                  // 프로젝트 선택 시 백엔드의 현재 프로젝트로 설정 (폴더 열기 시에만 로드)
-                  // 프로젝트 경로 설정의 "기본 프로젝트 이름"은 현재 활성 프로젝트만 표시하도록 변경
-                  // 따라서 선택 시 settings 업데이트 없음 (UI 혼동 방지)
+                  // ✅ 프로젝트 선택 시 백엔드에서도 현재 프로젝트로 설정
+                  try {
+                    if (api?.invoke && project?.id) {
+                      await api.invoke("project:load", project.id);
+                    }
+                  } catch (error) {
+                    console.error("프로젝트 설정 오류:", error);
+                  }
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
