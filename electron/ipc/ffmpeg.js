@@ -1304,9 +1304,85 @@ function execCollect(bin, args) {
   });
 }
 
-// ----------------------------------------------------------------------------
-// FFmpeg 명령어 구성
-// ----------------------------------------------------------------------------
+// ✅ 이미지 클립 생성 (buildFFmpegCommand용 헬퍼)
+async function generateImageClips(imageFiles, perSceneMs, tempDir, options, onMakeClipProgress) {
+  const videoClips = [];
+  let totalVideoSec = 0;
+  const MIN_CLIP_DURATION = 0.25;
+  const N = imageFiles.length;
+
+  for (let i = 0; i < N; i++) {
+    const img = imageFiles[i];
+
+    if (!img || typeof img !== "string") {
+      console.warn(`⚠️ 유효하지 않은 이미지 파일: 인덱스 ${i}`);
+      continue;
+    }
+
+    const durSec = Math.max(MIN_CLIP_DURATION, (perSceneMs[i] || 0) / 1000);
+    const clipOut = path.join(tempDir, `clip_${String(i).padStart(3, "0")}_${Date.now()}.mp4`);
+
+    const totalFrames = Math.floor(durSec * 24);
+    const panHeight = 324;
+    const panPerFrame = (panHeight / totalFrames).toFixed(6);
+    const vfChain = `scale=2496:1404:force_original_aspect_ratio=decrease,pad=2496:1404:(ow-iw)/2:(oh-ih)/2,crop=1920:1080:288:'max(0,${panHeight}-${panPerFrame}*n)',setsar=1,format=yuv420p`;
+
+    const clipArgs = [
+      "-y", "-hide_banner",
+      "-framerate", "24",
+      "-loop", "1",
+      "-i", img,
+      "-t", durSec.toFixed(3),
+      "-vf", vfChain,
+      "-c:v", "libx264",
+      "-preset", "veryfast",
+      "-crf", String(options.crf ?? 23),
+      "-r", String(options.fps ?? 24),
+      "-pix_fmt", "yuv420p",
+      "-avoid_negative_ts", "make_zero",
+      "-fflags", "+genpts+discardcorrupt",
+      clipOut,
+    ];
+
+    console.log(`\n--- Creating clip ${i + 1}/${N} ---`);
+    console.log(`Image: ${path.basename(img)}`);
+    console.log(`Duration: ${durSec.toFixed(2)}s`);
+
+    try {
+      await spawnFFmpegWithMonitoring(clipArgs, {
+        timeout: 30000,
+        processId: `clip-${i}`
+      });
+
+      const realSec = await probeDurationSec(clipOut);
+      totalVideoSec += realSec;
+    } catch (error) {
+      console.error(`❌ 클립 ${i + 1} 생성 실패:`, error.message);
+      throw new Error(`클립 생성 중단: ${error.message}`);
+    }
+
+    videoClips.push(clipOut);
+    if (onMakeClipProgress) onMakeClipProgress(i + 1, N);
+  }
+
+  return { videoClips, totalVideoSec };
+}
+
+// ✅ 씬별 duration 배열 설정
+function setupSceneDurations(imageCount, totalAudioMs, sceneDurationsMs) {
+  let perSceneMs = [];
+  if (Array.isArray(sceneDurationsMs) && sceneDurationsMs.length === imageCount) {
+    perSceneMs = [...sceneDurationsMs];
+  } else if (imageCount > 0) {
+    const base = Math.floor(totalAudioMs / imageCount);
+    perSceneMs = Array.from({ length: imageCount }, () => base);
+    let diff = totalAudioMs - perSceneMs.reduce((a, b) => a + b, 0);
+    if (diff !== 0) perSceneMs[perSceneMs.length - 1] += diff;
+  }
+  return perSceneMs;
+}
+
+// ✅ FFmpeg 명령어 구성 (클립 생성 후 concat args만 반환)
 async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitlePath, sceneDurationsMs, options, onMakeClipProgress }) {
   console.log(`\n${'='.repeat(80)}`);
   console.log(`[FFmpeg] Building command`);
@@ -1315,9 +1391,6 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
   console.log(`   Output: ${outputPath}`);
   console.log(`   Subtitle: ${subtitlePath || 'none'}`);
   console.log(`${'='.repeat(80)}\n`);
-
-  // ✅ 상수 먼저 정의 (hoisting 문제 해결)
-  const MIN_CLIP_DURATION = 0.25; // 최소 클립 길이
 
   let tempDir;
   try {
@@ -1329,13 +1402,13 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
   await fsp.mkdir(tempDir, { recursive: true });
   await cleanupTempFiles(tempDir);
 
-  // ✅ 입력 검증
+  // 1️⃣ 입력 검증
   if (!imageFiles || imageFiles.length === 0) {
     throw new Error("이미지 파일이 없습니다");
   }
 
-  // 오디오 총 길이 안전하게 측정
-  let totalAudioSec = 10; // 기본값
+  // 2️⃣ 오디오 총 길이 측정
+  let totalAudioSec = 10;
   if (audioFiles && audioFiles.length > 0 && audioFiles[0]) {
     try {
       const measuredDuration = await probeDurationSec(audioFiles[0]);
@@ -1350,100 +1423,17 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
   }
   const totalAudioMs = Math.max(1000, Math.floor(totalAudioSec * 1000));
 
-  const N = imageFiles.length;
-  let perSceneMs = [];
-  if (Array.isArray(sceneDurationsMs) && sceneDurationsMs.length === N) {
-    perSceneMs = [...sceneDurationsMs];
-  } else if (N > 0) {
-    const base = Math.floor(totalAudioMs / N);
-    perSceneMs = Array.from({ length: N }, () => base);
-    let diff = totalAudioMs - perSceneMs.reduce((a, b) => a + b, 0);
-    if (diff !== 0) perSceneMs[perSceneMs.length - 1] += diff;
-  }
+  // 3️⃣ 씬별 duration 설정
+  const perSceneMs = setupSceneDurations(imageFiles.length, totalAudioMs, sceneDurationsMs);
 
-  const videoClips = [];
-  let totalVideoSec = 0;
-
-  for (let i = 0; i < N; i++) {
-    const img = imageFiles[i];
-
-    // ✅ 이미지 파일 존재 확인
-    if (!img || typeof img !== "string") {
-      console.warn(`⚠️ 유효하지 않은 이미지 파일: 인덱스 ${i}`);
-      continue;
-    }
-
-    const durSec = Math.max(MIN_CLIP_DURATION, (perSceneMs[i] || totalAudioMs / N) / 1000);
-    const clipOut = path.join(tempDir, `clip_${String(i).padStart(3, "0")}_${Date.now()}.mp4`);
-
-    // ✅ 이미지 패닝 효과: crop 필터로 아래에서 위로 부드럽게 이동
-    // 1. 이미지를 30% 크게 스케일 (1920*1.3=2496, 1080*1.3=1404) - 더 부드러운 패닝을 위해
-    // 2. crop 필터로 1920x1080 영역을 선택하되, y 위치를 프레임에 따라 변경
-    // n: 현재 프레임 번호 (0부터 시작)
-    // 아래(y=324)에서 시작하여 위(y=0)로 이동 - 이동 거리 3배 증가로 매우 부드럽고 역동적
-    const totalFrames = Math.floor(durSec * 24);
-    const panHeight = 324; // 1404 - 1080 (30% 오버스캔)
-    const panPerFrame = (panHeight / totalFrames).toFixed(6);
-    // crop의 y 파라미터를 표현식으로: max(0, 324 - (324/254)*n)
-    // max() 함수로 끝에서 멈추도록 (0 이하로 내려가지 않음)
-    const vfChain = `scale=2496:1404:force_original_aspect_ratio=decrease,pad=2496:1404:(ow-iw)/2:(oh-ih)/2,crop=1920:1080:288:'max(0,${panHeight}-${panPerFrame}*n)',setsar=1,format=yuv420p`;
-
-    const clipArgs = [
-      "-y",
-      "-hide_banner",
-      "-framerate",
-      "24",
-      "-loop",
-      "1",
-      "-i",
-      img,
-      "-t",
-      durSec.toFixed(3),
-      "-vf",
-      vfChain,
-      "-c:v",
-      "libx264",
-      "-preset",
-      "veryfast",
-      "-crf",
-      String(options.crf ?? 23),
-      "-r",
-      String(options.fps ?? 24),
-      "-pix_fmt",
-      "yuv420p",
-      // ✅ 검은 화면 튀는 현상 방지
-      "-avoid_negative_ts",
-      "make_zero",
-      "-fflags",
-      "+genpts+discardcorrupt",
-      clipOut,
-    ];
-
-    // ✅ Clip generation command logging
-    console.log(`\n--- Creating clip ${i + 1}/${N} ---`);
-    console.log(`Image: ${path.basename(img)}`);
-    console.log(`Duration: ${durSec.toFixed(2)}s`);
-    console.log(`Command:\n  ffmpeg ${clipArgs.join(' \\\n    ')}`);
-    console.log(`---\n`);
-
-    try {
-      // ✅ spawnFFmpegWithMonitoring 사용 (중복 코드 제거)
-      await spawnFFmpegWithMonitoring(clipArgs, {
-        timeout: 30000,
-        processId: `clip-${i}`
-      });
-
-      // ✅ 실제 길이 확인
-      const realSec = await probeDurationSec(clipOut);
-      totalVideoSec += realSec;
-    } catch (error) {
-      console.error(`❌ 클립 ${i + 1} 생성 실패:`, error.message);
-      throw new Error(`클립 생성 중단: ${error.message}`);
-    }
-
-    videoClips.push(clipOut);
-    if (onMakeClipProgress) onMakeClipProgress(i + 1, N);
-  }
+  // 4️⃣ 클립 생성
+  const { videoClips, totalVideoSec } = await generateImageClips(
+    imageFiles,
+    perSceneMs,
+    tempDir,
+    options,
+    onMakeClipProgress
+  );
 
   // ✅ tpad 제거: 각 씬이 정확한 길이로 생성되므로 불필요
   if (totalVideoSec < totalAudioSec - 0.5) {
