@@ -1427,64 +1427,10 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
     console.log(`---\n`);
 
     try {
-      await new Promise((resolve, reject) => {
-        const proc = spawn(ffmpegPath, clipArgs, { windowsHide: true });
-
-        // ✅ 메모리 누수 방지: 배열 버퍼링 사용
-        const stderrChunks = [];
-        let stderrLength = 0;
-        const MAX_STDERR_LENGTH = 50000;
-        let completed = false;
-
-        // 타임아웃 설정 (30초)
-        const timeout = setTimeout(() => {
-          if (!completed) {
-            completed = true;
-            try {
-              proc.kill();
-            } catch {}
-            reject(new Error(`클립 ${i + 1} 생성 타임아웃 (30초 초과)`));
-          }
-        }, 30000);
-
-        proc.stderr.on("data", (data) => {
-          const chunk = data.toString();
-          stderrChunks.push(chunk);
-          stderrLength += chunk.length;
-
-          // ✅ 메모리 효율적인 버퍼 관리
-          while (stderrLength > MAX_STDERR_LENGTH && stderrChunks.length > 0) {
-            const removed = stderrChunks.shift();
-            stderrLength -= removed.length;
-          }
-        });
-
-        proc.on("close", (code) => {
-          if (completed) return;
-          completed = true;
-          clearTimeout(timeout);
-
-          const stderr = stderrChunks.join('');  // ✅ 배열 결합
-
-          if (code === 0) {
-            resolve();
-          } else {
-            // ✅ Log full stderr
-            console.error(`[ERROR] Clip ${i + 1} failed (code: ${code})`);
-            console.error(`\n=== FFmpeg stderr (${stderr.length} chars) ===`);
-            console.error(stderr);
-            console.error(`=== stderr end ===\n`);
-
-            reject(new Error(`Clip ${i + 1} failed (code: ${code})\n\nError:\n${stderr}`));
-          }
-        });
-
-        proc.on("error", (error) => {
-          if (completed) return;
-          completed = true;
-          clearTimeout(timeout);
-          reject(new Error(`클립 ${i + 1} 프로세스 오류: ${error.message}`));
-        });
+      // ✅ spawnFFmpegWithMonitoring 사용 (중복 코드 제거)
+      await spawnFFmpegWithMonitoring(clipArgs, {
+        timeout: 30000,
+        processId: `clip-${i}`
       });
 
       // ✅ 실제 길이 확인
@@ -2192,59 +2138,18 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
         videoClipOut
       );
 
-      await new Promise((resolve, reject) => {
-        const proc = spawn(ffmpegPath, videoArgs, { windowsHide: true });
-        // 클립 생성 중 취소 처리를 위해 currentFfmpegProcess에 저장
-        const previousProcess = currentFfmpegProcess;
-        currentFfmpegProcess = proc;
-
-        // ✅ 메모리 누수 방지: 배열 버퍼링 사용
-        const stderrChunks = [];
-        let stderrLength = 0;
-        const MAX_STDERR_LENGTH = 50000;
-
-        proc.stderr.on("data", (d) => {
-          const chunk = d.toString();
-          stderrChunks.push(chunk);
-          stderrLength += chunk.length;
-
-          // ✅ 메모리 효율적인 버퍼 관리
-          while (stderrLength > MAX_STDERR_LENGTH && stderrChunks.length > 0) {
-            const removed = stderrChunks.shift();
-            stderrLength -= removed.length;
-          }
+      try {
+        await spawnFFmpegWithMonitoring(videoArgs, {
+          timeout: 60000,
+          processId: `compose-video-${i}`
         });
-        proc.on("close", (code) => {
-          // 프로세스 복원
-          if (currentFfmpegProcess === proc) {
-            currentFfmpegProcess = previousProcess;
-          }
-
-          const stderr = stderrChunks.join('');  // ✅ 배열 결합
-
-          // 취소되었으면 거부
-          if (isExportCancelled) {
-            reject(new Error("cancelled"));
-          } else if (code === 0) {
-            resolve();
-          } else {
-            // Log full stderr
-            console.error(`[ERROR] Video clip ${i + 1} failed (code: ${code})`);
-            console.error(`\n=== FFmpeg stderr (${stderr.length} chars) ===`);
-            console.error(stderr);
-            console.error(`=== stderr end ===\n`);
-
-            reject(new Error(`Video clip ${i + 1} failed (code: ${code})\n\nError:\n${stderr}`));
-          }
-        });
-        proc.on("error", (err) => {
-          // 프로세스 복원
-          if (currentFfmpegProcess === proc) {
-            currentFfmpegProcess = previousProcess;
-          }
-          reject(err);
-        });
-      });
+      } catch (error) {
+        if (error.message === "사용자에 의해 취소됨") {
+          throw new Error("cancelled");
+        }
+        console.error(`[ERROR] Video clip ${i + 1} failed: ${error.message}`);
+        throw error;
+      }
 
       videoClips.push(videoClipOut);
 
@@ -2297,59 +2202,18 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
         imageClipOut,
       ];
 
-      await new Promise((resolve, reject) => {
-        const proc = spawn(ffmpegPath, imageArgs, { windowsHide: true });
-        // 클립 생성 중 취소 처리를 위해 currentFfmpegProcess에 저장
-        const previousProcess = currentFfmpegProcess;
-        currentFfmpegProcess = proc;
-
-        // ✅ 메모리 누수 방지: 배열 버퍼링 사용
-        const stderrChunks = [];
-        let stderrLength = 0;
-        const MAX_STDERR_LENGTH = 50000;
-
-        proc.stderr.on("data", (d) => {
-          const chunk = d.toString();
-          stderrChunks.push(chunk);
-          stderrLength += chunk.length;
-
-          // ✅ 메모리 효율적인 버퍼 관리
-          while (stderrLength > MAX_STDERR_LENGTH && stderrChunks.length > 0) {
-            const removed = stderrChunks.shift();
-            stderrLength -= removed.length;
-          }
+      try {
+        await spawnFFmpegWithMonitoring(imageArgs, {
+          timeout: 60000,
+          processId: `compose-image-${i}`
         });
-        proc.on("close", (code) => {
-          // 프로세스 복원
-          if (currentFfmpegProcess === proc) {
-            currentFfmpegProcess = previousProcess;
-          }
-
-          const stderr = stderrChunks.join('');  // ✅ 배열 결합
-
-          // 취소되었으면 거부
-          if (isExportCancelled) {
-            reject(new Error("cancelled"));
-          } else if (code === 0) {
-            resolve();
-          } else {
-            // Log full stderr
-            console.error(`[ERROR] Image clip ${i + 1} failed (code: ${code})`);
-            console.error(`\n=== FFmpeg stderr (${stderr.length} chars) ===`);
-            console.error(stderr);
-            console.error(`=== stderr end ===\n`);
-
-            reject(new Error(`Image clip ${i + 1} failed (code: ${code})\n\nError:\n${stderr}`));
-          }
-        });
-        proc.on("error", (err) => {
-          // 프로세스 복원
-          if (currentFfmpegProcess === proc) {
-            currentFfmpegProcess = previousProcess;
-          }
-          reject(err);
-        });
-      });
+      } catch (error) {
+        if (error.message === "사용자에 의해 취소됨") {
+          throw new Error("cancelled");
+        }
+        console.error(`[ERROR] Image clip ${i + 1} failed: ${error.message}`);
+        throw error;
+      }
 
       videoClips.push(imageClipOut);
 
