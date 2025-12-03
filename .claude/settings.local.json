@@ -13,7 +13,8 @@
       "Bash(dir:*)",
       "Bash(findstr:*)",
       "Bash(git checkout:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(git --no-color diff electron/ipc/video-download.js)"
     ],
     "deny": [],
     "ask": []

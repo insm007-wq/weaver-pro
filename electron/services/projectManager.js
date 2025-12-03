@@ -89,6 +89,12 @@ class ProjectManager {
       store.set('videoSaveFolder', projectDir);
       console.log(`💾 settings.json 자동 업데이트: defaultProjectName="${topic}", videoSaveFolder="${projectDir}"`);
 
+      // ✅ Race condition 해결: 모든 설정이 저장될 때까지 대기
+      const saved = await this.ensureProjectSettingsSaved(projectId, 5000);
+      if (!saved) {
+        console.warn(`⚠️ 신규 프로젝트 설정 저장 확인 시간 초과: ${projectId} (계속 진행)`);
+      }
+
       console.log(`📁 새 프로젝트 생성: ${projectId}`);
       console.log(`✅ currentProject 설정 완료:`, this.currentProject?.id);
       console.log(`📂 프로젝트 경로:`, projectData.paths.root);
@@ -153,6 +159,12 @@ class ProjectManager {
         if (project.paths && project.paths.root) {
           store.set('videoSaveFolder', project.paths.root);
           console.log(`📁 videoSaveFolder 업데이트: ${project.paths.root}`);
+        }
+
+        // ✅ Race condition 해결: 모든 설정이 저장될 때까지 대기
+        const saved = await this.ensureProjectSettingsSaved(projectId, 5000);
+        if (!saved) {
+          console.warn(`⚠️ 프로젝트 설정 저장 확인 시간 초과: ${projectId} (계속 진행)`);
         }
 
         return project;
@@ -399,6 +411,65 @@ class ProjectManager {
 
     console.warn(`⚠️ 프로젝트 설정 저장 확인 시간 초과 (${timeoutMs}ms)`);
     return false;
+  }
+
+  /**
+   * 프로젝트 경로를 안전하게 가져오는 중앙화된 함수
+   * @param {string} category - 'scripts', 'audio', 'video', 'images', 'output', 'temp'
+   * @param {Object} options - 옵션
+   * @returns {Promise<string>} - 절대 경로
+   */
+  async getProjectPath(category, options = {}) {
+    const { autoCreate = true, ensureSync = true, timeout = 3000 } = options;
+
+    // 현재 프로젝트 ID 확인
+    const currentProjectId = store.getCurrentProjectId();
+    if (!currentProjectId) {
+      throw new Error('❌ 현재 프로젝트가 설정되지 않았습니다');
+    }
+
+    // Race condition 방지: Project 설정이 완전히 저장되었는지 확인
+    if (ensureSync) {
+      const synced = await this.ensureProjectSettingsSaved(currentProjectId, timeout);
+      if (!synced) {
+        console.warn(`⚠️ 프로젝트 설정 동기화 대기 실패: ${currentProjectId}`);
+      }
+    }
+
+    // Project 객체 가져오기
+    const project = this.getCurrentProject();
+    if (!project || !project.paths) {
+      throw new Error(`❌ 프로젝트를 찾을 수 없습니다: ${currentProjectId}`);
+    }
+
+    // 카테고리별 경로 가져오기
+    const targetPath = project.paths[category];
+    if (!targetPath) {
+      throw new Error(`❌ 잘못된 경로 카테고리입니다: ${category}`);
+    }
+
+    // 폴더 자동 생성
+    if (autoCreate) {
+      try {
+        await fs.mkdir(targetPath, { recursive: true });
+      } catch (mkdirError) {
+        console.warn(`⚠️ 디렉토리 생성 시도 실패: ${targetPath}`, mkdirError.message);
+      }
+    }
+
+    return targetPath;
+  }
+
+  /**
+   * 프로젝트 파일 경로를 안전하게 가져오는 함수
+   * @param {string} category - 'scripts', 'audio', 'video', 'images', 'output', 'temp'
+   * @param {string} filename - 파일명
+   * @param {Object} options - 옵션
+   * @returns {Promise<string>} - 절대 파일 경로
+   */
+  async getProjectFilePath(category, filename, options = {}) {
+    const dirPath = await this.getProjectPath(category, options);
+    return path.join(dirPath, filename);
   }
 
   // 기존 폴더 기반 프로젝트들을 설정 파일로 마이그레이션

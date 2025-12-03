@@ -94,57 +94,33 @@ ipcMain.handle("script:getSubtitlePath", async (_evt, { filename }) => {
     const currentProjectId = store.getCurrentProjectId();
     console.log("🎯 현재 프로젝트 ID:", currentProjectId);
 
-    if (!currentProjectId) {
-      console.warn("⚠️ 현재 프로젝트가 설정되지 않았습니다. 기본 경로를 사용합니다.");
-
-      // 폴백: 기본 경로 사용
-      const projectRoot = store.get('projectRootFolder') || getDefaultProjectRoot();
-      const defaultProjectName = store.get('defaultProjectName') || 'default';
-      const scriptsDir = path.join(projectRoot, defaultProjectName, 'scripts');
-
-      await fs.mkdir(scriptsDir, { recursive: true });
-      const filePath = path.join(scriptsDir, filename);
-
-      console.log("📁 폴백 자막 파일 경로:", filePath);
-      return { success: true, data: { filePath } };
-    }
-
-    // 프로젝트 매니저를 통해 현재 프로젝트 정보 가져오기
-    const projectManager = getProjectManager();
-    const currentProject = store.getCurrentProject();
-
-    if (!currentProject) {
-      console.error("❌ 현재 프로젝트 데이터를 찾을 수 없습니다:", currentProjectId);
-
-      // ID로 프로젝트 다시 찾기 시도
-      const foundProject = await projectManager.findProjectById(currentProjectId);
-      if (!foundProject) {
-        throw new Error(`프로젝트를 찾을 수 없습니다: ${currentProjectId}`);
+    // ✅ Race condition 해결: Project 설정이 완전히 저장되었는지 확인
+    if (currentProjectId) {
+      const projectManager = getProjectManager();
+      const ensured = await projectManager.ensureProjectSettingsSaved(currentProjectId, 3000);
+      if (!ensured) {
+        console.warn(`⚠️ script:getSubtitlePath - 프로젝트 설정 로드 대기 실패: ${currentProjectId}`);
       }
-
-      // 프로젝트 매니저에 현재 프로젝트 설정
-      projectManager.setCurrentProject(foundProject);
     }
 
-    // 현재 프로젝트의 scripts 경로 사용
-    const project = currentProject || projectManager.getCurrentProject();
-    const scriptsDir = project.paths.scripts;
+    if (!currentProjectId) {
+      throw new Error("❌ 현재 프로젝트가 설정되지 않았습니다. 프로젝트를 먼저 선택해주세요.");
+    }
 
-    console.log("📂 현재 프로젝트 기반 scripts 디렉토리:", scriptsDir);
-
-    // 디렉토리가 없으면 생성
+    // ✅ projectManager를 통한 중앙화된 경로 관리
+    const projectManager = getProjectManager();
     try {
-      await fs.mkdir(scriptsDir, { recursive: true });
-      console.log("✅ 디렉토리 생성 완료:", scriptsDir);
-    } catch (dirError) {
-      console.warn("⚠️ 디렉토리 생성 시도 실패 (이미 존재할 수 있음):", dirError.message);
+      const filePath = await projectManager.getProjectFilePath('scripts', filename, {
+        autoCreate: true,
+        ensureSync: true
+      });
+
+      console.log("📁 자막 파일 경로:", filePath);
+      return { success: true, data: { filePath } };
+    } catch (error) {
+      console.error("❌ 자막 파일 경로 생성 실패:", error.message);
+      throw error;
     }
-
-    // 자막 파일 경로
-    const filePath = path.join(scriptsDir, filename);
-    console.log("📁 현재 프로젝트 자막 파일 경로:", filePath);
-
-    return { success: true, data: { filePath } };
   } catch (error) {
     console.error("❌ 동적 자막 경로 생성 실패:", error);
     return { success: false, message: error.message };
@@ -165,57 +141,33 @@ ipcMain.handle("script:getAudioPath", async (_evt, { filename }) => {
     const currentProjectId = store.getCurrentProjectId();
     console.log("🎯 현재 프로젝트 ID:", currentProjectId);
 
-    if (!currentProjectId) {
-      console.warn("⚠️ 현재 프로젝트가 설정되지 않았습니다. 기본 경로를 사용합니다.");
-
-      // 폴백: 기본 경로 사용
-      const projectRoot = store.get('projectRootFolder') || getDefaultProjectRoot();
-      const defaultProjectName = store.get('defaultProjectName') || 'default';
-      const audioDir = path.join(projectRoot, defaultProjectName, 'audio');
-
-      await fs.mkdir(audioDir, { recursive: true });
-      const filePath = path.join(audioDir, filename);
-
-      console.log("📁 폴백 오디오 파일 경로:", filePath);
-      return { success: true, data: { filePath } };
-    }
-
-    // 프로젝트 매니저를 통해 현재 프로젝트 정보 가져오기
-    const projectManager = getProjectManager();
-    const currentProject = store.getCurrentProject();
-
-    if (!currentProject) {
-      console.error("❌ 현재 프로젝트 데이터를 찾을 수 없습니다:", currentProjectId);
-
-      // ID로 프로젝트 다시 찾기 시도
-      const foundProject = await projectManager.findProjectById(currentProjectId);
-      if (!foundProject) {
-        throw new Error(`프로젝트를 찾을 수 없습니다: ${currentProjectId}`);
+    // ✅ Race condition 해결: Project 설정이 완전히 저장되었는지 확인
+    if (currentProjectId) {
+      const projectManager = getProjectManager();
+      const ensured = await projectManager.ensureProjectSettingsSaved(currentProjectId, 3000);
+      if (!ensured) {
+        console.warn(`⚠️ script:getAudioPath - 프로젝트 설정 로드 대기 실패: ${currentProjectId}`);
       }
-
-      // 프로젝트 매니저에 현재 프로젝트 설정
-      projectManager.setCurrentProject(foundProject);
     }
 
-    // 현재 프로젝트의 audio 경로 사용
-    const project = currentProject || projectManager.getCurrentProject();
-    const audioDir = project.paths.audio;
+    if (!currentProjectId) {
+      throw new Error("❌ 현재 프로젝트가 설정되지 않았습니다. 프로젝트를 먼저 선택해주세요.");
+    }
 
-    console.log("📂 현재 프로젝트 기반 audio 디렉토리:", audioDir);
-
-    // 디렉토리가 없으면 생성
+    // ✅ projectManager를 통한 중앙화된 경로 관리
+    const projectManager = getProjectManager();
     try {
-      await fs.mkdir(audioDir, { recursive: true });
-      console.log("✅ 디렉토리 생성 완료:", audioDir);
-    } catch (dirError) {
-      console.warn("⚠️ 디렉토리 생성 시도 실패 (이미 존재할 수 있음):", dirError.message);
+      const filePath = await projectManager.getProjectFilePath('audio', filename, {
+        autoCreate: true,
+        ensureSync: true
+      });
+
+      console.log("📁 오디오 파일 경로:", filePath);
+      return { success: true, data: { filePath } };
+    } catch (error) {
+      console.error("❌ 오디오 파일 경로 생성 실패:", error.message);
+      throw error;
     }
-
-    // 오디오 파일 경로
-    const filePath = path.join(audioDir, filename);
-    console.log("📁 현재 프로젝트 오디오 파일 경로:", filePath);
-
-    return { success: true, data: { filePath } };
   } catch (error) {
     console.error("❌ 동적 오디오 경로 생성 실패:", error);
     return { success: false, message: error.message };
