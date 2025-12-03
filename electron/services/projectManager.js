@@ -437,7 +437,18 @@ class ProjectManager {
     }
 
     // Project 객체 가져오기
-    const project = this.getCurrentProject();
+    let project = this.getCurrentProject();
+
+    // ✅ 앱 재시작 후 메모리에 로드되지 않은 프로젝트 처리
+    if (!project || !project.paths) {
+      // store에서 프로젝트 찾기
+      project = store.findProject(currentProjectId);
+      if (project) {
+        this.currentProject = project;  // 메모리에 캐시
+        console.log(`✅ 프로젝트 메모리 로드: ${currentProjectId}`);
+      }
+    }
+
     if (!project || !project.paths) {
       throw new Error(`❌ 프로젝트를 찾을 수 없습니다: ${currentProjectId}`);
     }
