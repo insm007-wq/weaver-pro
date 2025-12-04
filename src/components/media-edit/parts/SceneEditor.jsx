@@ -583,8 +583,8 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
           statusText="🎬 영상을 생성하는 중..."
           remainingTimeText={
             remainingTime
-              ? remainingTime <= 5
-                ? "(완료 중...)"
+              ? remainingTime <= 0
+                ? "(완료 중 ...)"
                 : `(남은 시간: ${formatRemainingTime(remainingTime)})`
               : ""
           }

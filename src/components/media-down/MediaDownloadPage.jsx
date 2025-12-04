@@ -17,22 +17,9 @@ import { showError, showSuccess } from "../common/GlobalToast";
 import BottomFixedBar from "../common/BottomFixedBar";
 import { tokens } from "@fluentui/react-components";
 import { MODE_CONFIGS } from "../../constants/modeConstants";
-import { useGenerationTimer } from "../../hooks/useGenerationTimer";
 
 // 로컬 이미지 캐시
 const imageCache = new Map();
-
-// 모드별 다운로드 설정 프리셋
-const MODE_DOWNLOAD_PRESETS = {
-  script_mode: {
-    aspectRatio: "16:9",
-    minResolution: "1080p",
-  },
-  shorts_mode: {
-    aspectRatio: "9:16",
-    minResolution: "1080p",
-  }
-};
 
 // 썸네일 이미지 컴포넌트 (로컬 파일 → base64 변환)
 const ThumbnailImage = React.memo(({ src, alt, style, fallbackText = "IMAGE" }) => {
@@ -138,10 +125,6 @@ function MediaDownloadPage({ onDownloadingChange }) {
   const headerStyles = useHeaderStyles();
   const containerStyles = useContainerStyles();
 
-  // 현재 작업 모드 가져오기 (기본값)
-  const currentMode = sessionStorage.getItem('currentMode') || 'script_mode';
-  const defaultPreset = MODE_DOWNLOAD_PRESETS[currentMode];
-
   // 상태
   const [keywords, setKeywords] = useState([]);
   const [selectedKeywords, setSelectedKeywords] = useState(new Set());
@@ -149,20 +132,16 @@ function MediaDownloadPage({ onDownloadingChange }) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState({});
   const [downloadedVideos, setDownloadedVideos] = useState([]);
-  const [selectedMode, setSelectedMode] = useState(currentMode);  // ✅ 사용자 선택 모드
   const [downloadOptions, setDownloadOptions] = useState({
     videosPerKeyword: 2,
     maxFileSize: 20,
-    minResolution: defaultPreset.minResolution,    // ✅ 모드별 해상도
-    aspectRatio: defaultPreset.aspectRatio,        // ✅ 모드별 비율
+    minResolution: "1080p",
+    aspectRatio: "16:9",
   });
   const [keywordsLoaded, setKeywordsLoaded] = useState(false);
   const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState(null);
   const [completedVideosCount, setCompletedVideosCount] = useState(0);
   const [showButtonHint, setShowButtonHint] = useState(true);
-  const [downloadStartTime, setDownloadStartTime] = useState(null);
-  const [displayedStep, setDisplayedStep] = useState("idle");
-  const [renderTrigger, setRenderTrigger] = useState(0);
 
   // Refs
   const cancelledRef = useRef(false);
@@ -171,76 +150,20 @@ function MediaDownloadPage({ onDownloadingChange }) {
   const totalVideosRef = useRef(0);
   const countdownIntervalRef = useRef(null);
   const isTimeEstimatedRef = useRef(false);
-  const prevStepRef = useRef("idle");
 
-  // 타이머 훅
-  const { remainingTime, estimatedTotalTime, elapsedTime } = useGenerationTimer(
-    isDownloading,
-    downloadStartTime,
-    displayedStep,
-    totalVideosRef.current > 0 ? totalVideosRef.current * 5 / 60 : 0  // 예상 소요 시간 (분 단위)
-  );
+  // 남은 시간을 "1분 20초" 형식으로 변환 (초 단위)
+  const formatRemainingTime = (seconds) => {
+    if (typeof seconds !== "number" || seconds <= 0) return "";
 
-  // Step 변경 감지 (깜빡임 방지)
-  useEffect(() => {
-    const newStep = isDownloading ? "downloading" : "idle";
-    if (newStep !== prevStepRef.current) {
-      prevStepRef.current = newStep;
-      setDisplayedStep(newStep);
-    }
-  }, [isDownloading]);
+    const min = Math.floor(seconds / 60);
+    const sec = Math.floor(seconds % 60);
 
-  // 1초마다 렌더 트리거 업데이트 (부드러운 진행바 애니메이션)
-  useEffect(() => {
-    if (!isDownloading) return;
-
-    const interval = setInterval(() => {
-      setRenderTrigger((prev) => prev + 1);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [isDownloading]);
-
-  // 남은 시간을 "1분 20초" 형식으로 변환
-  const formatRemainingTime = (timeStr) => {
-    if (!timeStr || typeof timeStr !== "string") return "";
-    if (timeStr.includes("생성 중")) return "";
-
-    const parts = timeStr.split(":");
-    const min = parseInt(parts[0], 10);
-    const sec = parseInt(parts[1], 10);
-
-    if (isNaN(min) || isNaN(sec)) return "";
     if (min > 0) {
       return `${min}분 ${sec}초`;
     }
     return `${sec}초`;
   };
 
-  // 시간 기반 진행률 계산 (99% 캡)
-  const calculateDownloadProgress = () => {
-    // 완료 상태: 100%
-    if (!isDownloading && completedVideosCount > 0) {
-      return 100;
-    }
-
-    // 미진행 상태: 0%
-    if (!isDownloading || !estimatedTotalTime || !elapsedTime) return 0;
-
-    const [totalMin, totalSec] = estimatedTotalTime.split(":").map(Number);
-    const [elapsedMin, elapsedSec] = elapsedTime.split(":").map(Number);
-
-    const totalSeconds = totalMin * 60 + totalSec;
-    const elapsedSeconds = elapsedMin * 60 + elapsedSec;
-
-    if (totalSeconds === 0) return 0;
-
-    // 진행 상황에 따라 0% → 99%
-    let progress = (elapsedSeconds / totalSeconds) * 100;
-    return Math.round(Math.min(99, progress));
-  };
-
-  const timeBasedDownloadProgress = calculateDownloadProgress();
 
   // 타이머 정리 헬퍼
   const clearCountdownTimer = useCallback(() => {
@@ -254,12 +177,10 @@ function MediaDownloadPage({ onDownloadingChange }) {
   const resetDownloadState = useCallback(() => {
     setIsDownloading(false);
     downloadStartTimeRef.current = null;
-    setDownloadStartTime(null);
     totalVideosRef.current = 0;
     isTimeEstimatedRef.current = false;
     setEstimatedTimeRemaining(null);
     setCompletedVideosCount(0);
-    setDisplayedStep("idle");
     clearCountdownTimer();
   }, [clearCountdownTimer]);
 
@@ -432,10 +353,8 @@ function MediaDownloadPage({ onDownloadingChange }) {
     setDownloadProgress({});
     setDownloadedVideos([]);
     downloadStartTimeRef.current = Date.now();
-    setDownloadStartTime(Date.now());
     setCompletedVideosCount(0);
     isTimeEstimatedRef.current = false;
-    setDisplayedStep("downloading");
 
     clearCountdownTimer();
 
@@ -813,51 +732,6 @@ function MediaDownloadPage({ onDownloadingChange }) {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
-            {/* 영상 모드 선택 (NEW - 가장 상단) */}
-            <div style={{ display: "grid", gridTemplateColumns: "140px minmax(0,1fr)", alignItems: "center", columnGap: 12 }}>
-              <Text size={300} weight="medium">
-                영상 모드
-              </Text>
-              <div style={{ minWidth: 0, width: "100%" }}>
-                <Dropdown
-                  value={selectedMode === "shorts_mode" ? "쇼츠 (9:16 세로)" : "일반 영상 (16:9 가로)"}
-                  selectedOptions={[selectedMode]}
-                  onOptionSelect={(_, data) => {
-                    const newMode = data.optionValue;
-                    const preset = MODE_DOWNLOAD_PRESETS[newMode];
-
-                    setSelectedMode(newMode);
-                    setDownloadOptions((prev) => ({
-                      ...prev,
-                      aspectRatio: preset.aspectRatio,      // 자동 설정
-                      minResolution: preset.minResolution,  // 자동 설정
-                    }));
-                  }}
-                  style={{ width: "100%" }}
-                  disabled={isDownloading}
-                >
-                  <Option value="script_mode">일반 영상 (16:9 가로)</Option>
-                  <Option value="shorts_mode">쇼츠 (9:16 세로)</Option>
-                </Dropdown>
-              </div>
-            </div>
-
-            {/* 설명 텍스트 추가 */}
-            <div style={{
-              gridColumn: "1 / -1",
-              padding: "8px 12px",
-              background: "#f8fafc",
-              borderRadius: 6,
-              border: "1px solid #e0e7ff",
-              marginBottom: 0
-            }}>
-              <Text size={200} style={{ color: "#4f46e5", lineHeight: 1.2 }}>
-                💡 {selectedMode === "shorts_mode"
-                  ? "쇼츠: 9:16 세로 비율 (유튜브 쇼츠, 틱톡, 릴스 최적)"
-                  : "일반: 16:9 가로 비율 (유튜브, 블로그 등)"}
-              </Text>
-            </div>
-
             {/* 영상 개수 */}
             <div style={{ display: "grid", gridTemplateColumns: "140px minmax(0,1fr)", alignItems: "center", columnGap: 12 }}>
               <Text size={300} weight="medium">
@@ -971,9 +845,6 @@ function MediaDownloadPage({ onDownloadingChange }) {
                 <Text size={200} weight="semibold">
                   <span style={{ color: "#0078d4" }}>현재</span> 선택 요약
                 </Text>
-                <Badge appearance="filled" color={selectedMode === "shorts_mode" ? "warning" : "brand"} size="small">
-                  {selectedMode === "shorts_mode" ? "🎬 쇼츠 모드" : "📺 일반 모드"}
-                </Badge>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 <Badge appearance="tint" color="brand">
@@ -990,9 +861,7 @@ function MediaDownloadPage({ onDownloadingChange }) {
                 </Badge>
               </div>
               <Text size={100} style={{ color: "#7a869a" }}>
-                팁: {selectedMode === "shorts_mode"
-                  ? "9:16 세로 비율로 자동 설정되었습니다. 필요시 수동 변경 가능합니다."
-                  : "16:9 가로 비율로 자동 설정되었습니다. 10-20MB가 품질과 속도의 최적 균형입니다."}
+                팁: 10-20MB가 품질과 속도의 최적 균형입니다.
               </Text>
             </div>
           </div>
@@ -1010,13 +879,13 @@ function MediaDownloadPage({ onDownloadingChange }) {
               : `✅ 다운로드 완료 (${downloadedVideos.length}개)`
           }
           remainingTimeText={
-            isDownloading && remainingTime
-              ? remainingTime <= 5
-                ? "(완료 중...)"
-                : `(남은 시간: ${formatRemainingTime(remainingTime)})`
+            isDownloading && estimatedTimeRemaining !== null
+              ? estimatedTimeRemaining <= 0
+                ? "(완료중 ...)"
+                : `(남은 시간: ${formatRemainingTime(estimatedTimeRemaining)})`
               : ""
           }
-          progress={isDownloading ? timeBasedDownloadProgress : 100}
+          progress={downloadProgressPercent}
           nextStepButton={
             !isDownloading && downloadedVideos.length > 0
               ? {

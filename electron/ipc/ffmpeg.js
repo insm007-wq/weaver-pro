@@ -1700,9 +1700,9 @@ async function buildFFmpegCommand({ audioFiles, imageFiles, outputPath, subtitle
   return args;
 }
 
-// ----------------------------------------------------------------------------
-// FFmpeg 실행 (쉘 스크립트 사용 - 긴 명령줄 처리, 크로스 플랫폼)
-// ----------------------------------------------------------------------------
+// ============================================================================
+// FFmpeg 실행 (Windows: 직접 spawn, 배치 파일 우회)
+// ============================================================================
 function runFFmpegViaShellScript(args, progressCallback = null) {
   return new Promise(async (resolve) => {
     // 취소 확인
@@ -1710,118 +1710,16 @@ function runFFmpegViaShellScript(args, progressCallback = null) {
       return resolve({ success: false, error: "cancelled" });
     }
 
-    const os = require("os");
-    const isWindows = process.platform === "win32";
-
-    let tempDir;
-    try {
-      tempDir = path.join(app.getPath("userData"), "ffmpeg-temp");
-    } catch {
-      tempDir = path.join(os.tmpdir(), "weaver-pro-ffmpeg-temp");
-    }
-    await fsp.mkdir(tempDir, { recursive: true });
-
-    // 플랫폼별 스크립트 파일 생성
-    const scriptExt = isWindows ? "bat" : "sh";
-    const scriptPath = path.join(tempDir, `ffmpeg_${Date.now()}.${scriptExt}`);
-
-    let scriptContent;
-    let shellCommand;
-    let shellArgs;
-
-    if (isWindows) {
-      // Windows: .bat 파일
-      // 배치 파일에서 안전한 이스케이프
-      const escapedArgs = args.map((arg) => {
-        // %를 %%로 변환 (배치 파일에서 변수로 해석되지 않도록)
-        let escaped = arg.replace(/%/g, "%%");
-        // 큰따옴표를 이스케이프
-        escaped = escaped.replace(/"/g, '""');
-
-        // 모든 인자를 기본적으로 큰따옴표로 감싸기 (경로 안전성)
-        return `"${escaped}"`;
-      });
-
-      // 각 인자를 별도 줄로 분리 (^ 사용하여 줄바꿈)
-      const argsLines = escapedArgs
-        .map((arg, i) => {
-          if (i === escapedArgs.length - 1) {
-            return `  ${arg}`;
-          }
-          return `  ${arg} ^`;
-        })
-        .join("\n");
-
-      // 한글 로그 제거 (UTF-8 호환성 문제)
-      scriptContent = `@echo off
-setlocal DisableDelayedExpansion
-"${ffmpegPath}" ^
-${argsLines}
-endlocal
-exit /b %ERRORLEVEL%`;
-
-      shellCommand = "cmd.exe";
-      shellArgs = ["/c", scriptPath];
-    } else {
-      // Mac/Linux: .sh 파일
-      // 인자를 쉘 이스케이프
-      const escapeForShell = (arg) => {
-        return arg.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\$/g, "\\$").replace(/`/g, "\\`");
-      };
-
-      const escapedArgs = args.map((arg) => {
-        const escaped = escapeForShell(arg);
-        return `"${escaped}"`;
-      });
-
-      // 각 인자를 별도 줄로 분리 (\ 사용하여 줄바꿈)
-      // 마지막 인자만 \ 없이 종료
-      const argsLines = escapedArgs
-        .map((arg, i) => {
-          if (i === escapedArgs.length - 1) {
-            return `  ${arg}`;
-          }
-          return `  ${arg} \\`;
-        })
-        .join("\n");
-
-      scriptContent = `#!/bin/sh
-"${ffmpegPath}" \\
-${argsLines}
-exit $?`;
-
-      shellCommand = "/bin/sh";
-      shellArgs = [scriptPath];
-    }
-
-    try {
-      // 스크립트 파일 작성
-      // Windows: UTF-8 (UTF-16LE는 한글 로깅 깨짐), Mac/Linux: UTF-8
-      const encoding = "utf8";
-      await fsp.writeFile(scriptPath, scriptContent, encoding);
-
-      // Mac/Linux는 실행 권한 부여
-      if (!isWindows) {
-        await fsp.chmod(scriptPath, 0o755);
-      }
-
-      // 스크립트 파일 검증
-      if (!fs.existsSync(scriptPath)) {
-        throw new Error(`배치 스크립트 생성 실패: ${scriptPath}`);
-      }
-
-      // 배치 파일 검증 (오류만 출력)
-      const batchSize = fs.statSync(scriptPath).size;
-      if (batchSize === 0) {
-        throw new Error(`배치 파일이 비어있습니다: ${scriptPath}`);
-      }
-    } catch (error) {
-      console.error("❌ 스크립트 파일 생성 실패:", error);
-      return resolve({ success: false, error: `스크립트 파일 생성 실패: ${error.message}` });
-    }
-
     const timeoutMs = 15 * 60 * 1000;
-    const proc = spawn(shellCommand, shellArgs, { windowsHide: isWindows });
+
+    // ✅ Windows: 배열 인자를 직접 spawn() 전달
+    // 장점: 명령줄 길이 제한 없음, 이스케이프 불필요, 배치 파일 생성 불필요
+    const ffmpegPath = getFfmpegPath();
+    if (!ffmpegPath) {
+      return resolve({ success: false, error: "FFmpeg 경로를 찾을 수 없습니다" });
+    }
+
+    const proc = spawn(ffmpegPath, args, { windowsHide: true });
 
     // 현재 프로세스 저장 (취소용)
     currentFfmpegProcess = proc;
