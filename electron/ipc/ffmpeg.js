@@ -583,7 +583,8 @@ function createDrawtextFilterAdvanced(subtitle, settings, textFilePath, videoWid
       .replace(/\[/g, "\\[")
       .replace(/\]/g, "\\]")
       .replace(/,/g, "\\,")
-      .replace(/;/g, "\\;");
+      .replace(/;/g, "\\;")
+      .replace(/%/g, "\\%");  // ✅ FFmpeg drawtext에서 % 변수 해석 방지
   };
 
   const totalTextHeight = lines.length * Math.round(fontSize * lineHeight);
@@ -2423,6 +2424,24 @@ async function generateClips(scenes, mediaFiles, sceneDurationsMs, tempDir, even
   return { videoClips, totalVideoSec };
 }
 
+// ✅ 비디오 concat 파일 설정 (300개+ 씬 대응용)
+async function setupVideoConcat(videoClips, tempDir) {
+  if (!videoClips || videoClips.length === 0) {
+    return null;
+  }
+
+  const videoConcatPath = path.join(tempDir, `video_concat_${Date.now()}.txt`);
+  const videoConcatContent = videoClips
+    .map((filePath) => {
+      // Windows 경로를 forward slash로 변환
+      const escapedPath = filePath.replace(/\\/g, "/").replace(/'/g, "'\\''");
+      return `file '${escapedPath}'`;
+    })
+    .join("\n");
+  await fsp.writeFile(videoConcatPath, videoConcatContent, "utf8");
+  return videoConcatPath;
+}
+
 // ✅ 오디오 concat 파일 설정
 async function setupAudioConcat(audioFiles, tempDir) {
   if (!audioFiles || audioFiles.length === 0) {
@@ -2441,30 +2460,39 @@ async function setupAudioConcat(audioFiles, tempDir) {
 }
 
 // ✅ 최종 FFmpeg 필터 복합체 구성
+// Phase 3 개선: concat demuxer 사용 시 [0:v]부터 시작 (concat 필터 불필요)
 function buildFinalFilterComplex(videoClips, audioFiles, srtPath) {
-  let filterComplex = videoClips.map((_, i) => `[${i}:v]`).join("");
-  filterComplex += `concat=n=${videoClips.length}:v=1:a=0[outv]`;
+  // ✅ concat demuxer가 이미 비디오를 [0:v]로 병합했으므로
+  // concat 필터 제거 후 [0:v]에서 직접 자막 처리 시작
+  let filterComplex = "";
+  let currentLabel = "[0:v]";  // concat demuxer 출력
+  let finalVideoLabel = "[v]";
 
-  let finalVideoLabel = "[outv]";
   const subtitleSettings = getSubtitleSettings();
 
   if (subtitleSettings.enableSubtitles && srtPath && fs.existsSync(srtPath)) {
     const srtContent = fs.readFileSync(srtPath, "utf-8");
     const subtitles = parseSRT(srtContent);
 
-    let currentLabel = "[outv]";
     for (let i = 0; i < subtitles.length; i++) {
       const subtitle = subtitles[i];
       const nextLabel = i === subtitles.length - 1 ? "[v]" : `[st${i}]`;
 
       const drawtextFilter = createDrawtextFilterAdvanced(subtitle, subtitleSettings, null, 1920, 1080);
-      filterComplex += `;${currentLabel}${drawtextFilter}${nextLabel}`;
+
+      if (i === 0) {
+        // 첫 번째는 구분자 없이 시작
+        filterComplex = `${currentLabel}${drawtextFilter}${nextLabel}`;
+      } else {
+        filterComplex += `;${currentLabel}${drawtextFilter}${nextLabel}`;
+      }
       currentLabel = nextLabel;
     }
 
     finalVideoLabel = "[v]";
   } else {
-    filterComplex += `;[outv]format=yuv420p[v]`;
+    // 자막 없으면 format 필터만 적용
+    filterComplex = `[0:v]format=yuv420p[v]`;
     finalVideoLabel = "[v]";
   }
 
@@ -2522,13 +2550,18 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
     // 3️⃣ FFmpeg 최종 arguments 구성
     const finalArgs = ["-y", "-hide_banner"];
 
-    // 비디오 클립들을 입력으로 추가
-    videoClips.forEach((clip) => {
-      finalArgs.push("-i", clip);
-    });
+    // ✅ 비디오 concat 텍스트 파일 생성 (Phase 2 개선)
+    const videoConcatPath = await setupVideoConcat(videoClips, tempDir);
+    if (!videoConcatPath || !fs.existsSync(videoConcatPath)) {
+      throw new Error(`❌ 비디오 concat 파일 생성 실패: ${videoConcatPath}`);
+    }
 
-    // 오디오는 concat demuxer로 추가
-    const audioInputIndex = videoClips.length;
+    // ✅ 비디오와 오디오 모두 concat demuxer 사용 (명령줄 길이 최적화)
+    // Windows CreateProcess 32KB 제한 회피: 600+ 인자 → 2개 파일로 단축
+    finalArgs.push("-f", "concat", "-safe", "0", "-i", videoConcatPath);
+
+    // 오디오 concat demuxer
+    const audioInputIndex = 1;  // ✅ 비디오가 [0], 오디오가 [1]
     if (audioConcatPath) {
       finalArgs.push("-f", "concat", "-safe", "0", "-i", audioConcatPath);
     }
@@ -2611,21 +2644,19 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
       }
     }
 
-    // 모든 비디오 입력 파일 확인
-    let videoInputCount = 0;
-    for (let i = 0; i < finalArgs.length; i++) {
-      if (finalArgs[i] === "-i" && i + 1 < finalArgs.length) {
-        const inputPath = finalArgs[i + 1];
-        if (!inputPath.startsWith("-")) {
-          if (fs.existsSync(inputPath)) {
-            videoInputCount++;
-          } else {
-            console.warn(`  ❌ Input file missing: ${inputPath}`);
-          }
-        }
-      }
+    // ✅ concat demuxer 파일 확인 (Phase 2 개선)
+    console.log(`  Video concat file: ${videoConcatPath}`);
+    console.log(`  Video concat exists: ${fs.existsSync(videoConcatPath) ? "✅" : "❌"}`);
+    if (fs.existsSync(videoConcatPath)) {
+      const videoConcatSize = fs.statSync(videoConcatPath).size;
+      console.log(`  Video concat size: ${videoConcatSize}bytes`);
     }
-    console.log(`  Video inputs found: ${videoInputCount}개`);
+    console.log(`  Total video clips: ${videoClips.length}개`);
+    console.log(`  Audio concat file: ${audioConcatPath || "없음"}`);
+    if (audioConcatPath && fs.existsSync(audioConcatPath)) {
+      const audioConcatSize = fs.statSync(audioConcatPath).size;
+      console.log(`  Audio concat size: ${audioConcatSize}bytes`);
+    }
     console.log(`\n`);
 
     // FFmpeg 실행
