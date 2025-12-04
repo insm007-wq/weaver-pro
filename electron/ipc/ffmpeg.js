@@ -544,33 +544,10 @@ function createDrawtextFilterAdvanced(subtitle, settings, textFilePath, videoWid
   const lineSpacing = Math.round((lineHeight - 1) * fontSize);
 
   // textfile 사용 시 (줄바꿈 자동 지원)
+  // 현재는 text 방식 사용 (% 문자 처리 때문)
   if (useTextFile) {
-    const escapedTextFile = textFilePath.replace(/\\/g, "/").replace(/:/g, "\\:");
-
-    let filter = `drawtext=textfile='${escapedTextFile}'`;
-
-    // 폰트 파일이 있을 때만 포함
-    if (fontFile) {
-      filter += `:fontfile='${fontFile}'`;
-    }
-
-    filter +=
-      `:fontsize=${fontSize}` +
-      `:fontcolor=${textColorFFmpeg}` +
-      `:x=${xExpr}` +
-      `:y=${yExpr}` +
-      `:box=${boxExpr}` +
-      `:boxcolor=${boxcolor}` +
-      `:boxborderw=${boxborderw}` +
-      `:borderw=${borderw}` +
-      `:bordercolor=${bordercolor}` +
-      `:shadowx=${shadowx}` +
-      `:shadowy=${shadowy}` +
-      `:shadowcolor=${shadowColorFFmpeg}` +
-      `:line_spacing=${lineSpacing}` +
-      `:enable='${enableExpr}'`;
-
-    return filter;
+    // text 방식으로 처리하므로 여기서는 실행 안 됨
+    // (buildFinalFilterComplex에서 textFilePath를 null로 전달)
   }
 
   // text 사용 시 (여러 줄을 개별 필터로 분리)
@@ -584,7 +561,7 @@ function createDrawtextFilterAdvanced(subtitle, settings, textFilePath, videoWid
       .replace(/\]/g, "\\]")
       .replace(/,/g, "\\,")
       .replace(/;/g, "\\;")
-      .replace(/%/g, "\\%");  // ✅ FFmpeg drawtext에서 % 변수 해석 방지
+      .replace(/%/g, "\\\\%");  // ✅ % 문자: 싱글쿼트 안에서 \% (두 개의 백슬래시)
   };
 
   const totalTextHeight = lines.length * Math.round(fontSize * lineHeight);
@@ -2461,7 +2438,7 @@ async function setupAudioConcat(audioFiles, tempDir) {
 
 // ✅ 최종 FFmpeg 필터 복합체 구성
 // Phase 3 개선: concat demuxer 사용 시 [0:v]부터 시작 (concat 필터 불필요)
-function buildFinalFilterComplex(videoClips, audioFiles, srtPath) {
+async function buildFinalFilterComplex(videoClips, audioFiles, srtPath) {
   // ✅ concat demuxer가 이미 비디오를 [0:v]로 병합했으므로
   // concat 필터 제거 후 [0:v]에서 직접 자막 처리 시작
   let filterComplex = "";
@@ -2478,6 +2455,7 @@ function buildFinalFilterComplex(videoClips, audioFiles, srtPath) {
       const subtitle = subtitles[i];
       const nextLabel = i === subtitles.length - 1 ? "[v]" : `[st${i}]`;
 
+      // ✅ text 방식 사용 (% 문자 포함 자막도 처리 가능)
       const drawtextFilter = createDrawtextFilterAdvanced(subtitle, subtitleSettings, null, 1920, 1080);
 
       if (i === 0) {
@@ -2567,7 +2545,7 @@ async function composeVideoFromScenes({ event, scenes, mediaFiles, audioFiles, o
     }
 
     // 4️⃣ 필터 복합체 구성
-    const { filterComplex, finalVideoLabel } = buildFinalFilterComplex(videoClips, audioFiles, srtPath);
+    const { filterComplex, finalVideoLabel } = await buildFinalFilterComplex(videoClips, audioFiles, srtPath);
 
     // filter_complex가 길면 파일로 저장
     let filterScriptPath = null;
