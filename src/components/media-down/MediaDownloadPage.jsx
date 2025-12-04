@@ -723,21 +723,6 @@ function MediaDownloadPage({ onDownloadingChange }) {
           <div style={{ marginTop: "auto" }}>
             <Divider style={{ margin: "16px 0" }} />
 
-            {isDownloading && estimatedTimeRemaining !== null && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <Text size={300} weight="semibold">
-                  다운로드 진행 중
-                </Text>
-                <Badge appearance="filled" color="informative" size="small">
-                  {estimatedTimeRemaining <= 0
-                    ? "거의 완료 중..."
-                    : estimatedTimeRemaining >= 3600
-                    ? `${Math.floor(estimatedTimeRemaining / 3600)}시간 ${Math.floor((estimatedTimeRemaining % 3600) / 60)}분 남음`
-                    : `${Math.floor(estimatedTimeRemaining / 60)}분 ${Math.floor(estimatedTimeRemaining % 60)}초 남음`}
-                </Badge>
-              </div>
-            )}
-
             {!isDownloading ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <style>
@@ -1026,7 +1011,9 @@ function MediaDownloadPage({ onDownloadingChange }) {
           }
           remainingTimeText={
             isDownloading && remainingTime
-              ? `(남은 시간: ${formatRemainingTime(remainingTime)})`
+              ? remainingTime <= 5
+                ? "(완료 중...)"
+                : `(남은 시간: ${formatRemainingTime(remainingTime)})`
               : ""
           }
           progress={isDownloading ? timeBasedDownloadProgress : 100}

@@ -345,6 +345,8 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
           remainingTimeText={
             fullVideoState?.currentStep === "completed"
               ? ""
+              : remainingTime === "00:00" || !remainingTime
+              ? "(완료 중...)"
               : `(남은 시간: ${formatRemainingTime(remainingTime)})`
           }
           progress={timeBasedProgress}

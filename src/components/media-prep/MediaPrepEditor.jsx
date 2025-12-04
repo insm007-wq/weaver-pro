@@ -8,7 +8,6 @@ import { useKeywordExtraction } from "../../hooks/useKeywordExtraction";
 import { useWizardStep } from "../../hooks/useWizardStep";
 import { useVoiceSettings } from "../../hooks/useVoiceSettings";
 import { useApi } from "../../hooks/useApi";
-import { useGenerationTimer } from "../../hooks/useGenerationTimer";
 
 // Constants
 import { makeDefaultForm } from "../../constants/scriptSettings";
@@ -88,26 +87,35 @@ function MediaPrepEditor() {
     return () => clearInterval(interval);
   }, [keywordExtraction.isExtracting]);
 
-  // 타이머 훅 (키워드 추출 중에만 작동)
-  const { remainingTime } = useGenerationTimer(
-    keywordExtraction.isExtracting,
-    extractionStartTime,
-    displayedStep,
-    fileManagement.scenes.length * 0.5 / 60 || 1  // 씬 수 기반 분 단위 변환
-  );
+  // 남은 시간 직접 계산 (로딩바와 일치시키기)
+  const [remainingTime, setRemainingTime] = useState(0);
+
+  useEffect(() => {
+    if (!keywordExtraction.isExtracting || !extractionStartTime) {
+      setRemainingTime(0);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const now = new Date();
+      const elapsedMs = now - extractionStartTime;
+      const elapsedSec = Math.floor(elapsedMs / 1000);
+
+      const estimatedSec = Math.max(fileManagement.scenes.length * 0.5, 5); // 시간 표시용 (씬당 0.5초)
+      const remaining = Math.max(0, estimatedSec - elapsedSec);
+
+      setRemainingTime(remaining);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [keywordExtraction.isExtracting, extractionStartTime, fileManagement.scenes.length]);
 
   // 남은 시간을 "X분 Y초" 형식으로 변환
-  const formatRemainingTime = (timeStr) => {
-    if (!timeStr) return '';
+  const formatRemainingTime = (seconds) => {
+    if (typeof seconds !== 'number' || seconds <= 0) return '';
 
-    // "생성 중..." 같은 텍스트 처리
-    if (timeStr.includes('생성')) return '';
-
-    const parts = timeStr.split(':');
-    const min = parseInt(parts[0]) || 0;
-    const sec = parseInt(parts[1]) || 0;
-
-    if (isNaN(min) || isNaN(sec)) return '';
+    const min = Math.floor(seconds / 60);
+    const sec = Math.floor(seconds % 60);
 
     if (min > 0) {
       return `${min}분 ${sec}초`;
@@ -131,8 +139,8 @@ function MediaPrepEditor() {
     const elapsedMs = now - extractionStartTime;
     const elapsedSec = Math.floor(elapsedMs / 1000);
 
-    // 씬 수 기반 예상 시간 (씬당 0.5초)
-    const estimatedSec = Math.max(fileManagement.scenes.length * 0.5, 10);
+    // 씬 수 기반 예상 시간 (로딩바용 - 조금 늦게 채워지도록)
+    const estimatedSec = Math.max(fileManagement.scenes.length * 0.35, 4);
 
     // 진행 중: 99%까지만 올라감 (완료까지 100% 도달 방지)
     return Math.min(99, Math.round((elapsedSec / estimatedSec) * 99));
@@ -574,7 +582,9 @@ function MediaPrepEditor() {
           }
           remainingTimeText={
             isExtracting
-              ? `(남은 시간: ${formatRemainingTime(remainingTime)})`
+              ? remainingTime <= 5
+                ? "(완료 중...)"
+                : `(남은 시간: ${formatRemainingTime(remainingTime)})`
               : ""
           }
           progress={extractionProgress}
