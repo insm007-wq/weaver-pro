@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { Text, tokens } from "@fluentui/react-components";
 import { useHeaderStyles, useContainerStyles } from "../../styles/commonStyles";
 import { DocumentEditRegular } from "@fluentui/react-icons";
@@ -16,6 +16,7 @@ import { useScriptGenerator } from "../../hooks/useScriptGenerator";
 import { useVoiceSettings } from "../../hooks/useVoiceSettings";
 import { usePromptSettings } from "../../hooks/usePromptSettings";
 import { useApi } from "../../hooks/useApi";
+import { useGenerationTimer } from "../../hooks/useGenerationTimer";
 
 // 상수 imports
 import { makeDefaultForm } from "../../constants/scriptSettings";
@@ -46,12 +47,87 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
     logs: [],
   });
 
+  // 이전 step을 추적 (청크 생성 중 깜박임 방지)
+  const prevStepRef = useRef("idle");
+  const [displayedStep, setDisplayedStep] = useState("idle");
+
+  // Step이 실제로 바뀔 때만 UI 업데이트 (청크 생성 중 깜박임 방지)
+  useEffect(() => {
+    if (fullVideoState.currentStep !== prevStepRef.current) {
+      prevStepRef.current = fullVideoState.currentStep;
+      setDisplayedStep(fullVideoState.currentStep);
+    }
+  }, [fullVideoState.currentStep]);
+
   // 커스텀 훅들
   const api = useApi();
   const { promptNames, promptLoading } = usePromptSettings();
   const { doc, setDoc, isLoading, error, setIsLoading, setError, runGenerate, chunkProgress } = useScriptGeneration();
   const { voices, voiceLoading, voiceError, previewVoice, stopVoice, retryVoiceLoad } = useVoiceSettings(form);
   const { runScriptMode, cancelGeneration, isCancelling } = useScriptGenerator();
+  const { remainingTime, estimatedTotalTime, elapsedTime } = useGenerationTimer(
+    fullVideoState?.isGenerating,
+    fullVideoState?.startTime,
+    fullVideoState?.currentStep,
+    form?.durationMin
+  );
+
+  // 남은 시간을 "1분 20초" 형식으로 변환
+  const formatRemainingTime = (timeStr) => {
+    if (!timeStr) return '';
+    const parts = timeStr.split(':');
+    const min = parseInt(parts[0]);
+    const sec = parseInt(parts[1]);
+    if (min > 0) {
+      return `${min}분 ${sec}초`;
+    }
+    return `${sec}초`;
+  };
+
+  // 각 단계별 독립적 진행률 계산 (단계마다 0% → 100% 부드럽게 올라옴)
+  const calculateTimeBasedProgress = () => {
+    if (!estimatedTotalTime || !elapsedTime) return 0;
+
+    const [totalMin, totalSec] = estimatedTotalTime.split(':').map(Number);
+    const [elapsedMin, elapsedSec] = elapsedTime.split(':').map(Number);
+
+    const totalSeconds = totalMin * 60 + totalSec;
+    const elapsedSeconds = elapsedMin * 60 + elapsedSec;
+
+    if (totalSeconds === 0) return 0;
+
+    // 각 단계별 예상 시간
+    const scriptEstimatedSec = Math.min(form?.durationMin * 8, 600);
+    const audioEstimatedSec = form?.durationMin * 60 * 0.2;
+    const subtitleEstimatedSec = 10;
+
+    // 단계별 진행 범위 설정
+    const scriptRange = (scriptEstimatedSec / totalSeconds) * 100;
+    const audioRange = (audioEstimatedSec / totalSeconds) * 100;
+    const subtitleRange = (subtitleEstimatedSec / totalSeconds) * 100;
+
+    let progress = 0;
+
+    if (displayedStep === "script") {
+      // 대본 생성: 각 단계 내에서 0% → 100%
+      const stepProgress = Math.min(100, (elapsedSeconds / scriptEstimatedSec) * 100);
+      progress = (stepProgress / 100) * scriptRange;
+    } else if (displayedStep === "audio") {
+      // 음성 합성: 각 단계 내에서 0% → 100%
+      const audioElapsed = Math.max(0, elapsedSeconds - scriptEstimatedSec);
+      const stepProgress = Math.min(100, (audioElapsed / audioEstimatedSec) * 100);
+      progress = scriptRange + (stepProgress / 100) * audioRange;
+    } else if (displayedStep === "subtitle") {
+      // 자막 생성: 각 단계 내에서 0% → 100%
+      const subtitleElapsed = Math.max(0, elapsedSeconds - scriptEstimatedSec - audioEstimatedSec);
+      const stepProgress = Math.min(100, (subtitleElapsed / subtitleEstimatedSec) * 100);
+      progress = scriptRange + audioRange + (stepProgress / 100) * subtitleRange;
+    }
+
+    return Math.round(Math.min(100, progress));
+  };
+
+  const timeBasedProgress = calculateTimeBasedProgress();
 
   // 폼 변경 핸들러
   const onChange = useCallback((k, v) => {
@@ -87,6 +163,7 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
         startTime: null,
         logs: clearLogs ? [] : prev.logs,
       }));
+      setDisplayedStep("idle");
       setDoc(null);
       setIsLoading(false);
     },
@@ -244,7 +321,7 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
       {/* 하단 고정 미니 진행바 */}
       {(fullVideoState?.isGenerating || isLoading || fullVideoState?.currentStep === "completed") && (
         <BottomFixedBar
-          key={`bottombar-${fullVideoState?.currentStep}`}
+          key={`bottombar-${displayedStep}`}
           isComplete={fullVideoState?.currentStep === "completed"}
           isLoading={fullVideoState?.isGenerating || isLoading}
           statusText={
@@ -252,19 +329,19 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
               ? "✅ 대본 생성 완료"
               : `🎬 ${
                   {
-                    script: "대본 생성",
-                    audio: "음성 합성",
-                    subtitle: "자막 생성",
-                    idle: "대기",
-                  }[fullVideoState?.currentStep || "idle"] || fullVideoState?.currentStep
-                }`
+                    script: "대본을 생성하는 중",
+                    audio: "음성을 합성하는 중",
+                    subtitle: "자막을 생성하는 중",
+                    idle: "대기 중",
+                  }[displayedStep || "idle"] || displayedStep
+                }...`
           }
-          progress={Math.round(
-            ["script", "audio", "subtitle"].reduce(
-              (acc, k) => acc + (fullVideoState?.progress?.[k] || 0),
-              0
-            ) / 3
-          )}
+          remainingTimeText={
+            fullVideoState?.currentStep === "completed"
+              ? ""
+              : `(남은 시간: ${formatRemainingTime(remainingTime)})`
+          }
+          progress={timeBasedProgress}
           nextStepButton={{
             text: "➡️ 다음 단계: 미디어 준비",
             eventName: "navigate-to-assemble",

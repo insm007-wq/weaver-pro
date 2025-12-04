@@ -61,6 +61,7 @@ const TEXT_SIZES = {
  * @param {boolean} props.isComplete - 완료 상태
  * @param {boolean} props.isLoading - 로딩 중 상태
  * @param {string} props.statusText - 상태 텍스트 (예: "✅ 대본 생성 완료")
+ * @param {string} props.remainingTimeText - 남은 시간 텍스트 (예: "(남은 시간: 1분 20초)")
  * @param {number} props.progress - 진행률 (0-100)
  * @param {string} props.borderColor - 상단 보더 색상
  * @param {React.ReactNode} props.expandedContent - 펼쳐졌을 때 표시할 내용
@@ -71,6 +72,7 @@ const BottomFixedBar = memo(({
   isComplete = false,
   isLoading = false,
   statusText,
+  remainingTimeText = "",
   progress = 0,
   borderColor,
   expandedContent,
@@ -204,16 +206,29 @@ const BottomFixedBar = memo(({
               }}
             />
 
-            {/* 상태 텍스트 (로딩 중일 때 깜빡임) */}
-            <Text
-              size={TEXT_SIZES.STATUS}
-              weight="semibold"
-              style={{
-                animation: statusTextAnimation
-              }}
-            >
-              {statusText}
-            </Text>
+            {/* 상태 텍스트 (로딩 중일 때 깜빡임) + 남은 시간 (깜빡이지 않음) */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Text
+                size={TEXT_SIZES.STATUS}
+                weight="semibold"
+                style={{
+                  animation: statusTextAnimation
+                }}
+              >
+                {statusText}
+              </Text>
+              {remainingTimeText && (
+                <Text
+                  size={TEXT_SIZES.STATUS}
+                  weight="semibold"
+                  style={{
+                    color: tokens.colorNeutralForeground2
+                  }}
+                >
+                  {remainingTimeText}
+                </Text>
+              )}
+            </div>
 
             {/* 진행률 바 (로딩 중일 때만) */}
             {shouldShowProgress && (
