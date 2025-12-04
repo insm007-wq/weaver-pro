@@ -17,6 +17,7 @@ import { showError, showSuccess } from "../common/GlobalToast";
 import BottomFixedBar from "../common/BottomFixedBar";
 import { tokens } from "@fluentui/react-components";
 import { MODE_CONFIGS } from "../../constants/modeConstants";
+import { useGenerationTimer } from "../../hooks/useGenerationTimer";
 
 // 로컬 이미지 캐시
 const imageCache = new Map();
@@ -159,6 +160,9 @@ function MediaDownloadPage({ onDownloadingChange }) {
   const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState(null);
   const [completedVideosCount, setCompletedVideosCount] = useState(0);
   const [showButtonHint, setShowButtonHint] = useState(true);
+  const [downloadStartTime, setDownloadStartTime] = useState(null);
+  const [displayedStep, setDisplayedStep] = useState("idle");
+  const [renderTrigger, setRenderTrigger] = useState(0);
 
   // Refs
   const cancelledRef = useRef(false);
@@ -167,6 +171,76 @@ function MediaDownloadPage({ onDownloadingChange }) {
   const totalVideosRef = useRef(0);
   const countdownIntervalRef = useRef(null);
   const isTimeEstimatedRef = useRef(false);
+  const prevStepRef = useRef("idle");
+
+  // 타이머 훅
+  const { remainingTime, estimatedTotalTime, elapsedTime } = useGenerationTimer(
+    isDownloading,
+    downloadStartTime,
+    displayedStep,
+    totalVideosRef.current > 0 ? totalVideosRef.current * 5 / 60 : 0  // 예상 소요 시간 (분 단위)
+  );
+
+  // Step 변경 감지 (깜빡임 방지)
+  useEffect(() => {
+    const newStep = isDownloading ? "downloading" : "idle";
+    if (newStep !== prevStepRef.current) {
+      prevStepRef.current = newStep;
+      setDisplayedStep(newStep);
+    }
+  }, [isDownloading]);
+
+  // 1초마다 렌더 트리거 업데이트 (부드러운 진행바 애니메이션)
+  useEffect(() => {
+    if (!isDownloading) return;
+
+    const interval = setInterval(() => {
+      setRenderTrigger((prev) => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isDownloading]);
+
+  // 남은 시간을 "1분 20초" 형식으로 변환
+  const formatRemainingTime = (timeStr) => {
+    if (!timeStr || typeof timeStr !== "string") return "";
+    if (timeStr.includes("생성 중")) return "";
+
+    const parts = timeStr.split(":");
+    const min = parseInt(parts[0], 10);
+    const sec = parseInt(parts[1], 10);
+
+    if (isNaN(min) || isNaN(sec)) return "";
+    if (min > 0) {
+      return `${min}분 ${sec}초`;
+    }
+    return `${sec}초`;
+  };
+
+  // 시간 기반 진행률 계산 (99% 캡)
+  const calculateDownloadProgress = () => {
+    // 완료 상태: 100%
+    if (!isDownloading && completedVideosCount > 0) {
+      return 100;
+    }
+
+    // 미진행 상태: 0%
+    if (!isDownloading || !estimatedTotalTime || !elapsedTime) return 0;
+
+    const [totalMin, totalSec] = estimatedTotalTime.split(":").map(Number);
+    const [elapsedMin, elapsedSec] = elapsedTime.split(":").map(Number);
+
+    const totalSeconds = totalMin * 60 + totalSec;
+    const elapsedSeconds = elapsedMin * 60 + elapsedSec;
+
+    if (totalSeconds === 0) return 0;
+
+    // 진행 상황에 따라 0% → 99%
+    let progress = (elapsedSeconds / totalSeconds) * 100;
+    return Math.round(Math.min(99, progress));
+  };
+
+  const timeBasedDownloadProgress = calculateDownloadProgress();
 
   // 타이머 정리 헬퍼
   const clearCountdownTimer = useCallback(() => {
@@ -180,10 +254,12 @@ function MediaDownloadPage({ onDownloadingChange }) {
   const resetDownloadState = useCallback(() => {
     setIsDownloading(false);
     downloadStartTimeRef.current = null;
+    setDownloadStartTime(null);
     totalVideosRef.current = 0;
     isTimeEstimatedRef.current = false;
     setEstimatedTimeRemaining(null);
     setCompletedVideosCount(0);
+    setDisplayedStep("idle");
     clearCountdownTimer();
   }, [clearCountdownTimer]);
 
@@ -356,8 +432,10 @@ function MediaDownloadPage({ onDownloadingChange }) {
     setDownloadProgress({});
     setDownloadedVideos([]);
     downloadStartTimeRef.current = Date.now();
+    setDownloadStartTime(Date.now());
     setCompletedVideosCount(0);
     isTimeEstimatedRef.current = false;
+    setDisplayedStep("downloading");
 
     clearCountdownTimer();
 
@@ -946,7 +1024,12 @@ function MediaDownloadPage({ onDownloadingChange }) {
               ? `📥 미디어 다운로드 중... (${completedVideosCount}/${totalVideosToDownload})`
               : `✅ 다운로드 완료 (${downloadedVideos.length}개)`
           }
-          progress={downloadProgressPercent}
+          remainingTimeText={
+            isDownloading && remainingTime
+              ? `(남은 시간: ${formatRemainingTime(remainingTime)})`
+              : ""
+          }
+          progress={isDownloading ? timeBasedDownloadProgress : 100}
           nextStepButton={
             !isDownloading && downloadedVideos.length > 0
               ? {

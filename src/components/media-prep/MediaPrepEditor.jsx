@@ -8,6 +8,7 @@ import { useKeywordExtraction } from "../../hooks/useKeywordExtraction";
 import { useWizardStep } from "../../hooks/useWizardStep";
 import { useVoiceSettings } from "../../hooks/useVoiceSettings";
 import { useApi } from "../../hooks/useApi";
+import { useGenerationTimer } from "../../hooks/useGenerationTimer";
 
 // Constants
 import { makeDefaultForm } from "../../constants/scriptSettings";
@@ -58,6 +59,93 @@ function MediaPrepEditor() {
   const [currentPreviewAudio, setCurrentPreviewAudio] = useState(null);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const { voices, voiceLoading, voiceError } = useVoiceSettings(voiceForm);
+
+  // 키워드 추출 타이머 관련 상태
+  const [extractionStartTime, setExtractionStartTime] = useState(null);
+  const [displayedStep, setDisplayedStep] = useState("idle");
+  const [renderTrigger, setRenderTrigger] = useState(0); // 리렌더링 트리거
+
+  // 키워드 추출 시작/종료 감지
+  useEffect(() => {
+    if (keywordExtraction.isExtracting && !extractionStartTime) {
+      setExtractionStartTime(new Date());
+      setDisplayedStep("extracting");
+    } else if (!keywordExtraction.isExtracting && extractionStartTime) {
+      setExtractionStartTime(null);
+      setDisplayedStep("idle");
+    }
+  }, [keywordExtraction.isExtracting, extractionStartTime]);
+
+  // 게이지 바 실시간 업데이트 (매초)
+  useEffect(() => {
+    if (!keywordExtraction.isExtracting) return;
+
+    const interval = setInterval(() => {
+      // 리렌더링 유도 (extractionProgress 재계산)
+      setRenderTrigger(prev => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [keywordExtraction.isExtracting]);
+
+  // 타이머 훅 (키워드 추출 중에만 작동)
+  const { remainingTime } = useGenerationTimer(
+    keywordExtraction.isExtracting,
+    extractionStartTime,
+    displayedStep,
+    fileManagement.scenes.length * 0.5 / 60 || 1  // 씬 수 기반 분 단위 변환
+  );
+
+  // 남은 시간을 "X분 Y초" 형식으로 변환
+  const formatRemainingTime = (timeStr) => {
+    if (!timeStr) return '';
+
+    // "생성 중..." 같은 텍스트 처리
+    if (timeStr.includes('생성')) return '';
+
+    const parts = timeStr.split(':');
+    const min = parseInt(parts[0]) || 0;
+    const sec = parseInt(parts[1]) || 0;
+
+    if (isNaN(min) || isNaN(sec)) return '';
+
+    if (min > 0) {
+      return `${min}분 ${sec}초`;
+    }
+    return `${sec}초`;
+  };
+
+  // 키워드 추출 시간 기반 게이지 바 진행률 계산
+  const calculateExtractionProgress = () => {
+    const assetsExist = Array.isArray(keywordExtraction.assets) && keywordExtraction.assets.length > 0;
+
+    // 완료 상태: 100%
+    if (!keywordExtraction.isExtracting && assetsExist) {
+      return 100;
+    }
+
+    // 미진행 상태: 0%
+    if (!keywordExtraction.isExtracting || !extractionStartTime) return 0;
+
+    const now = new Date();
+    const elapsedMs = now - extractionStartTime;
+    const elapsedSec = Math.floor(elapsedMs / 1000);
+
+    // 씬 수 기반 예상 시간 (씬당 0.5초)
+    const estimatedSec = Math.max(fileManagement.scenes.length * 0.5, 10);
+
+    // 진행 중: 99%까지만 올라감 (완료까지 100% 도달 방지)
+    return Math.min(99, Math.round((elapsedSec / estimatedSec) * 99));
+  };
+
+  // renderTrigger를 의존성에 포함해서 매초 재계산
+  const extractionProgress = useMemo(() => calculateExtractionProgress(), [
+    keywordExtraction.isExtracting,
+    keywordExtraction.assets,
+    extractionStartTime,
+    fileManagement.scenes.length,
+    renderTrigger
+  ]);
 
   // 전역 설정에서 TTS 설정 불러오기 (대본 생성과 동일)
   useEffect(() => {
@@ -484,6 +572,12 @@ function MediaPrepEditor() {
               ? "🤖 키워드 추출 중..."
               : `✅ 키워드 추출 완료 (${keywordExtraction.assets.length}개)`
           }
+          remainingTimeText={
+            isExtracting
+              ? `(남은 시간: ${formatRemainingTime(remainingTime)})`
+              : ""
+          }
+          progress={extractionProgress}
           nextStepButton={
             hasAssets && !isExtracting
               ? {

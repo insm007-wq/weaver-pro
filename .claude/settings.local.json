@@ -16,7 +16,8 @@
       "Bash(taskkill:*)",
       "Bash(git --no-color diff electron/ipc/video-download.js)",
       "Bash(node -c:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []

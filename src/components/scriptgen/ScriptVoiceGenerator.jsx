@@ -84,9 +84,15 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
     return `${sec}초`;
   };
 
-  // 각 단계별 독립적 진행률 계산 (단계마다 0% → 100% 부드럽게 올라옴)
+  // 각 단계별 독립적 진행률 계산 (단계마다 0% → 99% 부드럽게 올라옴)
   const calculateTimeBasedProgress = () => {
-    if (!estimatedTotalTime || !elapsedTime) return 0;
+    // 완료 상태: 100%
+    if (fullVideoState?.currentStep === "completed") {
+      return 100;
+    }
+
+    // 미진행 상태: 0%
+    if (!fullVideoState?.isGenerating || !estimatedTotalTime || !elapsedTime) return 0;
 
     const [totalMin, totalSec] = estimatedTotalTime.split(':').map(Number);
     const [elapsedMin, elapsedSec] = elapsedTime.split(':').map(Number);
@@ -102,29 +108,29 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
     const subtitleEstimatedSec = 10;
 
     // 단계별 진행 범위 설정
-    const scriptRange = (scriptEstimatedSec / totalSeconds) * 100;
-    const audioRange = (audioEstimatedSec / totalSeconds) * 100;
-    const subtitleRange = (subtitleEstimatedSec / totalSeconds) * 100;
+    const scriptRange = (scriptEstimatedSec / totalSeconds) * 99;
+    const audioRange = (audioEstimatedSec / totalSeconds) * 99;
+    const subtitleRange = (subtitleEstimatedSec / totalSeconds) * 99;
 
     let progress = 0;
 
     if (displayedStep === "script") {
-      // 대본 생성: 각 단계 내에서 0% → 100%
+      // 대본 생성: 각 단계 내에서 0% → 99%까지
       const stepProgress = Math.min(100, (elapsedSeconds / scriptEstimatedSec) * 100);
       progress = (stepProgress / 100) * scriptRange;
     } else if (displayedStep === "audio") {
-      // 음성 합성: 각 단계 내에서 0% → 100%
+      // 음성 합성: 각 단계 내에서 0% → 99%까지
       const audioElapsed = Math.max(0, elapsedSeconds - scriptEstimatedSec);
       const stepProgress = Math.min(100, (audioElapsed / audioEstimatedSec) * 100);
       progress = scriptRange + (stepProgress / 100) * audioRange;
     } else if (displayedStep === "subtitle") {
-      // 자막 생성: 각 단계 내에서 0% → 100%
+      // 자막 생성: 각 단계 내에서 0% → 99%까지
       const subtitleElapsed = Math.max(0, elapsedSeconds - scriptEstimatedSec - audioEstimatedSec);
       const stepProgress = Math.min(100, (subtitleElapsed / subtitleEstimatedSec) * 100);
       progress = scriptRange + audioRange + (stepProgress / 100) * subtitleRange;
     }
 
-    return Math.round(Math.min(100, progress));
+    return Math.round(Math.min(99, progress));
   };
 
   const timeBasedProgress = calculateTimeBasedProgress();
@@ -347,38 +353,78 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
             eventName: "navigate-to-assemble",
           }}
           expandedContent={
-            doc && (
-              <div style={{ padding: "12px 16px" }}>
-                <Text size={300} weight="semibold" style={{ marginBottom: 12, display: "block" }}>
-                  📖 생성된 대본 ({doc.scenes?.length}개 장면)
+            fullVideoState?.isGenerating || isLoading ? (
+              // 생성 중: 대기 화면
+              <div style={{
+                padding: "12px 16px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: "200px",
+                gap: 16
+              }}>
+                <Text size={400} weight="semibold" style={{ color: tokens.colorNeutralForeground2 }}>
+                  📝 대본 생성 중...
                 </Text>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 8,
-                  }}
-                >
-                  {doc.scenes?.map((scene, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        padding: 12,
-                        background: tokens.colorNeutralBackground1,
-                        borderRadius: 8,
-                        border: `1px solid ${tokens.colorNeutralStroke1}`,
-                      }}
-                    >
-                      <Text size={250} weight="semibold" style={{ color: "#667eea", marginBottom: 4, display: "block" }}>
-                        장면 {index + 1}
-                      </Text>
-                      <Text size={200} style={{ color: tokens.colorNeutralForeground2, lineHeight: 1.5 }}>
-                        {scene.text}
-                      </Text>
-                    </div>
-                  ))}
+                <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>
+                  잠시만 기다려주세요
+                </Text>
+                <div style={{
+                  width: "80%",
+                  maxWidth: "300px",
+                  height: "6px",
+                  background: tokens.colorNeutralBackground3,
+                  borderRadius: "3px",
+                  overflow: "hidden",
+                  marginTop: 8
+                }}>
+                  <div style={{
+                    width: `${timeBasedProgress}%`,
+                    height: "100%",
+                    background: "linear-gradient(90deg, #667eea 0%, #764ba2 100%)",
+                    transition: "width 0.3s ease"
+                  }} />
                 </div>
+                <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                  {timeBasedProgress}%
+                </Text>
               </div>
+            ) : (
+              // 완료: 생성된 대본 목록
+              doc && (
+                <div style={{ padding: "12px 16px" }}>
+                  <Text size={300} weight="semibold" style={{ marginBottom: 12, display: "block" }}>
+                    📖 생성된 대본 ({doc.scenes?.length}개 장면)
+                  </Text>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                    }}
+                  >
+                    {doc.scenes?.map((scene, index) => (
+                      <div
+                        key={index}
+                        style={{
+                          padding: 12,
+                          background: tokens.colorNeutralBackground1,
+                          borderRadius: 8,
+                          border: `1px solid ${tokens.colorNeutralStroke1}`,
+                        }}
+                      >
+                        <Text size={250} weight="semibold" style={{ color: "#667eea", marginBottom: 4, display: "block" }}>
+                          장면 {index + 1}
+                        </Text>
+                        <Text size={200} style={{ color: tokens.colorNeutralForeground2, lineHeight: 1.5 }}>
+                          {scene.text}
+                        </Text>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
             )
           }
           onClose={() => {
