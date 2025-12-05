@@ -32,6 +32,7 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
   const [selectedSceneIndex, setSelectedSceneIndex] = useState(0);
   const [videoUrl, setVideoUrl] = useState(null);
   const [projectTtsSettings, setProjectTtsSettings] = useState(null);
+  const [isVideoAssigning, setIsVideoAssigning] = useState(false);
 
   // 비디오 ref
   const videoRef = useRef(null);
@@ -382,6 +383,7 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
                 onSceneSelect={handleSceneSelect}
                 projectTtsSettings={projectTtsSettings}
                 isVideoExporting={isVideoExporting}
+                onAssignStateChange={setIsVideoAssigning}
               />
             </div>
 
@@ -400,6 +402,7 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
                 onSceneSelect={handleSceneSelect}
                 isVideoExporting={isVideoExporting}
                 setIsVideoExporting={setIsVideoExporting}
+                isVideoAssigning={isVideoAssigning}
               />
             </div>
           </div>

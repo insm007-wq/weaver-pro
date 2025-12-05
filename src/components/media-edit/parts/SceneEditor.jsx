@@ -9,7 +9,7 @@ import { showSuccess, showError, showInfo } from "../../common/GlobalToast";
 import BottomFixedBar from "../../common/BottomFixedBar";
 import { useGenerationTimer } from "../../../hooks/useGenerationTimer";
 
-function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExporting }) {
+function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExporting, isVideoAssigning = false }) {
   const [isExporting, setIsExporting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
@@ -486,7 +486,7 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
               handleExportProject();
             }
           }}
-          disabled={isCancelling || (!isExporting && (!scenes || scenes.length === 0))}
+          disabled={isCancelling || isVideoAssigning || (!isExporting && (!scenes || scenes.length === 0))}
           style={{
             width: "100%",
           }}

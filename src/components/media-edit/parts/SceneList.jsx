@@ -25,6 +25,7 @@ function SceneList({
   onSceneSelect,
   projectTtsSettings, // 프로젝트에 저장된 TTS 설정
   isVideoExporting = false, // 영상 렌더링 중 여부
+  onAssignStateChange = null, // 할당 상태 변경 callback
 }) {
   // 내부 편집 상태 관리
   const [editingSceneIndex, setEditingSceneIndex] = useState(-1);
@@ -93,6 +94,11 @@ function SceneList({
       });
     }
   }, [selectedSceneIndex]);
+
+  // 할당 상태 변경 시 부모에 알림
+  useEffect(() => {
+    onAssignStateChange?.(videoAssignState.isActive);
+  }, [videoAssignState.isActive, onAssignStateChange]);
 
   // 시간 포맷 헬퍼
   const formatTime = (seconds) => {
