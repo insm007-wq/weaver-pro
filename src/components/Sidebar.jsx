@@ -38,7 +38,7 @@ const useStyles = makeStyles({
     ...shorthands.padding(tokens.spacingVerticalM, tokens.spacingHorizontalM),
     ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke2),
   },
-  
+
   headerSection: {
     ...shorthands.padding(tokens.spacingVerticalXL, tokens.spacingHorizontalL),
     ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke2),
@@ -57,7 +57,7 @@ const useStyles = makeStyles({
       WebkitBackdropFilter: "blur(10px)",
     },
   },
-  
+
   logoContainer: {
     display: "flex",
     alignItems: "center",
@@ -65,7 +65,7 @@ const useStyles = makeStyles({
     position: "relative",
     zIndex: 1,
   },
-  
+
   logoBox: {
     width: "44px",
     height: "44px",
@@ -85,19 +85,19 @@ const useStyles = makeStyles({
     animation: "fadeIn 0.3s ease-out",
     color: "inherit",
   },
-  
+
   mainContent: {
     display: "flex",
     flexDirection: "column",
     ...shorthands.padding(tokens.spacingVerticalL, "0"),
     paddingBottom: tokens.spacingVerticalM,
   },
-  
+
   navigation: {
     ...shorthands.padding("0", tokens.spacingHorizontalM),
     marginBottom: tokens.spacingVerticalL,
   },
-  
+
   sectionTitle: {
     ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
     marginBottom: tokens.spacingVerticalM,
@@ -107,11 +107,11 @@ const useStyles = makeStyles({
     textTransform: "uppercase",
     letterSpacing: "0.05em",
   },
-  
+
   menuSection: {
     marginBottom: tokens.spacingVerticalL,
   },
-  
+
   menuItem: {
     display: "flex",
     alignItems: "center",
@@ -152,7 +152,7 @@ const useStyles = makeStyles({
     ...shorthands.padding(tokens.spacingVerticalL, tokens.spacingHorizontalS),
     ...shorthands.margin("0", tokens.spacingHorizontalXXS),
   },
-  
+
   iconContainer: {
     width: "24px",
     height: "24px",
@@ -163,12 +163,12 @@ const useStyles = makeStyles({
     marginRight: tokens.spacingHorizontalM,
     fontSize: "18px",
   },
-  
+
   iconContainerCollapsed: {
     marginRight: "0",
     fontSize: "20px",
   },
-  
+
   menuContent: {
     flex: 1,
     animation: "fadeIn 0.3s ease-out",
@@ -176,13 +176,13 @@ const useStyles = makeStyles({
     flexDirection: "column",
     ...shorthands.gap(tokens.spacingVerticalXXS),
   },
-  
+
   menuLabel: {
     fontSize: tokens.fontSizeBase300,
     fontWeight: tokens.fontWeightMedium,
     color: tokens.colorNeutralForeground1,
   },
-  
+
   menuDescription: {
     fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground3,
@@ -193,7 +193,7 @@ const useStyles = makeStyles({
     marginTop: tokens.spacingVerticalL,
     marginBottom: tokens.spacingVerticalM,
   },
-  
+
   footerContent: {
     display: "flex",
     flexDirection: "column",
@@ -205,7 +205,13 @@ const useStyles = makeStyles({
   },
 });
 
-export default function Sidebar({ onSelectMenu, isScriptGenerating = false, isVideoExporting = false, isMediaDownloading = false, hasProject = true }) {
+export default function Sidebar({
+  onSelectMenu,
+  isScriptGenerating = false,
+  isVideoExporting = false,
+  isMediaDownloading = false,
+  hasProject = true,
+}) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const styles = useStyles();
 
@@ -303,23 +309,16 @@ export default function Sidebar({ onSelectMenu, isScriptGenerating = false, isVi
         style={{
           opacity: isDisabled ? 0.5 : 1,
           cursor: isDisabled ? "not-allowed" : "pointer",
-          pointerEvents: isDisabled ? "none" : "auto"
+          pointerEvents: isDisabled ? "none" : "auto",
         }}
       >
-        <div
-          className={mergeClasses(styles.iconContainer, collapsed && styles.iconContainerCollapsed)}
-          style={{ color: item.color }}
-        >
+        <div className={mergeClasses(styles.iconContainer, collapsed && styles.iconContainerCollapsed)} style={{ color: item.color }}>
           {item.icon}
         </div>
         {!collapsed && (
           <div className={styles.menuContent}>
-            <div className={styles.menuLabel}>
-              {item.label}
-            </div>
-            <div className={styles.menuDescription}>
-              {item.desc}
-            </div>
+            <div className={styles.menuLabel}>{item.label}</div>
+            <div className={styles.menuDescription}>{item.desc}</div>
           </div>
         )}
       </div>
@@ -387,9 +386,7 @@ export default function Sidebar({ onSelectMenu, isScriptGenerating = false, isVi
           {!isCollapsed && (
             <div className={styles.logoText}>
               <Title3 block>Weaver Pro</Title3>
-              <Caption1 block>
-                AI 영상 제작 솔루션
-              </Caption1>
+              <Caption1 block>AI 영상 제작 솔루션</Caption1>
             </div>
           )}
         </div>
@@ -399,9 +396,7 @@ export default function Sidebar({ onSelectMenu, isScriptGenerating = false, isVi
       <div className={styles.mainContent}>
         {/* Global Menu */}
         <nav className={styles.navigation}>
-          {!isCollapsed && (
-            <div className={styles.sectionTitle}>전역 메뉴</div>
-          )}
+          {!isCollapsed && <div className={styles.sectionTitle}>전역 메뉴</div>}
           <div className={styles.menuSection}>
             {globalMenu.map((item) => (
               <MenuItem key={item.key} item={item} collapsed={isCollapsed} />
@@ -411,9 +406,7 @@ export default function Sidebar({ onSelectMenu, isScriptGenerating = false, isVi
 
         {/* Project Menu */}
         <nav className={styles.navigation}>
-          {!isCollapsed && (
-            <div className={styles.sectionTitle}>프로젝트 워크플로우</div>
-          )}
+          {!isCollapsed && <div className={styles.sectionTitle}>프로젝트 워크플로우</div>}
           <div className={styles.menuSection}>
             {projectMenu.map((item) => (
               <MenuItem key={item.key} item={item} collapsed={isCollapsed} />
@@ -428,11 +421,9 @@ export default function Sidebar({ onSelectMenu, isScriptGenerating = false, isVi
           <div className={styles.footer}>
             <div className={styles.footerContent}>
               <Text size={200} weight="medium">
-                Version 1.0.0
+                Version 1.10
               </Text>
-              <Caption1 color="subtle">
-                © 2025 Weaver Pro
-              </Caption1>
+              <Caption1 color="subtle">© 2025 Weaver Pro</Caption1>
             </div>
           </div>
           <div className={styles.footerSpacer} />

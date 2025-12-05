@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Text, Button, Card, Dialog, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, tokens } from "@fluentui/react-components";
 import {
   SettingsRegular,
@@ -7,8 +7,9 @@ import {
 } from "@fluentui/react-icons";
 import { showSuccess, showError, showInfo } from "../../common/GlobalToast";
 import BottomFixedBar from "../../common/BottomFixedBar";
+import { useGenerationTimer } from "../../../hooks/useGenerationTimer";
 
-function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExporting }) {
+function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExporting, isVideoAssigning = false }) {
   const [isExporting, setIsExporting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
@@ -17,6 +18,81 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
   const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState(null);
   const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
   const [exportedFilePath, setExportedFilePath] = useState("");
+  const [displayedStep, setDisplayedStep] = useState("idle");
+  const [renderTrigger, setRenderTrigger] = useState(0);
+
+  // Refs
+  const prevStepRef = useRef("idle");
+  const estimatedDurationRef = useRef(0);
+
+  // 타이머 훅
+  const { remainingTime, estimatedTotalTime, elapsedTime } = useGenerationTimer(
+    isExporting,
+    exportStartTime,
+    displayedStep,
+    (estimatedDurationRef.current / 60) * 1.5  // 예상 소요 시간 (분 단위) - 1.5배 증가로 게이지 바 속도 조정
+  );
+
+  // Step 변경 감지 (깜빡임 방지)
+  useEffect(() => {
+    const newStep = isExporting ? "exporting" : "idle";
+    if (newStep !== prevStepRef.current) {
+      prevStepRef.current = newStep;
+      setDisplayedStep(newStep);
+    }
+  }, [isExporting]);
+
+  // 1초마다 렌더 트리거 업데이트 (부드러운 진행바 애니메이션)
+  useEffect(() => {
+    if (!isExporting) return;
+
+    const interval = setInterval(() => {
+      setRenderTrigger((prev) => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isExporting]);
+
+  // 남은 시간을 "1분 20초" 형식으로 변환
+  const formatRemainingTime = (timeStr) => {
+    if (!timeStr || typeof timeStr !== "string") return "";
+    if (timeStr.includes("생성 중")) return "";
+
+    const parts = timeStr.split(":");
+    const min = parseInt(parts[0], 10);
+    const sec = parseInt(parts[1], 10);
+
+    if (isNaN(min) || isNaN(sec)) return "";
+    if (min > 0) {
+      return `${min}분 ${sec}초`;
+    }
+    return `${sec}초`;
+  };
+
+  // 시간 기반 진행률 계산 (99% 캡)
+  const calculateExportProgress = () => {
+    // 완료 상태: 100%
+    if (!isExporting && exportProgress > 0) {
+      return 100;
+    }
+
+    // 미진행 상태: 0%
+    if (!isExporting || !estimatedTotalTime || !elapsedTime) return 0;
+
+    const [totalMin, totalSec] = estimatedTotalTime.split(":").map(Number);
+    const [elapsedMin, elapsedSec] = elapsedTime.split(":").map(Number);
+
+    const totalSeconds = totalMin * 60 + totalSec;
+    const elapsedSeconds = elapsedMin * 60 + elapsedSec;
+
+    if (totalSeconds === 0) return 0;
+
+    // 진행 상황에 따라 0% → 99%
+    let progress = (elapsedSeconds / totalSeconds) * 100;
+    return Math.round(Math.min(99, progress));
+  };
+
+  const timeBasedExportProgress = calculateExportProgress();
 
   // FFmpeg 진행률 이벤트 리스너 (진행률만 업데이트)
   useEffect(() => {
@@ -165,6 +241,8 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
     setIsVideoExporting?.(true);
     setExportProgress(0);
     setExportStartTime(Date.now());
+    setDisplayedStep("exporting");
+    estimatedDurationRef.current = estimatedEncodingTime;
     setEstimatedTimeRemaining(estimatedEncodingTime);
     showInfo("영상 내보내기를 시작합니다...");
 
@@ -188,6 +266,8 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
       setIsVideoExporting?.(false);
       setExportProgress(0);
       setExportStartTime(null);
+      setDisplayedStep("idle");
+      estimatedDurationRef.current = 0;
       setEstimatedTimeRemaining(null);
     }
   };
@@ -205,6 +285,8 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
       setIsVideoExporting?.(false);
       setExportProgress(0);
       setExportStartTime(null);
+      setDisplayedStep("idle");
+      estimatedDurationRef.current = 0;
       setEstimatedTimeRemaining(null);
 
       // FFmpeg 프로세스 완전 종료 대기 (1500ms)
@@ -404,7 +486,7 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
               handleExportProject();
             }
           }}
-          disabled={isCancelling || (!isExporting && (!scenes || scenes.length === 0))}
+          disabled={isCancelling || isVideoAssigning || (!isExporting && (!scenes || scenes.length === 0))}
           style={{
             width: "100%",
           }}
@@ -498,14 +580,15 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
         <BottomFixedBar
           isComplete={false}
           isLoading={true}
-          statusText={
-            estimatedTimeRemaining !== null && estimatedTimeRemaining > 0
-              ? `영상을 생성하는 중... (남은 시간: ${Math.floor(estimatedTimeRemaining / 60)}분 ${Math.floor(estimatedTimeRemaining % 60)}초)`
-              : exportProgress >= 99
-              ? "영상 생성 거의 완료..."
-              : "영상을 생성하는 중..."
+          statusText="🎬 영상을 생성하는 중..."
+          remainingTimeText={
+            estimatedTimeRemaining !== null
+              ? estimatedTimeRemaining <= 0
+                ? "(남은 시간: 거의 완료...)"
+                : `(남은 시간: ${Math.floor(estimatedTimeRemaining / 60)}분 ${Math.floor(estimatedTimeRemaining % 60)}초)`
+              : ""
           }
-          progress={exportProgress}
+          progress={timeBasedExportProgress}
           borderColor="#3b82f6"
           expandedContent={
             <div style={{ padding: "12px 16px" }}>

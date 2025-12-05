@@ -10,13 +10,14 @@ import {
   EditRegular,
   BrainCircuitRegular,
   ShieldCheckmarkRegular,
+  VideoClipRegular,
 } from "@fluentui/react-icons";
 import { useApi } from "../../../hooks/useApi";
 import { LoadingSpinner } from "../../common/LoadingSpinner";
 import { ErrorBoundary } from "../../common/ErrorBoundary";
 import { showGlobalToast } from "../../common/GlobalToast";
 import { useContainerStyles, useCardStyles, useSettingsStyles } from "../../../styles/commonStyles";
-import { DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT, DEFAULT_TEMPLATE } from "../../../constants/prompts";
+import { DEFAULT_GENERATE_PROMPT, DEFAULT_REFERENCE_PROMPT, DEFAULT_TEMPLATE, SHORTS_GENERATE_PROMPT } from "../../../constants/prompts";
 
 /**
  * PromptTab 컴포넌트
@@ -139,6 +140,7 @@ function PromptTab() {
   const [referencePrompt, setReferencePrompt] = useState("");
   const [thumbnailPrompt, setThumbnailPrompt] = useState("");
   const [originalThumbnailPrompt, setOriginalThumbnailPrompt] = useState("");
+  const [shortsPrompt, setShortsPrompt] = useState("");
 
   // 선택된 프롬프트 상태
   const [selectedName, setSelectedName] = useState("");
@@ -174,10 +176,12 @@ function PromptTab() {
         const dThumb = prompts.find((p) => p.isDefault && p.category === "thumbnail");
 
         // 에디터에 기본 프롬프트 설정
+        const dShorts = prompts.find((p) => p.isDefault && p.category === "shorts");
         setScriptPrompt(dScript?.content?.trim() ?? catDefault("script"));
         setReferencePrompt(dRef?.content?.trim() ?? catDefault("reference"));
         setThumbnailPrompt(dThumb?.content?.trim() ?? DEFAULT_TEMPLATE);
         setOriginalThumbnailPrompt(dThumb?.content?.trim() ?? DEFAULT_TEMPLATE);
+        setShortsPrompt(dShorts?.content?.trim() ?? SHORTS_GENERATE_PROMPT);
 
         // 이전에 선택했던 프롬프트 이름을 불러오기
         const savedName = await window.api.getSetting("selectedPromptName");
@@ -236,7 +240,7 @@ function PromptTab() {
       const res = await api.invoke("prompts:getPairByName", name);
       if (!isOk(res)) throw new Error(res?.message || "load failed");
 
-      const { script, reference, thumbnail } = res.data || {};
+      const { script, reference, thumbnail, shorts } = res.data || {};
 
       // 프롬프트 ID 설정
       setSelectedScriptId(script?.id || "");
@@ -246,12 +250,19 @@ function PromptTab() {
       if (script) setScriptPrompt(script.content?.trim() ?? "");
       if (reference) setReferencePrompt(reference.content?.trim() ?? "");
       if (thumbnail) setThumbnailPrompt(thumbnail.content?.trim() ?? "");
+      if (shorts) setShortsPrompt(shorts.content?.trim() ?? "");
 
       // 기본 프롬프트 쌍인 경우 기본값으로 설정
-      if (!script && !reference && !thumbnail && name === DEFAULT_PAIR_NAME) {
+      if (!script && !reference && !thumbnail && !shorts && name === DEFAULT_PAIR_NAME) {
         setScriptPrompt(catDefault("script"));
         setReferencePrompt(catDefault("reference"));
         setThumbnailPrompt(DEFAULT_TEMPLATE);
+        setShortsPrompt(SHORTS_GENERATE_PROMPT);
+      }
+
+      // shorts가 없으면 항상 기본값으로 설정 (마이그레이션 시나리오 포함)
+      if (!shorts) {
+        setShortsPrompt(SHORTS_GENERATE_PROMPT);
       }
 
       // 선택된 프롬프트 이름을 전역 설정에 저장 (썸네일 생성기에서 사용)
@@ -262,14 +273,15 @@ function PromptTab() {
   };
 
   /**
-   * 프롬프트 쌍을 저장 (대본 생성 + 레퍼런스 분석 + 썸네일 생성 프롬프트)
+   * 프롬프트 쌍을 저장 (대본 생성 + 레퍼런스 분석 + 썸네일 생성 + 쇼츠 대본 생성 프롬프트)
    * @param {string} name - 프롬프트 쌍 이름
    * @param {string} scriptText - 대본 생성 프롬프트 내용
    * @param {string} referenceText - 레퍼런스 분석 프롬프트 내용
    * @param {string} thumbnailText - 썸네일 생성 프롬프트 내용
+   * @param {string} shortsText - 쇼츠 대본 생성 프롬프트 내용
    * @returns {Object} API 응답 결과
    */
-  const savePair = async (name, scriptText, referenceText, thumbnailText) => {
+  const savePair = async (name, scriptText, referenceText, thumbnailText, shortsText) => {
     setIsSaving(true);
     const nm = (name || "").trim();
     if (!nm) throw new Error("name is empty");
@@ -280,6 +292,7 @@ function PromptTab() {
         scriptContent: scriptText,
         referenceContent: referenceText,
         thumbnailContent: thumbnailText,
+        shortsContent: shortsText,
       });
       if (!isOk(res)) throw new Error(res?.message || "save failed");
 
@@ -300,6 +313,7 @@ function PromptTab() {
       setReferencePrompt(res.data?.reference?.content ?? "");
       setThumbnailPrompt(res.data?.thumbnail?.content ?? "");
       setOriginalThumbnailPrompt(res.data?.thumbnail?.content ?? "");
+      setShortsPrompt(res.data?.shorts?.content ?? "");
 
       setIsSaving(false);
       return res;
@@ -348,7 +362,7 @@ function PromptTab() {
     }
 
     try {
-      await savePair(base, catDefault("script"), catDefault("reference"), DEFAULT_TEMPLATE);
+      await savePair(base, catDefault("script"), catDefault("reference"), DEFAULT_TEMPLATE, SHORTS_GENERATE_PROMPT);
       setShowInlineCreate(false);
       setNewName("");
 
@@ -414,6 +428,7 @@ function PromptTab() {
         setScriptPrompt(catDefault("script"));
         setReferencePrompt(catDefault("reference"));
         setThumbnailPrompt(DEFAULT_TEMPLATE);
+        setShortsPrompt(SHORTS_GENERATE_PROMPT);
       }
 
       showGlobalToast({
@@ -447,8 +462,8 @@ function PromptTab() {
       }
 
       // 기본 프롬프트도 수정 가능하도록 허용
-      // 3개 프롬프트 모두 한 번에 저장
-      await savePair(name, scriptPrompt, referencePrompt, thumbnailPrompt);
+      // 4개 프롬프트 모두 한 번에 저장
+      await savePair(name, scriptPrompt, referencePrompt, thumbnailPrompt, shortsPrompt);
 
       showGlobalToast({
         type: "success",
@@ -471,6 +486,7 @@ function PromptTab() {
     if (category === "script") setScriptPrompt(catDefault("script"));
     else if (category === "reference") setReferencePrompt(catDefault("reference"));
     else if (category === "thumbnail") setThumbnailPrompt(DEFAULT_TEMPLATE);
+    else if (category === "shorts") setShortsPrompt(SHORTS_GENERATE_PROMPT);
 
     showGlobalToast({
       type: "success",
@@ -484,6 +500,7 @@ function PromptTab() {
   const scriptCount = scriptPrompt.length || 0;
   const referenceCount = referencePrompt.length || 0;
   const thumbnailCount = thumbnailPrompt.length || 0;
+  const shortsCount = shortsPrompt.length || 0;
 
   // 로딩 중일 때 스피너 표시
   if (loading) {
@@ -606,7 +623,7 @@ function PromptTab() {
                 appearance="primary"
                 icon={isSaving ? <LoadingSpinner size="tiny" /> : <SaveRegular />}
                 onClick={handleSaveAll}
-                disabled={isSaving || !scriptPrompt || !referencePrompt || !thumbnailPrompt || !selectedName}
+                disabled={isSaving || !scriptPrompt || !referencePrompt || !thumbnailPrompt || !shortsPrompt || !selectedName}
               >
                 {isSaving ? "저장 중..." : "저장하기"}
               </Button>
@@ -635,6 +652,9 @@ function PromptTab() {
           </Tab>
           <Tab value="thumbnail" icon={<BrainCircuitRegular />}>
             썸네일 생성
+          </Tab>
+          <Tab value="shorts" icon={<VideoClipRegular />}>
+            쇼츠 대본 생성
           </Tab>
         </TabList>
       </Card>
@@ -795,6 +815,54 @@ function PromptTab() {
             />
             <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM, flexShrink: 0 }}>
               {thumbnailCount.toLocaleString()} 글자 | 변수: {"{content}, {referenceAnalysis}"}
+            </Text>
+          </div>
+        )}
+
+        {/* 쇼츠 대본 생성 탭 */}
+        {selectedTab === "shorts" && (
+          <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, padding: tokens.spacingVerticalL }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: tokens.spacingVerticalM,
+                flexShrink: 0,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <VideoClipRegular style={{ color: tokens.colorPaletteRedForeground1 }} />
+                <Text weight="semibold" size={500}>
+                  쇼츠 대본 생성 프롬프트
+                </Text>
+              </div>
+              <Button size="small" icon={<ArrowResetRegular />} onClick={() => handleReset("shorts")}>
+                기본값
+              </Button>
+            </div>
+            <textarea
+              value={shortsPrompt}
+              onChange={(e) => setShortsPrompt(e.target.value)}
+              style={{
+                flex: 1,
+                minHeight: 0,
+                width: "100%",
+                fontSize: tokens.fontSizeBase300,
+                fontFamily: "monospace",
+                lineHeight: 1.6,
+                border: `1px solid ${tokens.colorNeutralStroke1}`,
+                borderRadius: tokens.borderRadiusMedium,
+                background: tokens.colorNeutralBackground1,
+                color: tokens.colorNeutralForeground1,
+                padding: tokens.spacingVerticalM,
+                resize: "none",
+                outline: "none",
+              }}
+            />
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: tokens.spacingVerticalM, flexShrink: 0 }}>
+              {shortsCount.toLocaleString()} 글자 | 변수:{" "}
+              {"{topic}, {style}, {seconds}, {minSceneCount}, {maxSceneCount}, {targetSceneCount}"}
             </Text>
           </div>
         )}

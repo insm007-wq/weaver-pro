@@ -68,6 +68,53 @@ export const DEFAULT_REFERENCE_PROMPT = `아래 레퍼런스 대본의 스타일
 
 ⚡ JSON만 출력하고 다른 설명은 절대 포함하지 마세요.`.trim();
 
+// ✅ 쇼츠 생성 프롬프트 (15~60초 짧은 영상 최적화)
+export const SHORTS_GENERATE_PROMPT = `다음 조건에 맞는 {seconds}초 길이의 쇼츠 영상 대본을 작성해주세요.
+
+🎯 쇼츠 핵심 원칙:
+• 첫 3초 안에 시청자를 사로잡아야 함 (후킹 필수!)
+• 빠른 템포, 즉각적인 메시지 전달
+• 스크롤 방지: 궁금증 유발 → 해결
+
+📋 기본 정보:
+• 주제: {topic}
+• 스타일: {style}
+• 길이: {seconds}초
+• 언어: 한국어
+
+📺 쇼츠 구성 (반드시 준수):
+• 총 길이: {seconds}초
+• 장면 구성: {minSceneCount}~{maxSceneCount}개 (권장: {targetSceneCount}개)
+• 각 장면: 3~15초 (15~50자)
+
+📝 작성 방식:
+• 첫 장면(오프닝): 강렬한 후킹 (3~5초, 15~25자)
+  - 질문형: "이거 모르면 손해"
+  - 충격형: "절대 믿을 수 없는 사실"
+  - 호기심형: "이것만 알면 인생 바뀜"
+• 중간 장면: 핵심 내용 빠르게 전달
+• 마지막 장면: CTA 또는 여운 (좋아요/팔로우 유도)
+• 군더더기 없이 핵심만
+• 자연스러운 구어체
+
+⚠️ 중요:
+1. 첫 장면이 가장 중요 - 반드시 후킹!
+2. 15초~60초에 맞춰 장면 수 조정
+3. 장면당 15~50자 (너무 길지 않게)
+4. 빠른 템포 유지
+
+📤 응답 형식 (JSON만 반환):
+{
+  "title": "쇼츠 제목",
+  "scenes": [
+    {"text": "첫 장면 - 강렬한 후킹 (15~25자)", "duration": 3},
+    {"text": "두 번째 장면 (20~40자)", "duration": 8},
+    ... (총 {minSceneCount}~{maxSceneCount}개 장면)
+  ]
+}
+
+⚡ JSON만 출력하고 다른 설명은 절대 포함하지 마세요.`;
+
 export const DEFAULT_TEMPLATE = `{content}{referenceAnalysis}
 
 Ultra-realistic, cinematic YouTube thumbnail, dramatic lighting, vibrant colors, 16:9 aspect ratio, no text`;

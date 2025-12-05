@@ -14,7 +14,7 @@ import {
   Spinner,
   Divider,
 } from "@fluentui/react-components";
-import { useHeaderStyles } from "../styles/commonStyles";
+import { useHeaderStyles, useContainerStyles } from "../styles/commonStyles";
 import {
   SettingsRegular,
   KeyRegular,
@@ -33,30 +33,6 @@ const PromptTab = lazy(() => import("./settings/tabs/PromptTab"));
 const SubtitleTab = lazy(() => import("./settings/tabs/SubtitleTab"));
 
 const useStyles = makeStyles({
-  root: {
-    maxWidth: "1200px",
-    ...shorthands.margin("0", "auto"),
-    ...shorthands.padding(tokens.spacingVerticalXL, tokens.spacingHorizontalL),
-  },
-
-  pageHeader: {
-    ...shorthands.margin(0, 0, tokens.spacingVerticalL),
-  },
-  pageTitle: {
-    display: "flex",
-    alignItems: "center",
-    columnGap: tokens.spacingHorizontalM,
-  },
-  pageDesc: {
-    color: tokens.colorNeutralForeground3,
-    marginTop: tokens.spacingVerticalXS,
-    fontSize: tokens.fontSizeBase300,
-  },
-  hairline: {
-    ...shorthands.borderBottom("1px", "solid", tokens.colorNeutralStroke2),
-    marginTop: tokens.spacingVerticalM,
-  },
-
   mainCard: {
     backgroundColor: tokens.colorNeutralBackground1,
     ...shorthands.border("1px", "solid", tokens.colorNeutralStroke2),
@@ -109,6 +85,7 @@ const allTabs = [
 export default function SettingsPage({ onBack }) {
   const styles = useStyles();
   const headerStyles = useHeaderStyles();
+  const containerStyles = useContainerStyles();
 
   // 관리자 모드 상태
   const [isAdminMode, setIsAdminMode] = useState(() => {
@@ -182,7 +159,7 @@ export default function SettingsPage({ onBack }) {
   };
 
   return (
-    <div ref={containerRef} className={styles.root} style={fixedWidthPx ? { width: `${fixedWidthPx}px` } : undefined}>
+    <div ref={containerRef} className={containerStyles.container} style={fixedWidthPx ? { width: `${fixedWidthPx}px` } : undefined}>
       {onBack && (
         <Button appearance="subtle" icon={<ChevronLeftRegular />} onClick={onBack} className={styles.backButton} size="small">
           돌아가기
@@ -199,8 +176,6 @@ export default function SettingsPage({ onBack }) {
             cursor: "pointer",
             userSelect: "none",
             position: "relative",
-            display: "inline-flex",
-            alignItems: "center",
             gap: 8
           }}
         >
@@ -223,7 +198,7 @@ export default function SettingsPage({ onBack }) {
           )}
         </div>
         <div className={headerStyles.pageDescription}>애플리케이션 전반의 설정을 관리합니다.</div>
-        <div className={styles.hairline} />
+        <div className={headerStyles.divider} />
       </div>
 
       {/* 본문 카드 */}

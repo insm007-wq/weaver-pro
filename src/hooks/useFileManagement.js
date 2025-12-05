@@ -136,29 +136,49 @@ export const useFileManagement = () => {
 
       // ✅ 2단계: 설정이 없으면 현재 프로젝트에서 가져오기 (exe 환경에서 타이밍 이슈 해결)
       if (!videoSaveFolder) {
-        console.warn("[handleInsertFromScript] videoSaveFolder 설정이 없음. 현재 프로젝트 확인 중...");
+        console.warn("[handleInsertFromScript] videoSaveFolder 설정이 없음. 재시도 및 복구 시작...");
 
-        // 현재 프로젝트 ID 확인
-        const currentProjectId = await getSetting("currentProjectId");
-        if (currentProjectId) {
-          // 프로젝트 목록에서 현재 프로젝트 찾기
-          const projects = await getSetting("projects");
-          if (Array.isArray(projects)) {
-            const currentProject = projects.find(p => p.id === currentProjectId);
-            if (currentProject && currentProject.paths && currentProject.paths.root) {
-              videoSaveFolder = currentProject.paths.root;
-              console.log(`✅ [handleInsertFromScript] 프로젝트 경로 복구: ${videoSaveFolder}`);
+        // 재시도 로직: 최대 3초 대기
+        let retries = 30;
+        while (retries > 0 && !videoSaveFolder) {
+          console.log(`⏳ videoSaveFolder 재시도 중... (남은 시도: ${retries})`);
+          await new Promise(resolve => setTimeout(resolve, 100));
+          videoSaveFolder = await getSetting("videoSaveFolder");
+          retries--;
+        }
 
-              // ✅ 복구된 경로를 다시 저장 (다음번 호출 시 빠르게 + EXE 환경 안정성)
-              try {
-                await setSetting({
-                  key: "videoSaveFolder",
-                  value: videoSaveFolder,
-                });
-                console.log(`💾 [handleInsertFromScript] videoSaveFolder 저장 완료: ${videoSaveFolder}`);
-              } catch (saveError) {
-                console.warn(`⚠️ [handleInsertFromScript] videoSaveFolder 저장 실패:`, saveError);
-                // 저장 실패해도 계속 진행 (이미 메모리에는 있음)
+        // 재시도 후에도 없으면 프로젝트 정보에서 복구
+        if (!videoSaveFolder) {
+          console.warn("[handleInsertFromScript] 재시도 실패. 프로젝트 정보에서 복구 시도...");
+          const currentProjectId = await getSetting("currentProjectId");
+          if (currentProjectId) {
+            let projects = await getSetting("projects");
+            let projectRetries = 20; // 2초 추가 대기
+
+            while (projectRetries > 0 && (!projects || projects.length === 0)) {
+              console.log(`⏳ projects 정보 대기 중... (남은 시도: ${projectRetries})`);
+              await new Promise(resolve => setTimeout(resolve, 100));
+              projects = await getSetting("projects");
+              projectRetries--;
+            }
+
+            if (Array.isArray(projects) && projects.length > 0) {
+              const currentProject = projects.find(p => p.id === currentProjectId);
+              if (currentProject && currentProject.paths && currentProject.paths.root) {
+                videoSaveFolder = currentProject.paths.root;
+                console.log(`✅ [handleInsertFromScript] 프로젝트 경로 복구 성공: ${videoSaveFolder}`);
+
+                // ✅ 복구된 경로를 다시 저장 (다음번 호출 시 빠르게 + EXE 환경 안정성)
+                try {
+                  await setSetting({
+                    key: "videoSaveFolder",
+                    value: videoSaveFolder,
+                  });
+                  console.log(`💾 [handleInsertFromScript] videoSaveFolder 저장 완료: ${videoSaveFolder}`);
+                } catch (saveError) {
+                  console.warn(`⚠️ [handleInsertFromScript] videoSaveFolder 저장 실패:`, saveError);
+                  // 저장 실패해도 계속 진행 (이미 메모리에는 있음)
+                }
               }
             }
           }

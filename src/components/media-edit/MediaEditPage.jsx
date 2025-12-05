@@ -5,7 +5,7 @@ import { VideoRegular } from "@fluentui/react-icons";
 import { PageErrorBoundary } from "../common/ErrorBoundary";
 import { useFileManagement } from "../../hooks/useFileManagement";
 import { assignPrioritizedMediaToMissingScenes } from "../../services/videoAssignment";
-import { showSuccess, showInfo } from "../common/GlobalToast";
+import { showSuccess, showInfo, showError } from "../common/GlobalToast";
 
 // 최적화된 컴포넌트들 import
 import SceneList from "./parts/SceneList";
@@ -32,6 +32,7 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
   const [selectedSceneIndex, setSelectedSceneIndex] = useState(0);
   const [videoUrl, setVideoUrl] = useState(null);
   const [projectTtsSettings, setProjectTtsSettings] = useState(null);
+  const [isVideoAssigning, setIsVideoAssigning] = useState(false);
 
   // 비디오 ref
   const videoRef = useRef(null);
@@ -148,7 +149,8 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
             showSuccess(`자동 할당 완료! ${assignedCount}/${totalCount}개 씬에 미디어가 할당되었습니다.`);
           } catch (error) {
             console.error("[자동 할당] 오류:", error);
-            // 오류가 발생해도 조용히 넘어감 (사용자가 수동으로 할당 가능)
+            // ✅ 사용자에게 오류 알림
+            showError(`자동 할당 중 오류 발생: ${error.message || "알 수 없는 오류"}`);
           }
         }
       }
@@ -216,7 +218,8 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
             showSuccess(`자동 할당 완료! ${assignedCount}/${totalCount}개 씬에 미디어가 할당되었습니다.`);
           } catch (error) {
             console.error("[자동 할당] 오류:", error);
-            // 오류가 발생해도 조용히 넘어감 (사용자가 수동으로 할당 가능)
+            // ✅ 사용자에게 오류 알림
+            showError(`미디어 자동 할당 중 오류 발생: ${error.message || "알 수 없는 오류"}`);
           }
         }
       }
@@ -380,6 +383,7 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
                 onSceneSelect={handleSceneSelect}
                 projectTtsSettings={projectTtsSettings}
                 isVideoExporting={isVideoExporting}
+                onAssignStateChange={setIsVideoAssigning}
               />
             </div>
 
@@ -398,6 +402,7 @@ function MediaEditPage({ isVideoExporting, setIsVideoExporting }) {
                 onSceneSelect={handleSceneSelect}
                 isVideoExporting={isVideoExporting}
                 setIsVideoExporting={setIsVideoExporting}
+                isVideoAssigning={isVideoAssigning}
               />
             </div>
           </div>

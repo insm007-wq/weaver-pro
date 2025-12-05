@@ -40,12 +40,21 @@ export function useScriptGeneration() {
   }, []);
 
   const getSelectedPromptContent = useCallback(
-    async (promptName) => {
+    async (promptName, selectedMode = "script_mode") => {
       try {
         const res = await api.invoke("prompts:getPairByName", promptName);
         if ((res?.ok || res?.success) && res.data) {
+          // 모드에 따라 category 선택
+          const scriptCategory = selectedMode === "shorts_mode" ? "shorts" : "script";
+          const selectedPrompt = res.data[scriptCategory];
+
+          // 쇼츠 프롬프트가 없으면 일반 프롬프트로 fallback
+          if (!selectedPrompt?.content && selectedMode === "shorts_mode") {
+            console.warn(`⚠️ 쇼츠 프롬프트가 없어 일반 프롬프트를 사용합니다: ${promptName}`);
+          }
+
           return {
-            script: res.data.script?.content || "",
+            script: selectedPrompt?.content || res.data.script?.content || "",
             reference: res.data.reference?.content || "",
           };
         }
@@ -58,7 +67,7 @@ export function useScriptGeneration() {
   );
 
   const runGenerate = useCallback(
-    async (form, toast = null) => {
+    async (form, toast = null, selectedMode = "script_mode") => {
       setError("");
       setIsLoading(true);
       setChunkProgress(null); // 진행률 초기화
@@ -78,7 +87,7 @@ export function useScriptGeneration() {
 
         let promptContent = { script: "", reference: "" };
         if (form.promptName) {
-          promptContent = await getSelectedPromptContent(form.promptName);
+          promptContent = await getSelectedPromptContent(form.promptName, selectedMode);
         }
 
         const selectedEngine = AI_ENGINE_OPTIONS.find((engine) => engine.key === finalEngine);
@@ -94,16 +103,20 @@ export function useScriptGeneration() {
           referenceText: form.referenceScript,
           cpmMin: form.cpmMin || 300,
           cpmMax: form.cpmMax || 400,
+          isShorts: selectedMode === "shorts_mode", // 🎯 쇼츠 모드 플래그 추가
         };
 
         const getTimeoutForDuration = (minutes) => {
           // 장편은 청크로 나눠 생성하므로 충분한 시간 필요
-          if (minutes >= 90) return 900000;  // 90분+: 15분
-          if (minutes >= 60) return 720000;  // 60분+: 12분
-          if (minutes >= 30) return 600000;  // 30분+: 10분
-          if (minutes >= 20) return 360000;  // 20분+: 6분
-          if (minutes >= 10) return 240000;  // 10분+: 4분
-          return 120000;                      // 10분 미만: 2분
+          // 계산식: (청크 개수 × 청크당 최대 시간 5분) + 여유분
+          // 단편: API 타임아웃 90초 × 재시도 3회 + 백오프 = 최대 5분
+          if (minutes <= 1) return 180000;    // 1분 이하 (쇼츠): 3분 ✅
+          if (minutes >= 90) return 2700000;  // 90분+: 45분 (18청크 × 2.5분)
+          if (minutes >= 60) return 1800000;  // 60분+: 30분 (12청크 × 2.5분)
+          if (minutes >= 30) return 1200000;  // 30분+: 20분 (6청크 × 3분)
+          if (minutes >= 20) return 1200000;  // 20분+: 20분 (4청크 × 5분) ✅
+          if (minutes >= 10) return 480000;   // 10분+: 8분 (단일 생성 + 재시도) ✅
+          return 360000;                       // 10분 미만: 6분 (재시도 여유) ✅
         };
 
         const timeoutMs = getTimeoutForDuration(form.durationMin);

@@ -668,17 +668,15 @@ export async function generateImageForScene(scene, sceneIndex, options = {}) {
       const arrayBuffer = await blob.arrayBuffer();
       const buffer = new Uint8Array(arrayBuffer);
 
-      // 파일 저장 (Windows 경로 형식으로 변환)
-      const windowsPath = fullImagePath.replace(/\//g, '\\');
-
-      // Node.js Buffer 형식으로 변환
+      // ✅ Node.js Buffer 형식으로 변환
       const bufferData = {
         type: "Buffer",
         data: Array.from(buffer)
       };
 
+      // ✅ 경로를 그대로 전달 (files.js에서 normalize 처리)
       const saveResult = await window.api.invoke("files:writeBuffer", {
-        filePath: windowsPath,
+        filePath: fullImagePath,
         buffer: bufferData,
       });
 

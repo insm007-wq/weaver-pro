@@ -1,8 +1,21 @@
 import React, { memo, useMemo, useCallback, useEffect, useRef } from "react";
-import { Card, Text, tokens } from "@fluentui/react-components";
+import { Card, Text, tokens, Button } from "@fluentui/react-components";
+import { PlayRegular } from "@fluentui/react-icons";
 import { MODE_CONFIGS } from "../../../constants/modeConstants";
 
-const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, compact = false, globalSettings, setGlobalSettings, api }) => {
+const ModeSelector = memo(({
+  selectedMode,
+  onModeChange,
+  form,
+  isGenerating,
+  compact = false,
+  globalSettings,
+  setGlobalSettings,
+  api,
+  onGenerate = null,
+  isCancelling = false,
+  onCancel = null,
+}) => {
   // 안전한 폼 데이터 처리
   const safeForm = useMemo(
     () => ({
@@ -85,13 +98,12 @@ const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, com
         background: tokens.colorNeutralBackground1,
         border: `1px solid ${tokens.colorNeutralStroke2}`,
         borderRadius: 16,
-        padding: tokens.spacingVerticalL,
-        marginBottom: tokens.spacingVerticalL,
+        padding: "12px 16px",
       },
       gridContainer: {
         display: "grid",
         gridTemplateColumns: "1fr 1fr",
-        gap: tokens.spacingHorizontalL,
+        gap: "8px",
       },
       summaryContainer: {
         marginTop: tokens.spacingVerticalM,
@@ -272,11 +284,11 @@ const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, com
   // 기본 모드 렌더링 (기존 코드 유지)
   return (
     <Card style={styles.defaultCard}>
-      <div style={{ marginBottom: tokens.spacingVerticalM }}>
-        <Text size={500} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
+      <div style={{ marginBottom: "8px" }}>
+        <Text size={400} weight="semibold" style={{ color: tokens.colorNeutralForeground1 }}>
           🎯 생성 모드 선택
         </Text>
-        <Text size={300} style={{ color: tokens.colorNeutralForeground3, marginTop: 4, display: "block" }}>
+        <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: 2, display: "block" }}>
           원하는 콘텐츠 생성 방식을 선택하세요
         </Text>
       </div>
@@ -295,7 +307,7 @@ const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, com
                 background: isSelected ? mode.gradient : tokens.colorNeutralBackground2,
                 border: isSelected ? "2px solid transparent" : `2px solid ${tokens.colorNeutralStroke2}`,
                 borderRadius: 12,
-                padding: tokens.spacingVerticalM,
+                padding: "10px 12px",
                 cursor: isDisabled ? "not-allowed" : status === "generating" ? "not-allowed" : "pointer",
                 transform: isSelected ? "translateY(-2px)" : "none",
                 boxShadow: isSelected ? "0 8px 24px rgba(0,0,0,0.15)" : "0 2px 8px rgba(0,0,0,0.08)",
@@ -326,42 +338,42 @@ const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, com
                 </div>
 
                 <Text
-                  size={400}
+                  size={300}
                   weight="semibold"
                   style={{
                     color: "inherit",
                     display: "block",
-                    marginBottom: 4,
+                    marginBottom: 2,
                   }}
                 >
                   {mode.title}
                 </Text>
 
                 <Text
-                  size={200}
+                  size={100}
                   style={{
                     color: isSelected ? "rgba(255,255,255,0.9)" : tokens.colorNeutralForeground3,
                     display: "block",
-                    marginBottom: tokens.spacingVerticalS,
+                    marginBottom: "4px",
                   }}
                 >
                   {mode.subtitle}
                 </Text>
 
                 <Text
-                  size={200}
+                  size={100}
                   style={{
                     color: isSelected ? "rgba(255,255,255,0.8)" : tokens.colorNeutralForeground2,
                     lineHeight: 1.4,
                     display: "block",
-                    marginBottom: tokens.spacingVerticalS,
+                    marginBottom: "4px",
                   }}
                 >
                   {mode.description}
                 </Text>
 
                 {/* 단계 표시 */}
-                <div style={{ marginBottom: tokens.spacingVerticalS }}>
+                <div style={{ marginBottom: "4px" }}>
                   <div
                     style={{
                       display: "flex",
@@ -413,14 +425,41 @@ const ModeSelector = memo(({ selectedMode, onModeChange, form, isGenerating, com
         })}
       </div>
 
-      {/* 선택된 모드 요약 */}
-      {selectedMode && (
-        <div style={styles.summaryContainer}>
-          <Text size={300} style={{ color: tokens.colorNeutralForeground2 }}>
-            선택됨: <strong>{MODE_CONFIGS[selectedMode]?.title}</strong>
-          </Text>
+      {/* 생성 버튼 */}
+      {selectedMode && onGenerate && (
+        <div style={{ marginTop: tokens.spacingVerticalM }}>
+          <Button
+            appearance={isCancelling ? "secondary" : isGenerating ? "secondary" : "primary"}
+            icon={isCancelling ? null : isGenerating ? null : <PlayRegular />}
+            onClick={() => {
+              if (isGenerating) {
+                onCancel?.();
+              } else {
+                onGenerate();
+              }
+            }}
+            disabled={isCancelling || (!isGenerating && !form?.topic?.trim() && !form?.referenceScript?.trim())}
+            style={{
+              width: "100%",
+              padding: "12px 20px",
+              fontSize: "14px",
+              fontWeight: "bold",
+              background: isCancelling
+                ? "transparent"
+                : isGenerating
+                  ? `linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)`
+                  : `linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)`,
+              border: "none",
+              color: isCancelling ? tokens.colorNeutralForeground2 : "white",
+              boxShadow: isGenerating ? "0 4px 12px rgba(0,0,0,0.1)" : "0 2px 8px rgba(0,0,0,0.15)",
+              transition: "all 200ms ease-out",
+            }}
+          >
+            {isCancelling ? "⏳ 취소 중..." : isGenerating ? "⏹ 생성 중지" : selectedMode === "shorts_mode" ? "⚡ 쇼츠 생성 시작" : "📝 대본 생성 시작"}
+          </Button>
         </div>
       )}
+
     </Card>
   );
 });

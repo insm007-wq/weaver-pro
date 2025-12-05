@@ -461,6 +461,11 @@ contextBridge.exposeInMainWorld("electron", {
     openOutputFolder: () => ipcRenderer.invoke("project:openOutputFolder"),
     getFilePath: ({ category, filename }) => ipcRenderer.invoke("project:getFilePath", { category, filename }),
     update: (updates) => ipcRenderer.invoke("project:update", updates),
+    ensureSettingsSaved: (projectId, timeoutMs) => ipcRenderer.invoke("project:ensureSettingsSaved", { projectId, timeoutMs }),
+
+    // ✅ Phase 2: 중앙화된 경로 관리 함수들
+    getPath: (category, options) => ipcRenderer.invoke("project:getPath", { category, options: options || {} }),
+    getProjectPath: (category, filename, options) => ipcRenderer.invoke("project:getFilePath", { category, filename, options: options || {} }),
   },
 
   // FFmpeg 영상 합성

@@ -75,8 +75,86 @@ function validateScript(data) {
 // ============================================================
 // Vrew 스타일 프롬프트 빌더
 // ============================================================
-function buildPrompt({ topic, style, duration, referenceText, cpmMin, cpmMax }) {
+function buildPrompt({ topic, style, duration, referenceText, cpmMin, cpmMax, isShorts = false, customPrompt = null }) {
   const totalSeconds = duration * 60;
+
+  // 쇼츠 모드 + 사용자 정의 프롬프트가 있으면 우선 사용
+  if ((isShorts || duration <= 1) && customPrompt && customPrompt.trim()) {
+    const secondsPerScene = duration <= 0.5 ? 5 : 8;
+    const targetSceneCount = Math.round(totalSeconds / secondsPerScene);
+    const minSceneCount = Math.max(2, Math.floor(targetSceneCount * 0.8));
+    const maxSceneCount = Math.ceil(targetSceneCount * 1.3);
+
+    return customPrompt
+      .replace(/\{topic\}/g, topic || "(미지정)")
+      .replace(/\{style\}/g, style || "바이럴")
+      .replace(/\{seconds\}/g, totalSeconds)
+      .replace(/\{minSceneCount\}/g, minSceneCount)
+      .replace(/\{maxSceneCount\}/g, maxSceneCount)
+      .replace(/\{targetSceneCount\}/g, targetSceneCount);
+  }
+
+  // 쇼츠 모드인 경우 다른 로직 적용 (기본 프롬프트 폴백)
+  if (isShorts || duration <= 1) {
+    const secondsPerScene = duration <= 0.5 ? 5 : 8; // 30초 이하: 5초, 그 외: 8초
+    const targetSceneCount = Math.round(totalSeconds / secondsPerScene);
+    const minSceneCount = Math.max(2, Math.floor(targetSceneCount * 0.8)); // 최소 2개
+    const maxSceneCount = Math.ceil(targetSceneCount * 1.3);
+
+    // 쇼츠는 장당 더 적은 글자수 (빠른 템포)
+    const expectedMinChars = Math.round(totalSeconds * 3); // 초당 3자
+    const expectedMaxChars = Math.round(totalSeconds * 5); // 초당 5자
+
+    const shortsPrompt = `다음 조건에 맞는 ${totalSeconds}초 길이의 쇼츠 영상 대본을 작성해주세요.
+
+🎯 쇼츠 핵심 원칙:
+• 첫 3초 안에 시청자를 사로잡아야 함 (후킹 필수!)
+• 빠른 템포, 즉각적인 메시지 전달
+• 스크롤 방지: 궁금증 유발 → 해결
+
+📋 기본 정보:
+• 주제: ${topic || "(미지정)"}
+• 스타일: ${style || "바이럴"}
+• 길이: ${totalSeconds}초
+• 언어: 한국어
+
+📺 쇼츠 구성 (반드시 준수):
+• 총 길이: ${totalSeconds}초
+• 장면 구성: ${minSceneCount}~${maxSceneCount}개 (권장: ${targetSceneCount}개)
+• 각 장면: 3~15초 (15~50자)
+
+📝 작성 방식:
+• 첫 장면(오프닝): 강렬한 후킹 (3~5초, 15~25자)
+  - 질문형: "이거 모르면 손해"
+  - 충격형: "절대 믿을 수 없는 사실"
+  - 호기심형: "이것만 알면 인생 바뀜"
+• 중간 장면: 핵심 내용 빠르게 전달
+• 마지막 장면: CTA 또는 여운 (좋아요/팔로우 유도)
+• 군더더기 없이 핵심만
+• 자연스러운 구어체
+
+⚠️ 중요:
+1. 첫 장면이 가장 중요 - 반드시 후킹!
+2. 15초~60초에 맞춰 장면 수 조정
+3. 장면당 15~50자 (너무 길지 않게)
+4. 빠른 템포 유지
+
+📤 응답 형식 (JSON만 반환):
+{
+  "title": "쇼츠 제목",
+  "scenes": [
+    {"text": "첫 장면 - 강렬한 후킹 (15~25자)", "duration": 3},
+    {"text": "두 번째 장면 (20~40자)", "duration": ${secondsPerScene}},
+    ... (총 ${minSceneCount}~${maxSceneCount}개 장면)
+  ]
+}
+
+⚡ JSON만 출력하고 다른 설명은 절대 포함하지 마세요.`;
+
+    return shortsPrompt;
+  }
+
+  // 일반 대본 로직
   const secondsPerScene = 8;
   const targetSceneCount = Math.round(totalSeconds / secondsPerScene);
   const minSceneCount = Math.max(3, Math.floor(targetSceneCount * 0.9));
@@ -141,7 +219,8 @@ function buildPrompt({ topic, style, duration, referenceText, cpmMin, cpmMax }) 
   return parts.join("\n");
 }
 
-async function _buildPrompt(topic, duration, style, customPrompt = null, referenceScript = null, cpmMin = 220, cpmMax = 250) {
+async function _buildPrompt(topic, duration, style, customPrompt = null, referenceScript = null, cpmMin = 220, cpmMax = 250, isShorts = false) {
+  const isShortMode = isShorts || duration <= 1; // 1분 이하는 쇼츠로 간주
   const minCharacters = duration * cpmMin;
   const maxCharacters = duration * cpmMax;
   const totalSeconds = duration * 60;
@@ -173,6 +252,7 @@ async function _buildPrompt(topic, duration, style, customPrompt = null, referen
       referenceText: referenceScript,
       cpmMin,
       cpmMax,
+      isShorts: isShortMode,
     });
   }
 
@@ -228,7 +308,7 @@ async function callAnthropicAPI(apiKey, prompt, minSceneCount = 5, isLongForm = 
       }
 
       // 타임아웃 설정 (여유있게 증가)
-      const timeoutMs = isLongForm ? 180000 : 90000;  // 장편: 3분, 단편: 1.5분
+      const timeoutMs = isLongForm ? 240000 : 180000;  // 장편: 4분, 단편: 3분
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -307,6 +387,7 @@ async function callAnthropic(params, event = null) {
     referenceText = "",
     cpmMin = 320,
     cpmMax = 360,
+    isShorts = false, // 🎯 쇼츠 모드 플래그 받기
   } = params;
 
   const isLongForm = duration >= 20;
@@ -321,6 +402,7 @@ async function callAnthropic(params, event = null) {
       cpmMin,
       cpmMax,
       customPrompt: params.prompt,
+      isShorts, // 🎯 장편에도 전달
       event  // 진행률 전송을 위해 event 전달
     });
   }
@@ -333,7 +415,7 @@ async function callAnthropic(params, event = null) {
   const apiKey = await getSecret("anthropicKey");
   if (!apiKey) throw new Error("Anthropic API Key가 설정되지 않았습니다.");
 
-  const prompt = await _buildPrompt(topic, duration, style, params.prompt, referenceText, cpmMin, cpmMax);
+  const prompt = await _buildPrompt(topic, duration, style, params.prompt, referenceText, cpmMin, cpmMax, isShorts);
 
   let lastError = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
@@ -376,7 +458,7 @@ async function callAnthropic(params, event = null) {
 // ============================================================
 // 장편 대본 생성 (청크 방식)
 // ============================================================
-async function generateLongFormScript({ topic, style, duration, referenceText, cpmMin, cpmMax, customPrompt, event = null }) {
+async function generateLongFormScript({ topic, style, duration, referenceText, cpmMin, cpmMax, customPrompt, isShorts = false, event = null }) {
   const CHUNK_DURATION = 5; // 5분씩 청크
   const chunkCount = Math.ceil(duration / CHUNK_DURATION);
 
@@ -386,15 +468,24 @@ async function generateLongFormScript({ topic, style, duration, referenceText, c
   const allScenes = [];
   let currentSceneNumber = 1;
 
+  // ✅ 장편 대본 청크용 CPM 배율 증가 (기존: 320 → 346 CPM, 8% 증가)
+  // 계산: 각 청크 5분 × 346 CPM × 1.25배 = 2,163자 기대 → 실제 1,838자 (85% 효율)
+  // 20분 기준: 4청크 × 1,838자 ≈ 7,352자 ≈ 18분 ✅
+  const chunkCpmMin = Math.round(cpmMin * 1.08); // 320 → 346
+  const chunkCpmMax = Math.round(cpmMax * 1.08); // 400 → 432
+
   for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++) {
+    const startTime = Date.now();
     const isLastChunk = chunkIndex === chunkCount - 1;
     const chunkDuration = isLastChunk ? duration - (chunkIndex * CHUNK_DURATION) : CHUNK_DURATION;
+
+    console.log(`📝 청크 ${chunkIndex + 1}/${chunkCount} 생성 시작 (${chunkDuration}분, CPM: ${chunkCpmMin}-${chunkCpmMax})`);
 
     const chunkTopic = chunkIndex === 0
       ? `${topic} (전체 ${duration}분 중 ${chunkIndex + 1}/${chunkCount} 파트)`
       : `${topic} (전체 ${duration}분 중 ${chunkIndex + 1}/${chunkCount} 파트 - 이전 내용에서 자연스럽게 이어지도록)`;
 
-    const prompt = await _buildPrompt(chunkTopic, chunkDuration, style, customPrompt, referenceText, cpmMin, cpmMax);
+    const prompt = await _buildPrompt(chunkTopic, chunkDuration, style, customPrompt, referenceText, chunkCpmMin, chunkCpmMax, isShorts);
 
     const targetSceneCount = Math.round((chunkDuration * 60) / 8);
     const minSceneCount = Math.max(3, Math.floor(targetSceneCount * 0.9));
@@ -430,6 +521,9 @@ async function generateLongFormScript({ topic, style, duration, referenceText, c
     });
 
     allScenes.push(...chunkScenes);
+
+    const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`✅ 청크 ${chunkIndex + 1}/${chunkCount} 완료 (${elapsedSec}초 소요, ${chunkScenes.length}개 장면)`);
 
     // 청크 완료 시 진행률 전송 (UI 업데이트)
     if (event && event.sender) {

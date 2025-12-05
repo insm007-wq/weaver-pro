@@ -71,8 +71,41 @@ const DEFAULT_TEMPLATE = `{content}{referenceAnalysis}
 
 Ultra-realistic, cinematic YouTube thumbnail, dramatic lighting, vibrant colors, 16:9 aspect ratio, no text`;
 
+const DEFAULT_SHORTS_PROMPT = `다음 조건에 맞는 {seconds}초 길이의 쇼츠 영상 대본을 작성해주세요.
+
+🎯 쇼츠 핵심 원칙:
+• 첫 3초 안에 시청자를 사로잡아야 함 (후킹 필수!)
+• 빠른 템포, 즉각적인 메시지 전달
+• 스크롤 방지: 궁금증 유발 → 해결
+
+📋 기본 정보:
+• 주제: {topic}
+• 스타일: {style}
+• 길이: {seconds}초
+
+📺 쇼츠 구성:
+• 총 길이: {seconds}초
+• 장면 구성: {minSceneCount}~{maxSceneCount}개 (권장: {targetSceneCount}개)
+• 각 장면: 3~15초 (15~50자)
+
+📝 작성 방식:
+• 첫 장면: 강렬한 후킹 (3~5초, 15~25자)
+• 중간 장면: 핵심 내용 빠르게 전달
+• 마지막 장면: CTA 또는 여운
+• 자연스러운 구어체
+
+📤 응답 형식 (JSON만 반환):
+{
+  "title": "쇼츠 제목",
+  "scenes": [
+    {"text": "첫 장면 - 강렬한 후킹", "duration": 3},
+    ...
+  ]
+}`;
+
 module.exports = {
   DEFAULT_GENERATE_PROMPT,
   DEFAULT_REFERENCE_PROMPT,
-  DEFAULT_TEMPLATE
+  DEFAULT_TEMPLATE,
+  DEFAULT_SHORTS_PROMPT
 };

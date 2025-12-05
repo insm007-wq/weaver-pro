@@ -59,6 +59,7 @@ export function useScriptGenerator() {
         setIsLoading,
         setDoc,
         setFullVideoState,
+        selectedMode = "script_mode",
       } = options;
 
       // 🛑 abort 플래그 명확하게 리셋 (새 생성 시작 시)
@@ -114,7 +115,7 @@ export function useScriptGenerator() {
           throw new Error('작업이 취소되었습니다.');
         }
 
-        const scriptResult = await runGenerate(formData);
+        const scriptResult = await runGenerate(formData, null, selectedMode);
 
         // 🛑 대본 생성 완료 후 abort 확인 (취소되었으면 진행 중단)
         if (abortFlagRef.current.shouldAbort) {

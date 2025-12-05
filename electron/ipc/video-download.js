@@ -50,12 +50,35 @@ function isCancelled() {
 // ---------------------------------------------------------------------------
 // 공통 유틸
 // ---------------------------------------------------------------------------
-function assertVideoSaveFolder() {
-  const videoSaveFolder = store.get("videoSaveFolder"); // ✅ this 유지
-  if (!videoSaveFolder || typeof videoSaveFolder !== "string" || videoSaveFolder.trim() === "") {
-    throw new Error("영상 저장 폴더가 설정되지 않았습니다. 설정 > 기본 설정에서 영상 저장 폴더를 지정해주세요.");
+async function assertVideoSaveFolder() {
+  // ✅ projectManager를 통한 중앙화된 경로 관리 사용
+  try {
+    const { getProjectManager } = require('../services/projectManager');
+    const projectManager = getProjectManager();
+
+    // 현재 프로젝트의 output 폴더 반환 (video-download에서는 이걸 "프로젝트 루트"로 사용)
+    const projectRootPath = await projectManager.getProjectPath('output', {
+      autoCreate: true,
+      ensureSync: true,
+      timeout: 5000
+    });
+
+    console.log("✅ [assertVideoSaveFolder] 프로젝트 경로 확인 완료:", projectRootPath);
+
+    // output 폴더의 부모 디렉토리 (프로젝트 루트)를 반환
+    return path.dirname(projectRootPath);
+  } catch (error) {
+    console.error("❌ [assertVideoSaveFolder] 프로젝트 경로 조회 실패:", error.message);
+
+    // Fallback: 기존 videoSaveFolder 사용 (레거시 지원)
+    const videoSaveFolder = store.get("videoSaveFolder");
+    if (videoSaveFolder && typeof videoSaveFolder === "string" && videoSaveFolder.trim() !== "") {
+      console.warn("⚠️ [assertVideoSaveFolder] Fallback: videoSaveFolder 사용:", videoSaveFolder);
+      return videoSaveFolder;
+    }
+
+    throw new Error("❌ 프로젝트 경로를 찾을 수 없습니다. 프로젝트를 먼저 선택해주세요.");
   }
-  return videoSaveFolder;
 }
 
 // ---------------------------------------------------------------------------
@@ -280,12 +303,9 @@ async function searchPixabayVideos(apiKey, query, perPage = 3, options = {}) {
 // ---------------------------------------------------------------------------
 async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 20) {
   try {
-    const videoSaveFolder = assertVideoSaveFolder();
+    const videoSaveFolder = await assertVideoSaveFolder();
     const videoPath = path.join(videoSaveFolder, "video");
     const filePath = path.join(videoPath, filename);
-
-    // 디렉토리 생성
-    await fs.mkdir(videoPath, { recursive: true });
 
     // 캐시 체크
     try {
@@ -467,12 +487,9 @@ async function downloadVideoOptimized(url, filename, onProgress, maxFileSize = 2
 // ---------------------------------------------------------------------------
 async function downloadPhotoOptimized(url, filename, onProgress) {
   try {
-    const videoSaveFolder = assertVideoSaveFolder();
+    const videoSaveFolder = await assertVideoSaveFolder();
     const imagesPath = path.join(videoSaveFolder, "images");
     const filePath = path.join(imagesPath, filename);
-
-    // 디렉토리 생성
-    await fs.mkdir(imagesPath, { recursive: true });
 
     // 캐시 체크
     try {
@@ -647,7 +664,7 @@ function extractKeywordsFromText(text) {
   return words;
 }
 
-async function generateAndDownloadAIImage(keyword, onProgress) {
+async function generateAndDownloadAIImage(keyword, onProgress, options = {}) {
   try {
     // Replicate API 키 가져오기
     const replicateKey = await getSecret("replicateKey");
@@ -683,13 +700,16 @@ async function generateAndDownloadAIImage(keyword, onProgress) {
     // Replicate 클라이언트 생성
     const replicate = createReplicate(replicateKey);
 
+    // ✅ 모드별 aspectRatio 설정 (쇼츠: 9:16, 일반: 16:9)
+    const aspectRatio = options.aspectRatio || "16:9";
+
     // 이미지 생성 요청
     let prediction = await replicate.predictions.create({
       version: versionId,
       input: {
         prompt: finalPrompt,
         num_outputs: 1,
-        aspect_ratio: "16:9",
+        aspect_ratio: aspectRatio,
       },
     });
 
@@ -906,7 +926,8 @@ async function downloadMediaWithFallback(keyword, provider, options = {}, onProg
         apiKey: pexelsKey,
         query: keyword,
         perPage: 1,
-        targetRes: { w: 1920, h: 1080 }
+        targetRes: { w: 1920, h: 1080 },
+        options // ✅ options 전달 (aspectRatio 필터링 포함)
       });
 
       if (photos && photos.length > 0) {
@@ -948,7 +969,8 @@ async function downloadMediaWithFallback(keyword, provider, options = {}, onProg
         apiKey: pixabayKey,
         query: keyword,
         perPage: 1,
-        targetRes: { w: 1920, h: 1080 }
+        targetRes: { w: 1920, h: 1080 },
+        options // ✅ options 전달 (aspectRatio 필터링 포함)
       });
 
       if (photos && photos.length > 0) {
@@ -986,7 +1008,7 @@ async function downloadMediaWithFallback(keyword, provider, options = {}, onProg
 
     const aiResult = await generateAndDownloadAIImage(keyword, (progress) => {
       onProgress?.({ keyword, status: "generating", mediaType: "ai", step: 5, progress });
-    });
+    }, options); // ✅ options 전달 (aspectRatio 포함)
 
     if (aiResult.success) {
       return {
@@ -1023,7 +1045,7 @@ async function downloadVideosForKeywords(keywords, provider, options = {}, onPro
     throw new Error(`지원되지 않는 프로바이더입니다. 지원 목록: ${supportedList}`);
   }
 
-  assertVideoSaveFolder(); // 미리 검증
+  await assertVideoSaveFolder(); // 미리 검증
 
   const providerInfo = SUPPORTED_PROVIDERS[provider];
   const apiKey = await getSecret(providerInfo.apiKeyName); // ✅ keytar에서 API 키 조회

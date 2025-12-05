@@ -1,13 +1,21 @@
 import { memo, useMemo, useState, useCallback, useEffect } from "react";
-import { Card, Text, Field, Input, Dropdown, Option, Spinner, Switch, Textarea, tokens } from "@fluentui/react-components";
+import { Card, Text, Field, Input, Dropdown, Option, Switch, Textarea, tokens, Spinner } from "@fluentui/react-components";
 import { SettingsRegular } from "@fluentui/react-icons";
-import { STYLE_OPTIONS, DURATION_OPTIONS } from "../../../constants/scriptSettings";
+import { STYLE_OPTIONS, DURATION_OPTIONS, SHORTS_STYLE_OPTIONS, SHORTS_DURATION_OPTIONS } from "../../../constants/scriptSettings";
 import { validateAndSanitizeText } from "../../../utils/sanitizer";
 
 /**
  * 기본 설정 카드 (UI만 개선)
  */
-const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, setForm, disabled = false }) => {
+const BasicSettingsCard = memo(({
+  form,
+  onChange,
+  promptNames,
+  promptLoading,
+  setForm,
+  disabled = false,
+  selectedMode = "script_mode",
+}) => {
   const [validationErrors, setValidationErrors] = useState({});
 
   // 안전한 폼 데이터 처리
@@ -23,11 +31,12 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
     [form?.topic, form?.style, form?.durationMin, form?.promptName, form?.showReferenceScript, form?.referenceScript]
   );
 
+
   // 안전한 입력 처리 함수 메모화
   const handleSafeChange = useCallback(
     (field, value, options = {}) => {
       const result = validateAndSanitizeText(value, {
-        maxLength: field === "topic" ? 80 : field === "referenceScript" ? 10000 : 100,
+        maxLength: field === "topic" ? 80 : field === "referenceScript" ? 15000 : 100,
         allowEmpty: true,
         fieldName: field,
         ...options,
@@ -104,12 +113,42 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
     []
   );
 
+  // 모드별 필터링된 프롬프트
+  const filteredPromptNames = useMemo(() => {
+    if (selectedMode === "shorts_mode") {
+      // 쇼츠 모드: "쇼츠" 또는 "shorts"가 포함된 프롬프트를 우선적으로 찾기
+      const shortsPrompts = promptNames.filter(
+        (name) =>
+          name.toLowerCase().includes("쇼츠") ||
+          name.toLowerCase().includes("shorts") ||
+          name.toLowerCase().includes("short")
+      );
+      // 쇼츠 프롬프트가 있으면 그것만, 없으면 모든 프롬프트 표시
+      return shortsPrompts.length > 0 ? shortsPrompts : promptNames;
+    }
+    // 일반 모드: 모든 프롬프트
+    return promptNames;
+  }, [promptNames, selectedMode]);
+
   // 프롬프트 자동 선택 로직 추가
   useEffect(() => {
-    if (promptNames.length > 0 && !safeForm.promptName) {
-      setForm((prev) => ({ ...prev, promptName: promptNames[0] }));
+    if (filteredPromptNames.length > 0 && !safeForm.promptName) {
+      // 쇼츠 모드에서 쇼츠 프롬프트 우선 선택
+      let selectedPrompt = filteredPromptNames[0];
+      if (selectedMode === "shorts_mode") {
+        const shortsPrompt = filteredPromptNames.find(
+          (name) =>
+            name.toLowerCase().includes("쇼츠") ||
+            name.toLowerCase().includes("shorts") ||
+            name.toLowerCase().includes("short")
+        );
+        if (shortsPrompt) {
+          selectedPrompt = shortsPrompt;
+        }
+      }
+      setForm((prev) => ({ ...prev, promptName: selectedPrompt }));
     }
-  }, [promptNames, safeForm.promptName, setForm]);
+  }, [filteredPromptNames, safeForm.promptName, setForm, selectedMode]);
 
   return (
     <Card style={styles.cardContainer}>
@@ -167,58 +206,71 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
         </div>
 
         {/* 스타일 선택 */}
-        <Field
-          label={
-            <Text size={300} weight="semibold">
-              스타일
-            </Text>
-          }
-        >
-          <Dropdown
-            value={STYLE_OPTIONS.find((s) => s.key === safeForm.style)?.text || "스타일 선택"}
-            selectedOptions={[safeForm.style]}
-            onOptionSelect={(_, d) => onChange("style", d.optionValue)}
-            size="medium" // 🔧 large → medium
-            style={{ minHeight: 36 }} // 🔧 시각 높이 맞춤
-            disabled={disabled}
-          >
-            {STYLE_OPTIONS.map((style) => (
-              <Option key={style.key} value={style.key}>
-                {style.text}
-              </Option>
-            ))}
-          </Dropdown>
-        </Field>
+        {(() => {
+          const isShortMode = selectedMode === "shorts_mode";
+          const styleOptions = isShortMode ? SHORTS_STYLE_OPTIONS : STYLE_OPTIONS;
+          return (
+            <Field
+              label={
+                <Text size={300} weight="semibold">
+                  {isShortMode ? "쇼츠 스타일" : "스타일"}
+                </Text>
+              }
+            >
+              <Dropdown
+                value={styleOptions.find((s) => s.key === safeForm.style)?.text || "스타일 선택"}
+                selectedOptions={[safeForm.style]}
+                onOptionSelect={(_, d) => onChange("style", d.optionValue)}
+                size="medium"
+                style={{ minHeight: 36 }}
+                disabled={disabled}
+              >
+                {styleOptions.map((style) => (
+                  <Option key={style.key} value={style.key} text={style.desc ? `${style.text} - ${style.desc}` : style.text}>
+                    {style.text}
+                  </Option>
+                ))}
+              </Dropdown>
+            </Field>
+          );
+        })()}
 
         {/* 예상 길이 */}
-        <Field
-          label={
-            <Text size={300} weight="semibold">
-              예상 길이
-            </Text>
-          }
-        >
-          <Dropdown
-            value={DURATION_OPTIONS.find((d) => d.key === safeForm.durationMin)?.text || "길이 선택"}
-            selectedOptions={[safeForm.durationMin?.toString()]}
-            onOptionSelect={(_, d) => onChange("durationMin", parseInt(d.optionValue))}
-            size="medium" // 🔧 large → medium
-            style={{ minHeight: 36 }}
-            disabled={disabled}
-          >
-            {DURATION_OPTIONS.map((duration) => (
-              <Option key={duration.key} value={duration.key.toString()}>
-                {duration.text}
-              </Option>
-            ))}
-          </Dropdown>
-        </Field>
+        {(() => {
+          const isShortMode = selectedMode === "shorts_mode";
+          const durationOptions = isShortMode ? SHORTS_DURATION_OPTIONS : DURATION_OPTIONS;
+          const parseValue = isShortMode ? parseFloat : parseInt;
+          return (
+            <Field
+              label={
+                <Text size={300} weight="semibold">
+                  {isShortMode ? "쇼츠 길이" : "예상 길이"}
+                </Text>
+              }
+            >
+              <Dropdown
+                value={durationOptions.find((d) => d.key === safeForm.durationMin)?.text || "길이 선택"}
+                selectedOptions={[safeForm.durationMin?.toString()]}
+                onOptionSelect={(_, d) => onChange("durationMin", parseValue(d.optionValue))}
+                size="medium"
+                style={{ minHeight: 36 }}
+                disabled={disabled}
+              >
+                {durationOptions.map((duration) => (
+                  <Option key={duration.key} value={duration.key.toString()}>
+                    {duration.text}
+                  </Option>
+                ))}
+              </Dropdown>
+            </Field>
+          );
+        })()}
 
         {/* 프롬프트 선택 */}
         <Field
           label={
             <Text size={300} weight="semibold">
-              대본 생성 프롬프트
+              {selectedMode === "shorts_mode" ? "🎬 쇼츠 대본 생성" : "📝 대본 생성 프롬프트"}
             </Text>
           }
         >
@@ -227,10 +279,10 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
             selectedOptions={safeForm.promptName ? [safeForm.promptName] : []}
             onOptionSelect={(_, d) => onChange("promptName", d.optionValue)}
             size="medium" // 🔧 large → medium
-            disabled={disabled || !!promptLoading || promptNames.length === 0}
+            disabled={disabled || !!promptLoading || filteredPromptNames.length === 0}
             style={{ minHeight: 36 }}
           >
-            {promptNames.map((name) => (
+            {filteredPromptNames.map((name) => (
               <Option key={name} value={name}>
                 {name}
               </Option>
@@ -246,18 +298,18 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
                   불러오는 중...
                 </Text>
               </div>
-            ) : promptNames.length === 0 ? (
-              <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                설정에서 프롬프트를 저장하세요
-              </Text>
             ) : null}
           </div>
         </Field>
 
-        {/* 레퍼런스 대본 (선택) - 전체 너비 */}
+        {/* 레퍼런스 대본 (선택) - 전체 너비 / 쇼츠 모드에서 비활성화 */}
         <div style={styles.referenceContainer}>
           <div style={styles.switchContainer}>
-            <Switch checked={safeForm.showReferenceScript} onChange={(_, data) => onChange("showReferenceScript", data.checked)} disabled={disabled} />
+            <Switch
+              checked={safeForm.showReferenceScript}
+              onChange={(_, data) => onChange("showReferenceScript", data.checked)}
+              disabled={disabled || selectedMode === "shorts_mode"} // ✅ 쇼츠 모드에서 비활성화
+            />
             <Text
               size={300}
               weight="semibold"
@@ -265,9 +317,11 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
                 cursor: "default",
                 userSelect: "none",
                 pointerEvents: "none",
+                opacity: selectedMode === "shorts_mode" ? 0.5 : 1, // ✅ 쇼츠 모드에서 회색 표시
               }}
             >
               레퍼런스 대본 (선택사항)
+              {selectedMode === "shorts_mode" && " - 쇼츠 모드에서는 사용 불가"}
             </Text>
           </div>
 
@@ -292,8 +346,8 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
                 placeholder="예시: '안녕하세요! 오늘은 맛있는 요리를 만들어볼게요. 먼저 재료를 준비해주세요...'"
                 rows={6}
                 resize="none"
-                disabled={disabled}
-                maxLength={10000}
+                disabled={disabled || selectedMode === "shorts_mode"} // ✅ 쇼츠 모드에서 비활성화
+                maxLength={15000}
                 style={{
                   ...styles.textareaContainer,
                   borderColor: validationErrors.referenceScript?.length > 0 ? tokens.colorPaletteRedBorder2 : styles.textareaContainer.borderColor,
@@ -336,6 +390,7 @@ const BasicSettingsCard = memo(({ form, onChange, promptNames, promptLoading, se
           )}
         </div>
       </div>
+
     </Card>
   );
 });

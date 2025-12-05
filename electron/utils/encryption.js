@@ -29,10 +29,10 @@ function encrypt(text) {
 /**
  * 암호화된 문자열을 복호화
  * @param {string} encrypted - 암호화된 텍스트 (hex)
- * @returns {string} 복호화된 텍스트
+ * @returns {string|null} 복호화된 텍스트 또는 실패 시 null
  */
 function decrypt(encrypted) {
-  if (!encrypted) return '';
+  if (!encrypted) return null;
 
   try {
     const hash = crypto.createHash('sha256');
@@ -45,10 +45,16 @@ function decrypt(encrypted) {
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
 
+    // 복호화 결과가 유효한지 검증
+    if (!decrypted || decrypted.trim() === '') {
+      console.error('❌ 복호화 결과가 비어있습니다');
+      return null;
+    }
+
     return decrypted;
   } catch (error) {
     console.error('❌ 복호화 실패:', error.message);
-    return '';
+    return null;
   }
 }
 

@@ -51,6 +51,17 @@ if (!store.has('termsAccepted')) {
   console.log("✅ 기본 termsAccepted 설정됨");
 }
 
+// API 키 초기화 상태 추적 (Windows 환경 호환성)
+if (!store.has('keysInitialized')) {
+  store.set('keysInitialized', false);
+  console.log("✅ 기본 keysInitialized 설정됨");
+}
+
+if (!store.has('keysInitializedVersion')) {
+  store.set('keysInitializedVersion', null);
+  console.log("✅ 기본 keysInitializedVersion 설정됨");
+}
+
 // 자막 설정 초기화 (YouTube 표준 스타일)
 if (!store.has('subtitleSettings')) {
   const defaultSubtitleSettings = {

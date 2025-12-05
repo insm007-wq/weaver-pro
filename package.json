@@ -1,6 +1,6 @@
 {
   "name": "weaver-pro",
-  "version": "1.0.6",
+  "version": "1.0.9",
   "main": "electron/main.js",
   "scripts": {
     "predev": "node scripts/obfuscate.js --check",
@@ -96,7 +96,7 @@
           ]
         }
       ],
-      "icon": "build/icon_256x256.png",
+      "icon": "build/icon.ico",
       "signAndEditExecutable": false
     },
     "mac": {

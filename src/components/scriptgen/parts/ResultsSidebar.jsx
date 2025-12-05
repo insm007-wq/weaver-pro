@@ -498,8 +498,33 @@ const CompactScriptViewer = memo(({ fullVideoState, doc, isLoading, form, global
   const generatingNow = isLoading || (fullVideoState?.isGenerating && fullVideoState?.currentStep === "script");
   const completedNow = !!doc;
 
-  const handleNavigateToAssemble = useCallback(() => {
-    window.dispatchEvent(new CustomEvent('navigate-to-assemble'));
+  const handleNavigateToAssemble = useCallback(async () => {
+    try {
+      console.log("🔄 미디어 준비로 이동 시작 - 프로젝트 설정 확인 중...");
+
+      let retries = 50; // 50회 × 100ms = 5초
+      let videoSaveFolder = null;
+
+      while (retries > 0) {
+        videoSaveFolder = await window.api.getSetting("videoSaveFolder");
+        if (videoSaveFolder) {
+          console.log("✅ videoSaveFolder 확인 완료:", videoSaveFolder);
+          break;
+        }
+        console.log(`⏳ videoSaveFolder 대기 중... (남은 시도: ${retries})`);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        retries--;
+      }
+
+      if (!videoSaveFolder) {
+        console.warn("⚠️ videoSaveFolder 설정을 찾을 수 없음. 복구 로직에 의존합니다.");
+      }
+
+      window.dispatchEvent(new CustomEvent('navigate-to-assemble'));
+    } catch (error) {
+      console.error("미디어 준비 이동 중 오류:", error);
+      window.dispatchEvent(new CustomEvent('navigate-to-assemble'));
+    }
   }, []);
 
   if (!generatingNow && !completedNow) {

@@ -121,13 +121,13 @@ export default function ProjectManager() {
   const [projectToDelete, setProjectToDelete] = useState(null);
 
   /**
-   * 프로젝트 주제 입력 필터 - 폴더명으로 사용 불가능한 문자 제거 및 길이 제한
+   * 프로젝트 주제 입력 필터 - 영문자와 숫자만 허용 및 길이 제한
    */
   const handleProjectTopicChange = useCallback((value) => {
     // 길이 제한 (50자)
     let filtered = value.substring(0, MAX_PROJECT_TOPIC_LENGTH);
-    // Windows 폴더명 금지 문자 제거: < > : " / \ | ? *
-    filtered = filtered.replace(/[<>:"/\\|?*]/g, '');
+    // 영문자(a-z, A-Z), 숫자(0-9), 하이픈(-), 언더스코어(_)만 허용
+    filtered = filtered.replace(/[^a-zA-Z0-9\-_]/g, '');
     setNewProjectTopic(filtered);
   }, []);
 
@@ -636,11 +636,11 @@ export default function ProjectManager() {
 
         {showCreateForm && (
           <div key="create-form" style={{ marginTop: tokens.spacingVerticalM }}>
-            <Field label="프로젝트 주제" required>
+            <Field label="프로젝트 저장 폴더" required>
               <Input
                 value={newProjectTopic}
                 onChange={(_, data) => handleProjectTopicChange(data.value)}
-                placeholder="예: 유튜브 마케팅 전략, 요리 레시피 소개 등"
+                placeholder="영어만 입력해 주세요"
                 contentBefore={<DocumentRegular />}
                 disabled={creating}
                 autoComplete="off"
@@ -708,11 +708,16 @@ export default function ProjectManager() {
                       ? `2px solid ${tokens.colorBrandStroke1}`
                       : `1px solid ${tokens.colorNeutralStroke2}`,
                 }}
-                onClick={() => {
+                onClick={async () => {
                   setSelectedProject(project);
-                  // 프로젝트 선택 시 백엔드의 현재 프로젝트로 설정 (폴더 열기 시에만 로드)
-                  // 프로젝트 경로 설정의 "기본 프로젝트 이름"은 현재 활성 프로젝트만 표시하도록 변경
-                  // 따라서 선택 시 settings 업데이트 없음 (UI 혼동 방지)
+                  // ✅ 프로젝트 선택 시 백엔드에서도 현재 프로젝트로 설정
+                  try {
+                    if (api?.invoke && project?.id) {
+                      await api.invoke("project:load", project.id);
+                    }
+                  } catch (error) {
+                    console.error("프로젝트 설정 오류:", error);
+                  }
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

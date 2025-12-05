@@ -14,6 +14,26 @@ const errlog = (...a) => console.warn("[stock:ERR]", ...a);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/* ── 화면 비율 계산 및 확인 ───────────────────────────────────── */
+function checkAspectRatio(width, height, targetRatio) {
+  if (!width || !height || targetRatio === "any") return true;
+
+  const ratio = width / height;
+  const tolerance = 0.1; // 10% 허용 오차
+
+  const ratios = {
+    "16:9": 16/9,
+    "4:3": 4/3,
+    "1:1": 1,
+    "9:16": 9/16
+  };
+
+  const target = ratios[targetRatio];
+  if (!target) return true;
+
+  return Math.abs(ratio - target) <= tolerance;
+}
+
 /* ── per-provider gate (동시요청 상한) ───────────────────────────────────── */
 const MAX_INFLIGHT = 2; // 프로바이더당 동시 요청 2개로 제한
 const GATE_SLEEP = 80; // 게이트 대기 간격
@@ -215,13 +235,16 @@ async function searchPexels({ apiKey, query, perPage, targetRes, minBytes, maxBy
   return out;
 }
 
-async function searchPexelsPhotos({ apiKey, query, perPage, targetRes }) {
+async function searchPexelsPhotos({ apiKey, query, perPage, targetRes, options = {} }) {
   if (!apiKey) return [];
   const url = "https://api.pexels.com/v1/search";
   const params = { query, per_page: Math.min(perPage || 6, 80), locale: "ko-KR" };
 
   const r = await withRateLimit("pexels", () => axios.get(url, { headers: { Authorization: apiKey }, params, timeout: 10000 }));
   if (r?._rateLimited || !r?.data) return [];
+
+  // ✅ aspectRatio 필터링 설정
+  const { aspectRatio = "16:9" } = options;
 
   const out = [];
   for (const photo of r.data?.photos || []) {
@@ -269,6 +292,11 @@ async function searchPexelsPhotos({ apiKey, query, perPage, targetRes }) {
     const best = closestRes(variants, targetRes, { minWidth: 1280, minHeight: 720, preferLarger: true });
 
     if (best?.url) {
+      // ✅ aspectRatio 필터링 추가
+      if (!checkAspectRatio(best.width, best.height, aspectRatio)) {
+        continue; // 비율이 맞지 않으면 스킵
+      }
+
       const id = photo.id;
       out.push({
         provider: "pexels",
@@ -337,7 +365,7 @@ async function searchPixabay({ apiKey, query, perPage, targetRes, minBytes, maxB
   return out;
 }
 
-async function searchPixabayPhotos({ apiKey, query, perPage, targetRes }) {
+async function searchPixabayPhotos({ apiKey, query, perPage, targetRes, options = {} }) {
   if (!apiKey) return [];
   const url = "https://pixabay.com/api/";
   const params = {
@@ -350,6 +378,9 @@ async function searchPixabayPhotos({ apiKey, query, perPage, targetRes }) {
 
   const r = await withRateLimit("pixabay", () => axios.get(url, { params, timeout: 10000 }));
   if (r?._rateLimited || !r?.data) return [];
+
+  // ✅ aspectRatio 필터링 설정
+  const { aspectRatio = "16:9" } = options;
 
   const out = [];
   for (const hit of r.data?.hits || []) {
@@ -383,6 +414,11 @@ async function searchPixabayPhotos({ apiKey, query, perPage, targetRes }) {
     const best = closestRes(variants, targetRes, { minWidth: 1280, minHeight: 720, preferLarger: true });
 
     if (best?.url) {
+      // ✅ aspectRatio 필터링 추가
+      if (!checkAspectRatio(best.width, best.height, aspectRatio)) {
+        continue; // 비율이 맞지 않으면 스킵
+      }
+
       const id = hit.id;
       const tags = String(hit.tags || "")
         .split(",")

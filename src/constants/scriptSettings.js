@@ -10,6 +10,21 @@ export const STYLE_OPTIONS = [
   { key: "storytelling", text: "스토리텔링", desc: "이야기 형식의 구성" },
 ];
 
+export const SHORTS_STYLE_OPTIONS = [
+  { key: "viral", text: "바이럴", desc: "충격적이고 공유하고 싶은 후킹" },
+  { key: "tip", text: "팁/하우투", desc: "빠른 정보 전달" },
+  { key: "challenge", text: "챌린지", desc: "참여 유도형" },
+  { key: "reaction", text: "리액션", desc: "감정 표현 중심" },
+  { key: "mini_doc", text: "미니 다큐", desc: "짧지만 깊이 있는" },
+];
+
+export const SHORTS_DURATION_OPTIONS = [
+  { key: 0.25, text: "15초", seconds: 15 },
+  { key: 0.5, text: "30초", seconds: 30 },
+  { key: 0.75, text: "45초", seconds: 45 },
+  { key: 1, text: "60초", seconds: 60 },
+];
+
 export const DURATION_OPTIONS = [
   { key: 3, text: "3분 (표준)" },
   { key: 5, text: "5분 (중편)" },

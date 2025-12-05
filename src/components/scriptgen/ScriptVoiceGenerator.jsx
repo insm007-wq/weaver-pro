@@ -1,22 +1,22 @@
-import React, { useState, useCallback, useEffect } from "react";
-import { Text, tokens, Button, Card } from "@fluentui/react-components";
+import React, { useState, useCallback, useEffect, useRef } from "react";
+import { Text, tokens } from "@fluentui/react-components";
 import { useHeaderStyles, useContainerStyles } from "../../styles/commonStyles";
-import { DocumentEditRegular, VideoRegular, EyeRegular } from "@fluentui/react-icons";
+import { DocumentEditRegular } from "@fluentui/react-icons";
 import { PageErrorBoundary } from "../common/ErrorBoundary";
 
 // 컴포넌트 imports
 import ModeSelector from "./parts/ModeSelector";
-import ActionCard from "./parts/ActionCard";
 import BasicSettingsCard from "./parts/BasicSettingsCard";
 import VoiceSelector from "../common/VoiceSelector";
-import ResultsSidebar from "./parts/ResultsSidebar";
 import BottomFixedBar from "../common/BottomFixedBar";
 
 // 훅 imports
 import { useScriptGeneration } from "../../hooks/useScriptGeneration";
+import { useScriptGenerator } from "../../hooks/useScriptGenerator";
 import { useVoiceSettings } from "../../hooks/useVoiceSettings";
 import { usePromptSettings } from "../../hooks/usePromptSettings";
 import { useApi } from "../../hooks/useApi";
+import { useGenerationTimer } from "../../hooks/useGenerationTimer";
 
 // 상수 imports
 import { makeDefaultForm } from "../../constants/scriptSettings";
@@ -47,16 +47,113 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
     logs: [],
   });
 
+  // 이전 step을 추적 (청크 생성 중 깜박임 방지)
+  const prevStepRef = useRef("idle");
+  const [displayedStep, setDisplayedStep] = useState("idle");
+
+  // Step이 실제로 바뀔 때만 UI 업데이트 (청크 생성 중 깜박임 방지)
+  useEffect(() => {
+    if (fullVideoState.currentStep !== prevStepRef.current) {
+      prevStepRef.current = fullVideoState.currentStep;
+      setDisplayedStep(fullVideoState.currentStep);
+    }
+  }, [fullVideoState.currentStep]);
+
   // 커스텀 훅들
   const api = useApi();
   const { promptNames, promptLoading } = usePromptSettings();
   const { doc, setDoc, isLoading, error, setIsLoading, setError, runGenerate, chunkProgress } = useScriptGeneration();
   const { voices, voiceLoading, voiceError, previewVoice, stopVoice, retryVoiceLoad } = useVoiceSettings(form);
+  const { runScriptMode, cancelGeneration, isCancelling } = useScriptGenerator();
+  const { remainingTime, estimatedTotalTime, elapsedTime } = useGenerationTimer(
+    fullVideoState?.isGenerating,
+    fullVideoState?.startTime,
+    fullVideoState?.currentStep,
+    form?.durationMin
+  );
+
+  // 남은 시간을 "1분 20초" 형식으로 변환
+  const formatRemainingTime = (timeStr) => {
+    if (!timeStr) return '';
+    const parts = timeStr.split(':');
+    const min = parseInt(parts[0]);
+    const sec = parseInt(parts[1]);
+    if (min > 0) {
+      return `${min}분 ${sec}초`;
+    }
+    return `${sec}초`;
+  };
+
+  // 각 단계별 독립적 진행률 계산 (단계마다 0% → 99% 부드럽게 올라옴)
+  const calculateTimeBasedProgress = () => {
+    // 완료 상태: 100%
+    if (fullVideoState?.currentStep === "completed") {
+      return 100;
+    }
+
+    // 미진행 상태: 0%
+    if (!fullVideoState?.isGenerating || !estimatedTotalTime || !elapsedTime) return 0;
+
+    const [totalMin, totalSec] = estimatedTotalTime.split(':').map(Number);
+    const [elapsedMin, elapsedSec] = elapsedTime.split(':').map(Number);
+
+    const totalSeconds = totalMin * 60 + totalSec;
+    const elapsedSeconds = elapsedMin * 60 + elapsedSec;
+
+    if (totalSeconds === 0) return 0;
+
+    // 각 단계별 예상 시간
+    const scriptEstimatedSec = Math.min(form?.durationMin * 8, 600);
+    const audioEstimatedSec = form?.durationMin * 60 * 0.2;
+    const subtitleEstimatedSec = 10;
+
+    // 단계별 진행 범위 설정
+    const scriptRange = (scriptEstimatedSec / totalSeconds) * 99;
+    const audioRange = (audioEstimatedSec / totalSeconds) * 99;
+    const subtitleRange = (subtitleEstimatedSec / totalSeconds) * 99;
+
+    let progress = 0;
+
+    if (displayedStep === "script") {
+      // 대본 생성: 각 단계 내에서 0% → 99%까지
+      const stepProgress = Math.min(100, (elapsedSeconds / scriptEstimatedSec) * 100);
+      progress = (stepProgress / 100) * scriptRange;
+    } else if (displayedStep === "audio") {
+      // 음성 합성: 각 단계 내에서 0% → 99%까지
+      const audioElapsed = Math.max(0, elapsedSeconds - scriptEstimatedSec);
+      const stepProgress = Math.min(100, (audioElapsed / audioEstimatedSec) * 100);
+      progress = scriptRange + (stepProgress / 100) * audioRange;
+    } else if (displayedStep === "subtitle") {
+      // 자막 생성: 각 단계 내에서 0% → 99%까지
+      const subtitleElapsed = Math.max(0, elapsedSeconds - scriptEstimatedSec - audioEstimatedSec);
+      const stepProgress = Math.min(100, (subtitleElapsed / subtitleEstimatedSec) * 100);
+      progress = scriptRange + audioRange + (stepProgress / 100) * subtitleRange;
+    }
+
+    return Math.round(Math.min(99, progress));
+  };
+
+  const timeBasedProgress = calculateTimeBasedProgress();
 
   // 폼 변경 핸들러
   const onChange = useCallback((k, v) => {
     setForm((p) => ({ ...p, [k]: v }));
   }, []);
+
+  // 생성 시작 핸들러
+  const handleGenerate = useCallback(async () => {
+    await runScriptMode(form, {
+      form,
+      voices,
+      api,
+      runGenerate,
+      setError,
+      setIsLoading,
+      setDoc,
+      setFullVideoState,
+      selectedMode,
+    });
+  }, [runScriptMode, form, voices, api, runGenerate, setError, setIsLoading, setDoc, setFullVideoState, selectedMode]);
 
   // 상태 초기화 헬퍼
   const resetFullVideoState = useCallback(
@@ -72,6 +169,7 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
         startTime: null,
         logs: clearLogs ? [] : prev.logs,
       }));
+      setDisplayedStep("idle");
       setDoc(null);
       setIsLoading(false);
     },
@@ -150,7 +248,7 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: tokens.spacingVerticalL,
+          gap: tokens.spacingVerticalM,
           width: "100%",
           maxWidth: "100%",
           overflowX: "hidden",
@@ -158,24 +256,45 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
           position: "relative",
         }}
       >
-        {/* 1행: 실행 버튼 (1열) */}
-        <ActionCard
+        {/* 0행: 모드 선택 (1열) */}
+        <ModeSelector
           selectedMode={selectedMode}
+          onModeChange={(newMode) => {
+            setSelectedMode(newMode);
+            // 쇼츠 모드로 전환 시 기본값 설정
+            if (newMode === "shorts_mode") {
+              setForm(prev => ({
+                ...prev,
+                durationMin: 0.5, // 기본 30초
+                style: "viral", // 기본 바이럴 스타일
+              }));
+            } else {
+              // 일반 모드로 전환 시 기본값 복원
+              setForm(prev => ({
+                ...prev,
+                durationMin: 3, // 기본 3분
+                style: "informative", // 기본 정보 전달형
+              }));
+            }
+          }}
           form={form}
-          isLoading={isLoading}
-          fullVideoState={fullVideoState}
-          setFullVideoState={setFullVideoState}
-          voices={voices}
+          isGenerating={fullVideoState.isGenerating}
+          compact={false}
+          globalSettings={globalSettings}
+          setGlobalSettings={setGlobalSettings}
           api={api}
-          runGenerate={runGenerate}
-          setError={setError}
-          setIsLoading={setIsLoading}
-          setDoc={setDoc}
-          chunkProgress={chunkProgress}
-          centered={true}
+          onGenerate={handleGenerate}
+          isCancelling={isCancelling}
+          onCancel={() => {
+            cancelGeneration({
+              setFullVideoState,
+              setIsLoading,
+              setDoc,
+            });
+          }}
         />
 
-        {/* 2행: 기본 설정 (1열) */}
+        {/* 1행: 기본 설정 (1열) */}
         <BasicSettingsCard
           form={form}
           onChange={onChange}
@@ -183,6 +302,7 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
           promptLoading={promptLoading}
           setForm={setForm}
           disabled={fullVideoState.isGenerating}
+          selectedMode={selectedMode}
         />
 
         {/* 3행: 음성 설정 (1열) */}
@@ -207,7 +327,7 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
       {/* 하단 고정 미니 진행바 */}
       {(fullVideoState?.isGenerating || isLoading || fullVideoState?.currentStep === "completed") && (
         <BottomFixedBar
-          key={`bottombar-${fullVideoState?.currentStep}`}
+          key={`bottombar-${displayedStep}`}
           isComplete={fullVideoState?.currentStep === "completed"}
           isLoading={fullVideoState?.isGenerating || isLoading}
           statusText={
@@ -215,56 +335,101 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
               ? "✅ 대본 생성 완료"
               : `🎬 ${
                   {
-                    script: "대본 생성",
-                    audio: "음성 합성",
-                    subtitle: "자막 생성",
-                    idle: "대기",
-                  }[fullVideoState?.currentStep || "idle"] || fullVideoState?.currentStep
-                }`
+                    script: "대본을 생성하는 중",
+                    audio: "음성을 합성하는 중",
+                    subtitle: "자막을 생성하는 중",
+                    idle: "대기 중",
+                  }[displayedStep || "idle"] || displayedStep
+                }...`
           }
-          progress={Math.round(
-            ["script", "audio", "subtitle"].reduce(
-              (acc, k) => acc + (fullVideoState?.progress?.[k] || 0),
-              0
-            ) / 3
-          )}
+          remainingTimeText={
+            fullVideoState?.currentStep === "completed"
+              ? ""
+              : !estimatedTotalTime || estimatedTotalTime === "00:00"
+              ? "(남은 시간: 거의 완료...)"
+              : `(남은 시간: ${formatRemainingTime(estimatedTotalTime)})`
+          }
+          progress={timeBasedProgress}
           nextStepButton={{
             text: "➡️ 다음 단계: 미디어 준비",
             eventName: "navigate-to-assemble",
           }}
           expandedContent={
-            doc && (
-              <div style={{ padding: "12px 16px" }}>
-                <Text size={300} weight="semibold" style={{ marginBottom: 12, display: "block" }}>
-                  📖 생성된 대본 ({doc.scenes?.length}개 장면)
+            fullVideoState?.isGenerating || isLoading ? (
+              // 생성 중: 대기 화면
+              <div style={{
+                padding: "12px 16px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: "200px",
+                gap: 16
+              }}>
+                <Text size={400} weight="semibold" style={{ color: tokens.colorNeutralForeground2 }}>
+                  📝 대본 생성 중...
                 </Text>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 8,
-                  }}
-                >
-                  {doc.scenes?.map((scene, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        padding: 12,
-                        background: tokens.colorNeutralBackground1,
-                        borderRadius: 8,
-                        border: `1px solid ${tokens.colorNeutralStroke1}`,
-                      }}
-                    >
-                      <Text size={250} weight="semibold" style={{ color: "#667eea", marginBottom: 4, display: "block" }}>
-                        장면 {index + 1}
-                      </Text>
-                      <Text size={200} style={{ color: tokens.colorNeutralForeground2, lineHeight: 1.5 }}>
-                        {scene.text}
-                      </Text>
-                    </div>
-                  ))}
+                <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>
+                  잠시만 기다려주세요
+                </Text>
+                <div style={{
+                  width: "80%",
+                  maxWidth: "300px",
+                  height: "6px",
+                  background: tokens.colorNeutralBackground3,
+                  borderRadius: "3px",
+                  overflow: "hidden",
+                  marginTop: 8
+                }}>
+                  <div style={{
+                    width: `${timeBasedProgress}%`,
+                    height: "100%",
+                    background: "linear-gradient(90deg, #667eea 0%, #764ba2 100%)",
+                    transition: "width 0.3s ease"
+                  }} />
                 </div>
+                <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                  {timeBasedProgress}%
+                </Text>
+                <Text size={300} weight="semibold" style={{ color: tokens.colorNeutralForeground2 }}>
+                  (남은 시간: {formatRemainingTime(estimatedTotalTime)})
+                </Text>
               </div>
+            ) : (
+              // 완료: 생성된 대본 목록
+              doc && (
+                <div style={{ padding: "12px 16px" }}>
+                  <Text size={300} weight="semibold" style={{ marginBottom: 12, display: "block" }}>
+                    📖 생성된 대본 ({doc.scenes?.length}개 장면)
+                  </Text>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                    }}
+                  >
+                    {doc.scenes?.map((scene, index) => (
+                      <div
+                        key={index}
+                        style={{
+                          padding: 12,
+                          background: tokens.colorNeutralBackground1,
+                          borderRadius: 8,
+                          border: `1px solid ${tokens.colorNeutralStroke1}`,
+                        }}
+                      >
+                        <Text size={250} weight="semibold" style={{ color: "#667eea", marginBottom: 4, display: "block" }}>
+                          장면 {index + 1}
+                        </Text>
+                        <Text size={200} style={{ color: tokens.colorNeutralForeground2, lineHeight: 1.5 }}>
+                          {scene.text}
+                        </Text>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
             )
           }
           onClose={() => {

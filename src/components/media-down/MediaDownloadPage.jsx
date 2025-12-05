@@ -16,6 +16,7 @@ import { PageErrorBoundary } from "../common/ErrorBoundary";
 import { showError, showSuccess } from "../common/GlobalToast";
 import BottomFixedBar from "../common/BottomFixedBar";
 import { tokens } from "@fluentui/react-components";
+import { MODE_CONFIGS } from "../../constants/modeConstants";
 
 // 로컬 이미지 캐시
 const imageCache = new Map();
@@ -149,6 +150,20 @@ function MediaDownloadPage({ onDownloadingChange }) {
   const totalVideosRef = useRef(0);
   const countdownIntervalRef = useRef(null);
   const isTimeEstimatedRef = useRef(false);
+
+  // 남은 시간을 "1분 20초" 형식으로 변환 (초 단위)
+  const formatRemainingTime = (seconds) => {
+    if (typeof seconds !== "number" || seconds <= 0) return "";
+
+    const min = Math.floor(seconds / 60);
+    const sec = Math.floor(seconds % 60);
+
+    if (min > 0) {
+      return `${min}분 ${sec}초`;
+    }
+    return `${sec}초`;
+  };
+
 
   // 타이머 정리 헬퍼
   const clearCountdownTimer = useCallback(() => {
@@ -627,21 +642,6 @@ function MediaDownloadPage({ onDownloadingChange }) {
           <div style={{ marginTop: "auto" }}>
             <Divider style={{ margin: "16px 0" }} />
 
-            {isDownloading && estimatedTimeRemaining !== null && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <Text size={300} weight="semibold">
-                  다운로드 진행 중
-                </Text>
-                <Badge appearance="filled" color="informative" size="small">
-                  {estimatedTimeRemaining <= 0
-                    ? "거의 완료 중..."
-                    : estimatedTimeRemaining >= 3600
-                    ? `${Math.floor(estimatedTimeRemaining / 3600)}시간 ${Math.floor((estimatedTimeRemaining % 3600) / 60)}분 남음`
-                    : `${Math.floor(estimatedTimeRemaining / 60)}분 ${Math.floor(estimatedTimeRemaining % 60)}초 남음`}
-                </Badge>
-              </div>
-            )}
-
             {!isDownloading ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <style>
@@ -795,6 +795,10 @@ function MediaDownloadPage({ onDownloadingChange }) {
                   <Option value="1080p">1080p (FHD)</Option>
                   <Option value="1440p">1440p (QHD)</Option>
                 </Dropdown>
+                {/* 자동 설정 안내 */}
+                <Text size={100} style={{ color: "#9ca3af", marginTop: 4, display: "block" }}>
+                  * 영상 모드 변경 시 자동으로 추천값이 설정됩니다
+                </Text>
               </div>
             </div>
 
@@ -816,6 +820,10 @@ function MediaDownloadPage({ onDownloadingChange }) {
                   <Option value="1:1">1:1 (정사각형)</Option>
                   <Option value="9:16">9:16 (세로)</Option>
                 </Dropdown>
+                {/* 자동 설정 안내 */}
+                <Text size={100} style={{ color: "#9ca3af", marginTop: 4, display: "block" }}>
+                  * 영상 모드 변경 시 자동으로 추천값이 설정됩니다
+                </Text>
               </div>
             </div>
 
@@ -853,7 +861,7 @@ function MediaDownloadPage({ onDownloadingChange }) {
                 </Badge>
               </div>
               <Text size={100} style={{ color: "#7a869a" }}>
-                팁: 1080p + 16:9는 대부분의 가로형 콘텐츠에 적합하고, 용량은 10–20MB가 품질·속도 균형이 좋아요.
+                팁: 10-20MB가 품질과 속도의 최적 균형입니다.
               </Text>
             </div>
           </div>
@@ -870,6 +878,13 @@ function MediaDownloadPage({ onDownloadingChange }) {
               ? `📥 미디어 다운로드 중... (${completedVideosCount}/${totalVideosToDownload})`
               : `✅ 다운로드 완료 (${downloadedVideos.length}개)`
           }
+          remainingTimeText={
+            isDownloading && estimatedTimeRemaining !== null
+              ? estimatedTimeRemaining <= 0
+                ? "(남은 시간: 거의 완료...)"
+                : `(남은 시간: ${formatRemainingTime(estimatedTimeRemaining)})`
+              : ""
+          }
           progress={downloadProgressPercent}
           nextStepButton={
             !isDownloading && downloadedVideos.length > 0
@@ -878,6 +893,13 @@ function MediaDownloadPage({ onDownloadingChange }) {
                   eventName: "navigate-to-refine",
                   onClick: async () => {
                     try {
+                      console.log("🔄 영상 편집으로 이동 시작 - 프로젝트 설정 동기화 대기 중...");
+
+                      // ✅ ResultsSidebar와 동일한 대기 로직: IPC 채널 동기화 대기 (50ms)
+                      await new Promise(resolve => setTimeout(resolve, 50));
+
+                      console.log("✅ 설정 동기화 완료 - auto-load-project-files 이벤트 발생");
+
                       // 페이지 전환 전에 이벤트 먼저 발생 (타이밍 경합 제거)
                       window.dispatchEvent(new CustomEvent("auto-load-project-files"));
                     } catch (error) {

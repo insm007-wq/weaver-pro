@@ -63,30 +63,27 @@ ipcMain.handle("tts:synthesize", async (event, { scenes, ttsEngine, voiceId, spe
     const { getProjectManager } = require('../services/projectManager');
     const currentProjectId = store.getCurrentProjectId();
 
-    let audioPartsDir;
+    // ✅ Race condition 해결: Project 설정이 완전히 저장되었는지 확인
     if (currentProjectId) {
-      // 현재 프로젝트 기반 경로 사용
       const projectManager = getProjectManager();
-      let currentProject = store.getCurrentProject();
-
-      if (!currentProject) {
-        currentProject = await projectManager.findProjectById(currentProjectId);
-        if (currentProject) {
-          projectManager.setCurrentProject(currentProject);
-        }
+      const ensured = await projectManager.ensureProjectSettingsSaved(currentProjectId, 3000);
+      if (!ensured) {
+        console.warn(`⚠️ tts:synthesize - 프로젝트 설정 로드 대기 실패: ${currentProjectId}`);
       }
-
-      if (currentProject && currentProject.paths && currentProject.paths.audio) {
-        audioPartsDir = path.join(currentProject.paths.audio, 'parts');
-      } else {
-        throw new Error(`현재 프로젝트 경로를 찾을 수 없습니다: ${currentProjectId}`);
-      }
-    } else {
-      // 폴백: 기본 경로 사용
-      const projectRoot = store.get('projectRootFolder') || getDefaultProjectRoot();
-      const defaultProjectName = store.get('defaultProjectName') || 'default';
-      audioPartsDir = path.join(projectRoot, defaultProjectName, 'audio', 'parts');
     }
+
+    if (!currentProjectId) {
+      throw new Error("❌ 현재 프로젝트가 설정되지 않았습니다. 프로젝트를 먼저 선택해주세요.");
+    }
+
+    // ✅ projectManager를 통한 중앙화된 경로 관리
+    const projectManager = getProjectManager();
+    const audioDir = await projectManager.getProjectPath('audio', {
+      autoCreate: true,
+      ensureSync: true
+    });
+
+    const audioPartsDir = path.join(audioDir, 'parts');
 
     // 디렉토리 생성 (없는 경우)
     await fs.mkdir(audioPartsDir, { recursive: true });
@@ -498,32 +495,21 @@ ipcMain.handle("tts:regenerateScene", async (event, { sceneIndex, sceneText, voi
       const path = require('path');
       const fs = require('fs').promises;
 
-      // 현재 프로젝트 기반 audio/parts 경로 생성
+      // ✅ projectManager를 통한 중앙화된 경로 관리
       const { getProjectManager } = require('../services/projectManager');
       const currentProjectId = store.getCurrentProjectId();
 
-      let audioPartsDir;
-      if (currentProjectId) {
-        const projectManager = getProjectManager();
-        let currentProject = store.getCurrentProject();
-
-        if (!currentProject) {
-          currentProject = await projectManager.findProjectById(currentProjectId);
-          if (currentProject) {
-            projectManager.setCurrentProject(currentProject);
-          }
-        }
-
-        if (currentProject && currentProject.paths && currentProject.paths.audio) {
-          audioPartsDir = path.join(currentProject.paths.audio, 'parts');
-        } else {
-          throw new Error(`현재 프로젝트 경로를 찾을 수 없습니다: ${currentProjectId}`);
-        }
-      } else {
-        // 폴백: 기본 경로 사용
-        const projectRoot = store.get('projectRootFolder') || getDefaultProjectRoot();
-        audioPartsDir = path.join(projectRoot, 'audio', 'parts');
+      if (!currentProjectId) {
+        throw new Error("❌ 현재 프로젝트가 설정되지 않았습니다. 프로젝트를 먼저 선택해주세요.");
       }
+
+      const projectManager = getProjectManager();
+      const audioDir = await projectManager.getProjectPath('audio', {
+        autoCreate: true,
+        ensureSync: true
+      });
+
+      const audioPartsDir = path.join(audioDir, 'parts');
 
       // 디렉토리 생성 (없는 경우)
       await fs.mkdir(audioPartsDir, { recursive: true });
