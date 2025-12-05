@@ -421,7 +421,7 @@ export default function Sidebar({
           <div className={styles.footer}>
             <div className={styles.footerContent}>
               <Text size={200} weight="medium">
-                Version 1.0.9
+                Version 1.10
               </Text>
               <Caption1 color="subtle">© 2025 Weaver Pro</Caption1>
             </div>

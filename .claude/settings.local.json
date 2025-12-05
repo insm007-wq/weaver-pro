@@ -18,7 +18,12 @@
       "Bash(node -c:*)",
       "Bash(cat:*)",
       "Bash(git push:*)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(wmic path win32_operatingsystem get:*)",
+      "Bash(ver:*)",
+      "Bash(node --version)",
+      "Bash(npm --version:*)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": [],
     "ask": []
