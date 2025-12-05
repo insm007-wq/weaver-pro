@@ -583,7 +583,7 @@ function MediaPrepEditor() {
           remainingTimeText={
             isExtracting
               ? remainingTime <= 0
-                ? "(완료 중 ...)"
+                ? "(남은 시간: 거의 완료...)"
                 : `(남은 시간: ${formatRemainingTime(remainingTime)})`
               : ""
           }

@@ -30,7 +30,7 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
     isExporting,
     exportStartTime,
     displayedStep,
-    estimatedDurationRef.current / 60  // 예상 소요 시간 (분 단위)
+    (estimatedDurationRef.current / 60) * 1.5  // 예상 소요 시간 (분 단위) - 1.5배 증가로 게이지 바 속도 조정
   );
 
   // Step 변경 감지 (깜빡임 방지)
@@ -582,10 +582,10 @@ function SceneEditor({ scenes, onSceneSelect, isVideoExporting, setIsVideoExport
           isLoading={true}
           statusText="🎬 영상을 생성하는 중..."
           remainingTimeText={
-            remainingTime
-              ? remainingTime <= 0
-                ? "(완료 중 ...)"
-                : `(남은 시간: ${formatRemainingTime(remainingTime)})`
+            estimatedTimeRemaining !== null
+              ? estimatedTimeRemaining <= 0
+                ? "(남은 시간: 거의 완료...)"
+                : `(남은 시간: ${Math.floor(estimatedTimeRemaining / 60)}분 ${Math.floor(estimatedTimeRemaining % 60)}초)`
               : ""
           }
           progress={timeBasedExportProgress}

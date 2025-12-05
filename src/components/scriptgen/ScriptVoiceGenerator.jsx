@@ -345,9 +345,9 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
           remainingTimeText={
             fullVideoState?.currentStep === "completed"
               ? ""
-              : remainingTime === "00:00" || !remainingTime
-              ? "(완료 중...)"
-              : `(남은 시간: ${formatRemainingTime(remainingTime)})`
+              : !estimatedTotalTime || estimatedTotalTime === "00:00"
+              ? "(남은 시간: 거의 완료...)"
+              : `(남은 시간: ${formatRemainingTime(estimatedTotalTime)})`
           }
           progress={timeBasedProgress}
           nextStepButton={{
@@ -390,6 +390,9 @@ function ScriptVoiceGenerator({ onGeneratingChange }) {
                 </div>
                 <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
                   {timeBasedProgress}%
+                </Text>
+                <Text size={300} weight="semibold" style={{ color: tokens.colorNeutralForeground2 }}>
+                  (남은 시간: {formatRemainingTime(estimatedTotalTime)})
                 </Text>
               </div>
             ) : (
